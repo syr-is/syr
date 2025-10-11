@@ -1,38 +1,98 @@
-# sv
+# SYR
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A SvelteKit application built with a pnpm workspace monorepo structure.
 
-## Creating a project
+## Project Structure
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+```
+/
+├── apps/
+│   └── syr/               # SvelteKit application
+├── docker/
+│   ├── dev/
+│   │   ├── app.dockerfile # Development Dockerfile
+│   │   └── README.md      # Docker documentation
+│   └── prod/              # Production Docker configs (future)
+├── docker-compose.yml     # Docker Compose configuration
+├── pnpm-workspace.yaml    # pnpm workspace definition
+└── package.json           # Root workspace configuration
 ```
 
-## Developing
+## Getting Started
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+### Prerequisites
 
-```sh
-npm run dev
+- Node.js 20+
+- pnpm 10.18.1+
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+### Local Development (without Docker)
+
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+
+2. Run the development server:
+   ```bash
+   pnpm dev
+   ```
+
+3. Open [http://localhost:5173](http://localhost:5173) in your browser
+
+### Docker Development
+
+1. Create a `.env` file in the project root:
+   ```bash
+   PORT=3000
+   # Add other environment variables as needed
+   ```
+
+2. Start the development server with Docker:
+   ```bash
+   docker-compose up --watch
+   ```
+
+   The `--watch` flag enables:
+   - Hot module reloading for source code changes
+   - Automatic rebuild when dependencies change
+
+3. Access the app at [http://localhost:3000](http://localhost:3000) (or your configured PORT)
+
+## Available Scripts
+
+From the root directory:
+
+- `pnpm dev` - Start development server for the syr app
+- `pnpm build` - Build the syr app for production
+- `pnpm preview` - Preview the production build
+- `pnpm lint` - Lint the syr app
+- `pnpm check` - Type check the syr app
+- `pnpm format` - Format code in the syr app
+
+## Workspace Management
+
+This project uses pnpm workspaces. To run commands for a specific app:
+
+```bash
+# Run any command in the syr app
+pnpm --filter syr <command>
+
+# Examples:
+pnpm --filter syr dev
+pnpm --filter syr build
+pnpm --filter syr add <package-name>
 ```
 
-## Building
+## Docker Documentation
 
-To create a production version of your app:
+For detailed Docker setup and usage, see [docker/dev/README.md](docker/dev/README.md).
 
-```sh
-npm run build
-```
+## Technology Stack
 
-You can preview the production build with `npm run preview`.
+- **Framework**: SvelteKit 2
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS 4
+- **Build Tool**: Vite 7
+- **Package Manager**: pnpm
+- **Container**: Docker with watch mode
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
