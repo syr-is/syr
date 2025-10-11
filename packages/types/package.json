@@ -1,0 +1,26 @@
+{
+  "name": "@syr-is/types",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@traversable/zod": "^0.0.57",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

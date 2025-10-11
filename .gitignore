@@ -27,3 +27,16 @@ Thumbs.db
 # Turborepo
 .turbo/
 
+# Database files
+*.db
+syr.db
+db/data/
+db/*.db
+
+# Storage files
+s3/data/
+
+# Logs
+*.log
+logs/
+

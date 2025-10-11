@@ -1,4 +1,44 @@
 services:
+  # SurrealDB - Multi-model database (Production)
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    command: start --log info --user root --pass ${SURREALDB_PASS} file:/data/syr.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - surrealdb-prod-data:/data
+    environment:
+      - SURREAL_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # SeaweedFS - S3-compatible distributed storage (Production)
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: server -s3 -dir=/data -s3.port=8333 -volume.max=100
+    ports:
+      - "8333:8333" # S3 API
+      - "9333:9333" # Master
+      - "8080:8080" # Volume server
+      - "18080:18080" # Filer
+    volumes:
+      - seaweedfs-prod-data:/data
+    environment:
+      - WEED_MASTER_VOLUME_GROWTH_COPY_1=2
+      - WEED_MASTER_VOLUME_GROWTH_COPY_2=1
+      - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # SYR Application (Production)
   syr-prod:
     build:
       context: .
@@ -10,6 +50,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-5173}
+      - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://seaweedfs:8333}
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -18,4 +65,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+volumes:
+  surrealdb-prod-data:
+    driver: local
+  seaweedfs-prod-data:
+    driver: local
 

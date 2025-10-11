@@ -88,6 +88,19 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0(vite@7.1.9(@types/node@20.19.20)(jiti@2.6.1)(lightningcss@1.30.1))
 
+  packages/types:
+    dependencies:
+      '@traversable/zod':
+        specifier: ^0.0.57
+        version: 0.0.57(zod@4.1.12)
+      zod:
+        specifier: ^4.1.12
+        version: 4.1.12
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.10':
@@ -630,6 +643,30 @@ packages:
     resolution: {integrity: sha512-BoFUoU0XqgCUS1UXWhmDJroKKhNXeDzD7/XwabjkDIAbMnc4ULn5e2FuEuBbhZ6ENZoSYzKlzvZ44Yr6EUDUSA==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
+
+  '@traversable/json@0.0.52':
+    resolution: {integrity: sha512-QddhvjiJULZw6z/OhHE0YchZfKr1LRvRvs5dZqGpYb0UB3GpWSn/2fIJjYTOCT0pG95QhuxexPpKky6eihFBLA==}
+    peerDependencies:
+      '@traversable/registry': ^0.0.49
+      fast-check: 3 - 4
+    peerDependenciesMeta:
+      fast-check:
+        optional: true
+
+  '@traversable/registry@0.0.49':
+    resolution: {integrity: sha512-uof62gHhyf5MebDkjQMeJj1yIAQkCbCcJYl848b4A+jFnUXxo2NUuHi0NIZOeG3r+XgNSF4MapDED89tFM6iLA==}
+
+  '@traversable/zod-types@0.0.30':
+    resolution: {integrity: sha512-BbVyKLvxNpuVouwkLGf7NRNUuMauJBZFr3z4Qy1KZgiAFEryXTLZfJV1Sf98k+naDDj6zaHQD66NsTUTQ7upqw==}
+    peerDependencies:
+      '@traversable/json': ^0.0.52
+      '@traversable/registry': ^0.0.49
+      zod: '4'
+
+  '@traversable/zod@0.0.57':
+    resolution: {integrity: sha512-oOSaBQitiav6QrwPZFF8GY1J2VDKDeA/GQTgsi2E6D8dn6V+5jcji+Qp2zRz6XDGUzfJy+Xda+2LqzwDT2G8nA==}
+    peerDependencies:
+      zod: '4'
 
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
@@ -1624,6 +1661,9 @@ packages:
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
 
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
+
 snapshots:
 
   '@esbuild/aix-ppc64@0.25.10':
@@ -2040,6 +2080,27 @@ snapshots:
       '@tailwindcss/oxide': 4.1.14
       tailwindcss: 4.1.14
       vite: 7.1.9(@types/node@20.19.20)(jiti@2.6.1)(lightningcss@1.30.1)
+
+  '@traversable/json@0.0.52(@traversable/registry@0.0.49)':
+    dependencies:
+      '@traversable/registry': 0.0.49
+
+  '@traversable/registry@0.0.49': {}
+
+  '@traversable/zod-types@0.0.30(@traversable/json@0.0.52(@traversable/registry@0.0.49))(@traversable/registry@0.0.49)(zod@4.1.12)':
+    dependencies:
+      '@traversable/json': 0.0.52(@traversable/registry@0.0.49)
+      '@traversable/registry': 0.0.49
+      zod: 4.1.12
+
+  '@traversable/zod@0.0.57(zod@4.1.12)':
+    dependencies:
+      '@traversable/json': 0.0.52(@traversable/registry@0.0.49)
+      '@traversable/registry': 0.0.49
+      '@traversable/zod-types': 0.0.30(@traversable/json@0.0.52(@traversable/registry@0.0.49))(@traversable/registry@0.0.49)(zod@4.1.12)
+      zod: 4.1.12
+    transitivePeerDependencies:
+      - fast-check
 
   '@types/cookie@0.6.0': {}
 
@@ -2943,3 +3004,5 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zimmerframe@1.1.4: {}
+
+  zod@4.1.12: {}

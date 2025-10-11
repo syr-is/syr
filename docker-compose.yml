@@ -1,4 +1,77 @@
 services:
+  # SurrealDB - Multi-model database
+  surrealdb:
+    image: surrealdb/surrealdb:v2.3.10
+    command: start --log trace --user root --pass ${SURREALDB_PASS:-syr-dev-password} rocksdb://data
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db/data:/data
+    environment:
+      - SURREAL_LOG=trace
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # SeaweedFS - S3-compatible distributed storage
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: server -s3 -s3.config=/etc/seaweedfs/s3_config.json
+    ports:
+      - "8333:8333" # S3 API
+      - "9333:9333" # Master
+      - "8080:8080" # Volume server
+      - "18080:18080" # Filer
+    volumes:
+      - ./s3/data:/data
+      - ./s3/s3_config.json:/etc/seaweedfs/s3_config.json
+    environment:
+      - WEED_MASTER_VOLUME_GROWTH_COPY_1=1
+      - WEED_MASTER_VOLUME_GROWTH_COPY_2=0
+      - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Surrealist - Visual IDE for SurrealDB
+  surrealist:
+    image: surrealdb/surrealist:latest
+    ports:
+      - "8091:8080"
+    environment:
+      - SURREAL_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # SurrealMCP - Official SurrealDB MCP server for AI tool integration
+  surrealmcp:
+    image: surrealdb/surrealmcp:latest
+    command: start --bind-address 0.0.0.0:8090 --server-url http://localhost:8090
+    ports:
+      - "8090:8090"
+    environment:
+      - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+      - SURREALDB_NS=${SURREALDB_NAMESPACE:-syr}
+      - SURREALDB_DB=${SURREALDB_DATABASE:-syr}
+      - SURREALDB_USER=${SURREALDB_USER:-root}
+      - SURREALDB_PASS=${SURREALDB_PASS:-syr-dev-password}
+      - SURREAL_MCP_AUTH_REQUIRED=false
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    profiles:
+      - mcp
+    restart: unless-stopped
+
+  # SYR Application
   syr-dev:
     build:
       context: .
@@ -9,6 +82,13 @@ services:
       - .env
     environment:
       - PORT=${PORT:-5173}
+      - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://seaweedfs:8333}
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
     stdin_open: true
     tty: true
     develop:
@@ -24,22 +104,32 @@ services:
             - .svelte-kit/
             - build/
             - package.json
-        
+
+        # Sync shared types package
+        - action: sync
+          path: ./packages/types
+          target: /app/packages/types
+          ignore:
+            - node_modules/
+            - dist/
+
         # Rebuild when workspace configuration changes
         - action: rebuild
           path: ./package.json
-        
+
         - action: rebuild
           path: ./pnpm-lock.yaml
-        
+
         - action: rebuild
           path: ./pnpm-workspace.yaml
-        
+
         - action: rebuild
           path: ./turbo.json
-        
+
         # Rebuild when app dependencies change
         - action: rebuild
           path: ./apps/syr/package.json
 
-
+        # Rebuild when types package changes
+        - action: rebuild
+          path: ./packages/types/package.json

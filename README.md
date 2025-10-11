@@ -11,28 +11,41 @@ A SvelteKit application built with a pnpm workspace monorepo structure, powered 
 ```
 /
 ├── .github/
-│   └── workflows/
-│       ├── code-quality.yml  # Code quality checks (format, lint, typecheck)
-│       ├── build.yml         # Build verification
-│       └── docker.yml        # Docker image builds
+│   ├── ISSUE_TEMPLATE/     # Issue templates (bug, feature, proposal, docs)
+│   ├── workflows/
+│   │   ├── code-quality.yml  # Code quality checks (format, lint, typecheck)
+│   │   ├── build.yml         # Build verification
+│   │   └── docker.yml        # Docker image builds
+│   └── pull_request_template.md
 ├── .vscode/
 │   ├── settings.json         # VS Code settings (format on save, etc.)
 │   └── extensions.json       # Recommended extensions
+├── .cursor/
+│   └── mcp.json              # MCP server configuration (SurrealMCP + Svelte MCP)
 ├── apps/
-│   └── syr/               # SvelteKit application
+│   └── syr/                # SvelteKit application (frontend + backend)
+├── packages/
+│   └── types/              # Shared Zod schemas and types (@syr-is/types)
+├── db/
+│   └── data/               # SurrealDB data (gitignored)
+├── s3/
+│   ├── data/               # SeaweedFS data (gitignored)
+│   └── s3_config.json      # S3 credentials configuration
 ├── docker/
 │   ├── dev/
-│   │   ├── syr.dockerfile # Development Dockerfile
-│   │   └── README.md      # Docker dev documentation
-│   └── prod/
-│       ├── syr.dockerfile # Production Dockerfile (optimized)
-│       └── README.md      # Docker prod documentation
-├── docker-compose.yml     # Development Docker Compose
-├── prod.docker-compose.yml # Production Docker Compose
-├── pnpm-workspace.yaml    # pnpm workspace definition
-├── turbo.json             # Turborepo pipeline configuration
-├── .npmrc                 # pnpm configuration (v10 workspace settings)
-└── package.json           # Root workspace configuration
+│   │   ├── syr.dockerfile  # Development Dockerfile
+│   │   └── README.md       # Docker dev documentation
+│   ├── prod/
+│   │   ├── syr.dockerfile  # Production Dockerfile (optimized)
+│   │   └── README.md       # Docker prod documentation
+│   └── DOCKER_SETUP.md     # Docker infrastructure guide
+├── docker-compose.yml      # Dev: SurrealDB + SeaweedFS + SYR
+├── docker-compose.prod.yml # Production Docker Compose
+├── Architecture.md         # System architecture and design
+├── pnpm-workspace.yaml     # pnpm workspace definition
+├── turbo.json              # Turborepo pipeline configuration
+├── env.example             # Environment variable template
+└── package.json            # Root workspace configuration
 ```
 
 ## Getting Started
@@ -46,6 +59,7 @@ A SvelteKit application built with a pnpm workspace monorepo structure, powered 
 ### VS Code Setup
 
 When you open this project in VS Code, you'll be prompted to install recommended extensions. These include:
+
 - **Svelte** - Svelte language support
 - **ESLint** - JavaScript/TypeScript linting
 - **Prettier** - Code formatting
@@ -55,6 +69,7 @@ When you open this project in VS Code, you'll be prompted to install recommended
 - And more utilities for better DX
 
 The workspace is configured with:
+
 - ✅ Format on save (Prettier)
 - ✅ Auto-fix on save (ESLint)
 - ✅ Consistent tab settings (tabs, size 2)
@@ -63,11 +78,13 @@ The workspace is configured with:
 ### Local Development (without Docker)
 
 1. Install dependencies:
+
    ```bash
    pnpm install
    ```
 
 2. Run the development server:
+
    ```bash
    pnpm dev
    # or specifically for the syr app:
@@ -79,25 +96,37 @@ The workspace is configured with:
 ### Docker Development
 
 1. Create a `.env` file in the project root:
+
    ```bash
-   PORT=5173
-   # Add other environment variables as needed
+   cp env.example .env
+   # Edit as needed
    ```
 
-2. Start the development server with Docker:
+2. Start all services with Docker:
+
    ```bash
    docker-compose up --watch
    ```
 
+   This starts:
+
+   - **SYR App** at [http://localhost:5173](http://localhost:5173)
+   - **SurrealDB** at http://localhost:8000
+   - **Surrealist** (DB GUI) at [http://localhost:8091](http://localhost:8091)
+   - **SeaweedFS S3** at http://localhost:8333
+
    The `--watch` flag enables:
+
    - Hot module reloading for source code changes
    - Automatic rebuild when dependencies change
+   - Types package synchronization
 
-3. Access the app at [http://localhost:5173](http://localhost:5173) (or your configured PORT)
+3. See [docker/DOCKER_SETUP.md](docker/DOCKER_SETUP.md) for detailed Docker documentation
 
 ### Production Docker
 
 1. Create a `.env.production` file in the project root:
+
    ```bash
    PORT=5173
    NODE_ENV=production
@@ -170,31 +199,59 @@ pnpm --filter syr <command>
 The project uses GitHub Actions with **3 separate workflows** that run on every push and pull request:
 
 ### Code Quality (`code-quality.yml`)
+
 - ✅ **Format Check** - Ensures code is properly formatted with Prettier
 - ✅ **Lint** - Runs ESLint and Prettier checks
 - ✅ **Type Check** - Validates TypeScript types with svelte-check
 
 ### Build (`build.yml`)
+
 - ✅ **Build** - Ensures the project builds successfully with Turborepo caching
 
 ### Docker (`docker.yml`)
+
 - ✅ **Dev Image** - Verifies development container builds
 - ✅ **Prod Image** - Verifies production container builds
 
 All workflows run in parallel, with jobs within each workflow also running concurrently for maximum speed.
 
+## MCP Integration (AI Tooling)
+
+The SYR project includes MCP (Model Context Protocol) integration for AI-powered development:
+
+### SurrealMCP
+
+- **Purpose**: Connect AI tools to your SurrealDB database
+- **Runs in**: Docker (port 8090)
+- **Start**: `docker-compose --profile mcp up --watch`
+- **Docs**: [surrealdb.com/mcp](https://surrealdb.com/mcp)
+
+### Svelte MCP
+
+- **Purpose**: AI assistance for Svelte component and route creation
+- **Runs**: Locally via `npx -y @sveltejs/mcp`
+- **Configured in**: `.cursor/mcp.json`
+- **Docs**: [svelte.dev/docs/mcp](https://svelte.dev/docs/mcp/overview)
+
+The repository includes `.cursor/mcp.json` with both MCP servers pre-configured. Cursor will automatically use this configuration.
+
 ## Docker Documentation
 
 - **Development**: [docker/dev/README.md](docker/dev/README.md)
 - **Production**: [docker/prod/README.md](docker/prod/README.md)
+- **Infrastructure Setup**: [docker/DOCKER_SETUP.md](docker/DOCKER_SETUP.md)
 
 ## Technology Stack
 
 - **Framework**: SvelteKit 2
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS 4
+- **Styling**: Tailwind CSS 4 + shadcn-svelte
 - **Build Tool**: Vite 7
 - **Package Manager**: pnpm
 - **Task Runner**: Turborepo 2
 - **Container**: Docker with watch mode
-
+- **Database**: SurrealDB (multi-model)
+- **File Storage**: SeaweedFS (S3-compatible)
+- **Type System**: Zod v4
+- **Password Hashing**: Argon2id
+- **Protocols**: ActivityPub, W3C VC 2.0, OAuth 2.0
