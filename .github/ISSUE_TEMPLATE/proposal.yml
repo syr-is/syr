@@ -1,0 +1,162 @@
+name: 💡 Proposal
+description: Propose a significant change, refactor, or architectural decision
+title: "[Proposal]: "
+labels: ["proposal", "discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a change! Proposals are for significant changes that require discussion and planning.
+
+        For smaller features, please use the Feature Request template instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A brief summary of the proposal
+      placeholder: One or two sentences describing the proposal
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this change needed? What problem does it solve?
+      placeholder: Describe the current limitations and why this change is important
+    validations:
+      required: true
+
+  - type: textarea
+    id: detailed-design
+    attributes:
+      label: Detailed Design
+      description: A detailed explanation of the proposed change
+      placeholder: |
+        - What changes would be made?
+        - How would it work?
+        - What are the technical details?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact Scope
+      description: What areas of the project would be affected?
+      multiple: true
+      options:
+        - Frontend/UI
+        - Backend/API
+        - Build System (Vite, Turborepo)
+        - Package Management (pnpm workspace)
+        - Docker Configuration
+        - CI/CD Workflows
+        - Testing Infrastructure
+        - Documentation
+        - Developer Experience
+        - Breaking Changes
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking Changes
+      description: Would this introduce breaking changes?
+      options:
+        - "No breaking changes"
+        - "Minor breaking changes (easy to migrate)"
+        - "Major breaking changes (significant migration effort)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches have you considered?
+      placeholder: Describe alternative solutions and why they were not chosen
+    validations:
+      required: true
+
+  - type: textarea
+    id: drawbacks
+    attributes:
+      label: Drawbacks and Risks
+      description: What are the potential drawbacks or risks of this proposal?
+      placeholder: |
+        - Technical debt concerns
+        - Performance implications
+        - Maintenance burden
+        - Learning curve
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration Strategy
+      description: If this introduces breaking changes, how would users migrate?
+      placeholder: Describe the migration path and any tooling that could help
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Plan
+      description: How would this be implemented?
+      placeholder: |
+        - Phase 1: ...
+        - Phase 2: ...
+        - Estimated effort: ...
+        - Required skills: ...
+
+  - type: textarea
+    id: success-metrics
+    attributes:
+      label: Success Metrics
+      description: How would we measure the success of this change?
+      placeholder: |
+        - Performance benchmarks
+        - Developer productivity
+        - Code maintainability
+        - User satisfaction
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Does this proposal depend on other issues, proposals, or external factors?
+      placeholder: List any dependencies or prerequisites
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to related issues, discussions, or external resources
+      placeholder: |
+        - Related issues: #123, #456
+        - External docs: https://...
+        - Similar implementations: https://...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context or information about the proposal
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched for similar proposals and this is not a duplicate
+          required: true
+        - label: This is a significant change that requires community discussion
+          required: true
+        - label: I am willing to help implement this proposal
+          required: false
+        - label: I am willing to create follow-up issues to track implementation
+          required: false

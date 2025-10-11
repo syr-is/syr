@@ -1,0 +1,87 @@
+name: 📚 Documentation
+description: Report missing, unclear, or incorrect documentation
+title: "[Docs]: "
+labels: ["documentation", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Please provide details about what needs to be documented or improved.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What kind of documentation issue is this?
+      options:
+        - Missing documentation
+        - Unclear or confusing documentation
+        - Incorrect or outdated documentation
+        - Typo or formatting issue
+        - Code examples needed
+        - API reference needed
+    validations:
+      required: true
+
+  - type: dropdown
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation located (or where should it be)?
+      options:
+        - README.md (root)
+        - apps/syr/README.md
+        - docker/dev/README.md
+        - docker/prod/README.md
+        - Code comments
+        - GitHub Wiki
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the documentation issue or what needs to be documented
+      placeholder: What's missing, unclear, or incorrect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Documentation
+      description: If applicable, quote or link to the current documentation
+      placeholder: Link or quote the current text
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested Improvement
+      description: How would you improve this documentation?
+      placeholder: What should be added, changed, or clarified?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this documentation important? Who would benefit from it?
+      placeholder: Describe the use case or scenario where this documentation would be helpful
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or examples
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched for similar documentation issues and this is not a duplicate
+          required: true
+        - label: I am willing to help improve this documentation
+          required: false
