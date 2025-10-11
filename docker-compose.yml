@@ -1,0 +1,42 @@
+services:
+  syr-dev:
+    build:
+      context: .
+      dockerfile: docker/dev/app.dockerfile
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    env_file:
+      - .env
+    environment:
+      - PORT=${PORT:-3000}
+    stdin_open: true
+    tty: true
+    develop:
+      watch:
+        # Sync entire app directory for hot reload
+        - action: sync
+          path: ./apps/syr
+          target: /app/apps/syr
+          ignore:
+            - node_modules/
+            - "**/*.swp"
+            - "**/.DS_Store"
+            - .svelte-kit/
+            - build/
+            - package.json
+        
+        # Rebuild when workspace dependencies change
+        - action: rebuild
+          path: ./package.json
+        
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+        
+        - action: rebuild
+          path: ./pnpm-workspace.yaml
+        
+        # Rebuild when app dependencies change
+        - action: rebuild
+          path: ./apps/syr/package.json
+
+
