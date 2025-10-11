@@ -28,6 +28,7 @@ A SvelteKit application built with a pnpm workspace monorepo structure, powered 
 ├── prod.docker-compose.yml # Production Docker Compose
 ├── pnpm-workspace.yaml    # pnpm workspace definition
 ├── turbo.json             # Turborepo pipeline configuration
+├── .npmrc                 # pnpm configuration (v10 workspace settings)
 └── package.json           # Root workspace configuration
 ```
 

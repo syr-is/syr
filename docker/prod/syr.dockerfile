@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
 WORKDIR /app
 
 # Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 
 # ---- Dependencies Stage ----
 FROM base AS deps
