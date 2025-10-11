@@ -7,7 +7,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
 
 # Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 
 # Copy app package.json
 COPY apps/syr/package.json ./apps/syr/
@@ -19,12 +19,12 @@ RUN pnpm install --frozen-lockfile
 COPY apps/syr ./apps/syr
 
 # Set default port (can be overridden by env variable)
-ENV PORT=3000
+ENV PORT=5173
 
 # Expose the port
 EXPOSE ${PORT}
 
 # Run dev server with host binding and custom port
-CMD ["sh", "-c", "pnpm --filter syr dev --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "pnpm dev -- --host 0.0.0.0 --port ${PORT}"]
 
 

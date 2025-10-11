@@ -1,18 +1,28 @@
 {
-  "name": "syr",
+  "name": "syr-is",
   "version": "1.0.0",
   "description": "SvelteKit monorepo",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter syr dev",
-    "build": "pnpm --filter syr build",
-    "preview": "pnpm --filter syr preview",
-    "format": "pnpm --filter syr format",
-    "lint": "pnpm --filter syr lint",
-    "check": "pnpm --filter syr check"
+    "dev": "turbo dev",
+    "dev:syr": "pnpm --filter @syr-is/syr dev",
+    "build": "turbo build",
+    "preview": "turbo preview",
+    "format": "turbo format",
+    "format:check": "turbo format:check",
+    "lint": "turbo lint",
+    "check": "turbo check"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.18.1"
+  "packageManager": "pnpm@10.18.1",
+  "devDependencies": {
+    "turbo": "^2.5.8"
+  },
+  "pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild"
+		]
+	}
 }

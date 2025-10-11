@@ -1,0 +1,21 @@
+services:
+  syr-prod:
+    build:
+      context: .
+      dockerfile: docker/prod/syr.dockerfile
+    ports:
+      - "${PORT:-5173}:${PORT:-5173}"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-5173}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+

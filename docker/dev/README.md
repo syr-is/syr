@@ -13,7 +13,7 @@ This is a pnpm workspace monorepo:
 │   └── syr/               # SvelteKit application
 ├── docker/
 │   └── dev/
-│       └── app.dockerfile # Development Dockerfile
+│       └── syr.dockerfile # Development Dockerfile
 ├── docker-compose.yml     # Docker Compose config
 ├── pnpm-workspace.yaml    # Workspace definition
 └── package.json           # Root workspace package.json
@@ -23,7 +23,7 @@ This is a pnpm workspace monorepo:
 
 1. Create a `.env` file in the project root with your configuration:
    ```bash
-   PORT=3000
+   PORT=5173
    # Add other environment variables as needed
    ```
 
@@ -39,7 +39,7 @@ This is a pnpm workspace monorepo:
 All environment variables from your `.env` file in the project root will be passed through to the container.
 
 **Required:**
-- `PORT` - The port to run the development server on (default: 3000)
+- `PORT` - The port to run the development server on (default: 5173)
 
 ### Port Configuration
 
@@ -65,18 +65,19 @@ These files trigger a full container rebuild when changed:
 - `package.json` - Root workspace package.json
 - `pnpm-lock.yaml` - Workspace lock file
 - `pnpm-workspace.yaml` - Workspace configuration
+- `turbo.json` - Turborepo pipeline configuration
 - `apps/syr/package.json` - App-specific dependencies
 
 ## Using Docker without docker-compose
 
 Build the image (from project root):
 ```bash
-docker build -f docker/dev/app.dockerfile -t syr-dev .
+docker build -f docker/dev/syr.dockerfile -t syr-dev .
 ```
 
 Run the container:
 ```bash
-docker run -p 3000:3000 --env-file .env syr-dev
+docker run -p 5173:5173 --env-file .env syr-dev
 ```
 
 Or with a custom port:
@@ -84,20 +85,30 @@ Or with a custom port:
 docker run -p 8080:8080 --env-file .env -e PORT=8080 syr-dev
 ```
 
-## Workspace Commands
+## Turborepo Integration
 
-The Dockerfile uses pnpm workspace filtering to run commands:
+This project uses Turborepo for task orchestration. The Dockerfile runs tasks through pnpm scripts that use Turbo:
 
 ```bash
-# Run dev server for the syr app
-pnpm --filter syr dev
+# Commands run through pnpm (which uses Turborepo)
+pnpm dev         # Runs dev server via Turbo (persistent, not cached)
+pnpm build       # Runs build via Turbo (cached)
+pnpm lint        # Runs lint via Turbo (cached)
+pnpm check       # Runs type checking via Turbo (cached)
+```
 
-# Build the syr app
-pnpm --filter syr build
+The `turbo.json` configuration file is copied into the container to enable Turborepo's caching and pipeline features.
 
-# Run other workspace scripts
-pnpm --filter syr lint
-pnpm --filter syr check
+### Workspace Commands
+
+For direct package management:
+
+```bash
+# Add dependencies to the syr app
+pnpm --filter syr add <package-name>
+
+# Run non-turbo commands
+pnpm --filter syr <command>
 ```
 
 ## Development Features

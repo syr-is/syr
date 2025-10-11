@@ -2,13 +2,13 @@ services:
   syr-dev:
     build:
       context: .
-      dockerfile: docker/dev/app.dockerfile
+      dockerfile: docker/dev/syr.dockerfile
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${PORT:-5173}:${PORT:-5173}"
     env_file:
       - .env
     environment:
-      - PORT=${PORT:-3000}
+      - PORT=${PORT:-5173}
     stdin_open: true
     tty: true
     develop:
@@ -25,7 +25,7 @@ services:
             - build/
             - package.json
         
-        # Rebuild when workspace dependencies change
+        # Rebuild when workspace configuration changes
         - action: rebuild
           path: ./package.json
         
@@ -34,6 +34,9 @@ services:
         
         - action: rebuild
           path: ./pnpm-workspace.yaml
+        
+        - action: rebuild
+          path: ./turbo.json
         
         # Rebuild when app dependencies change
         - action: rebuild
