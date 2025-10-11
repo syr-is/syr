@@ -1,0 +1,28 @@
+{
+  "recommendations": [
+    // Svelte
+    "svelte.svelte-vscode",
+
+    // Code Quality
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+
+    // Turborepo
+    "vercel.turbo-vsc",
+
+    // Docker
+    "ms-azuretools.vscode-docker",
+
+    // Tailwind CSS
+    "bradlc.vscode-tailwindcss",
+
+    // General Utilities
+    "usernamehw.errorlens",
+    "christian-kohler.path-intellisense",
+    "mhutchie.git-graph",
+
+    // Markdown
+    "yzhang.markdown-all-in-one"
+  ],
+  "unwantedRecommendations": []
+}

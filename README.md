@@ -15,6 +15,9 @@ A SvelteKit application built with a pnpm workspace monorepo structure, powered 
 │       ├── code-quality.yml  # Code quality checks (format, lint, typecheck)
 │       ├── build.yml         # Build verification
 │       └── docker.yml        # Docker image builds
+├── .vscode/
+│   ├── settings.json         # VS Code settings (format on save, etc.)
+│   └── extensions.json       # Recommended extensions
 ├── apps/
 │   └── syr/               # SvelteKit application
 ├── docker/
@@ -38,6 +41,24 @@ A SvelteKit application built with a pnpm workspace monorepo structure, powered 
 
 - Node.js 20+
 - pnpm 10.18.1+
+- VS Code (recommended) with suggested extensions
+
+### VS Code Setup
+
+When you open this project in VS Code, you'll be prompted to install recommended extensions. These include:
+- **Svelte** - Svelte language support
+- **ESLint** - JavaScript/TypeScript linting
+- **Prettier** - Code formatting
+- **Turbo** - Turborepo integration
+- **Tailwind CSS** - IntelliSense for Tailwind
+- **Docker** - Docker file support
+- And more utilities for better DX
+
+The workspace is configured with:
+- ✅ Format on save (Prettier)
+- ✅ Auto-fix on save (ESLint)
+- ✅ Consistent tab settings (tabs, size 2)
+- ✅ File nesting for better organization
 
 ### Local Development (without Docker)
 
