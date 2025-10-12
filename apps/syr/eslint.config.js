@@ -33,6 +33,14 @@ export default defineConfig(
 					varsIgnorePattern: '^_',
 					caughtErrorsIgnorePattern: '^_'
 				}
+			],
+			// Ignore <a> tags for resolve() requirement (Button component handles hrefs flexibly)
+			// I have had to add this specifically for shadcn/ui Button component, I wish there is a better way to handle this.
+			'svelte/no-navigation-without-resolve': [
+				'error',
+				{
+					ignoreLinks: true
+				}
 			]
 		}
 	},

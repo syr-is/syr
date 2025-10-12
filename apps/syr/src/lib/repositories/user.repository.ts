@@ -27,4 +27,3 @@ export class UserRepository extends BaseRepository<User> {
 
 // Export singleton instance
 export const userRepository = new UserRepository();
-

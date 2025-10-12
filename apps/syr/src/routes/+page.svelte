@@ -24,7 +24,7 @@
 	}
 </script>
 
-<div class="bg-background flex min-h-screen flex-col items-center justify-center p-4">
+<div class="flex min-h-screen flex-col items-center justify-center bg-background p-4">
 	<div class="max-w-3xl space-y-8">
 		{#if data.user}
 			<!-- Logged In View -->
@@ -56,7 +56,7 @@
 									@{data.user.username}
 									{#if data.user.role === 'ADMIN'}
 										<span
-											class="bg-primary/10 text-primary ml-2 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+											class="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
 										>
 											Admin
 										</span>
@@ -65,7 +65,7 @@
 							</div>
 
 							{#if data.user.profile?.bio}
-								<p class="text-muted-foreground max-w-md text-sm">
+								<p class="max-w-md text-sm text-muted-foreground">
 									{data.user.profile.bio}
 								</p>
 							{/if}
@@ -83,8 +83,8 @@
 				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 					Welcome to <span class="text-primary">SYR</span>
 				</h1>
-				<p class="text-muted-foreground text-xl">Self-Yield Representation</p>
-				<p class="text-muted-foreground text-lg">
+				<p class="text-xl text-muted-foreground">Self-Yield Representation</p>
+				<p class="text-lg text-muted-foreground">
 					Your sovereign digital presence. No algorithms, no lock-in, just you.
 				</p>
 			</div>
@@ -102,19 +102,19 @@
 			<Card.Content class="grid gap-4 sm:grid-cols-3">
 				<div class="space-y-2">
 					<h3 class="font-semibold">ActivityPub</h3>
-					<p class="text-muted-foreground text-sm">
+					<p class="text-sm text-muted-foreground">
 						Federated social networking with portable identity
 					</p>
 				</div>
 				<div class="space-y-2">
 					<h3 class="font-semibold">did:web</h3>
-					<p class="text-muted-foreground text-sm">
+					<p class="text-sm text-muted-foreground">
 						DNS-based decentralized identifiers you control
 					</p>
 				</div>
 				<div class="space-y-2">
 					<h3 class="font-semibold">W3C VCs</h3>
-					<p class="text-muted-foreground text-sm">Verifiable credentials for digital reputation</p>
+					<p class="text-sm text-muted-foreground">Verifiable credentials for digital reputation</p>
 				</div>
 			</Card.Content>
 		</Card.Root>

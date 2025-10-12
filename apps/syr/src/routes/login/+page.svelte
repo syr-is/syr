@@ -40,7 +40,7 @@
 	const { form: formData, enhance, delayed } = form;
 </script>
 
-<div class="bg-background flex min-h-screen items-center justify-center p-4">
+<div class="flex min-h-screen items-center justify-center bg-background p-4">
 	<Card.Root class="w-full max-w-md">
 		<Card.Header>
 			<Card.Title>Welcome Back</Card.Title>
@@ -81,12 +81,12 @@
 						Sign In
 					{/if}
 				</Form.Button>
-				<p class="text-muted-foreground text-center text-sm">
+				<p class="text-center text-sm text-muted-foreground">
 					Don't have an account?
 					<a
 						href={resolve('/register')}
 						data-sveltekit-preload-data
-						class="text-primary font-medium underline-offset-4 hover:underline"
+						class="font-medium text-primary underline-offset-4 hover:underline"
 					>
 						Create one
 					</a>

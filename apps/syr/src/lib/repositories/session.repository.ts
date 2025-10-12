@@ -31,23 +31,16 @@ export class SessionRepository extends BaseRepository<Session> {
 	 */
 	async deleteExpired(): Promise<void> {
 		const now = new Date().toISOString();
-		await this.db.query(
-			`DELETE FROM ${this.tableName} WHERE expires_at < $now`,
-			{ now }
-		);
+		await this.db.query(`DELETE FROM ${this.tableName} WHERE expires_at < $now`, { now });
 	}
 
 	/**
 	 * Delete all sessions for a user (logout all devices)
 	 */
 	async deleteByUserId(userId: string): Promise<void> {
-		await this.db.query(
-			`DELETE FROM ${this.tableName} WHERE user_id = $userId`,
-			{ userId }
-		);
+		await this.db.query(`DELETE FROM ${this.tableName} WHERE user_id = $userId`, { userId });
 	}
 }
 
 // Export singleton instance
 export const sessionRepository = new SessionRepository();
-
