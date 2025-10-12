@@ -25,11 +25,10 @@ FROM base AS builder
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/syr/node_modules ./apps/syr/node_modules
+COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
 
 # Copy application source
 COPY apps/syr ./apps/syr
-
-# Copy packages (types) that apps/syr depends on
 COPY packages ./packages
 
 # Build the application with Turborepo
