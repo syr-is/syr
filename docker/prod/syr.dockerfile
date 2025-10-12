@@ -12,8 +12,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 # ---- Dependencies Stage ----
 FROM base AS deps
 
-# Copy app package.json for dependency resolution
+# Copy app and packages package.json for dependency resolution
 COPY apps/syr/package.json ./apps/syr/
+COPY packages/types/package.json ./packages/types/
 
 # Install all dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
@@ -28,7 +29,11 @@ COPY --from=deps /app/apps/syr/node_modules ./apps/syr/node_modules
 # Copy application source
 COPY apps/syr ./apps/syr
 
+# Copy packages (types) that apps/syr depends on
+COPY packages ./packages
+
 # Build the application with Turborepo
+# Note: Build uses default config values, override at runtime with environment variables
 RUN pnpm build
 
 # Prune dev dependencies - keep only production dependencies
@@ -40,6 +45,11 @@ FROM node:20-alpine AS production
 # Set production environment
 ENV NODE_ENV=production
 ENV PORT=5173
+
+# IMPORTANT: Set these environment variables at runtime:
+# - JWT_SECRET: Must be at least 32 characters (generate with: openssl rand -base64 48)
+# - SURREALDB_URL, SURREALDB_USER, SURREALDB_PASS: Database connection
+# - All other configs have sensible defaults but should be reviewed for production
 
 WORKDIR /app
 

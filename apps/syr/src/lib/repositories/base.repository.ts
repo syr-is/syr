@@ -9,12 +9,14 @@ import { dbService } from '$lib/services/db';
  * Abstract class providing common CRUD operations for all repositories
  */
 export abstract class BaseRepository<T> {
-	protected db: Surreal;
 	protected abstract tableName: string;
 	protected abstract schema: z.ZodSchema<T>;
 
-	constructor() {
-		this.db = dbService.getDb();
+	/**
+	 * Get database instance lazily (only when needed, not at module load time)
+	 */
+	protected get db(): Surreal {
+		return dbService.getDb();
 	}
 
 	/**

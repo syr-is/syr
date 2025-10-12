@@ -19,7 +19,10 @@ const ConfigSchema = z.object({
 	SURREALDB_PASS: z.string().default('syr-dev-password'),
 
 	// JWT
-	JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
+	JWT_SECRET: z
+		.string()
+		.min(32, 'JWT secret must be at least 32 characters')
+		.default('build-time-placeholder-secret-change-in-production-min32chars'),
 	JWT_EXPIRES_IN: z.string().default('7d'),
 
 	// DID
