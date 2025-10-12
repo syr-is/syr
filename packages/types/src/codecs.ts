@@ -1,10 +1,26 @@
 import { z } from "zod";
+import { RecordId } from "surrealdb";
 
 /**
  * Zod Codecs
  * Bi-directional transformations for data serialization/deserialization
  * Based on Zod v4 codec patterns: https://zod.dev/codecs
  */
+
+/**
+ * SurrealDB RecordId Codec
+ * Converts strings to RecordId objects for database storage
+ * Format: "table:id" (e.g., "user:abc123", "profile:xyz789")
+ * Network (string) -> decode -> RecordId (DB)
+ * DB (RecordId) -> encode -> string (Network)
+ */
+export const stringToRecordId = z.codec(z.string(), z.instanceof(RecordId), {
+  decode: (str) => {
+    const [table, id] = str.split(":");
+    return new RecordId(table, id);
+  },
+  encode: (recordId) => recordId.toString(),
+});
 
 /**
  * String to Number Codec
@@ -35,11 +51,18 @@ export const stringToBigInt = z.codec(z.string(), z.bigint(), {
 
 /**
  * Number to BigInt Codec
- * Converts JavaScript number to bigint type
+ * ⚠️ Only use for values within Number.MAX_SAFE_INTEGER range
+ * For large integers over HTTP, use stringToBigInt instead
  */
 export const numberToBigInt = z.codec(z.int(), z.bigint(), {
   decode: (num) => BigInt(num),
-  encode: (bigint) => Number(bigint),
+  encode: (bigint) => {
+    const num = Number(bigint);
+    if (num > Number.MAX_SAFE_INTEGER || num < Number.MIN_SAFE_INTEGER) {
+      throw new Error("BigInt value exceeds safe integer range");
+    }
+    return num;
+  },
 });
 
 /**
@@ -97,8 +120,10 @@ export const utf8ToBytes = z.codec(z.string(), z.instanceof(Uint8Array), {
 });
 
 /**
- * Bytes to UTF-8 Codec
- * Converts Uint8Array byte arrays to UTF-8 strings
+ * Bytes to UTF-8 Codec (Server-side only)
+ * ⚠️ NOT for HTTP transport - Uint8Array cannot be sent over HTTP
+ * Use base64ToBytes or hexToBytes for HTTP transport of binary data
+ * This codec is for server-side binary data processing
  */
 export const bytesToUtf8 = z.codec(z.instanceof(Uint8Array), z.string(), {
   decode: (bytes) => new TextDecoder().decode(bytes),

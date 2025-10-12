@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RecordId } from "surrealdb";
 
 /**
  * Common Base Schemas
@@ -20,23 +21,36 @@ export const DIDSchema = z
 export type DID = z.infer<typeof DIDSchema>;
 
 /**
- * UUID Schema
+ * RecordId Schema
+ * SurrealDB RecordId instance validation
  */
-export const UUIDSchema = z.uuid();
+export const RecordIdSchema = z
+  .instanceof(RecordId, {
+    message: "Expected a SurrealDB RecordId instance",
+  })
+  .describe("RecordId");
+
+export type RecordIdType = z.infer<typeof RecordIdSchema>;
 
 /**
  * Timestamp Schema
- * ISO 8601 datetime string
+ * JavaScript Date object validation
  */
-export const TimestampSchema = z.iso.datetime();
+export const TimestampSchema = z
+  .instanceof(Date, {
+    message: "Expected a Date instance",
+  })
+  .describe("Timestamp");
+
+export type Timestamp = z.infer<typeof TimestampSchema>;
 
 /**
  * Base Entity Schema
  * Common fields for all database entities
- * Timestamps are stored as ISO 8601 strings
+ * IDs are RecordId objects, timestamps are Date objects
  */
 export const BaseEntitySchema = z.object({
-  id: UUIDSchema,
+  id: RecordIdSchema,
   created_at: TimestampSchema,
   updated_at: TimestampSchema,
 });

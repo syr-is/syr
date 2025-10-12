@@ -73,35 +73,73 @@ Files to modify:
 
 ## Phase 2: Database & User Profile System
 
-### 2.1 SurrealDB Integration
+### 2.1 SurrealDB Integration & Repository Pattern
 
-- Add SurrealDB client dependency (`surrealdb.js`)
-- Create database connection utility in `apps/syr/src/lib/server/db.ts`
-- Define database schemas for SurrealDB (users, profiles, actors, credentials)
-- Create migration/setup script for initial database schema
+**Dependencies:**
+
+- Add `surrealdb.js` to `apps/syr/package.json`
+- Add `@node-rs/argon2` for password hashing
+- Add `jsonwebtoken` for JWT sessions
+- Add `@syr-is/types` as workspace dependency
+
+**Database Service:**
+
+- `src/lib/services/db.ts` - Singleton SurrealDB connection with pooling
+
+**Base Repository:**
+
+- `src/lib/repositories/base.repository.ts` - Abstract base class with:
+  - `create(data: T)` - Insert with Zod validation
+  - `findById(id: string)` - Find by ID
+  - `findOne(params)` - Find by unique field
+  - `findMany(options: QueryOptions)` - List with pagination/sorting/filtering
+  - `update(id, data)` - Update with Zod validation
+  - `delete(id)` - Delete record
+  - Protected `validate(data, schema)` method
+  - Table name abstraction
+
+**Repositories (extending BaseRepository):**
+
+- `src/lib/repositories/user.repository.ts` - User CRUD + findByUsername
+- `src/lib/repositories/profile.repository.ts` - Profile CRUD + findByUserId
+- `src/lib/repositories/session.repository.ts` - Session management
+
+**SurrealDB Tables (Schemaless):**
+
+- `user` - Users (validated with UserSchema at app level)
+  - Fields: id, username, email?, password_hash, did?, role (ADMIN|USER), created_at, updated_at
+  - Indexes: `username` (unique), `email` (unique if provided)
+- `profile` - Profiles (validated with ProfileSchema)
+- `session` - Sessions
 
 ### 2.2 User Profile System
 
-**Database Schema (SurrealDB):**
+**Controllers (Business Logic):**
 
-- `user` table: id, username, email, password_hash, created_at, updated_at
-- `profile` table: user_id, display_name, bio, avatar_url, banner_url, metadata (JSON)
-- Indexes on username, email for lookups
+- `src/lib/controllers/auth.controller.ts`:
+  - `register(data)` - Hash password (Argon2id), create user + profile + DID
+  - `login(username, password)` - Verify password, create session, issue JWT
+  - `logout(sessionId)` - Invalidate session
+  - `refreshToken(refreshToken)` - Renew access token
+- `src/lib/controllers/profile.controller.ts`:
+  - `getProfile(username)` - Fetch user + profile
+  - `updateProfile(userId, data)` - Update profile with validation
+  - `uploadAvatar(userId, file)` - Upload to S3, update profile
 
-**API Routes (SvelteKit):**
+**API Routes:**
 
-- `src/routes/api/auth/register/+server.ts` - User registration (with Zod validation)
-- `src/routes/api/auth/login/+server.ts` - User login (issue JWT/session)
-- `src/routes/api/auth/logout/+server.ts` - Logout
-- `src/routes/api/profile/[username]/+server.ts` - Get/Update profile
-- `src/routes/api/profile/[username]/avatar/+server.ts` - Upload avatar
+- `src/routes/api/auth/register/+server.ts` - POST (calls auth.controller.register)
+- `src/routes/api/auth/login/+server.ts` - POST (calls auth.controller.login)
+- `src/routes/api/auth/logout/+server.ts` - POST (calls auth.controller.logout)
+- `src/routes/api/auth/refresh/+server.ts` - POST (calls auth.controller.refreshToken)
+- `src/routes/api/profile/[username]/+server.ts` - GET/PATCH (calls profile.controller)
+- `src/routes/api/profile/avatar/+server.ts` - POST (upload to SeaweedFS)
 
-**Authentication:**
+**Authentication Middleware:**
 
-- Implement session management (SvelteKit hooks)
-- Create auth helpers in `src/lib/server/auth.ts`
-- JWT or session-based auth (decide on approach)
-- Use Zod schemas from `@syr-is/types` for validation
+- `src/hooks.server.ts` - SvelteKit hooks for session validation
+- `src/lib/server/auth.ts` - JWT helpers, session validation
+- `src/lib/server/middleware.ts` - Auth guards for routes
 
 **Frontend:**
 
@@ -109,7 +147,13 @@ Files to modify:
 - Login page: `src/routes/login/+page.svelte` (shadcn-svelte Form)
 - Profile page: `src/routes/@[username]/+page.svelte` (shadcn-svelte Card, Avatar)
 - Profile edit page: `src/routes/settings/profile/+page.svelte` (shadcn-svelte Tabs, Form)
-- Auth store in `src/lib/stores/auth.ts`
+- Auth store: `src/lib/stores/auth.ts` (Svelte 5 runes)
+
+**Validation Strategy:**
+
+- Repository layer: Validate with Zod before DB operations (throw on invalid)
+- Controller layer: Additional business logic validation as needed
+- API routes: Parse request bodies with Zod schemas
 
 ## Phase 3: ActivityPub Foundation
 

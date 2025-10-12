@@ -1,10 +1,23 @@
 import { z } from "zod";
-import { BaseEntitySchema, DIDSchema, MetadataSchema } from "./common.js";
+import {
+  BaseEntitySchema,
+  DIDSchema,
+  MetadataSchema,
+  TimestampSchema,
+  RecordIdSchema,
+} from "./common.js";
+
+/**
+ * User Role Schema
+ * For instance-level access control
+ */
+export const UserRoleSchema = z.enum(["ADMIN", "USER"]);
+export type UserRole = z.infer<typeof UserRoleSchema>;
 
 /**
  * User Schema
  * Represents a user account in the SYR system
- * Designed for sovereignty - no email required
+ * Designed for sovereignty - username and DID only, no email
  */
 export const UserSchema = BaseEntitySchema.extend({
   username: z
@@ -15,9 +28,9 @@ export const UserSchema = BaseEntitySchema.extend({
       /^[a-zA-Z0-9_-]+$/,
       "Username can only contain letters, numbers, underscores, and hyphens"
     ),
-  email: z.email("Invalid email address").optional(),
   password_hash: z.string(),
   did: DIDSchema.optional(), // did:web for true sovereignty (DNS-based, no blockchain)
+  role: UserRoleSchema.default("USER"), // Instance-level role for access control
 });
 
 export type User = z.infer<typeof UserSchema>;
@@ -27,7 +40,7 @@ export type User = z.infer<typeof UserSchema>;
  * User profile information
  */
 export const ProfileSchema = BaseEntitySchema.extend({
-  user_id: z.uuid(),
+  user_id: RecordIdSchema,
   display_name: z.string().min(1).max(100),
   bio: z.string().max(500).optional(),
   avatar_url: z.url().optional(),
@@ -38,13 +51,12 @@ export const ProfileSchema = BaseEntitySchema.extend({
 export type Profile = z.infer<typeof ProfileSchema>;
 
 /**
- * User Registration Schema
- * For validating user registration requests
- * Email is optional for true digital sovereignty
+ * User Registration Input Schema (for API)
+ * For validating user registration requests on the backend
+ * True digital sovereignty - no email required
  */
-export const UserRegistrationSchema = z.object({
+export const UserRegistrationInputSchema = z.object({
   username: UserSchema.shape.username,
-  email: z.email("Invalid email address").optional(),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
@@ -52,6 +64,19 @@ export const UserRegistrationSchema = z.object({
     .regex(/[a-z]/, "Password must contain at least one lowercase letter")
     .regex(/[0-9]/, "Password must contain at least one number"),
   display_name: z.string().min(1).max(100),
+});
+
+export type UserRegistrationInput = z.infer<typeof UserRegistrationInputSchema>;
+
+/**
+ * User Registration Schema (for forms with password confirmation)
+ * For validating user registration forms with password confirmation
+ */
+export const UserRegistrationSchema = UserRegistrationInputSchema.extend({
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 export type UserRegistration = z.infer<typeof UserRegistrationSchema>;
@@ -89,9 +114,9 @@ export const SessionSchema = BaseEntitySchema.pick({
   id: true,
   created_at: true,
 }).extend({
-  user_id: z.uuid(),
+  user_id: RecordIdSchema,
   token: z.string(),
-  expires_at: z.iso.datetime(),
+  expires_at: TimestampSchema,
 });
 
 export type Session = z.infer<typeof SessionSchema>;
@@ -103,8 +128,8 @@ export type Session = z.infer<typeof SessionSchema>;
 export const AuthenticatedUserSchema = UserSchema.pick({
   id: true,
   username: true,
-  email: true,
   did: true,
+  role: true,
 }).extend({
   display_name: ProfileSchema.shape.display_name,
   avatar_url: ProfileSchema.shape.avatar_url,

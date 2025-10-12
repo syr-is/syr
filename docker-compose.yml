@@ -10,10 +10,12 @@ services:
     environment:
       - SURREAL_LOG=trace
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        ["CMD-SHELL", "wget --spider -q http://localhost:8000/status || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   # SeaweedFS - S3-compatible distributed storage
@@ -47,8 +49,7 @@ services:
     environment:
       - SURREAL_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
     depends_on:
-      surrealdb:
-        condition: service_healthy
+      - surrealdb
     restart: unless-stopped
 
   # SurrealMCP - Official SurrealDB MCP server for AI tool integration
@@ -65,8 +66,7 @@ services:
       - SURREALDB_PASS=${SURREALDB_PASS:-syr-dev-password}
       - SURREAL_MCP_AUTH_REQUIRED=false
     depends_on:
-      surrealdb:
-        condition: service_healthy
+      - surrealdb
     profiles:
       - mcp
     restart: unless-stopped

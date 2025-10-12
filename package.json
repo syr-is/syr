@@ -22,6 +22,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@syr-is/types",
       "@tailwindcss/oxide",
       "esbuild"
     ]
