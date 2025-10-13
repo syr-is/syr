@@ -1,5 +1,5 @@
 import { BaseRepository } from './base.repository';
-import { ProfileSchema, type Profile } from '@syr-is/types';
+import { ProfileSchema, stringToRecordId, type Profile } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
 /**
@@ -14,10 +14,10 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	 * Find profile by user ID
 	 */
 	async findByUserId(userId: RecordId | string): Promise<Profile | null> {
-		// Query directly without type assertion - SurrealDB handles both RecordId and string
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 		const result = await this.db.query<[Profile[]]>(
-			`SELECT * FROM ${this.tableName} WHERE user_id = $userId LIMIT 1`,
-			{ userId }
+			`SELECT * FROM ${this.tableName} WHERE user_id = $userRecordId LIMIT 1`,
+			{ userRecordId }
 		);
 		return result[0]?.[0] ?? null;
 	}

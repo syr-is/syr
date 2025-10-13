@@ -48,7 +48,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 				if (session && session.expires_at > new Date()) {
 					// Fetch user profile
 					const profile = await profileRepository.findByUserId(payload.userId);
-
 					// Session is valid - attach user info to locals
 					event.locals.user = {
 						id: payload.userId,

@@ -6,7 +6,6 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
 	const form = superForm(defaults(zod4(UserRegistrationSchema)), {
@@ -32,7 +31,7 @@
 				}
 
 				toast.success('Account created successfully!');
-				goto(resolve('/'));
+				window.location.href = '/';
 			} catch (_error) {
 				toast.error('An unexpected error occurred');
 			}
@@ -42,7 +41,7 @@
 	const { form: formData, enhance, delayed } = form;
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-background p-4">
+<div class="flex min-h-full items-center justify-center p-4">
 	<Card.Root class="w-full max-w-md">
 		<Card.Header>
 			<Card.Title>Create Account</Card.Title>
@@ -111,12 +110,12 @@
 						Create Account
 					{/if}
 				</Form.Button>
-				<p class="text-center text-sm text-muted-foreground">
+				<p class="text-muted-foreground text-center text-sm">
 					Already have an account?
 					<a
 						href={resolve('/login')}
 						data-sveltekit-preload-data
-						class="font-medium text-primary underline-offset-4 hover:underline"
+						class="text-primary font-medium underline-offset-4 hover:underline"
 					>
 						Sign in
 					</a>

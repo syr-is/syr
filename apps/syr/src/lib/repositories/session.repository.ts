@@ -1,5 +1,6 @@
 import { BaseRepository } from './base.repository';
-import { SessionSchema, type Session } from '@syr-is/types';
+import { SessionSchema, stringToRecordId, type Session } from '@syr-is/types';
+import type { RecordId } from 'surrealdb';
 
 /**
  * Session Repository
@@ -19,11 +20,13 @@ export class SessionRepository extends BaseRepository<Session> {
 	/**
 	 * Find all sessions for a user
 	 */
-	async findByUserId(userId: string): Promise<Session[]> {
-		const result = await this.findMany({
-			filters: { user_id: userId }
-		});
-		return result.data;
+	async findByUserId(userId: RecordId | string): Promise<Session[]> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const result = await this.db.query<[Session[]]>(
+			`SELECT * FROM ${this.tableName} WHERE user_id = $userRecordId`,
+			{ userRecordId }
+		);
+		return result[0] ?? [];
 	}
 
 	/**
@@ -37,8 +40,11 @@ export class SessionRepository extends BaseRepository<Session> {
 	/**
 	 * Delete all sessions for a user (logout all devices)
 	 */
-	async deleteByUserId(userId: string): Promise<void> {
-		await this.db.query(`DELETE FROM ${this.tableName} WHERE user_id = $userId`, { userId });
+	async deleteByUserId(userId: RecordId | string): Promise<void> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		await this.db.query(`DELETE FROM ${this.tableName} WHERE user_id = $userRecordId`, {
+			userRecordId
+		});
 	}
 }
 
