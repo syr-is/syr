@@ -4,9 +4,11 @@ import {
 	ProfileUpdateSchema,
 	stringToRecordId,
 	type Profile,
-	type ProfileUpdate
+	type ProfileUpdate,
+	type ProfileCreate
 } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
+import { userRepository } from './user.repository';
 
 /**
  * Profile Repository
@@ -15,6 +17,19 @@ import type { RecordId } from 'surrealdb';
 export class ProfileRepository extends BaseRepository<Profile> {
 	protected tableName = 'profile';
 	protected schema = ProfileSchema;
+
+	async createByUserId(userId: RecordId | string): Promise<Profile | null> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const user = await userRepository.findById(userId);
+		if (!user) {
+			throw new Error('User not found');
+		}
+		const result = await this.db.create<Profile, ProfileCreate>(this.tableName, {
+			user_id: userRecordId,
+			display_name: user.username
+		});
+		return result[0] as Profile | null;
+	}
 
 	/**
 	 * Find profile by user ID

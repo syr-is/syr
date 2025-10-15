@@ -45,11 +45,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (payload) {
 				// Check if session exists and is not expired
 				const session = await sessionRepository.findById(payload.sessionId);
+				const user = await userRepository.findById(payload.userId);
+				const profile = await profileRepository.findByUserId(payload.userId);
+
+				if (!user) {
+					if (session) {
+						await sessionRepository.deleteByUserId(session.user_id);
+					}
+					if (profile) {
+						await profileRepository.delete(profile.id);
+					}
+					event.cookies.delete('session', { path: '/' });
+					return resolve(event);
+				}
 
 				if (session && session.expires_at > new Date()) {
 					// Fetch user and profile data
-					const user = await userRepository.findById(payload.userId);
-					const profile = await profileRepository.findByUserId(payload.userId);
+
+					if (!profile) {
+						await profileRepository.createByUserId(payload.userId);
+					}
 
 					if (user) {
 						// Session is valid - attach user info to locals

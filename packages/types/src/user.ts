@@ -51,6 +51,13 @@ export const ProfileSchema = BaseEntitySchema.extend({
 
 export type Profile = z.infer<typeof ProfileSchema>;
 
+export const ProfileCreateSchema = ProfileSchema.pick({
+  user_id: true,
+  display_name: true,
+});
+
+export type ProfileCreate = z.infer<typeof ProfileCreateSchema>;
+
 /**
  * User Registration Input Schema (for API)
  * For validating user registration requests on the backend
