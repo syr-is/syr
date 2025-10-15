@@ -46,7 +46,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				// Check if session exists and is not expired
 				const session = await sessionRepository.findById(payload.sessionId);
 				const user = await userRepository.findById(payload.userId);
-				const profile = await profileRepository.findByUserId(payload.userId);
+				let profile = await profileRepository.findByUserId(payload.userId);
 
 				if (!user) {
 					if (session) {
@@ -63,7 +63,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					// Fetch user and profile data
 
 					if (!profile) {
-						await profileRepository.createByUserId(payload.userId);
+						profile = await profileRepository.createByUserId(payload.userId);
 					}
 
 					if (user) {
