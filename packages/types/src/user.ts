@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zx } from "@traversable/zod";
 import {
   BaseEntitySchema,
   DIDSchema,
@@ -95,14 +96,17 @@ export type UserLogin = z.infer<typeof UserLoginSchema>;
 /**
  * Profile Update Schema
  * For validating profile update requests
+ * Uses zod traversal to remove defaults and make all fields optional
  */
-export const ProfileUpdateSchema = ProfileSchema.pick({
-  display_name: true,
-  bio: true,
-  avatar_url: true,
-  banner_url: true,
-  metadata: true,
-}).partial();
+export const ProfileUpdateSchema = zx.deepNoDefaults(
+  ProfileSchema.pick({
+    display_name: true,
+    bio: true,
+    avatar_url: true,
+    banner_url: true,
+    metadata: true,
+  })
+);
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
 

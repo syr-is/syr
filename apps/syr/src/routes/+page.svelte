@@ -17,43 +17,61 @@
 				</h1>
 			</div>
 
-			<Card.Root>
-				<Card.Content class="pt-6">
-					<div class="flex flex-col items-center gap-6">
-						<Avatar.Root class="h-24 w-24">
+			<!-- Discord-style Profile Card -->
+			<Card.Root class="overflow-hidden">
+				<!-- Banner -->
+				{#if data.user.profile?.banner_url}
+					<div class="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
+						<img
+							src={data.user.profile.banner_url}
+							alt="Profile banner"
+							class="h-full w-full object-cover"
+						/>
+					</div>
+				{:else}
+					<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+				{/if}
+
+				<Card.Content class="relative pb-6 pt-16">
+					<!-- Avatar positioned over banner -->
+					<div class="absolute -top-12 left-6">
+						<Avatar.Root class="border-background h-24 w-24 border-4">
 							<Avatar.Image
 								src={data.user.profile?.avatar_url}
 								alt={data.user.profile?.display_name ?? data.user.username}
 							/>
-							<Avatar.Fallback class="text-3xl">
+							<Avatar.Fallback class="text-2xl">
 								{data.user.profile?.display_name?.charAt(0).toUpperCase() ??
 									data.user.username.charAt(0).toUpperCase()}
 							</Avatar.Fallback>
 						</Avatar.Root>
+					</div>
 
-						<div class="space-y-3 text-center">
-							<div>
-								<h2 class="text-2xl font-semibold">
+					<!-- Profile Info -->
+					<div class="space-y-4">
+						<div class="space-y-2">
+							<div class="flex items-center gap-2">
+								<h2 class="text-2xl font-bold">
 									{data.user.profile?.display_name ?? data.user.username}
 								</h2>
-								<p class="text-muted-foreground">
-									@{data.user.username}
-									{#if data.user.role === 'ADMIN'}
-										<span
-											class="bg-primary/10 text-primary ml-2 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-										>
-											Admin
-										</span>
-									{/if}
-								</p>
+								{#if data.user.role === 'ADMIN'}
+									<span
+										class="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+									>
+										Admin
+									</span>
+								{/if}
 							</div>
+							<p class="text-muted-foreground text-lg">@{data.user.username}</p>
+						</div>
 
-							{#if data.user.profile?.bio}
-								<p class="text-muted-foreground max-w-md text-sm">
+						{#if data.user.profile?.bio}
+							<div class="bg-muted/50 rounded-lg p-4">
+								<p class="text-sm leading-relaxed">
 									{data.user.profile.bio}
 								</p>
-							{/if}
-						</div>
+							</div>
+						{/if}
 					</div>
 				</Card.Content>
 			</Card.Root>

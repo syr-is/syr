@@ -89,7 +89,7 @@
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
-					<a href="settings">
+					<a href="/settings">
 						<DropdownMenu.Item>
 							<Settings />
 							Settings
