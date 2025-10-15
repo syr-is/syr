@@ -32,10 +32,10 @@
 					<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
 				{/if}
 
-				<Card.Content class="relative pb-6 pt-16">
+				<Card.Content class="relative pt-16 pb-6">
 					<!-- Avatar positioned over banner -->
 					<div class="absolute -top-12 left-6">
-						<Avatar.Root class="border-background h-24 w-24 border-4">
+						<Avatar.Root class="h-24 w-24 border-4 border-background">
 							<Avatar.Image
 								src={data.user.profile?.avatar_url}
 								alt={data.user.profile?.display_name ?? data.user.username}
@@ -56,17 +56,17 @@
 								</h2>
 								{#if data.user.role === 'ADMIN'}
 									<span
-										class="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+										class="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
 									>
 										Admin
 									</span>
 								{/if}
 							</div>
-							<p class="text-muted-foreground text-lg">@{data.user.username}</p>
+							<p class="text-lg text-muted-foreground">@{data.user.username}</p>
 						</div>
 
 						{#if data.user.profile?.bio}
-							<div class="bg-muted/50 rounded-lg p-4">
+							<div class="rounded-lg bg-muted/50 p-4">
 								<p class="text-sm leading-relaxed">
 									{data.user.profile.bio}
 								</p>
@@ -81,8 +81,8 @@
 				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 					Welcome to <span class="text-primary">SYR</span>
 				</h1>
-				<p class="text-muted-foreground text-xl">Self-Yield Representation</p>
-				<p class="text-muted-foreground text-lg">
+				<p class="text-xl text-muted-foreground">Self-Yield Representation</p>
+				<p class="text-lg text-muted-foreground">
 					Your sovereign digital presence. No algorithms, no lock-in, just you.
 				</p>
 			</div>
@@ -95,19 +95,19 @@
 			<Card.Content class="grid gap-4 sm:grid-cols-3">
 				<div class="space-y-2">
 					<h3 class="font-semibold">ActivityPub</h3>
-					<p class="text-muted-foreground text-sm">
+					<p class="text-sm text-muted-foreground">
 						Federated social networking with portable identity
 					</p>
 				</div>
 				<div class="space-y-2">
 					<h3 class="font-semibold">did:web</h3>
-					<p class="text-muted-foreground text-sm">
+					<p class="text-sm text-muted-foreground">
 						DNS-based decentralized identifiers you control
 					</p>
 				</div>
 				<div class="space-y-2">
 					<h3 class="font-semibold">W3C VCs</h3>
-					<p class="text-muted-foreground text-sm">Verifiable credentials for digital reputation</p>
+					<p class="text-sm text-muted-foreground">Verifiable credentials for digital reputation</p>
 				</div>
 			</Card.Content>
 		</Card.Root>

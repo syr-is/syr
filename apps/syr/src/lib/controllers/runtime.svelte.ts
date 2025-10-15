@@ -4,7 +4,3 @@
 import { createLocalStorageStore } from '$lib/stores/local-storage';
 
 export const sidebarIsOpenStore = createLocalStorageStore('pref:sidebarIsOpen', false);
-
-
-
-
