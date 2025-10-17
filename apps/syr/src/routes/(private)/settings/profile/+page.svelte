@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { superForm, defaults } from 'sveltekit-superforms';
 	import { zod4 } from 'sveltekit-superforms/adapters';
-	import { ProfileUpdateSchema } from '@syr-is/types';
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Card from '$lib/components/ui/card';
 	import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar';
 	import { toast } from 'svelte-sonner';
+	import { ProfileUpdateSchema } from '@syr-is/types';
 
 	export let data;
-
 	const form = superForm(defaults(zod4(ProfileUpdateSchema)), {
 		validators: zod4(ProfileUpdateSchema),
 		SPA: true,

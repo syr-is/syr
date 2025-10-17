@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:syr": "pnpm --filter @syr-is/syr dev",
+    "dev:types": "pnpm --filter @syr-is/types dev",
     "build": "turbo build",
     "preview": "turbo preview",
     "format": "turbo format",
