@@ -63,7 +63,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					// Fetch user and profile data
 
 					if (!profile) {
-						profile = await profileRepository.createByUserId(payload.userId);
+						profile = await profileRepository.createOrGetByUserId(payload.userId);
 					}
 
 					if (user) {

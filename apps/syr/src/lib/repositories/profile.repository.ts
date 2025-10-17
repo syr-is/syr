@@ -32,6 +32,58 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	}
 
 	/**
+	 * Create or get existing profile by user ID
+	 * Handles race conditions by using upsert pattern
+	 */
+	async createOrGetByUserId(userId: RecordId | string): Promise<Profile | null> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const user = await userRepository.findById(userId);
+		if (!user) {
+			throw new Error('User not found');
+		}
+
+		try {
+			// Try to create the profile
+			const result = await this.db.create<Profile, ProfileCreate>(this.tableName, {
+				user_id: userRecordId,
+				display_name: user.username
+			});
+			return result[0] as Profile | null;
+		} catch (error) {
+			// If creation fails due to unique constraint violation, fetch existing profile
+			if (this.isUniqueConstraintError(error)) {
+				console.log(`Profile already exists for user ${userId}, fetching existing profile`);
+				return await this.findByUserId(userId);
+			}
+
+			// Re-throw unexpected errors
+			console.error('Unexpected error creating profile:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Check if error is a unique constraint violation
+	 */
+	private isUniqueConstraintError(error: unknown): boolean {
+		// SurrealDB unique constraint error patterns
+		if (error && typeof error === 'object' && 'message' in error) {
+			const errorMessage = (error as { message: string }).message;
+			return (
+				errorMessage.includes('duplicate') ||
+				errorMessage.includes('unique') ||
+				errorMessage.includes('already exists')
+			);
+		}
+
+		if (error && typeof error === 'object' && 'code' in error) {
+			return (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION';
+		}
+
+		return false;
+	}
+
+	/**
 	 * Find profile by user ID
 	 */
 	async findByUserId(userId: RecordId | string): Promise<Profile | null> {
