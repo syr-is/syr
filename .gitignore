@@ -40,3 +40,4 @@ s3/data/
 *.log
 logs/
 
+*.tsbuildinfo
