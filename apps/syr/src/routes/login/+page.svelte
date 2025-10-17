@@ -80,12 +80,12 @@
 						Sign In
 					{/if}
 				</Form.Button>
-				<p class="text-muted-foreground text-center text-sm">
+				<p class="text-center text-sm text-muted-foreground">
 					Don't have an account?
 					<a
 						href={resolve('/register')}
 						data-sveltekit-preload-data
-						class="text-primary font-medium underline-offset-4 hover:underline"
+						class="font-medium text-primary underline-offset-4 hover:underline"
 					>
 						Create one
 					</a>

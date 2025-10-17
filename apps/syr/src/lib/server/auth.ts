@@ -36,8 +36,6 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
  */
 export interface JWTPayload {
 	userId: string;
-	username: string;
-	role: 'ADMIN' | 'USER';
 	sessionId: string;
 }
 

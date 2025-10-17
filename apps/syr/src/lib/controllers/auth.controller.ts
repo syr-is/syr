@@ -63,8 +63,6 @@ export class AuthController {
 		// Generate JWT token
 		const token = generateAccessToken({
 			userId: user.id.toString(),
-			username: user.username,
-			role: user.role,
 			sessionId: session.id.toString()
 		});
 
@@ -105,8 +103,6 @@ export class AuthController {
 		// Generate JWT token
 		const token = generateAccessToken({
 			userId: user.id.toString(),
-			username: user.username,
-			role: user.role,
 			sessionId: session.id.toString()
 		});
 

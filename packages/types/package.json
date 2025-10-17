@@ -2,6 +2,8 @@
   "name": "@syr-is/types",
   "version": "0.0.1",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -13,13 +15,12 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
+    "dev": "tsc --watch --preserveWatchOutput",
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@traversable/zod": "^0.0.57",
     "surrealdb": "^1.3.2",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

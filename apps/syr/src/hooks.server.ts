@@ -3,6 +3,7 @@ import { dbService } from '$lib/services/db';
 import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
+import { userRepository } from '$lib/repositories/user.repository';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
@@ -44,26 +45,47 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (payload) {
 				// Check if session exists and is not expired
 				const session = await sessionRepository.findById(payload.sessionId);
+				const user = await userRepository.findById(payload.userId);
+				let profile = await profileRepository.findByUserId(payload.userId);
+
+				if (!user) {
+					if (session) {
+						await sessionRepository.deleteByUserId(session.user_id);
+					}
+					if (profile) {
+						await profileRepository.delete(profile.id);
+					}
+					event.cookies.delete('session', { path: '/' });
+					return resolve(event);
+				}
 
 				if (session && session.expires_at > new Date()) {
-					// Fetch user profile
-					const profile = await profileRepository.findByUserId(payload.userId);
-					// Session is valid - attach user info to locals
-					event.locals.user = {
-						id: payload.userId,
-						username: payload.username,
-						role: payload.role,
-						sessionId: payload.sessionId,
-						profile: profile
-							? {
-									id: profile.id.toString(),
-									display_name: profile.display_name,
-									bio: profile.bio,
-									avatar_url: profile.avatar_url,
-									banner_url: profile.banner_url
-								}
-							: undefined
-					};
+					// Fetch user and profile data
+
+					if (!profile) {
+						profile = await profileRepository.createOrGetByUserId(payload.userId);
+					}
+
+					if (user) {
+						// Session is valid - attach user info to locals
+						event.locals.user = {
+							id: user.id.toString(),
+							username: user.username,
+							role: user.role,
+							created_at: user.created_at,
+							updated_at: user.updated_at,
+							sessionId: payload.sessionId,
+							profile: profile
+								? {
+										id: profile.id.toString(),
+										display_name: profile.display_name,
+										bio: profile.bio,
+										avatar_url: profile.avatar_url,
+										banner_url: profile.banner_url
+									}
+								: undefined
+						};
+					}
 				} else {
 					// Session expired or not found - clean up
 					if (session) {

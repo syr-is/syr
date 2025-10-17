@@ -110,12 +110,12 @@
 						Create Account
 					{/if}
 				</Form.Button>
-				<p class="text-muted-foreground text-center text-sm">
+				<p class="text-center text-sm text-muted-foreground">
 					Already have an account?
 					<a
 						href={resolve('/login')}
 						data-sveltekit-preload-data
-						class="text-primary font-medium underline-offset-4 hover:underline"
+						class="font-medium text-primary underline-offset-4 hover:underline"
 					>
 						Sign in
 					</a>

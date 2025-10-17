@@ -9,6 +9,8 @@ declare global {
 				username: string;
 				role: 'ADMIN' | 'USER';
 				sessionId: string;
+				created_at: Date;
+				updated_at: Date;
 				profile?: {
 					id: string;
 					display_name: string;

@@ -50,6 +50,13 @@ export const ProfileSchema = BaseEntitySchema.extend({
 
 export type Profile = z.infer<typeof ProfileSchema>;
 
+export const ProfileCreateSchema = ProfileSchema.pick({
+  user_id: true,
+  display_name: true,
+});
+
+export type ProfileCreate = z.infer<typeof ProfileCreateSchema>;
+
 /**
  * User Registration Input Schema (for API)
  * For validating user registration requests on the backend
@@ -95,6 +102,7 @@ export type UserLogin = z.infer<typeof UserLoginSchema>;
 /**
  * Profile Update Schema
  * For validating profile update requests
+ * Uses zod traversal to remove defaults and make all fields optional
  */
 export const ProfileUpdateSchema = ProfileSchema.pick({
   display_name: true,
