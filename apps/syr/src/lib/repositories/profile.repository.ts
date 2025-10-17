@@ -37,7 +37,7 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	 */
 	async createOrGetByUserId(userId: RecordId | string): Promise<Profile | null> {
 		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
-		const user = await userRepository.findById(userId);
+		const user = await userRepository.findById(userRecordId);
 		if (!user) {
 			throw new Error('User not found');
 		}
