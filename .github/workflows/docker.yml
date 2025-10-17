@@ -2,7 +2,7 @@ name: Docker
 
 on:
   workflow_run:
-    workflows: ["Build"]
+    workflows: [Build]
     branches: ["*"]
     types:
       - completed
