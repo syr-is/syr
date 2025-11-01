@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { User } from 'lucide-svelte';
+	import { User, Monitor } from 'lucide-svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 
@@ -9,6 +9,11 @@
 			title: 'Profile',
 			href: '/settings/profile',
 			icon: User
+		},
+		{
+			title: 'Sessions',
+			href: '/settings/sessions',
+			icon: Monitor
 		}
 	];
 

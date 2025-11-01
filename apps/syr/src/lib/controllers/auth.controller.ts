@@ -24,7 +24,10 @@ export class AuthController {
 	/**
 	 * Register a new user
 	 */
-	async register(data: UserRegistrationInput): Promise<RegisterResponse> {
+	async register(
+		data: UserRegistrationInput,
+		ctx?: { ip?: string; userAgent?: string }
+	): Promise<RegisterResponse> {
 		const { username, password, display_name } = data;
 
 		// Check if username already exists
@@ -58,7 +61,7 @@ export class AuthController {
 		} as Partial<Profile>);
 
 		// Create session
-		const session = await this.createSession(user);
+		const session = await this.createSession(user, ctx);
 
 		// Generate JWT token
 		const token = generateAccessToken({
@@ -79,7 +82,10 @@ export class AuthController {
 	/**
 	 * Login a user
 	 */
-	async login(credentials: UserLogin): Promise<LoginResponse> {
+	async login(
+		credentials: UserLogin,
+		ctx?: { ip?: string; userAgent?: string }
+	): Promise<LoginResponse> {
 		const { username, password } = credentials;
 
 		// Find user
@@ -98,7 +104,7 @@ export class AuthController {
 		const profile = await profileRepository.findByUserId(user.id);
 
 		// Create session
-		const session = await this.createSession(user);
+		const session = await this.createSession(user, ctx);
 
 		// Generate JWT token
 		const token = generateAccessToken({
@@ -126,7 +132,10 @@ export class AuthController {
 	/**
 	 * Create a new session for a user
 	 */
-	private async createSession(user: User): Promise<Session> {
+	private async createSession(
+		user: User,
+		ctx?: { ip?: string; userAgent?: string }
+	): Promise<Session> {
 		// Generate session token
 		const token = this.generateSessionToken();
 
@@ -140,7 +149,10 @@ export class AuthController {
 			user_id: user.id,
 			token,
 			expires_at: expiresAt,
-			created_at: now
+			created_at: now,
+			last_active: now,
+			ip: ctx?.ip,
+			user_agent: ctx?.userAgent
 		} as Partial<Session>);
 
 		return session;

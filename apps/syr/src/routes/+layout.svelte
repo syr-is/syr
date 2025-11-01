@@ -3,9 +3,16 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { SidebarProvider, SidebarTrigger, SidebarInset } from '$lib/components/ui/sidebar';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import '../app.css';
 
 	let { children, data } = $props();
+
+	$effect(() => {
+		if (!data.user) {
+			authStore.logout();
+		}
+	});
 </script>
 
 <ModeWatcher />

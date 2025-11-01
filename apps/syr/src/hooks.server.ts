@@ -85,6 +85,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 									}
 								: undefined
 						};
+
+						// Update session last_active and backfill ip/ua if missing
+						try {
+							const ip =
+								event.getClientAddress?.() ||
+								event.request.headers.get('x-forwarded-for') ||
+								undefined;
+							const userAgent = event.request.headers.get('user-agent') || undefined;
+							await sessionRepository.merge(payload.sessionId, {
+								last_active: new Date(),
+								ip: session.ip ?? ip,
+								user_agent: session.user_agent ?? userAgent
+							});
+						} catch (e) {
+							// best-effort; ignore
+						}
 					}
 				} else {
 					// Session expired or not found - clean up

@@ -4,15 +4,19 @@ import { UserLoginSchema } from '@syr-is/types';
 import { authController } from '$lib/controllers/auth.controller';
 import { config } from '$lib/config';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	try {
 		const body = await request.json();
 
 		// Validate request body
 		const validatedData = UserLoginSchema.parse(body);
 
+		// Session context
+		const ip = getClientAddress?.() || request.headers.get('x-forwarded-for') || undefined;
+		const userAgent = request.headers.get('user-agent') || undefined;
+
 		// Login user
-		const result = await authController.login(validatedData);
+		const result = await authController.login(validatedData, { ip, userAgent });
 
 		// Set JWT as HTTP-only cookie
 		cookies.set('session', result.token, {

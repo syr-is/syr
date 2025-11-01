@@ -34,11 +34,6 @@ services:
       - WEED_MASTER_VOLUME_GROWTH_COPY_1=1
       - WEED_MASTER_VOLUME_GROWTH_COPY_2=0
       - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   # Surrealist - Visual IDE for SurrealDB

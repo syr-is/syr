@@ -125,6 +125,9 @@ export const SessionSchema = BaseEntitySchema.pick({
   user_id: RecordIdSchema,
   token: z.string(),
   expires_at: TimestampSchema,
+  ip: z.string().optional(),
+  user_agent: z.string().optional(),
+  last_active: TimestampSchema.optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

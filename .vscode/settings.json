@@ -40,14 +40,8 @@
   "files.trimTrailingWhitespace": true,
 
   // ESLint
-  "eslint.validate": [
-    "javascript",
-    "typescript",
-    "svelte"
-  ],
-  "eslint.workingDirectories": [
-    { "mode": "auto" }
-  ],
+  "eslint.validate": ["javascript", "typescript", "svelte"],
+  "eslint.workingDirectories": [{ "mode": "auto" }],
 
   // Svelte
   "svelte.enable-ts-plugin": true,
@@ -73,6 +67,12 @@
     "*.tsx": "${capture}.ts",
     "tsconfig.json": "tsconfig.*.json",
     "package.json": "package-lock.json, pnpm-lock.yaml, yarn.lock, .npmrc"
-  }
+  },
+  "cSpell.words": [
+    "chrislusf",
+    "healthcheck",
+    "seaweedfs",
+    "SURREALDB",
+    "surrealmcp"
+  ]
 }
-

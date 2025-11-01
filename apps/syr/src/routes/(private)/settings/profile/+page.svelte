@@ -54,23 +54,7 @@
 </script>
 
 {#if data.user}
-	<div class="max-w-2xl space-y-6">
-		<div class="flex items-center gap-4">
-			<Avatar class="h-20 w-20">
-				<AvatarImage
-					src={data.user.profile?.avatar_url}
-					alt={data.user.profile?.display_name || data.user.username}
-				/>
-				<AvatarFallback class="text-lg">
-					{(data.user.profile?.display_name || data.user.username).charAt(0).toUpperCase()}
-				</AvatarFallback>
-			</Avatar>
-			<div>
-				<h1 class="text-2xl font-bold">{data.user.profile?.display_name || data.user.username}</h1>
-				<p class="text-muted-foreground">@{data.user.username}</p>
-			</div>
-		</div>
-
+	<div class="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Profile Information</Card.Title>
@@ -151,6 +135,45 @@
 					</Form.Button>
 				</Card.Footer>
 			</form>
+		</Card.Root>
+
+		<!-- Profile preview card with banner and avatar -->
+		<Card.Root class="overflow-hidden">
+			{#if data.user.profile?.banner_url}
+				<div class="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
+					<img
+						src={data.user.profile.banner_url}
+						alt="Profile banner"
+						class="h-full w-full object-cover"
+					/>
+				</div>
+			{:else}
+				<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+			{/if}
+			<Card.Content class="relative pb-6 pt-16">
+				<div class="absolute -top-12 left-6">
+					<Avatar class="border-background h-24 w-24 border-4">
+						<AvatarImage
+							src={data.user.profile?.avatar_url}
+							alt={data.user.profile?.display_name || data.user.username}
+						/>
+						<AvatarFallback class="text-2xl">
+							{(data.user.profile?.display_name || data.user.username).charAt(0).toUpperCase()}
+						</AvatarFallback>
+					</Avatar>
+				</div>
+				<div class="space-y-2">
+					<h2 class="text-2xl font-bold">
+						{data.user.profile?.display_name || data.user.username}
+					</h2>
+					<p class="text-muted-foreground">@{data.user.username}</p>
+				</div>
+				{#if data.user.profile?.bio}
+					<div class="bg-muted/50 mt-4 rounded-lg p-4">
+						<p class="text-sm leading-relaxed">{data.user.profile.bio}</p>
+					</div>
+				{/if}
+			</Card.Content>
 		</Card.Root>
 	</div>
 {/if}

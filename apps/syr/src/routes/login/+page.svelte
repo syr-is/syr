@@ -7,6 +7,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
 
 	const form = superForm(defaults(zod4(UserLoginSchema)), {
 		validators: zod4(UserLoginSchema),
@@ -29,7 +30,8 @@
 				}
 
 				toast.success('Welcome back!');
-				window.location.href = '/';
+				await goto(resolve('/'));
+				window.location.reload();
 			} catch (_error) {
 				toast.error('An unexpected error occurred');
 			}
@@ -80,12 +82,12 @@
 						Sign In
 					{/if}
 				</Form.Button>
-				<p class="text-center text-sm text-muted-foreground">
+				<p class="text-muted-foreground text-center text-sm">
 					Don't have an account?
 					<a
 						href={resolve('/register')}
 						data-sveltekit-preload-data
-						class="font-medium text-primary underline-offset-4 hover:underline"
+						class="text-primary font-medium underline-offset-4 hover:underline"
 					>
 						Create one
 					</a>
