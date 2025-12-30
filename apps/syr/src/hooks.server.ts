@@ -98,7 +98,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 								ip: session.ip ?? ip,
 								user_agent: session.user_agent ?? userAgent
 							});
-						} catch (e) {
+						} catch (_e) {
 							// best-effort; ignore
 						}
 					}
