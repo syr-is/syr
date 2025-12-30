@@ -3,9 +3,9 @@
 </script>
 
 <div class="flex h-full">
-	<aside class="bg-background w-64 shrink-0 border-r">
+	<aside class="w-64 shrink-0 border-r bg-background">
 		<div class="px-4 py-4">
-			<h2 class="text-muted-foreground mb-3 text-sm font-semibold">Settings</h2>
+			<h2 class="mb-3 text-sm font-semibold text-muted-foreground">Settings</h2>
 			<SettingsNav />
 		</div>
 	</aside>

@@ -150,9 +150,9 @@
 			{:else}
 				<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
 			{/if}
-			<Card.Content class="relative pb-6 pt-16">
+			<Card.Content class="relative pt-16 pb-6">
 				<div class="absolute -top-12 left-6">
-					<Avatar class="border-background h-24 w-24 border-4">
+					<Avatar class="h-24 w-24 border-4 border-background">
 						<AvatarImage
 							src={data.user.profile?.avatar_url}
 							alt={data.user.profile?.display_name || data.user.username}
@@ -169,7 +169,7 @@
 					<p class="text-muted-foreground">@{data.user.username}</p>
 				</div>
 				{#if data.user.profile?.bio}
-					<div class="bg-muted/50 mt-4 rounded-lg p-4">
+					<div class="mt-4 rounded-lg bg-muted/50 p-4">
 						<p class="text-sm leading-relaxed">{data.user.profile.bio}</p>
 					</div>
 				{/if}
