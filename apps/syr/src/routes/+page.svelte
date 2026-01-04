@@ -9,13 +9,13 @@
 	<div class="max-w-3xl space-y-8 py-8">
 		{#if data.user}
 			<!-- Logged In View -->
-			<div class="space-y-6 text-center">
+			<!-- <div class="space-y-6 text-center">
 				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 					Welcome back, <span class="text-primary"
 						>{data.user.profile?.display_name ?? data.user.username}</span
 					>!
 				</h1>
-			</div>
+			</div> -->
 
 			<!-- Discord-style Profile Card -->
 			<Card.Root class="overflow-hidden">
@@ -32,10 +32,10 @@
 					<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
 				{/if}
 
-				<Card.Content class="relative pt-16 pb-6">
+				<Card.Content class="relative min-w-96 pb-6 pt-16">
 					<!-- Avatar positioned over banner -->
 					<div class="absolute -top-12 left-6">
-						<Avatar.Root class="h-24 w-24 border-4 border-background">
+						<Avatar.Root class="border-background h-24 w-24 border-4">
 							<Avatar.Image
 								src={data.user.profile?.avatar_url}
 								alt={data.user.profile?.display_name ?? data.user.username}
@@ -56,17 +56,17 @@
 								</h2>
 								{#if data.user.role === 'ADMIN'}
 									<span
-										class="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+										class="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
 									>
 										Admin
 									</span>
 								{/if}
 							</div>
-							<p class="text-lg text-muted-foreground">@{data.user.username}</p>
+							<p class="text-muted-foreground text-lg">@{data.user.username}</p>
 						</div>
 
 						{#if data.user.profile?.bio}
-							<div class="rounded-lg bg-muted/50 p-4">
+							<div class="bg-muted/50 rounded-lg p-4">
 								<p class="text-sm leading-relaxed">
 									{data.user.profile.bio}
 								</p>
@@ -81,14 +81,14 @@
 				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 					Welcome to <span class="text-primary">SYR</span>
 				</h1>
-				<p class="text-xl text-muted-foreground">Self-Yield Representation</p>
-				<p class="text-lg text-muted-foreground">
+				<p class="text-muted-foreground text-xl">Self-Yield Representation</p>
+				<p class="text-muted-foreground text-lg">
 					Your sovereign digital presence. No algorithms, no lock-in, just you.
 				</p>
 			</div>
 		{/if}
 
-		<Card.Root class="mt-12 text-left">
+		<!-- <Card.Root class="mt-12 text-left">
 			<Card.Header>
 				<Card.Title>Built on Open Standards</Card.Title>
 			</Card.Header>
@@ -110,6 +110,6 @@
 					<p class="text-sm text-muted-foreground">Verifiable credentials for digital reputation</p>
 				</div>
 			</Card.Content>
-		</Card.Root>
+		</Card.Root> -->
 	</div>
 </div>

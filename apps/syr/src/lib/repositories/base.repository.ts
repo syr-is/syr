@@ -10,7 +10,7 @@ import { dbService } from '$lib/services/db';
  */
 export abstract class BaseRepository<T> {
 	protected abstract tableName: string;
-	protected abstract schema: z.ZodSchema<T>;
+	protected abstract schema: z.ZodType<T>;
 
 	/**
 	 * Get database instance lazily (only when needed, not at module load time)

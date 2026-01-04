@@ -1,4 +1,4 @@
-import { hashPassword, verifyPassword, generateAccessToken, generateDID } from '$lib/server/auth';
+import { hashPassword, verifyPassword, generateAccessToken } from '$lib/server/auth';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
@@ -39,14 +39,14 @@ export class AuthController {
 		const password_hash = await hashPassword(password);
 
 		// Generate did:web identifier
-		const did = generateDID(username);
+		// const did = generateDID(username);
 
 		// Create user
 		const now = new Date();
 		const user = await userRepository.create({
 			username,
 			password_hash,
-			did,
+			// did,
 			role: 'USER',
 			created_at: now,
 			updated_at: now

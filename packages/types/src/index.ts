@@ -4,28 +4,22 @@
  */
 
 // Common base schemas
-export * from "./common.js";
+export * from "./common";
 
 // Codecs for data transformation
-export * from "./codecs.js";
+export * from "./codecs";
 
 // User types
-export * from "./user.js";
+export * from "./user";
 
 // ActivityPub types
-export * from "./activitypub.js";
-
-// Verifiable Credentials types
-export * from "./credentials.js";
+export * from "./activitypub";
 
 // OAuth types
-export * from "./oauth.js";
+export * from "./oauth";
 
 // Event types
-export * from "./events.js";
-
-// Proof types
-export * from "./proofs.js";
+export * from "./events";
 
 // API types
-export * from "./api.js";
+export * from "./api";

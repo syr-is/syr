@@ -1,6 +1,6 @@
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { hash, verify } from '@node-rs/argon2';
-import { jwt as jwtConfig, did as didConfig } from '$lib/config';
+import { jwt as jwtConfig } from '$lib/config';
 
 /**
  * Argon2id configuration
@@ -64,13 +64,6 @@ export function verifyAccessToken(token: string): JWTPayload | null {
 		console.error('JWT verification error:', error);
 		return null;
 	}
-}
-
-/**
- * Generate did:web identifier for a user
- */
-export function generateDID(username: string): string {
-	return `did:web:${didConfig.domain}:users:${username}`;
 }
 
 /**

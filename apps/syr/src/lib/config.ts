@@ -26,7 +26,7 @@ const ConfigSchema = z.object({
 	JWT_EXPIRES_IN: z.string().default('7d'),
 
 	// DID
-	DID_WEB_DOMAIN: z.string().default('localhost:5173'),
+	// DID_WEB_DOMAIN: z.string().default('localhost:5173'),
 
 	// S3 / SeaweedFS
 	S3_ENDPOINT: z.url().default('http://localhost:8333'),
@@ -94,9 +94,9 @@ export const jwt = {
 	expiresIn: config.JWT_EXPIRES_IN
 } as const;
 
-export const did = {
-	domain: config.DID_WEB_DOMAIN
-} as const;
+// export const did = {
+// 	domain: config.DID_WEB_DOMAIN
+// } as const;
 
 export const s3 = {
 	endpoint: config.S3_ENDPOINT,

@@ -7,20 +7,6 @@ import { RecordId } from "surrealdb";
  */
 
 /**
- * DID Schema (did:web only)
- * Enforces did:web method for sovereignty (DNS-based, no blockchain)
- * Format: did:web:example.com or did:web:example.com:path:to:did
- */
-export const DIDSchema = z
-  .string()
-  .regex(
-    /^did:web:[a-zA-Z0-9.-]+(:[a-zA-Z0-9._-]+)*$/,
-    "Invalid DID format - must be did:web method"
-  );
-
-export type DID = z.infer<typeof DIDSchema>;
-
-/**
  * RecordId Schema
  * SurrealDB RecordId instance validation
  */
@@ -56,16 +42,6 @@ export const BaseEntitySchema = z.object({
 });
 
 export type BaseEntity = z.infer<typeof BaseEntitySchema>;
-
-/**
- * Base Entity with DID
- * For entities that have a DID
- */
-export const BaseEntityWithDIDSchema = BaseEntitySchema.extend({
-  did: DIDSchema.optional(),
-});
-
-export type BaseEntityWithDID = z.infer<typeof BaseEntityWithDIDSchema>;
 
 /**
  * Metadata Schema

@@ -1,11 +1,10 @@
 import { z } from "zod";
 import {
   BaseEntitySchema,
-  DIDSchema,
   MetadataSchema,
   TimestampSchema,
   RecordIdSchema,
-} from "./common.js";
+} from "./common";
 
 /**
  * User Role Schema
@@ -29,7 +28,6 @@ export const UserSchema = BaseEntitySchema.extend({
       "Username can only contain letters, numbers, underscores, and hyphens"
     ),
   password_hash: z.string(),
-  did: DIDSchema.optional(), // did:web for true sovereignty (DNS-based, no blockchain)
   role: UserRoleSchema.default("USER"), // Instance-level role for access control
 });
 

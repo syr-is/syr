@@ -2,7 +2,7 @@ services:
   # SurrealDB - Multi-model database
   surrealdb:
     image: surrealdb/surrealdb:v2.3.10
-    command: start --log trace --user root --pass ${SURREALDB_PASS:-syr-dev-password} rocksdb://data
+    command: start --log trace --user ${SURREALDB_USER:-root} --pass ${SURREALDB_PASS:-syr-dev-password} rocksdb://data
     ports:
       - "8000:8000"
     volumes:
