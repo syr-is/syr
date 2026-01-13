@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { sessionRepository } from '$lib/repositories/session.repository';
@@ -15,10 +15,10 @@ const QuerySchema = z.object({
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
-		return json(
-			{ status: 'error', error: { code: 'AUTHENTICATION_ERROR', message: 'Unauthorized' } },
-			{ status: 401 }
-		);
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'Unauthorized'
+		});
 	}
 
 	const parsed = QuerySchema.safeParse({
@@ -27,17 +27,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	});
 
 	if (!parsed.success) {
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'BAD_REQUEST',
-					message: 'Missing or invalid page/size',
-					details: parsed.error.flatten()
-				}
-			},
-			{ status: 400 }
-		);
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'Missing or invalid page/size',
+			details: z.treeifyError(parsed.error)
+		});
 	}
 
 	const { page, size } = parsed.data;

@@ -1,8 +1,9 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { UserLoginSchema } from '@syr-is/types';
 import { authController } from '$lib/controllers/auth.controller';
 import { config } from '$lib/config';
+import { z } from 'zod';
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	try {
@@ -39,48 +40,38 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			},
 			{ status: 200 }
 		);
-	} catch (error) {
-		console.error('Login error:', error);
+	} catch (err) {
+		console.error('Login error:', err);
 
-		if (error instanceof Error) {
+		// Handle Zod validation errors
+		if (err instanceof z.ZodError) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Invalid input data',
+				details: z.treeifyError(err)
+			});
+		}
+
+		if (err instanceof Error) {
 			// Handle invalid credentials
-			if (error.message.includes('Invalid credentials')) {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'INVALID_CREDENTIALS',
-							message: 'Invalid username or password'
-						}
-					},
-					{ status: 401 }
-				);
+			if (err.message.includes('Invalid credentials')) {
+				throw error(401, {
+					code: 'INVALID_CREDENTIALS',
+					message: 'Invalid username or password'
+				});
 			}
 
-			if (error.message.includes('Validation failed')) {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'VALIDATION_ERROR',
-							message: 'Invalid input data',
-							details: error.message
-						}
-					},
-					{ status: 400 }
-				);
+			if (err.message.includes('Validation failed')) {
+				throw error(400, {
+					code: 'VALIDATION_ERROR',
+					message: err.message
+				});
 			}
 		}
 
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'Login failed'
-				}
-			},
-			{ status: 500 }
-		);
+		throw error(500, {
+			code: 'INTERNAL_SERVER_ERROR',
+			message: 'Login failed'
+		});
 	}
 };

@@ -26,6 +26,9 @@
       "@syr-is/types",
       "@tailwindcss/oxide",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "@smithy/types": "^4.11.0"
+    }
   }
 }

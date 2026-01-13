@@ -4,7 +4,7 @@ import {
   MetadataSchema,
   TimestampSchema,
   RecordIdSchema,
-} from "./common";
+} from "./common.js";
 
 /**
  * User Role Schema

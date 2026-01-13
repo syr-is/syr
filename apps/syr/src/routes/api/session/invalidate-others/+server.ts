@@ -1,13 +1,13 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sessionRepository } from '$lib/repositories/session.repository';
 
 export const POST: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
-		return json(
-			{ status: 'error', error: { code: 'AUTHENTICATION_ERROR', message: 'Unauthorized' } },
-			{ status: 401 }
-		);
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'Unauthorized'
+		});
 	}
 
 	const sessions = await sessionRepository.findByUserId(locals.user.id);

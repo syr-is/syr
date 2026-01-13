@@ -155,6 +155,44 @@ export const QueryOptionsSchema = z.object({
 export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
 
 /**
+ * Query Parameters Schema
+ * Schema for parsing flat query parameters from URL and transforming to QueryOptions format
+ */
+export const QueryParamsSchema = z
+  .object({
+    limit: z.coerce.number().int().positive().max(100).optional(),
+    offset: z.coerce.number().int().nonnegative().optional(),
+    sort_field: z.string().optional(),
+    sort_order: SortOrderSchema.optional(),
+    search: z.string().optional(),
+  })
+  .transform((data) => {
+    // Transform flat query params to QueryOptions format
+    const options: Partial<QueryOptions> = {
+      limit: data.limit,
+      offset: data.offset,
+      search: data.search,
+    };
+
+    if (data.sort_field) {
+      options.sort = {
+        field: data.sort_field,
+        order: data.sort_order || "desc",
+      };
+    } else {
+      // Default sort
+      options.sort = {
+        field: "created_at",
+        order: data.sort_order || "desc",
+      };
+    }
+
+    return options;
+  });
+
+export type QueryParams = z.input<typeof QueryParamsSchema>;
+
+/**
  * Batch Operation Request Schema
  */
 export const BatchOperationRequestSchema = z.object({

@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
@@ -17,9 +17,9 @@ export const POST: RequestHandler = async ({ cookies }) => {
 				if (payload) {
 					await sessionRepository.delete(payload.sessionId);
 				}
-			} catch (error) {
+			} catch (err) {
 				// Token invalid or session already deleted - that's fine, continue with logout
-				console.log('Session cleanup skipped:', error);
+				console.log('Session cleanup skipped:', err);
 			}
 		}
 
@@ -40,23 +40,17 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			},
 			{ status: 200 }
 		);
-	} catch (error) {
-		console.error('Logout error:', error);
+	} catch (err) {
+		console.error('Logout error:', err);
 
 		// Still clear the cookie even if DB deletion fails
 		cookies.delete('session', {
 			path: '/'
 		});
 
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'LOGOUT_ERROR',
-					message: 'Logout completed with errors'
-				}
-			},
-			{ status: 500 }
-		);
+		throw error(500, {
+			code: 'LOGOUT_ERROR',
+			message: 'Logout completed with errors'
+		});
 	}
 };

@@ -1,8 +1,9 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { UserRegistrationInputSchema } from '@syr-is/types';
 import { authController } from '$lib/controllers/auth.controller';
 import { config } from '$lib/config';
+import { z } from 'zod';
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	try {
@@ -39,48 +40,39 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			},
 			{ status: 201 }
 		);
-	} catch (error) {
-		console.error('Registration error:', error);
+	} catch (err) {
+		console.error('Registration error:', err);
 
-		if (error instanceof Error) {
+		// Handle Zod validation errors
+		if (err instanceof z.ZodError) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Invalid input data',
+				details: z.treeifyError(err)
+			});
+		}
+
+		if (err instanceof Error) {
 			// Handle specific errors
-			if (error.message.includes('already exists')) {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'CONFLICT',
-							message: error.message
-						}
-					},
-					{ status: 409 }
-				);
+			if (err.message.includes('already exists')) {
+				throw error(409, {
+					code: 'CONFLICT',
+					message: err.message
+				});
 			}
 
-			if (error.message.includes('Validation failed')) {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'VALIDATION_ERROR',
-							message: 'Invalid input data',
-							details: error.message
-						}
-					},
-					{ status: 400 }
-				);
+			if (err.message.includes('Validation failed')) {
+				throw error(400, {
+					code: 'VALIDATION_ERROR',
+					message: 'Invalid input data',
+					details: err.message
+				});
 			}
 		}
 
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'Registration failed'
-				}
-			},
-			{ status: 500 }
-		);
+		throw error(500, {
+			code: 'INTERNAL_SERVER_ERROR',
+			message: 'Registration failed'
+		});
 	}
 };

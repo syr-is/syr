@@ -20,10 +20,35 @@ export abstract class BaseRepository<T> {
 	}
 
 	/**
+	 * Transform SurrealDB response to match schema expectations
+	 * Converts ISO date strings to Date instances
+	 */
+	protected transform(data: unknown): unknown {
+		if (data && typeof data === 'object' && !Array.isArray(data)) {
+			const transformed = { ...data } as Record<string, unknown>;
+			// Transform date fields (created_at, updated_at, etc.)
+			for (const [key, value] of Object.entries(transformed)) {
+				if (
+					(key === 'created_at' || key === 'updated_at' || key.endsWith('_at')) &&
+					typeof value === 'string'
+				) {
+					// Check if it's an ISO date string
+					if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+						transformed[key] = new Date(value);
+					}
+				}
+			}
+			return transformed;
+		}
+		return data;
+	}
+
+	/**
 	 * Validate data against schema
 	 */
 	protected validate(data: unknown): T {
-		const result = this.schema.safeParse(data);
+		const transformed = this.transform(data);
+		const result = this.schema.safeParse(transformed);
 		if (!result.success) {
 			throw new Error(`Validation failed: ${JSON.stringify(result.error.issues)}`);
 		}
@@ -48,7 +73,8 @@ export abstract class BaseRepository<T> {
 	async findById(id: RecordId | string): Promise<T | null> {
 		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
 		const record = await this.db.select(recordId);
-		return (record as T) ?? null;
+		if (!record) return null;
+		return this.validate(record);
 	}
 
 	/**
@@ -64,7 +90,9 @@ export abstract class BaseRepository<T> {
 			params as Record<string, unknown>
 		);
 
-		return result[0]?.[0] ?? null;
+		const record = result[0]?.[0];
+		if (!record) return null;
+		return this.validate(record);
 	}
 
 	/**
@@ -112,7 +140,8 @@ export abstract class BaseRepository<T> {
 			this.db.query<[{ total: number }[]]>(countQuery, params)
 		]);
 
-		const data = dataResult[0] ?? [];
+		const rawData = dataResult[0] ?? [];
+		const data = rawData.map((record) => this.validate(record));
 		const total = countResult[0]?.[0]?.total ?? 0;
 
 		return { data, total };
@@ -132,7 +161,7 @@ export abstract class BaseRepository<T> {
 	async merge(id: RecordId | string, data: Partial<T>): Promise<T> {
 		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
 		const record = await this.db.merge(recordId, data as Record<string, unknown>);
-		return record as T;
+		return this.validate(record);
 	}
 
 	/**

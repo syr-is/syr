@@ -1,21 +1,16 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { userController } from '$lib/controllers/user.controller';
 import { ProfileUpdateSchema } from '@syr-is/types';
+import { z } from 'zod';
 
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
 	if (!locals.user) {
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'UNAUTHORIZED',
-					message: 'You must be logged in to update your profile'
-				}
-			},
-			{ status: 401 }
-		);
+		throw error(401, {
+			code: 'UNAUTHORIZED',
+			message: 'You must be logged in to update your profile'
+		});
 	}
 
 	try {
@@ -30,48 +25,30 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			status: 'success',
 			data: result
 		});
-	} catch (error) {
-		console.error('Profile update error:', error);
+	} catch (err) {
+		console.error('Profile update error:', err);
 
-		if (error instanceof Error) {
-			if (error.message === 'Profile not found') {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'NOT_FOUND',
-							message: 'Profile not found'
-						}
-					},
-					{ status: 404 }
-				);
-			}
+		// Handle Zod validation errors
+		if (err instanceof z.ZodError) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Invalid profile data',
+				details: z.treeifyError(err)
+			});
+		}
 
-			// Validation error
-			if (error.name === 'ZodError') {
-				return json(
-					{
-						status: 'error',
-						error: {
-							code: 'VALIDATION_ERROR',
-							message: 'Invalid profile data',
-							details: error.message
-						}
-					},
-					{ status: 400 }
-				);
+		if (err instanceof Error) {
+			if (err.message === 'Profile not found') {
+				throw error(404, {
+					code: 'NOT_FOUND',
+					message: 'Profile not found'
+				});
 			}
 		}
 
-		return json(
-			{
-				status: 'error',
-				error: {
-					code: 'INTERNAL_ERROR',
-					message: 'An unexpected error occurred'
-				}
-			},
-			{ status: 500 }
-		);
+		throw error(500, {
+			code: 'INTERNAL_ERROR',
+			message: 'An unexpected error occurred'
+		});
 	}
 };

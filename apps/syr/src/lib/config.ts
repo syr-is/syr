@@ -32,7 +32,7 @@ const ConfigSchema = z.object({
 	S3_ENDPOINT: z.url().default('http://localhost:8333'),
 	S3_ACCESS_KEY_ID: z.string().default('syr-access-key'),
 	S3_SECRET_ACCESS_KEY: z.string().default('syr-secret-key'),
-	S3_BUCKET: z.string().default('syr-storage'),
+	S3_BUCKET: z.string().default('syr'),
 	S3_REGION: z.string().default('us-east-1'),
 
 	// OAuth

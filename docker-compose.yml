@@ -21,20 +21,38 @@ services:
   # SeaweedFS - S3-compatible distributed storage
   seaweedfs:
     image: chrislusf/seaweedfs:latest
-    command: server -s3 -s3.config=/etc/seaweedfs/s3_config.json
+    command: >
+      server -s3 -s3.config=/etc/seaweedfs/s3_config.json
+      -s3.allowedOrigins=${PUBLIC_URL:-http://localhost:5173}
+      -filer=true
     ports:
       - "8333:8333" # S3 API
       - "9333:9333" # Master
       - "8080:8080" # Volume server
-      - "18080:18080" # Filer
+      - "8888:8888" # Filer
     volumes:
       - ./s3/data:/data
       - ./s3/s3_config.json:/etc/seaweedfs/s3_config.json
+    # Note: To run the CORS setup script inside the container, use:
+    # docker-compose exec seaweedfs sh /usr/local/bin/setup-cors.sh
+    env_file:
+      - .env
     environment:
       - WEED_MASTER_VOLUME_GROWTH_COPY_1=1
       - WEED_MASTER_VOLUME_GROWTH_COPY_2=0
       - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:5173}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://localhost:8333}
+      - S3_BUCKET=${S3_BUCKET:-syr}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-syr-access-key}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-syr-secret-key}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Surrealist - Visual IDE for SurrealDB
   surrealist:

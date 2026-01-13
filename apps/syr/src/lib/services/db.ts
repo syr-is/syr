@@ -33,13 +33,6 @@ class DatabaseService {
 		}
 
 		try {
-			console.log(`
-				DB URL: ${db.url}
-				DB user: ${db.user}
-				DB pass: ${db.password}
-				DB ns: ${db.namespace}
-				DB db: ${db.database}
-				`);
 			await this.db.connect(db.url);
 			await this.db.signin({
 				username: db.user,

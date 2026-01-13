@@ -1,4 +1,44 @@
-<!-- 148c6b8a-1b20-4ebc-8331-59c19f13e8b3 9ad06733-0935-459d-82a3-9a938c3e20b4 -->
+---
+name: SYR Architecture Implementation Plan
+overview: ""
+todos:
+  - id: 2fdd2d88-d99c-49b4-8440-66bc9ab048e0
+    content: Create Architecture.md documenting SYR vision, system design, data models, and integration patterns
+    status: pending
+  - id: e8bc4f27-18b4-4453-b1b3-89a17d1e9652
+    content: Add SurrealDB and MCP servers to Docker configuration files
+    status: pending
+  - id: 08fbf686-a783-4546-be71-608067cc3e3c
+    content: Integrate SurrealDB client, create database connection utilities and initial schema
+    status: pending
+  - id: 025705e6-57d8-4663-a1d3-5741f848c81a
+    content: Implement user registration, login, session management with database schema and API routes
+    status: pending
+  - id: 467e7e77-a163-44e4-ac68-e407d7a7ff48
+    content: Build user profile system with CRUD operations, avatar uploads, and frontend pages
+    status: pending
+  - id: 7ca03172-f345-4497-a3a2-579ec7e1c693
+    content: Create ActivityPub actor model, WebFinger, inbox/outbox endpoints, and HTTP signatures
+    status: pending
+  - id: f40e167d-0b52-40b5-b72a-c85b08d820df
+    content: "Implement federation logic: remote actor fetching, activity delivery, and inbox processing"
+    status: pending
+  - id: cd9639e3-42f1-430a-90b9-999c20d8af52
+    content: Build VC 2.0 implementation with DID support, credential issuance, and verification
+    status: pending
+  - id: a70a8634-b84b-46e0-b97b-de65a71716ca
+    content: Implement digital proof storage system linked to VCs and user interactions
+    status: pending
+  - id: b9a72481-df86-4eb5-be22-dc6387523868
+    content: Create OAuth 2.0 provider with authorization flow, token management, and client registration
+    status: pending
+  - id: d1ca53ed-4496-449b-8541-a6775e0d6468
+    content: Build first-party JavaScript SDK package for service integration and event emission
+    status: pending
+  - id: bed7557b-8498-4f3a-93ec-05b5b39d64c2
+    content: Design and implement modern UI with dashboard, activity feed, credentials page, and developer settings
+    status: pending
+---
 
 # SYR Architecture Implementation Plan
 
@@ -374,18 +414,3 @@ Update `README.md` to include:
 - API documentation links
 - SDK usage examples
 - Types package documentation
-
-### To-dos
-
-- [ ] Create Architecture.md documenting SYR vision, system design, data models, and integration patterns
-- [ ] Add SurrealDB and MCP servers to Docker configuration files
-- [ ] Integrate SurrealDB client, create database connection utilities and initial schema
-- [ ] Implement user registration, login, session management with database schema and API routes
-- [ ] Build user profile system with CRUD operations, avatar uploads, and frontend pages
-- [ ] Create ActivityPub actor model, WebFinger, inbox/outbox endpoints, and HTTP signatures
-- [ ] Implement federation logic: remote actor fetching, activity delivery, and inbox processing
-- [ ] Build VC 2.0 implementation with DID support, credential issuance, and verification
-- [ ] Implement digital proof storage system linked to VCs and user interactions
-- [ ] Create OAuth 2.0 provider with authorization flow, token management, and client registration
-- [ ] Build first-party JavaScript SDK package for service integration and event emission
-- [ ] Design and implement modern UI with dashboard, activity feed, credentials page, and developer settings
