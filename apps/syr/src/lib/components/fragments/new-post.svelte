@@ -163,15 +163,15 @@
 	>
 		+ New Post
 	</Dialog.Trigger>
-	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden">
+	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col overflow-visible">
 		<Dialog.Header>
 			<Dialog.Title>New Post</Dialog.Title>
 			<Dialog.Description>Create a new blog post</Dialog.Description>
 		</Dialog.Header>
-		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
+		<form method="POST" use:enhance class="flex min-h-0 flex-col">
 			<!-- Hidden field for type -->
 			<input type="hidden" name="type" value={$formData.type} />
-			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
+			<div class="min-h-0 flex-1 space-y-4 overflow-visible">
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -231,7 +231,7 @@
 							<div
 								id="post-editor"
 								use:mountCrepe
-								class="border-input min-h-[400px] w-full overflow-y-auto rounded-md border p-4"
+								class="border-input min-h-[400px] w-full overflow-visible rounded-md border p-4"
 							></div>
 						{:else}
 							<Textarea

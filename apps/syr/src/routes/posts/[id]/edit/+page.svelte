@@ -171,7 +171,7 @@
 			<!-- Hidden field for id and type -->
 			<input type="hidden" name="id" value={$formData.id} />
 			<input type="hidden" name="type" value={$formData.type} />
-			<Card.Content class="max-h-[calc(100vh-16rem)] space-y-4 overflow-y-auto">
+			<Card.Content class="space-y-4">
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -232,7 +232,7 @@
 								<div
 									id="post-editor"
 									use:mountCrepe
-									class="border-input min-h-[400px] w-full overflow-y-auto rounded-md border p-4"
+									class="border-input max-h-[500px] min-h-[400px] w-full overflow-y-auto rounded-md border p-4"
 								></div>
 							{/key}
 						{:else}

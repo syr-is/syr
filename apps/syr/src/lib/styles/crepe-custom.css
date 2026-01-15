@@ -1,6 +1,5 @@
 /* Custom Crepe styling extensions */
 /* Extends the existing Crepe themes with z-index and overflow fixes for dialogs */
-/* Ensures block editor UI can overflow parent containers */
 
 /* Root editor container adjustments */
 :global(.milkdown-editor) {
@@ -24,28 +23,6 @@
 }
 
 /*
- * Block editor UI elements - allow overflow outside parent container
- * These elements (like code block editors, image block editors) can be larger
- * than their parent and need to be visible outside the container
- * Note: Don't override position - let Crepe handle it, just ensure overflow is allowed
- */
-:global(.milkdown [data-block-edit]),
-:global(.milkdown .block-edit),
-:global(.milkdown .block-editor),
-:global(.milkdown [data-type='codeBlock'] [class*='edit']),
-:global(.milkdown [data-type='imageBlock'] [class*='edit']),
-:global(.milkdown .code-block-edit),
-:global(.milkdown .image-block-edit) {
-	/* Allow block editor to overflow parent container */
-	z-index: 51; /* Above other floating elements */
-	overflow: visible !important;
-	/* Ensure it can extend beyond parent bounds */
-	max-width: none !important;
-	/* Prevent containment from clipping */
-	contain: none !important;
-}
-
-/*
  * Dropdown/Menu content scrolling
  * Ensure internal scrolling works for long menus while keeping the container visible
  */
@@ -57,123 +34,22 @@
 	max-height: 300px;
 }
 
-/* Post editor container specific overrides */
+/* Post editor container specific overrides if needed */
 #post-editor {
-	/* Allow block editor elements to overflow horizontally and vertically */
-	overflow-x: visible;
-	/* But allow scrolling for the main editor content */
-	overflow-y: auto;
+	/* Ensure the container usually doesn't clip the editor's floating elements */
+	overflow: visible;
 	display: flex;
 	flex-direction: column;
-	/* Ensure minimum height for usability */
-	min-height: 400px;
-	/* Ensure proper positioning context for block editors */
-	position: relative;
 }
 
 #post-editor .milkdown {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	/* Allow block editor elements to overflow */
-	overflow: visible;
-	position: relative;
 }
 
 #post-editor .milkdown .editor {
 	flex: 1;
 	/* Min height ensures clickable area */
 	min-height: 15rem;
-	/* Allow block editor UI to overflow */
-	overflow: visible;
-	position: relative;
-}
-
-/*
- * Block handle and block editor controls - ensure they can overflow
- * These are the UI elements that appear when editing blocks (code blocks, etc.)
- */
-:global(.milkdown-block-handle),
-:global(.milkdown [class*='block-handle']),
-:global(.milkdown [data-block-handle]),
-:global(.milkdown .block-handle) {
-	z-index: 52;
-	overflow: visible !important;
-	position: relative;
-}
-
-/*
- * Code block editor and image block editor - allow full overflow
- */
-:global(.milkdown [data-type='codeBlock']),
-:global(.milkdown [data-type='imageBlock']),
-:global(.milkdown .code-block),
-:global(.milkdown .image-block),
-:global(.milkdown [class*='code-block']),
-:global(.milkdown [class*='image-block']) {
-	overflow: visible !important;
-	position: relative;
-}
-
-/*
- * Block editor panels and popups that appear when editing blocks
- * These need to be able to overflow their containers
- */
-:global(.milkdown [class*='block-edit-panel']),
-:global(.milkdown [class*='block-editor-panel']),
-:global(.milkdown [class*='block-popup']),
-:global(.milkdown [data-block-popup]) {
-	z-index: 53;
-	overflow: visible !important;
-	/* Allow these to extend beyond parent */
-	max-width: none !important;
-	/* Prevent containment from clipping */
-	contain: none !important;
-}
-
-/*
- * Ensure containers that directly wrap block editors allow overflow
- * We need to allow overflow for block editor elements while maintaining
- * scrolling functionality. The key is to allow overflow on the editor's
- * immediate parent containers, not necessarily the dialog/card content itself.
- */
-:global(form:has(#post-editor)) {
-	/* Allow block editor elements to overflow the form */
-	overflow: visible;
-	position: relative;
-}
-
-/*
- * Content areas that contain the editor - these handle scrolling
- * but we need to ensure block editors can overflow them
- */
-:global(.space-y-4:has(#post-editor)) {
-	/* Allow block editors to overflow horizontally */
-	overflow-x: visible;
-	/* Keep vertical scrolling for main content */
-	overflow-y: auto;
-	position: relative;
-}
-
-/*
- * Dialog and Card content - ensure they don't clip block editors
- * Note: These may have overflow-y-auto for scrolling, but we need
- * to ensure block editors positioned absolutely can escape
- */
-:global([data-slot='dialog-content']:has(#post-editor)),
-:global([data-slot='card-content']:has(#post-editor)) {
-	/* Ensure proper positioning context for absolutely positioned block editors */
-	position: relative;
-	/* Don't clip absolutely positioned children (block editors) */
-	contain: layout style;
-}
-
-/*
- * ProseMirror editor viewport - ensure block editors can overflow
- */
-:global(.milkdown .editor),
-:global(.milkdown .editor > div),
-:global(.milkdown [class*='editor-viewport']) {
-	overflow: visible !important;
-	position: relative;
 }
