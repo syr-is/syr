@@ -111,79 +111,6 @@ export const json = <T extends z.ZodTypeAny>(schema: T) =>
   });
 
 /**
- * UTF-8 to Bytes Codec
- * Converts UTF-8 strings to Uint8Array byte arrays
- */
-export const utf8ToBytes = z.codec(z.string(), z.instanceof(Uint8Array), {
-  decode: (str) => new TextEncoder().encode(str),
-  encode: (bytes) => new TextDecoder().decode(bytes),
-});
-
-/**
- * Bytes to UTF-8 Codec (Server-side only)
- * ⚠️ NOT for HTTP transport - Uint8Array cannot be sent over HTTP
- * Use base64ToBytes or hexToBytes for HTTP transport of binary data
- * This codec is for server-side binary data processing
- */
-export const bytesToUtf8 = z.codec(z.instanceof(Uint8Array), z.string(), {
-  decode: (bytes) => new TextDecoder().decode(bytes),
-  encode: (str) => new TextEncoder().encode(str),
-});
-
-/**
- * Base64 to Bytes Codec
- * Converts base64 strings to Uint8Array byte arrays
- */
-export const base64ToBytes = z.codec(z.base64(), z.instanceof(Uint8Array), {
-  decode: (base64String) => {
-    const binaryString = atob(base64String);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  },
-  encode: (bytes) => {
-    let binaryString = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binaryString += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binaryString);
-  },
-});
-
-/**
- * Base64 URL to Bytes Codec
- * Converts base64url strings (URL-safe base64) to Uint8Array
- */
-export const base64urlToBytes = z.codec(
-  z.base64url(),
-  z.instanceof(Uint8Array),
-  {
-    decode: (base64urlString) => {
-      // Convert base64url to base64
-      const base64 = base64urlString.replace(/-/g, "+").replace(/_/g, "/");
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes;
-    },
-    encode: (bytes) => {
-      let binaryString = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binaryString += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binaryString)
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=/g, "");
-    },
-  }
-);
-
-/**
  * Hex to Bytes Codec
  * Converts hexadecimal strings to Uint8Array byte arrays
  */
@@ -200,24 +127,6 @@ export const hexToBytes = z.codec(z.hex(), z.instanceof(Uint8Array), {
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
   },
-});
-
-/**
- * String to URL Codec
- * Converts URL strings to JavaScript URL objects
- */
-export const stringToURL = z.codec(z.url(), z.instanceof(URL), {
-  decode: (urlString) => new URL(urlString),
-  encode: (url) => url.href,
-});
-
-/**
- * String to HTTP URL Codec
- * Converts HTTP/HTTPS URL strings to JavaScript URL objects
- */
-export const stringToHttpURL = z.codec(z.httpUrl(), z.instanceof(URL), {
-  decode: (urlString) => new URL(urlString),
-  encode: (url) => url.href,
 });
 
 /**
