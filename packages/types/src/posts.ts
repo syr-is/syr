@@ -23,6 +23,7 @@ export const PostSchema = BaseEntitySchema.extend({
   type: PostTypeSchema,
   content_type: PostBlogContentTypeSchema,
   title: z.string().optional(),
+  description: z.string().max(280).optional(),
   content: z.string().optional(),
   visibility: PostBlogVisibilityTypeSchema.default("public"),
   author_id: RecordIdSchema,

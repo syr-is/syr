@@ -59,6 +59,7 @@
 				$formData.type = 'blog';
 				$formData.content_type = 'markdown';
 				$formData.title = '';
+				$formData.description = '';
 				$formData.content = '';
 				$formData.visibility = 'public';
 				// Close dialog - editor will be destroyed and recreated on next open
@@ -79,6 +80,7 @@
 	$formData.type = 'blog';
 	$formData.content_type = 'markdown';
 	$formData.title = '';
+	$formData.description = '';
 	$formData.content = '';
 	$formData.visibility = 'public';
 
@@ -159,19 +161,19 @@
 
 <Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Trigger
-		class="border-input shadow-xs ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border bg-transparent px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+		class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium whitespace-nowrap shadow-xs ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 	>
 		+ New Post
 	</Dialog.Trigger>
-	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col overflow-visible">
-		<Dialog.Header>
+	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col">
+		<Dialog.Header class="shrink-0">
 			<Dialog.Title>New Post</Dialog.Title>
 			<Dialog.Description>Create a new blog post</Dialog.Description>
 		</Dialog.Header>
-		<form method="POST" use:enhance class="flex min-h-0 flex-col">
+		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<!-- Hidden field for type -->
 			<input type="hidden" name="type" value={$formData.type} />
-			<div class="min-h-0 flex-1 space-y-4 overflow-visible">
+			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -180,6 +182,23 @@
 						{/snippet}
 					</Form.Control>
 					<Form.Description>Give your post a title (optional)</Form.Description>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<Form.Field {form} name="description">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Form.Label>Description</Form.Label>
+							<Textarea
+								{...props}
+								bind:value={$formData.description}
+								placeholder="A short summary of your post..."
+								class="resize-none"
+								rows={2}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.Description>Brief summary shown in previews (max 280 characters)</Form.Description>
 					<Form.FieldErrors />
 				</Form.Field>
 
@@ -231,7 +250,7 @@
 							<div
 								id="post-editor"
 								use:mountCrepe
-								class="border-input min-h-[400px] w-full overflow-visible rounded-md border p-4"
+								class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
 							></div>
 						{:else}
 							<Textarea
@@ -254,7 +273,7 @@
 					{/snippet}
 				</Form.ElementField>
 			</div>
-			<Dialog.Footer class="mt-6">
+			<Dialog.Footer class="mt-6 shrink-0">
 				<Form.Button type="submit" disabled={loading} class="w-full sm:w-auto">
 					{#if loading}
 						Creating post...

@@ -153,11 +153,9 @@
 						<Pagination.Root bind:page={currentPage} count={total} perPage={limit} siblingCount={1}>
 							{#snippet children({ pages, currentPage: activePage })}
 								<Pagination.Content>
-									{#if activePage > 1}
-										<Pagination.Item>
-											<Pagination.PrevButton />
-										</Pagination.Item>
-									{/if}
+									<Pagination.Item>
+										<Pagination.PrevButton />
+									</Pagination.Item>
 									{#each pages as page (page.key)}
 										{#if page.type === 'ellipsis'}
 											<Pagination.Item>
@@ -171,11 +169,9 @@
 											</Pagination.Item>
 										{/if}
 									{/each}
-									{#if activePage < totalPages}
-										<Pagination.Item>
-											<Pagination.NextButton />
-										</Pagination.Item>
-									{/if}
+									<Pagination.Item>
+										<Pagination.NextButton />
+									</Pagination.Item>
 								</Pagination.Content>
 							{/snippet}
 						</Pagination.Root>

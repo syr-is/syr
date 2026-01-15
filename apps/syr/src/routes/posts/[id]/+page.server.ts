@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Get post by ID
 	const postId = stringToRecordId.decode(params.id);
 	const post = await postController.getPost(postId);
-	
+
 	if (!post) {
 		throw error(404, {
 			code: 'NOT_FOUND',

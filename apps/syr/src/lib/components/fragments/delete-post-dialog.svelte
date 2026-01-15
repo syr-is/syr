@@ -78,9 +78,7 @@
 			</div>
 		</div>
 		<Dialog.Footer>
-			<Button variant="outline" disabled={loading} onclick={() => (open = false)}>
-				Cancel
-			</Button>
+			<Button variant="outline" disabled={loading} onclick={() => (open = false)}>Cancel</Button>
 			<Button variant="destructive" disabled={!isConfirmValid || loading} onclick={handleDelete}>
 				{#if loading}
 					Deleting...

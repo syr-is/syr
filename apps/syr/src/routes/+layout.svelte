@@ -24,7 +24,7 @@
 		<header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
 			<SidebarTrigger />
 		</header>
-		<main>
+		<main class="min-h-0 flex-1 overflow-y-auto">
 			{@render children?.()}
 		</main>
 	</SidebarInset>

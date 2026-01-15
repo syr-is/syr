@@ -19,6 +19,8 @@
 	import { stringToRecordId } from '@syr-is/types';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
+	import { ArrowLeft } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data }: { data: PageData } = $props();
 
@@ -59,7 +61,7 @@
 
 				toast.success('Post updated successfully');
 				await invalidateAll();
-				goto('/');
+				goHome();
 			} catch (_error) {
 				toast.error('An unexpected error occurred');
 			} finally {
@@ -78,6 +80,7 @@
 			$formData.type = data.post.type;
 			$formData.content_type = data.post.content_type;
 			$formData.title = data.post.title || '';
+			$formData.description = data.post.description || '';
 			$formData.content = data.post.content || '';
 			$formData.visibility = data.post.visibility;
 		}
@@ -159,19 +162,36 @@
 			crepeReady = false;
 		}
 	});
+
+	function goHome() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		goto('/');
+	}
 </script>
 
-<div class="container mx-auto max-w-4xl px-4 py-8">
-	<Card.Root>
-		<Card.Header>
+<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-8">
+	<Button
+		variant="ghost"
+		size="sm"
+		class="mb-4 shrink-0 self-start"
+		onclick={() => {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto(`/posts/${data.post.id}`);
+		}}
+	>
+		<ArrowLeft class="mr-2 h-4 w-4" />
+		Back to Post
+	</Button>
+	<Card.Root class="flex min-h-0 flex-1 flex-col">
+		<Card.Header class="shrink-0">
 			<Card.Title>Edit Post</Card.Title>
 			<Card.Description>Update your blog post</Card.Description>
 		</Card.Header>
-		<form method="POST" use:enhance>
+		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<!-- Hidden field for id and type -->
 			<input type="hidden" name="id" value={$formData.id} />
 			<input type="hidden" name="type" value={$formData.type} />
-			<Card.Content class="space-y-4">
+			<Card.Content class="min-h-0 flex-1 space-y-4 overflow-y-auto">
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -180,6 +200,23 @@
 						{/snippet}
 					</Form.Control>
 					<Form.Description>Give your post a title (optional)</Form.Description>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<Form.Field {form} name="description">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Form.Label>Description</Form.Label>
+							<Textarea
+								{...props}
+								bind:value={$formData.description}
+								placeholder="A short summary of your post..."
+								class="resize-none"
+								rows={2}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.Description>Brief summary shown in previews (max 280 characters)</Form.Description>
 					<Form.FieldErrors />
 				</Form.Field>
 
@@ -232,7 +269,7 @@
 								<div
 									id="post-editor"
 									use:mountCrepe
-									class="border-input max-h-[500px] min-h-[400px] w-full overflow-y-auto rounded-md border p-4"
+									class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
 								></div>
 							{/key}
 						{:else}
@@ -256,8 +293,8 @@
 					{/snippet}
 				</Form.ElementField>
 			</Card.Content>
-			<Card.Footer class="flex justify-end gap-2">
-				<Form.Button type="button" variant="outline" onclick={() => goto('/')}>Cancel</Form.Button>
+			<Card.Footer class="flex shrink-0 justify-end gap-2">
+				<Form.Button type="button" variant="outline" onclick={goHome}>Cancel</Form.Button>
 				<Form.Button type="submit" disabled={loading}>
 					{#if loading}
 						Updating post...

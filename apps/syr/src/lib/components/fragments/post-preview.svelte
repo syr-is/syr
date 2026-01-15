@@ -19,12 +19,15 @@
 		}).format(d);
 	}
 
-	// Get excerpt from content (strip markdown/HTML and limit to 150 chars)
-	function getExcerpt(content: string | undefined): string {
-		if (!content) return 'No content';
-		// Strip markdown syntax and HTML tags
-		const plainText = content
-			.replace(/[#*_`~\[\]()]/g, '')
+	// Get display text - prefer description, fall back to truncated content
+	function getDisplayText(post: Post): string {
+		if (post.description) {
+			return post.description;
+		}
+		if (!post.content) return 'No content';
+		// Strip markdown syntax and HTML tags for fallback
+		const plainText = post.content
+			.replace(/[#*_`~[\]()]/g, '')
 			.replace(/<[^>]*>/g, '')
 			.replace(/\n/g, ' ')
 			.trim();
@@ -32,20 +35,22 @@
 	}
 
 	// Get visibility badge variant
-	function getVisibilityVariant(visibility: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+	function getVisibilityVariant(
+		visibility: string
+	): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (visibility === 'public') return 'default';
 		if (visibility === 'unlisted') return 'secondary';
 		return 'destructive';
 	}
 </script>
 
-<Card.Root class="transition-all hover:shadow-md hover:border-primary/50">
+<Card.Root class="hover:border-primary/50 transition-all hover:shadow-md">
 	<Card.Header>
 		<div class="flex items-start justify-between gap-2">
 			<Card.Title class="line-clamp-2 flex-1">
 				{post.title || 'Untitled Post'}
 			</Card.Title>
-			<div class="flex gap-2 flex-shrink-0">
+			<div class="flex flex-shrink-0 gap-2">
 				<Badge variant={getVisibilityVariant(post.visibility)} class="text-xs">
 					{post.visibility}
 				</Badge>
@@ -54,17 +59,17 @@
 				</Badge>
 			</div>
 		</div>
-		<Card.Description class="text-xs text-muted-foreground">
+		<Card.Description class="text-muted-foreground text-xs">
 			{formatDate(post.created_at)}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content>
 		<div class="flex items-start justify-between gap-2">
-			<p class="text-sm text-muted-foreground line-clamp-3 flex-1">{getExcerpt(post.content)}</p>
+			<p class="text-muted-foreground line-clamp-3 flex-1 text-sm">{getDisplayText(post)}</p>
 			<Button
 				variant="ghost"
 				size="icon"
-				class="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+				class="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
 				onclick={(e) => {
 					e.stopPropagation();
 					deleteDialogOpen = true;
@@ -77,4 +82,3 @@
 </Card.Root>
 
 <DeletePostDialog bind:open={deleteDialogOpen} {post} />
-
