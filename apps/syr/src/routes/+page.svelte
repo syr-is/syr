@@ -10,7 +10,8 @@
 	import type { Post } from '@syr-is/types';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { GripVertical, Pin } from 'lucide-svelte';
+	import { Pin } from 'lucide-svelte';
+	import DraggableItem from '$lib/components/fragments/draggable-item.svelte';
 
 	let { data } = $props();
 
@@ -331,24 +332,16 @@
 					</div>
 					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{#each pinnedPosts as post, index (post.id.toString())}
-							<div
-								draggable="true"
-								ondragstart={() => handleDragStart(index)}
-								ondragover={(e) => handleDragOver(e, index)}
-								ondragleave={handleDragLeave}
-								ondrop={(e) => handleDrop(e, index)}
-								ondragend={handleDragEnd}
-								class="group relative transition-all {dragOverIndex === index
-									? 'ring-2 ring-primary ring-offset-2'
-									: ''} {draggedIndex === index ? 'opacity-50' : ''}"
-								role="listitem"
+							<DraggableItem
+								{index}
+								{draggedIndex}
+								{dragOverIndex}
+								onDragStart={handleDragStart}
+								onDragOver={handleDragOver}
+								onDragLeave={handleDragLeave}
+								onDrop={handleDrop}
+								onDragEnd={handleDragEnd}
 							>
-								<!-- Drag handle -->
-								<div
-									class="absolute top-1/2 -left-2 z-10 -translate-y-1/2 cursor-grab rounded bg-muted p-1 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-								>
-									<GripVertical class="h-4 w-4 text-muted-foreground" />
-								</div>
 								<button
 									type="button"
 									class="w-full text-left"
@@ -367,7 +360,7 @@
 										showPinButton={true}
 									/>
 								</button>
-							</div>
+							</DraggableItem>
 						{/each}
 					</div>
 				</div>
