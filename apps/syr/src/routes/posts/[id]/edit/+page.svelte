@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -19,7 +20,7 @@
 	import { stringToRecordId } from '@syr-is/types';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
-	import { ArrowLeft } from 'lucide-svelte';
+	import { ArrowLeft, Pin, PinOff } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 
 	let { data }: { data: PageData } = $props();
@@ -27,6 +28,54 @@
 	let crepeInstance: CrepeType | null = $state(null);
 	let crepeReady = $state(false);
 	let loading = $state(false);
+	let isPinned = $state(false);
+	let pinLoading = $state(false);
+
+	// Check if post is pinned on mount
+	$effect(() => {
+		checkPinStatus();
+	});
+
+	async function checkPinStatus() {
+		try {
+			const response = await fetch('/api/posts/pinned');
+			if (response.ok) {
+				const result = await response.json();
+				const pinnedIds: string[] = result.data?.post_ids || [];
+				isPinned = pinnedIds.includes(data.post.id);
+			}
+		} catch {
+			// Ignore errors
+		}
+	}
+
+	async function handlePinToggle() {
+		if (pinLoading) return;
+
+		pinLoading = true;
+		try {
+			const response = await fetch('/api/posts/pinned', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					post_id: data.post.id,
+					action: isPinned ? 'unpin' : 'pin'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to toggle pin');
+			}
+
+			isPinned = !isPinned;
+			toast.success(isPinned ? 'Post pinned' : 'Post unpinned');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to toggle pin');
+		} finally {
+			pinLoading = false;
+		}
+	}
 
 	const form = superForm(defaults(zod4(PostUpdateSchema)), {
 		validators: zod4(PostUpdateSchema),
@@ -184,8 +233,37 @@
 	</Button>
 	<Card.Root class="flex min-h-0 flex-1 flex-col">
 		<Card.Header class="shrink-0">
-			<Card.Title>Edit Post</Card.Title>
-			<Card.Description>Update your blog post</Card.Description>
+			<div class="flex items-start justify-between">
+				<div>
+					<Card.Title>Edit Post</Card.Title>
+					<Card.Description>Update your blog post</Card.Description>
+				</div>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="outline"
+								size="sm"
+								onclick={handlePinToggle}
+								disabled={pinLoading}
+								class={isPinned ? 'text-primary' : ''}
+							>
+								{#if isPinned}
+									<PinOff class="mr-2 h-4 w-4" />
+									Unpin
+								{:else}
+									<Pin class="mr-2 h-4 w-4" />
+									Pin
+								{/if}
+							</Button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isPinned ? 'Remove from pinned posts' : 'Add to pinned posts'}
+					</Tooltip.Content>
+				</Tooltip.Root>
+			</div>
 		</Card.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<!-- Hidden field for id and type -->

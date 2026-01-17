@@ -1,13 +1,65 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { marked } from 'marked';
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
-	import { Pencil, ArrowLeft } from 'lucide-svelte';
+	import { Pencil, ArrowLeft, Pin, PinOff } from 'lucide-svelte';
 
 	let { data }: { data: PageData } = $props();
+	let isPinned = $state(false);
+	let pinLoading = $state(false);
+
+	// Check if post is pinned on mount
+	$effect(() => {
+		if (data.user) {
+			checkPinStatus();
+		}
+	});
+
+	async function checkPinStatus() {
+		try {
+			const response = await fetch('/api/posts/pinned');
+			if (response.ok) {
+				const result = await response.json();
+				const pinnedIds: string[] = result.data?.post_ids || [];
+				isPinned = pinnedIds.includes(data.post.id);
+			}
+		} catch {
+			// Ignore errors
+		}
+	}
+
+	async function handlePinToggle() {
+		if (pinLoading) return;
+
+		pinLoading = true;
+		try {
+			const response = await fetch('/api/posts/pinned', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					post_id: data.post.id,
+					action: isPinned ? 'unpin' : 'pin'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to toggle pin');
+			}
+
+			isPinned = !isPinned;
+			toast.success(isPinned ? 'Post pinned' : 'Post unpinned');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to toggle pin');
+		} finally {
+			pinLoading = false;
+		}
+	}
 
 	// Format date (handles both Date objects and ISO strings)
 	function formatDate(date: Date | string): string {
@@ -89,17 +141,44 @@
 				{#if data.user}
 					{@const isOwner = data.post.author_id === data.user.id}
 					{#if isOwner}
-						<Button
-							variant="outline"
-							size="sm"
-							onclick={() => {
-								// eslint-disable-next-line svelte/no-navigation-without-resolve
-								goto(`/posts/${getPostIdString()}/edit`);
-							}}
-						>
-							<Pencil class="mr-2 h-4 w-4" />
-							Edit
-						</Button>
+						<div class="flex gap-2">
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="outline"
+											size="sm"
+											onclick={handlePinToggle}
+											disabled={pinLoading}
+											class={isPinned ? 'text-primary' : ''}
+										>
+											{#if isPinned}
+												<PinOff class="mr-2 h-4 w-4" />
+												Unpin
+											{:else}
+												<Pin class="mr-2 h-4 w-4" />
+												Pin
+											{/if}
+										</Button>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									{isPinned ? 'Remove from pinned posts' : 'Add to pinned posts'}
+								</Tooltip.Content>
+							</Tooltip.Root>
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={() => {
+									// eslint-disable-next-line svelte/no-navigation-without-resolve
+									goto(`/posts/${getPostIdString()}/edit`);
+								}}
+							>
+								<Pencil class="mr-2 h-4 w-4" />
+								Edit
+							</Button>
+						</div>
 					{/if}
 				{/if}
 			</div>

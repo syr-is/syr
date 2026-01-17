@@ -1,0 +1,209 @@
+import { kvRepository, KvRepository } from '$lib/repositories/kv.repository';
+import type { KvEntry } from '@syr-is/types';
+
+/**
+ * KV Service
+ * Provides high-level key-value storage operations
+ * Uses SurrealDB for persistence with format kv:type:index
+ */
+export class KvService {
+	constructor(private repository: KvRepository = kvRepository) {}
+
+	/**
+	 * Set a value in the KV store
+	 * @param type - The category/type of the entry (e.g., 'session', 'cache')
+	 * @param index - The unique index within the type
+	 * @param value - Any JSON-serializable value
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 */
+	async set<T = unknown>(
+		type: string,
+		index: string,
+		value: T,
+		ttlSeconds?: number
+	): Promise<KvEntry> {
+		return this.repository.set(type, index, value, ttlSeconds);
+	}
+
+	/**
+	 * Get a value from the KV store
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @returns The stored value or null if not found/expired
+	 */
+	async get<T = unknown>(type: string, index: string): Promise<T | null> {
+		return this.repository.getValue<T>(type, index);
+	}
+
+	/**
+	 * Get the full KV entry (including metadata)
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @returns The full KV entry or null if not found/expired
+	 */
+	async getEntry(type: string, index: string): Promise<KvEntry | null> {
+		return this.repository.get(type, index);
+	}
+
+	/**
+	 * Delete a value from the KV store
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 */
+	async delete(type: string, index: string): Promise<void> {
+		return this.repository.delete(type, index);
+	}
+
+	/**
+	 * Check if a key exists in the KV store
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 */
+	async has(type: string, index: string): Promise<boolean> {
+		return this.repository.exists(type, index);
+	}
+
+	/**
+	 * Get all entries of a specific type
+	 * @param type - The category/type to retrieve
+	 */
+	async getByType(type: string): Promise<KvEntry[]> {
+		return this.repository.findByType(type);
+	}
+
+	/**
+	 * Delete all entries of a specific type
+	 * @param type - The category/type to delete
+	 */
+	async deleteByType(type: string): Promise<void> {
+		return this.repository.deleteByType(type);
+	}
+
+	/**
+	 * Get or set a value (cache pattern)
+	 * If the key exists, returns the cached value
+	 * If not, calls the factory function, stores the result, and returns it
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param factory - Function to generate the value if not cached
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 */
+	async getOrSet<T = unknown>(
+		type: string,
+		index: string,
+		factory: () => T | Promise<T>,
+		ttlSeconds?: number
+	): Promise<T> {
+		const existing = await this.get<T>(type, index);
+		if (existing !== null) {
+			return existing;
+		}
+
+		const value = await factory();
+		await this.set(type, index, value, ttlSeconds);
+		return value;
+	}
+
+	/**
+	 * Update an existing value
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param updater - Function that receives the current value and returns the new value
+	 * @param ttlSeconds - Optional new time-to-live in seconds
+	 * @returns The updated entry or null if the key doesn't exist
+	 */
+	async update<T = unknown>(
+		type: string,
+		index: string,
+		updater: (current: T) => T | Promise<T>,
+		ttlSeconds?: number
+	): Promise<KvEntry | null> {
+		const current = await this.get<T>(type, index);
+		if (current === null) {
+			return null;
+		}
+
+		const newValue = await updater(current);
+		return this.set(type, index, newValue, ttlSeconds);
+	}
+
+	/**
+	 * Increment a numeric value
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param amount - Amount to increment (default: 1)
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 * @returns The new value
+	 */
+	async increment(type: string, index: string, amount = 1, ttlSeconds?: number): Promise<number> {
+		const current = await this.get<number>(type, index);
+		const newValue = (current ?? 0) + amount;
+		await this.set(type, index, newValue, ttlSeconds);
+		return newValue;
+	}
+
+	/**
+	 * Decrement a numeric value
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param amount - Amount to decrement (default: 1)
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 * @returns The new value
+	 */
+	async decrement(type: string, index: string, amount = 1, ttlSeconds?: number): Promise<number> {
+		return this.increment(type, index, -amount, ttlSeconds);
+	}
+
+	/**
+	 * Set multiple values at once
+	 * @param type - The category/type for all entries
+	 * @param entries - Map of index -> value
+	 * @param ttlSeconds - Optional time-to-live in seconds (applies to all)
+	 */
+	async setMany<T = unknown>(
+		type: string,
+		entries: Record<string, T>,
+		ttlSeconds?: number
+	): Promise<KvEntry[]> {
+		const results: KvEntry[] = [];
+		for (const [index, value] of Object.entries(entries)) {
+			const entry = await this.set(type, index, value, ttlSeconds);
+			results.push(entry);
+		}
+		return results;
+	}
+
+	/**
+	 * Get multiple values at once
+	 * @param type - The category/type for all entries
+	 * @param indices - Array of indices to retrieve
+	 * @returns Map of index -> value (missing keys will have null values)
+	 */
+	async getMany<T = unknown>(type: string, indices: string[]): Promise<Record<string, T | null>> {
+		const results: Record<string, T | null> = {};
+		for (const index of indices) {
+			results[index] = await this.get<T>(type, index);
+		}
+		return results;
+	}
+
+	/**
+	 * Clean up expired entries
+	 * @returns Number of entries removed
+	 */
+	async cleanup(): Promise<number> {
+		return this.repository.cleanupExpired();
+	}
+
+	/**
+	 * Get all entries with pagination
+	 * @param limit - Maximum number of entries to return
+	 * @param offset - Number of entries to skip
+	 */
+	async list(limit = 100, offset = 0): Promise<{ data: KvEntry[]; total: number }> {
+		return this.repository.findAll(limit, offset);
+	}
+}
+
+// Export singleton instance
+export const kvService = new KvService();

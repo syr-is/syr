@@ -2,12 +2,34 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
-	import { Trash2 } from 'lucide-svelte';
+	import { Trash2, Pin, PinOff } from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
 
-	let { post }: { post: Post } = $props();
+	interface Props {
+		post: Post;
+		isPinned?: boolean;
+		onPinToggle?: (postId: string, isPinned: boolean) => void;
+		showPinButton?: boolean;
+	}
+
+	let { post, isPinned = false, onPinToggle, showPinButton = true }: Props = $props();
 	let deleteDialogOpen = $state(false);
+	let pinLoading = $state(false);
+
+	async function handlePinToggle(e: MouseEvent) {
+		e.stopPropagation();
+		if (!onPinToggle || pinLoading) return;
+
+		pinLoading = true;
+		try {
+			const postId = typeof post.id === 'string' ? post.id : post.id.toString();
+			await onPinToggle(postId, isPinned);
+		} finally {
+			pinLoading = false;
+		}
+	}
 
 	// Format date
 	function formatDate(date: Date | string): string {
@@ -66,17 +88,46 @@
 	<Card.Content>
 		<div class="flex items-start justify-between gap-2">
 			<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-				onclick={(e) => {
-					e.stopPropagation();
-					deleteDialogOpen = true;
-				}}
-			>
-				<Trash2 class="h-4 w-4" />
-			</Button>
+			<div class="flex gap-1">
+				{#if showPinButton && onPinToggle}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon"
+									class="h-8 w-8 {isPinned
+										? 'text-primary hover:bg-primary/10'
+										: 'text-muted-foreground hover:bg-muted'}"
+									onclick={handlePinToggle}
+									disabled={pinLoading}
+								>
+									{#if isPinned}
+										<PinOff class="h-4 w-4" />
+									{:else}
+										<Pin class="h-4 w-4" />
+									{/if}
+								</Button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{isPinned ? 'Unpin post' : 'Pin post'}
+						</Tooltip.Content>
+					</Tooltip.Root>
+				{/if}
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+					onclick={(e) => {
+						e.stopPropagation();
+						deleteDialogOpen = true;
+					}}
+				>
+					<Trash2 class="h-4 w-4" />
+				</Button>
+			</div>
 		</div>
 	</Card.Content>
 </Card.Root>

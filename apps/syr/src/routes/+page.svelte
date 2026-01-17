@@ -4,10 +4,13 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Pagination from '$lib/components/ui/pagination';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Badge } from '$lib/components/ui/badge';
 	import NewPost from '$lib/components/fragments/new-post.svelte';
 	import PostPreview from '$lib/components/fragments/post-preview.svelte';
 	import type { Post } from '@syr-is/types';
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+	import { GripVertical, Pin } from 'lucide-svelte';
 
 	let { data } = $props();
 
@@ -15,6 +18,15 @@
 	let posts = $state<Post[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+
+	// Pinned posts state
+	let pinnedPosts = $state<Post[]>([]);
+	let pinnedPostIds = $state<string[]>([]);
+	let _pinnedLoading = $state(false);
+
+	// Drag and drop state
+	let draggedIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
 
 	// Pagination state
 	let currentPage = $state(1);
@@ -57,6 +69,129 @@
 		}
 	}
 
+	// Fetch pinned posts function
+	async function fetchPinnedPosts() {
+		if (!data.user) return;
+
+		_pinnedLoading = true;
+		try {
+			const response = await fetch('/api/posts/pinned');
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to fetch pinned posts');
+			}
+
+			const result = await response.json();
+			pinnedPosts = result.data?.posts || [];
+			pinnedPostIds = result.data?.post_ids || [];
+		} catch (err) {
+			console.error('Failed to fetch pinned posts:', err);
+			pinnedPosts = [];
+			pinnedPostIds = [];
+		} finally {
+			_pinnedLoading = false;
+		}
+	}
+
+	// Check if a post is pinned
+	function isPostPinned(postId: string): boolean {
+		return pinnedPostIds.includes(postId);
+	}
+
+	// Handle pin/unpin toggle
+	async function handlePinToggle(postId: string, currentlyPinned: boolean) {
+		try {
+			const response = await fetch('/api/posts/pinned', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					post_id: postId,
+					action: currentlyPinned ? 'unpin' : 'pin'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to toggle pin');
+			}
+
+			const result = await response.json();
+			pinnedPostIds = result.data?.post_ids || [];
+
+			// Refresh pinned posts to get full data
+			await fetchPinnedPosts();
+
+			toast.success(currentlyPinned ? 'Post unpinned' : 'Post pinned');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to toggle pin');
+		}
+	}
+
+	// Drag and drop handlers
+	function handleDragStart(index: number) {
+		draggedIndex = index;
+	}
+
+	function handleDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDragLeave() {
+		dragOverIndex = null;
+	}
+
+	async function handleDrop(e: DragEvent, targetIndex: number) {
+		e.preventDefault();
+		if (draggedIndex === null || draggedIndex === targetIndex) {
+			draggedIndex = null;
+			dragOverIndex = null;
+			return;
+		}
+
+		// Reorder the array locally first for immediate feedback
+		const newOrder = [...pinnedPostIds];
+		const [removed] = newOrder.splice(draggedIndex, 1);
+		newOrder.splice(targetIndex, 0, removed);
+
+		// Update local state immediately
+		pinnedPostIds = newOrder;
+
+		// Reorder pinnedPosts array to match
+		const newPinnedPosts = [...pinnedPosts];
+		const [removedPost] = newPinnedPosts.splice(draggedIndex, 1);
+		newPinnedPosts.splice(targetIndex, 0, removedPost);
+		pinnedPosts = newPinnedPosts;
+
+		draggedIndex = null;
+		dragOverIndex = null;
+
+		// Send to server
+		try {
+			const response = await fetch('/api/posts/pinned', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ post_ids: newOrder })
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to reorder');
+			}
+
+			toast.success('Pinned posts reordered');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to reorder');
+			// Refresh to get correct order from server
+			await fetchPinnedPosts();
+		}
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
 	// Track previous sort values to detect changes
 	let prevSortField = $state<string | undefined>(undefined);
 	let prevSortOrder = $state<string | undefined>(undefined);
@@ -97,6 +232,12 @@
 		void currentSortOrder;
 
 		fetchPosts();
+	});
+
+	// Fetch pinned posts on mount
+	$effect(() => {
+		if (!data.user) return;
+		fetchPinnedPosts();
 	});
 
 	// Handle post click - navigate to viewing page
@@ -180,6 +321,58 @@
 				<NewPost />
 			</div>
 
+			<!-- Pinned Posts Section -->
+			{#if pinnedPosts.length > 0}
+				<div class="space-y-3">
+					<div class="flex items-center gap-2">
+						<Pin class="h-4 w-4 text-primary" />
+						<h2 class="text-lg font-semibold">Pinned Posts</h2>
+						<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
+					</div>
+					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+						{#each pinnedPosts as post, index (post.id.toString())}
+							<div
+								draggable="true"
+								ondragstart={() => handleDragStart(index)}
+								ondragover={(e) => handleDragOver(e, index)}
+								ondragleave={handleDragLeave}
+								ondrop={(e) => handleDrop(e, index)}
+								ondragend={handleDragEnd}
+								class="group relative transition-all {dragOverIndex === index
+									? 'ring-2 ring-primary ring-offset-2'
+									: ''} {draggedIndex === index ? 'opacity-50' : ''}"
+								role="listitem"
+							>
+								<!-- Drag handle -->
+								<div
+									class="absolute top-1/2 -left-2 z-10 -translate-y-1/2 cursor-grab rounded bg-muted p-1 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+								>
+									<GripVertical class="h-4 w-4 text-muted-foreground" />
+								</div>
+								<button
+									type="button"
+									class="w-full text-left"
+									onclick={() => handlePostClick(post)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											handlePostClick(post);
+										}
+									}}
+								>
+									<PostPreview
+										{post}
+										isPinned={true}
+										onPinToggle={handlePinToggle}
+										showPinButton={true}
+									/>
+								</button>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<!-- Posts List -->
 			{#if loading}
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -212,22 +405,30 @@
 					</Card.Content>
 				</Card.Root>
 			{:else}
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each posts as post (post.id.toString())}
-						<button
-							type="button"
-							class="w-full text-left"
-							onclick={() => handlePostClick(post)}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									handlePostClick(post);
-								}
-							}}
-						>
-							<PostPreview {post} />
-						</button>
-					{/each}
+				<div class="space-y-3">
+					<h2 class="text-lg font-semibold">All Posts</h2>
+					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+						{#each posts as post (post.id.toString())}
+							<button
+								type="button"
+								class="w-full text-left"
+								onclick={() => handlePostClick(post)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										handlePostClick(post);
+									}
+								}}
+							>
+								<PostPreview
+									{post}
+									isPinned={isPostPinned(post.id.toString())}
+									onPinToggle={handlePinToggle}
+									showPinButton={true}
+								/>
+							</button>
+						{/each}
+					</div>
 				</div>
 			{/if}
 		</div>
