@@ -5,7 +5,7 @@ declare global {
 		interface Error {
 			code?: string;
 			message: string;
-			details?: Record<string, unknown>;
+			details?: Record<string, unknown> | string;
 		}
 		interface Locals {
 			user?: {

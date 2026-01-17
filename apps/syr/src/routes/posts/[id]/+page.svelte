@@ -79,7 +79,7 @@
 							</Badge>
 						</div>
 					</div>
-					<Card.Description class="text-muted-foreground text-sm">
+					<Card.Description class="text-sm text-muted-foreground">
 						Published on {formatDate(data.post.created_at)}
 						{#if data.post.updated_at && data.post.updated_at !== data.post.created_at}
 							<span class="ml-2">• Updated on {formatDate(data.post.updated_at)}</span>
@@ -107,6 +107,8 @@
 		<Card.Content
 			class="prose prose-slate dark:prose-invert min-h-0 max-w-none flex-1 overflow-y-auto"
 		>
+			<!-- eslint-disable svelte/no-at-html-tags -->
+			<!-- This is a self hosted blog, so we can trust the content -->
 			{#if data.post.content_type === 'html'}
 				{@html data.post.content || ''}
 			{:else if data.post.content_type === 'markdown'}
@@ -114,6 +116,7 @@
 			{:else}
 				<p class="text-muted-foreground">No content available.</p>
 			{/if}
+			<!-- eslint-enable svelte/no-at-html-tags -->
 		</Card.Content>
 	</Card.Root>
 </div>
