@@ -314,7 +314,7 @@
 
 <Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Trigger
-		class="border-input shadow-xs ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border bg-transparent px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+		class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium whitespace-nowrap shadow-xs ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 	>
 		+ New Post
 	</Dialog.Trigger>
@@ -414,9 +414,9 @@
 							<div
 								id="post-editor"
 								use:mountCrepe
-								class="border-input max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border p-4"
+								class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
 							></div>
-							<p class="text-muted-foreground text-xs">
+							<p class="text-xs text-muted-foreground">
 								Images uploaded here are stored publicly for embedding in your post.
 							</p>
 						{:else}

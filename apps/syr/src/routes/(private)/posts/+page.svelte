@@ -334,7 +334,7 @@
 		{#if pinnedPosts.length > 0}
 			<div class="space-y-3">
 				<div class="flex items-center gap-2">
-					<Pin class="text-primary h-4 w-4" />
+					<Pin class="h-4 w-4 text-primary" />
 					<h2 class="text-lg font-semibold">Pinned Posts</h2>
 					<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 				</div>
@@ -393,7 +393,7 @@
 		{:else if error}
 			<Card.Root>
 				<Card.Content class="py-6">
-					<p class="text-destructive text-center">{error}</p>
+					<p class="text-center text-destructive">{error}</p>
 				</Card.Content>
 			</Card.Root>
 		{:else if posts.length === 0}
@@ -401,7 +401,7 @@
 				<Card.Content class="py-12">
 					<div class="space-y-2 text-center">
 						<h3 class="text-lg font-semibold">No posts yet</h3>
-						<p class="text-muted-foreground text-sm">Get started by creating your first post!</p>
+						<p class="text-sm text-muted-foreground">Get started by creating your first post!</p>
 					</div>
 				</Card.Content>
 			</Card.Root>

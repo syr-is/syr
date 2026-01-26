@@ -46,7 +46,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-sm">
 		<Dialog.Header>
-			<Dialog.Title class="text-destructive flex items-center gap-2">
+			<Dialog.Title class="flex items-center gap-2 text-destructive">
 				<Trash2 class="h-5 w-5" />
 				Delete File
 			</Dialog.Title>
@@ -55,7 +55,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="py-4">
-			<div class="bg-destructive/10 text-destructive flex items-start gap-2 rounded-md p-3 text-sm">
+			<div class="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
 				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
 				<span>This action cannot be undone. The file will be permanently deleted.</span>
 			</div>

@@ -446,7 +446,7 @@
 				<span>Root</span>
 			</Button>
 			{#each breadcrumbs as crumb (crumb.id)}
-				<ChevronRight class="text-muted-foreground h-4 w-4" />
+				<ChevronRight class="h-4 w-4 text-muted-foreground" />
 				<Button
 					variant="ghost"
 					size="sm"
@@ -512,7 +512,7 @@
 				{/if}
 			</div>
 			<div class="flex items-center gap-2">
-				<span class="text-muted-foreground text-sm">
+				<span class="text-sm text-muted-foreground">
 					{total} file{total !== 1 ? 's' : ''} total
 				</span>
 				<Button variant="outline" onclick={() => (createFolderDialogOpen = true)}>
@@ -531,7 +531,7 @@
 			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
 				{#each folders as folder (folder.id.toString())}
 					<Card.Root
-						class="hover:bg-accent cursor-pointer transition-colors"
+						class="cursor-pointer transition-colors hover:bg-accent"
 						role="button"
 						tabindex={0}
 						onclick={() => navigateToFolder(folder.id.toString())}
@@ -543,22 +543,22 @@
 						}}
 					>
 						<Card.Content class="flex items-center gap-3 p-4">
-							<div class="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+							<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
 								{#if isPublicFolder(folder)}
-									<Globe class="text-primary h-5 w-5" />
+									<Globe class="h-5 w-5 text-primary" />
 								{:else}
-									<FolderIcon class="text-muted-foreground h-5 w-5" />
+									<FolderIcon class="h-5 w-5 text-muted-foreground" />
 								{/if}
 							</div>
 							<div class="min-w-0 flex-1">
 								<p class="truncate font-medium">{folder.name}</p>
 								{#if isPublicFolder(folder)}
-									<p class="text-muted-foreground text-xs">Public folder</p>
+									<p class="text-xs text-muted-foreground">Public folder</p>
 								{/if}
 							</div>
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger
-									class="hover:bg-background rounded-md p-1"
+									class="rounded-md p-1 hover:bg-background"
 									onclick={(e) => e.stopPropagation()}
 								>
 									<MoreVertical class="h-4 w-4" />
@@ -615,16 +615,16 @@
 		{:else if error}
 			<Card.Root>
 				<Card.Content class="py-6">
-					<p class="text-destructive text-center">{error}</p>
+					<p class="text-center text-destructive">{error}</p>
 				</Card.Content>
 			</Card.Root>
 		{:else if uploads.length === 0 && folders.length === 0}
 			<Card.Root>
 				<Card.Content class="py-12">
 					<div class="space-y-2 text-center">
-						<File class="text-muted-foreground mx-auto h-12 w-12" />
+						<File class="mx-auto h-12 w-12 text-muted-foreground" />
 						<h3 class="text-lg font-semibold">No files or folders</h3>
-						<p class="text-muted-foreground text-sm">
+						<p class="text-sm text-muted-foreground">
 							{currentFolderId ? 'This folder is empty' : 'Your uploaded files will appear here'}
 						</p>
 					</div>
@@ -650,18 +650,18 @@
 								{@const FileIcon = getFileIcon(upload.mime_type)}
 								<Table.Row>
 									<Table.Cell>
-										<div class="bg-muted flex h-10 w-10 items-center justify-center rounded-lg">
-											<FileIcon class="text-muted-foreground h-5 w-5" />
+										<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+											<FileIcon class="h-5 w-5 text-muted-foreground" />
 										</div>
 									</Table.Cell>
 									<Table.Cell>
 										<div class="flex flex-col">
 											<span class="max-w-[300px] truncate font-medium">{upload.filename}</span>
-											<span class="text-muted-foreground text-xs">{upload.mime_type}</span>
+											<span class="text-xs text-muted-foreground">{upload.mime_type}</span>
 										</div>
 									</Table.Cell>
 									<Table.Cell>
-										<span class="text-muted-foreground text-sm">{formatFileSize(upload.size)}</span>
+										<span class="text-sm text-muted-foreground">{formatFileSize(upload.size)}</span>
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant={getStatusVariant(upload.status)}>
@@ -682,7 +682,7 @@
 										{/if}
 									</Table.Cell>
 									<Table.Cell>
-										<span class="text-muted-foreground text-sm"
+										<span class="text-sm text-muted-foreground"
 											>{formatDate(upload.created_at)}</span
 										>
 									</Table.Cell>

@@ -244,25 +244,25 @@
 						New Folder
 					</Button>
 				</div>
-				<div class="text-muted-foreground mb-2 text-sm">
-					Selected: <span class="text-foreground font-medium">{getSelectedFolderPath()}</span>
+				<div class="mb-2 text-sm text-muted-foreground">
+					Selected: <span class="font-medium text-foreground">{getSelectedFolderPath()}</span>
 				</div>
 
-				<div class="border-input max-h-64 overflow-y-auto rounded-md border p-2">
+				<div class="max-h-64 overflow-y-auto rounded-md border border-input p-2">
 					{#if loadingFolders}
 						<div class="flex items-center justify-center py-4">
-							<Loader2 class="text-muted-foreground h-5 w-5 animate-spin" />
+							<Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
 						</div>
 					{:else}
 						<button
 							type="button"
-							class="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors"
+							class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
 							onclick={() => (targetFolderId = '')}
 						>
 							{#if targetFolderId === ''}
-								<CircleCheck class="text-primary h-4 w-4" />
+								<CircleCheck class="h-4 w-4 text-primary" />
 							{:else}
-								<Circle class="text-muted-foreground h-4 w-4" />
+								<Circle class="h-4 w-4 text-muted-foreground" />
 							{/if}
 							<Home class="h-4 w-4" />
 							<span>Root</span>
@@ -286,24 +286,24 @@
 											<div class="group flex items-center" style="padding-left: {depth * 16}px">
 												<button
 													type="button"
-													class="hover:bg-accent flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors"
+													class="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
 													onclick={() => (targetFolderId = nodeId)}
 												>
 													{#if targetFolderId === nodeId}
-														<CircleCheck class="text-primary h-4 w-4 shrink-0" />
+														<CircleCheck class="h-4 w-4 shrink-0 text-primary" />
 													{:else}
-														<Circle class="text-muted-foreground h-4 w-4 shrink-0" />
+														<Circle class="h-4 w-4 shrink-0 text-muted-foreground" />
 													{/if}
 													{#if node.name.toLowerCase() === 'public'}
-														<Globe class="text-primary h-4 w-4 shrink-0" />
+														<Globe class="h-4 w-4 shrink-0 text-primary" />
 													{:else}
-														<FolderIcon class="text-muted-foreground h-4 w-4 shrink-0" />
+														<FolderIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
 													{/if}
 													<span class="truncate">{node.name}</span>
 												</button>
 												<button
 													type="button"
-													class="hover:bg-destructive/10 hover:text-destructive rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
+													class="rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
 													onclick={(e) => {
 														e.stopPropagation();
 														openDeleteFolderDialog(nodeId, node.name);
@@ -319,7 +319,7 @@
 											<Accordion.Content class="pb-0">
 												{#if isLoading}
 													<div
-														class="text-muted-foreground flex items-center gap-2 py-2 text-sm"
+														class="flex items-center gap-2 py-2 text-sm text-muted-foreground"
 														style="padding-left: {(depth + 1) * 16 + 8}px"
 													>
 														<Loader2 class="h-4 w-4 animate-spin" />
@@ -327,7 +327,7 @@
 													</div>
 												{:else if node.childrenLoaded && node.children.length === 0}
 													<div
-														class="text-muted-foreground py-2 text-sm"
+														class="py-2 text-sm text-muted-foreground"
 														style="padding-left: {(depth + 1) * 16 + 8}px"
 													>
 														No subfolders
@@ -344,24 +344,24 @@
 									<div class="group flex items-center" style="padding-left: {depth * 16}px">
 										<button
 											type="button"
-											class="hover:bg-accent flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors"
+											class="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
 											onclick={() => (targetFolderId = nodeId)}
 										>
 											{#if targetFolderId === nodeId}
-												<CircleCheck class="text-primary h-4 w-4 shrink-0" />
+												<CircleCheck class="h-4 w-4 shrink-0 text-primary" />
 											{:else}
-												<Circle class="text-muted-foreground h-4 w-4 shrink-0" />
+												<Circle class="h-4 w-4 shrink-0 text-muted-foreground" />
 											{/if}
 											{#if node.name.toLowerCase() === 'public'}
-												<Globe class="text-primary h-4 w-4 shrink-0" />
+												<Globe class="h-4 w-4 shrink-0 text-primary" />
 											{:else}
-												<FolderIcon class="text-muted-foreground h-4 w-4 shrink-0" />
+												<FolderIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
 											{/if}
 											<span class="truncate">{node.name}</span>
 										</button>
 										<button
 											type="button"
-											class="hover:bg-destructive/10 hover:text-destructive rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
+											class="rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
 											onclick={(e) => {
 												e.stopPropagation();
 												openDeleteFolderDialog(nodeId, node.name);
@@ -381,7 +381,7 @@
 				</div>
 			</div>
 			<div
-				class="bg-destructive/10 text-destructive mt-4 flex items-start gap-2 rounded-md p-3 text-sm"
+				class="mt-4 flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
 			>
 				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
 				<span
