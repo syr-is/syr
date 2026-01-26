@@ -70,7 +70,7 @@
 </script>
 
 <Card.Root
-	class="hover:border-primary/50 transition-all hover:shadow-md {isDraft
+	class="transition-all hover:border-primary/50 hover:shadow-md {isDraft
 		? 'border-warning/50 border-dashed'
 		: ''}"
 >
@@ -94,7 +94,7 @@
 				</Badge>
 			</div>
 		</div>
-		<Card.Description class="text-muted-foreground text-xs">
+		<Card.Description class="text-xs text-muted-foreground">
 			{#if isDraft}
 				Last edited {formatDate(post.updated_at)}
 			{:else}
@@ -104,7 +104,7 @@
 	</Card.Header>
 	<Card.Content>
 		<div class="flex items-start justify-between gap-2">
-			<p class="text-muted-foreground line-clamp-3 flex-1 text-sm">{getDisplayText(post)}</p>
+			<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
 			<div class="flex gap-1">
 				{#if showPinButton && onPinToggle}
 					<Tooltip.Root>
@@ -136,7 +136,7 @@
 				<Button
 					variant="ghost"
 					size="icon"
-					class="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
+					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
 					onclick={(e) => {
 						e.stopPropagation();
 						deleteDialogOpen = true;

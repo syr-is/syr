@@ -77,12 +77,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 };
 
-const UpdateUploadSchema = z.object({
-	folder_id: z.string().nullable().optional(),
-	filename: z.string().min(1).optional()
-}).refine(data => data.folder_id !== undefined || data.filename !== undefined, {
-	message: 'At least one field (folder_id or filename) must be provided'
-});
+const UpdateUploadSchema = z
+	.object({
+		folder_id: z.string().nullable().optional(),
+		filename: z.string().min(1).optional()
+	})
+	.refine((data) => data.folder_id !== undefined || data.filename !== undefined, {
+		message: 'At least one field (folder_id or filename) must be provided'
+	});
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!locals.user) {

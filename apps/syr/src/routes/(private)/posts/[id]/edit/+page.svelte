@@ -453,7 +453,7 @@
 								<div
 									id="post-editor"
 									use:mountCrepe
-									class="border-input max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border p-4"
+									class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
 								></div>
 							{/key}
 						{:else}

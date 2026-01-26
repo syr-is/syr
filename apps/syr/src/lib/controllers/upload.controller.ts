@@ -324,11 +324,7 @@ export class UploadController {
 	 * @param newFilename New filename
 	 * @returns Updated upload
 	 */
-	async renameUpload(
-		uploadId: string,
-		userId: RecordId,
-		newFilename: string
-	): Promise<Upload> {
+	async renameUpload(uploadId: string, userId: RecordId, newFilename: string): Promise<Upload> {
 		const upload = await uploadRepository.findById(uploadId);
 		if (!upload) {
 			throw new Error('Upload not found');
