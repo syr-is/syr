@@ -3,26 +3,20 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Pagination from '$lib/components/ui/pagination';
 	import * as Table from '$lib/components/ui/table';
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Accordion from '$lib/components/ui/accordion';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import type { Upload } from '@syr-is/types';
-	import type { RecordId } from 'surrealdb';
+	import type { Upload, Folder } from '@syr-is/types';
 
-	// Folder type definition (matches @syr-is/types/folders.ts)
-	interface Folder {
-		id: RecordId<string>;
-		created_at: Date;
-		updated_at: Date;
-		name: string;
-		owner_id: RecordId<string>;
-		parent_id?: RecordId<string> | null;
-	}
+	// Dialog components
+	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
+	import PreviewUploadDialog from '$lib/components/fragments/preview-upload-dialog.svelte';
+	import UploadFilesDialog from '$lib/components/fragments/upload-files-dialog.svelte';
+	import NewFolderDialog from '$lib/components/fragments/new-folder-dialog.svelte';
+	import MoveUploadDialog from '$lib/components/fragments/move-upload-dialog.svelte';
+	import RenameUploadDialog from '$lib/components/fragments/rename-upload-dialog.svelte';
+	import ShareUploadDialog from '$lib/components/fragments/share-upload-dialog.svelte';
 	import { toast } from 'svelte-sonner';
 	import {
 		Download,
@@ -35,7 +29,6 @@
 		Eye,
 		Link,
 		Plus,
-		Loader2,
 		FolderIcon,
 		FolderPlus,
 		ChevronRight,
@@ -44,13 +37,7 @@
 		Move,
 		Globe,
 		Lock,
-		Clock,
-		Copy,
-		Check,
-		Circle,
-		CircleCheck,
-		Pencil,
-		TriangleAlert
+		Pencil
 	} from 'lucide-svelte';
 
 	let { data } = $props();
@@ -74,126 +61,26 @@
 	let sortField = $state<'created_at' | 'updated_at' | 'filename' | 'size'>('created_at');
 	let sortOrder = $state<'asc' | 'desc'>('desc');
 
-	// Delete confirmation state
+	// Dialog states
 	let deleteDialogOpen = $state(false);
 	let uploadToDelete = $state<Upload | null>(null);
 	let folderToDelete = $state<Folder | null>(null);
-	let deleting = $state(false);
 
-	// Preview state
 	let previewDialogOpen = $state(false);
 	let previewUpload = $state<Upload | null>(null);
-	let previewUrl = $state<string | null>(null);
-	let previewIsPublic = $state(false); // Dynamic public status from API
-	let previewLoading = $state(false);
 
-	// Upload dialog state
 	let uploadDialogOpen = $state(false);
-	let uploading = $state(false);
-	let uploadProgress = $state<string>('');
-	let fileInputRef = $state<HTMLInputElement | null>(null);
 
-	// New folder dialog state
 	let newFolderDialogOpen = $state(false);
-	let newFolderName = $state('');
-	let creatingFolder = $state(false);
 
-	// Move file dialog state
 	let moveDialogOpen = $state(false);
 	let uploadToMove = $state<Upload | null>(null);
-	let moveTargetFolderId = $state<string>(''); // Empty string means root
-	let allFolders = $state<Folder[]>([]); // Flat list of all folders
-	let loadingFolders = $state(false);
-	let moving = $state(false);
 
-	// Rename file dialog state
 	let renameDialogOpen = $state(false);
 	let uploadToRename = $state<Upload | null>(null);
-	let newFilename = $state('');
-	let renaming = $state(false);
 
-	// Build folder tree from flat list
-	interface FolderNode extends Folder {
-		children: FolderNode[];
-	}
-
-	function buildFolderTree(folders: Folder[]): FolderNode[] {
-		const folderMap: Record<string, FolderNode> = {};
-		const rootFolders: FolderNode[] = [];
-
-		// Create nodes for all folders
-		for (const folder of folders) {
-			folderMap[folder.id.toString()] = { ...folder, children: [] };
-		}
-
-		// Build the tree
-		for (const folder of folders) {
-			const node = folderMap[folder.id.toString()];
-			if (folder.parent_id) {
-				const parent = folderMap[folder.parent_id.toString()];
-				if (parent) {
-					parent.children.push(node);
-				} else {
-					// Parent not found, treat as root
-					rootFolders.push(node);
-				}
-			} else {
-				rootFolders.push(node);
-			}
-		}
-
-		// Sort children alphabetically
-		const sortChildren = (nodes: FolderNode[]) => {
-			nodes.sort((a, b) => a.name.localeCompare(b.name));
-			for (const node of nodes) {
-				sortChildren(node.children);
-			}
-		};
-		sortChildren(rootFolders);
-
-		return rootFolders;
-	}
-
-	// Get the folder tree
-	const folderTree = $derived(buildFolderTree(allFolders));
-
-	// Get selected folder name for display
-	function getSelectedFolderPath(): string {
-		if (!moveTargetFolderId) return 'Root';
-		const folder = allFolders.find((f) => f.id.toString() === moveTargetFolderId);
-		if (!folder) return 'Select folder';
-
-		// Build path
-		const path: string[] = [folder.name];
-		let current = folder;
-		while (current.parent_id) {
-			const parent = allFolders.find((f) => f.id.toString() === current.parent_id?.toString());
-			if (parent) {
-				path.unshift(parent.name);
-				current = parent;
-			} else {
-				break;
-			}
-		}
-		return path.join(' / ');
-	}
-
-	// Share dialog state
 	let shareDialogOpen = $state(false);
 	let uploadToShare = $state<Upload | null>(null);
-	let shareExpiryValue = $state('3600'); // Default 1 hour, stored as string for Select component
-	let generatingShareLink = $state(false);
-	let generatedShareUrl = $state<string | null>(null);
-	let shareExpiresAt = $state<string | null>(null);
-
-	// Expiry options in seconds (values as strings for Select component)
-	const expiryOptions = [
-		{ value: '3600', label: '1 hour' },
-		{ value: '21600', label: '6 hours' },
-		{ value: '86400', label: '24 hours' },
-		{ value: '259200', label: '3 days' },
-		{ value: '604800', label: '7 days' }
-	];
 
 	// Fetch folders
 	async function fetchFolders() {
@@ -259,104 +146,19 @@
 		}
 	}
 
+	// Refresh data after successful operations
+	function refreshData() {
+		fetchFolders();
+		fetchUploads();
+	}
+
 	// Navigate to folder
 	function navigateToFolder(folderId: string | null) {
 		currentFolderId = folderId;
 		currentPage = 1;
 	}
 
-	// Create new folder
-	async function handleCreateFolder() {
-		if (!newFolderName.trim()) {
-			toast.error('Please enter a folder name');
-			return;
-		}
-
-		creatingFolder = true;
-		try {
-			const response = await fetch('/api/folders', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					name: newFolderName.trim(),
-					parent_id: currentFolderId
-				})
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to create folder');
-			}
-
-			toast.success('Folder created successfully');
-			newFolderDialogOpen = false;
-			newFolderName = '';
-			await fetchFolders();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to create folder');
-		} finally {
-			creatingFolder = false;
-		}
-	}
-
-	// Delete upload
-	async function handleDeleteUpload() {
-		if (!uploadToDelete) return;
-
-		deleting = true;
-		try {
-			const uploadId =
-				typeof uploadToDelete.id === 'string' ? uploadToDelete.id : uploadToDelete.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
-				method: 'DELETE'
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to delete upload');
-			}
-
-			toast.success('Upload deleted successfully');
-			deleteDialogOpen = false;
-			uploadToDelete = null;
-			await fetchUploads();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to delete upload');
-		} finally {
-			deleting = false;
-		}
-	}
-
-	// Delete folder
-	async function handleDeleteFolder() {
-		if (!folderToDelete) return;
-
-		deleting = true;
-		try {
-			const folderId =
-				typeof folderToDelete.id === 'string' ? folderToDelete.id : folderToDelete.id.toString();
-			const response = await fetch(`/api/folders/${folderId}?delete_contents=true`, {
-				method: 'DELETE'
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to delete folder');
-			}
-
-			toast.success('Folder deleted successfully');
-			deleteDialogOpen = false;
-			folderToDelete = null;
-			await fetchFolders();
-			await fetchUploads();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to delete folder');
-		} finally {
-			deleting = false;
-		}
-	}
-
-	// Open delete confirmation
+	// Open delete dialogs
 	function openDeleteUploadDialog(upload: Upload) {
 		uploadToDelete = upload;
 		folderToDelete = null;
@@ -369,27 +171,10 @@
 		deleteDialogOpen = true;
 	}
 
-	// Open preview
-	async function openPreview(upload: Upload) {
+	// Open preview dialog
+	function openPreview(upload: Upload) {
 		previewUpload = upload;
 		previewDialogOpen = true;
-		previewLoading = true;
-		previewUrl = null;
-		previewIsPublic = upload.is_public; // Default to stored value
-
-		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`);
-			if (response.ok) {
-				const result = await response.json();
-				previewUrl = result.data?.downloadUrl || null;
-				previewIsPublic = result.data?.isPublic ?? upload.is_public; // Use dynamic value from API
-			}
-		} catch {
-			// Silently fail, preview just won't work
-		} finally {
-			previewLoading = false;
-		}
 	}
 
 	// Download file
@@ -422,7 +207,6 @@
 		}
 
 		try {
-			// Fetch current public status from API (handles nested public folders correctly)
 			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
 			const response = await fetch(`/api/uploads/${uploadId}`);
 			if (!response.ok) {
@@ -433,17 +217,15 @@
 			const isPublic = result.data?.isPublic ?? upload.is_public;
 			const downloadUrl = result.data?.downloadUrl;
 
-			// For public files, copy the direct URL
 			if (isPublic && downloadUrl) {
 				await navigator.clipboard.writeText(downloadUrl);
 				toast.success('Link copied to clipboard');
 				return;
 			}
 
-			// For private files, open share dialog to generate presigned URL with custom expiry
+			// For private files, open share dialog
 			openShareDialog(upload);
 		} catch {
-			// Fallback to stored value if API fails
 			if (upload.is_public) {
 				try {
 					await navigator.clipboard.writeText(upload.url);
@@ -457,283 +239,20 @@
 		}
 	}
 
-	// Copy preview link directly (preview already has the correct URL)
-	async function copyPreviewLink() {
-		if (!previewUrl) {
-			toast.error('URL not available');
-			return;
-		}
-
-		// For public files in preview, copy directly since previewUrl is already correct
-		if (previewIsPublic) {
-			try {
-				await navigator.clipboard.writeText(previewUrl);
-				toast.success('Link copied to clipboard');
-			} catch {
-				toast.error('Failed to copy link');
-			}
-			return;
-		}
-
-		// For private files, open share dialog for custom expiry
-		if (previewUpload) {
-			openShareDialog(previewUpload);
-		}
-	}
-
-	// Open share dialog for private files
-	function openShareDialog(upload: Upload) {
-		uploadToShare = upload;
-		shareExpiryValue = '3600'; // Reset to default
-		generatedShareUrl = null;
-		shareExpiresAt = null;
-		shareDialogOpen = true;
-	}
-
-	// Generate share link with specified expiry
-	async function generateShareLink() {
-		if (!uploadToShare) return;
-
-		generatingShareLink = true;
-		try {
-			const uploadId =
-				typeof uploadToShare.id === 'string' ? uploadToShare.id : uploadToShare.id.toString();
-			const expiresIn = parseInt(shareExpiryValue, 10);
-			const response = await fetch(`/api/uploads/${uploadId}/share`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ expiresIn })
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to generate share link');
-			}
-
-			const result = await response.json();
-			generatedShareUrl = result.data.url;
-			shareExpiresAt = result.data.expiresAt;
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to generate share link');
-		} finally {
-			generatingShareLink = false;
-		}
-	}
-
-	// Copy generated share URL to clipboard
-	let shareLinkCopied = $state(false);
-	async function copyShareUrl() {
-		if (!generatedShareUrl) return;
-		try {
-			await navigator.clipboard.writeText(generatedShareUrl);
-			shareLinkCopied = true;
-			toast.success('Share link copied to clipboard');
-			setTimeout(() => {
-				shareLinkCopied = false;
-			}, 2000);
-		} catch {
-			toast.error('Failed to copy link');
-		}
-	}
-
-	// Format expiry time for display
-	function formatExpiryTime(isoString: string): string {
-		const date = new Date(isoString);
-		return date.toLocaleString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
-
-	// Handle file selection and upload
-	async function handleFileSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const files = input.files;
-		if (!files || files.length === 0) return;
-
-		uploading = true;
-		uploadProgress = 'Preparing upload...';
-
-		try {
-			for (let i = 0; i < files.length; i++) {
-				const file = files[i];
-				uploadProgress = `Uploading ${file.name} (${i + 1}/${files.length})...`;
-
-				// Calculate SHA256 hash
-				const arrayBuffer = await file.arrayBuffer();
-				const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-				const hashArray = Array.from(new Uint8Array(hashBuffer));
-				const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-
-				// Get signed URL
-				const response = await fetch('/api/uploads', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						filename: file.name,
-						mime_type: file.type || 'application/octet-stream',
-						size: file.size,
-						sha256,
-						folder_id: currentFolderId
-					})
-				});
-
-				if (!response.ok) {
-					throw new Error(`Failed to get upload URL for ${file.name}`);
-				}
-
-				const result = await response.json();
-				const { signedUrl, uploadId } = result.data;
-
-				// Upload to S3
-				uploadProgress = `Uploading ${file.name} to storage...`;
-				const uploadResponse = await fetch(signedUrl, {
-					method: 'PUT',
-					headers: { 'Content-Type': file.type || 'application/octet-stream' },
-					body: file
-				});
-
-				if (!uploadResponse.ok) {
-					throw new Error(`Failed to upload ${file.name}`);
-				}
-
-				// Complete upload
-				uploadProgress = `Finalizing ${file.name}...`;
-				const completeResponse = await fetch('/api/uploads', {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ id: uploadId, status: 'completed' })
-				});
-
-				if (!completeResponse.ok) {
-					throw new Error(`Failed to complete upload for ${file.name}`);
-				}
-			}
-
-			toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}`);
-			uploadDialogOpen = false;
-			await fetchUploads();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Upload failed');
-		} finally {
-			uploading = false;
-			uploadProgress = '';
-			// Reset the file input
-			if (input) input.value = '';
-		}
-	}
-
-	// Recursively fetch all folders for move dialog
-	async function fetchAllFoldersRecursive(parentId: string | null = null): Promise<Folder[]> {
-		const queryString = parentId ? `?parent_id=${encodeURIComponent(parentId)}` : '';
-		const response = await fetch(`/api/folders${queryString}`);
-		if (!response.ok) return [];
-
-		const result = await response.json();
-		const folders: Folder[] = result.data?.folders || [];
-
-		// Recursively fetch children for each folder
-		const allFolders: Folder[] = [...folders];
-		for (const folder of folders) {
-			const children = await fetchAllFoldersRecursive(folder.id.toString());
-			allFolders.push(...children);
-		}
-
-		return allFolders;
-	}
-
-	// Fetch all folders for move dialog
-	async function fetchAllFolders() {
-		loadingFolders = true;
-		try {
-			allFolders = await fetchAllFoldersRecursive();
-		} catch {
-			allFolders = [];
-		} finally {
-			loadingFolders = false;
-		}
-	}
-
-	// Open move dialog
-	async function openMoveDialog(upload: Upload) {
+	// Open dialogs
+	function openMoveDialog(upload: Upload) {
 		uploadToMove = upload;
-		moveTargetFolderId = '';
 		moveDialogOpen = true;
-		await fetchAllFolders();
 	}
 
-	// Handle move
-	async function handleMove() {
-		if (!uploadToMove) return;
-
-		moving = true;
-		try {
-			const uploadId =
-				typeof uploadToMove.id === 'string' ? uploadToMove.id : uploadToMove.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					folder_id: moveTargetFolderId || null // Convert empty string to null for API
-				})
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to move file');
-			}
-
-			toast.success('File moved successfully');
-			moveDialogOpen = false;
-			uploadToMove = null;
-			await fetchUploads();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to move file');
-		} finally {
-			moving = false;
-		}
-	}
-
-	// Open rename dialog
 	function openRenameDialog(upload: Upload) {
 		uploadToRename = upload;
-		newFilename = upload.filename;
 		renameDialogOpen = true;
 	}
 
-	// Handle rename
-	async function handleRename() {
-		if (!uploadToRename || !newFilename.trim()) return;
-
-		renaming = true;
-		try {
-			const uploadId =
-				typeof uploadToRename.id === 'string' ? uploadToRename.id : uploadToRename.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					filename: newFilename.trim()
-				})
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to rename file');
-			}
-
-			toast.success('File renamed successfully');
-			renameDialogOpen = false;
-			uploadToRename = null;
-			newFilename = '';
-			await fetchUploads();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to rename file');
-		} finally {
-			renaming = false;
-		}
+	function openShareDialog(upload: Upload) {
+		uploadToShare = upload;
+		shareDialogOpen = true;
 	}
 
 	// Get file icon based on mime type
@@ -795,15 +314,6 @@
 		);
 	}
 
-	// Get preview type for rendering the appropriate element
-	function getPreviewType(mimeType: string): 'image' | 'video' | 'audio' | 'pdf' | null {
-		if (mimeType.startsWith('image/')) return 'image';
-		if (mimeType.startsWith('video/')) return 'video';
-		if (mimeType.startsWith('audio/')) return 'audio';
-		if (mimeType === 'application/pdf') return 'pdf';
-		return null;
-	}
-
 	// Track previous sort values
 	let prevSortField = $state<string | undefined>(undefined);
 	let prevSortOrder = $state<string | undefined>(undefined);
@@ -861,10 +371,13 @@
 		return order === 'asc' ? 'Ascending' : 'Descending';
 	}
 
-	// Check if folder is a public folder (any folder named "public" at any level)
+	// Check if folder is a public folder
 	function isPublicFolder(folder: Folder): boolean {
 		return folder.name.toLowerCase() === 'public';
 	}
+
+	// Check if currently in a public folder hierarchy
+	const isInPublicFolder = $derived(breadcrumbs.some((b) => b.name.toLowerCase() === 'public'));
 </script>
 
 <svelte:head>
@@ -960,20 +473,11 @@
 				<span class="text-sm text-muted-foreground">
 					{total} file{total !== 1 ? 's' : ''} total
 				</span>
-				<Button
-					variant="outline"
-					onclick={() => {
-						newFolderDialogOpen = true;
-					}}
-				>
+				<Button variant="outline" onclick={() => (newFolderDialogOpen = true)}>
 					<FolderPlus class="mr-2 h-4 w-4" />
 					New Folder
 				</Button>
-				<Button
-					onclick={() => {
-						uploadDialogOpen = true;
-					}}
-				>
+				<Button onclick={() => (uploadDialogOpen = true)}>
 					<Plus class="mr-2 h-4 w-4" />
 					Upload File
 				</Button>
@@ -1208,475 +712,38 @@
 		{/if}
 	</div>
 
-	<!-- Delete Confirmation Dialog -->
-	<Dialog.Root bind:open={deleteDialogOpen}>
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>
-					{#if uploadToDelete}
-						Delete Upload
-					{:else}
-						Delete Folder
-					{/if}
-				</Dialog.Title>
-				<Dialog.Description>
-					{#if uploadToDelete}
-						Are you sure you want to delete "{uploadToDelete.filename}"? This action cannot be
-						undone.
-					{:else if folderToDelete}
-						Are you sure you want to delete the folder "{folderToDelete.name}" and all its contents?
-						This action cannot be undone.
-					{/if}
-				</Dialog.Description>
-			</Dialog.Header>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						deleteDialogOpen = false;
-						uploadToDelete = null;
-						folderToDelete = null;
-					}}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="destructive"
-					onclick={uploadToDelete ? handleDeleteUpload : handleDeleteFolder}
-					disabled={deleting}
-				>
-					{deleting ? 'Deleting...' : 'Delete'}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<!-- Dialog Components -->
+	<DeleteUploadDialog
+		upload={uploadToDelete}
+		folder={folderToDelete}
+		bind:open={deleteDialogOpen}
+		onSuccess={refreshData}
+	/>
 
-	<!-- Preview Dialog -->
-	<Dialog.Root bind:open={previewDialogOpen}>
-		<Dialog.Content class="max-w-3xl">
-			<Dialog.Header>
-				<Dialog.Title class="max-w-[500px] truncate">{previewUpload?.filename}</Dialog.Title>
-				<Dialog.Description>
-					{previewUpload?.mime_type} • {previewUpload ? formatFileSize(previewUpload.size) : ''}
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="flex items-center justify-center overflow-hidden py-4">
-				{#if previewLoading}
-					<Skeleton class="h-64 w-full" />
-				{:else if previewUrl && previewUpload}
-					{@const previewType = getPreviewType(previewUpload.mime_type)}
-					{#if previewType === 'image'}
-						<img
-							src={previewUrl}
-							alt={previewUpload.filename}
-							class="max-h-[60vh] w-auto max-w-full rounded-lg object-contain"
-						/>
-					{:else if previewType === 'video'}
-						<video
-							src={previewUrl}
-							controls
-							class="max-h-[60vh] w-auto max-w-full rounded-lg"
-							preload="metadata"
-						>
-							<track kind="captions" />
-							Your browser does not support video playback.
-						</video>
-					{:else if previewType === 'audio'}
-						<div class="flex w-full flex-col items-center gap-4 py-8">
-							<FileAudio class="h-16 w-16 text-muted-foreground" />
-							<audio src={previewUrl} controls class="w-full max-w-md" preload="metadata">
-								Your browser does not support audio playback.
-							</audio>
-						</div>
-					{:else if previewType === 'pdf'}
-						<iframe
-							src={previewUrl}
-							title={previewUpload.filename}
-							class="h-[60vh] w-full rounded-lg border"
-						>
-							Your browser does not support PDF preview.
-						</iframe>
-					{:else}
-						<p class="text-muted-foreground">Preview not available for this file type</p>
-					{/if}
-				{:else}
-					<p class="text-muted-foreground">Preview not available</p>
-				{/if}
-			</div>
-			{#if previewUpload?.url}
-				<Dialog.Footer>
-					<Button variant="outline" onclick={copyPreviewLink}>
-						<Link class="mr-2 h-4 w-4" />
-						{previewIsPublic ? 'Copy Link' : 'Share...'}
-					</Button>
-					<Button onclick={() => previewUpload && downloadFile(previewUpload)}>
-						<Download class="mr-2 h-4 w-4" />
-						Download
-					</Button>
-				</Dialog.Footer>
-			{/if}
-		</Dialog.Content>
-	</Dialog.Root>
+	<PreviewUploadDialog
+		upload={previewUpload}
+		bind:open={previewDialogOpen}
+		onOpenShareDialog={openShareDialog}
+	/>
 
-	<!-- Upload Dialog -->
-	<Dialog.Root bind:open={uploadDialogOpen}>
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>Upload Files</Dialog.Title>
-				<Dialog.Description>
-					Select files to upload to
-					{#if currentFolderId}
-						the current folder.
-					{:else}
-						your root directory.
-					{/if}
-					{#if breadcrumbs.some((b) => b.name.toLowerCase() === 'public')}
-						<br /><span class="font-medium text-primary"
-							>Files in public folders are accessible without authentication.</span
-						>
-					{/if}
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="py-4">
-				{#if uploading}
-					<div class="flex flex-col items-center justify-center gap-4 py-8">
-						<Loader2 class="h-8 w-8 animate-spin text-primary" />
-						<p class="text-sm text-muted-foreground">{uploadProgress}</p>
-					</div>
-				{:else}
-					<div class="flex flex-col gap-4">
-						<Input
-							bind:ref={fileInputRef}
-							type="file"
-							multiple
-							onchange={handleFileSelect}
-							class="cursor-pointer"
-						/>
-						<p class="text-xs text-muted-foreground">
-							You can select multiple files to upload at once.
-						</p>
-					</div>
-				{/if}
-			</div>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						uploadDialogOpen = false;
-					}}
-					disabled={uploading}
-				>
-					Cancel
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<UploadFilesDialog
+		{currentFolderId}
+		{isInPublicFolder}
+		bind:open={uploadDialogOpen}
+		onSuccess={refreshData}
+	/>
 
-	<!-- New Folder Dialog -->
-	<Dialog.Root bind:open={newFolderDialogOpen}>
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>Create New Folder</Dialog.Title>
-				<Dialog.Description>
-					Create a new folder in
-					{#if currentFolderId}
-						the current directory.
-					{:else}
-						your root directory.
-					{/if}
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="py-4">
-				<div class="flex flex-col gap-2">
-					<Label for="folder-name">Folder Name</Label>
-					<Input
-						id="folder-name"
-						bind:value={newFolderName}
-						placeholder="Enter folder name..."
-						onkeydown={(e) => {
-							if (e.key === 'Enter') {
-								handleCreateFolder();
-							}
-						}}
-					/>
-				</div>
-			</div>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						newFolderDialogOpen = false;
-						newFolderName = '';
-					}}
-				>
-					Cancel
-				</Button>
-				<Button onclick={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()}>
-					{creatingFolder ? 'Creating...' : 'Create Folder'}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<NewFolderDialog {currentFolderId} bind:open={newFolderDialogOpen} onSuccess={refreshData} />
 
-	<!-- Move File Dialog -->
-	<Dialog.Root bind:open={moveDialogOpen}>
-		<Dialog.Content class="max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Move File</Dialog.Title>
-				<Dialog.Description>
-					Move "{uploadToMove?.filename}" to a different folder.
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="py-4">
-				<div class="flex flex-col gap-2">
-					<Label>Destination Folder</Label>
-					<div class="mb-2 text-sm text-muted-foreground">
-						Selected: <span class="font-medium text-foreground">{getSelectedFolderPath()}</span>
-					</div>
-					<div class="max-h-64 overflow-y-auto rounded-md border border-input p-2">
-						{#if loadingFolders}
-							<div class="flex items-center justify-center py-4">
-								<Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
-							</div>
-						{:else}
-							<!-- Root option -->
-							<button
-								type="button"
-								class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-								onclick={() => (moveTargetFolderId = '')}
-							>
-								{#if moveTargetFolderId === ''}
-									<CircleCheck class="h-4 w-4 text-primary" />
-								{:else}
-									<Circle class="h-4 w-4 text-muted-foreground" />
-								{/if}
-								<Home class="h-4 w-4" />
-								<span>Root</span>
-							</button>
+	<MoveUploadDialog upload={uploadToMove} bind:open={moveDialogOpen} onSuccess={refreshData} />
 
-							<!-- Folder tree using accordions -->
-							{#if folderTree.length > 0}
-								{#snippet renderFolderNode(node: FolderNode, depth: number)}
-									{#if node.children.length > 0}
-										<Accordion.Root type="multiple" class="w-full">
-											<Accordion.Item value={node.id.toString()} class="border-b-0">
-												<div class="flex items-center" style="padding-left: {depth * 16}px">
-													<button
-														type="button"
-														class="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-														onclick={() => (moveTargetFolderId = node.id.toString())}
-													>
-														{#if moveTargetFolderId === node.id.toString()}
-															<CircleCheck class="h-4 w-4 shrink-0 text-primary" />
-														{:else}
-															<Circle class="h-4 w-4 shrink-0 text-muted-foreground" />
-														{/if}
-														{#if node.name.toLowerCase() === 'public'}
-															<Globe class="h-4 w-4 shrink-0 text-primary" />
-														{:else}
-															<FolderIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
-														{/if}
-														<span class="truncate">{node.name}</span>
-													</button>
-													<Accordion.Trigger
-														class="px-2 py-1.5 hover:no-underline [&>svg]:h-4 [&>svg]:w-4"
-													/>
-												</div>
-												<Accordion.Content class="pb-0">
-													{#each node.children as child (child.id.toString())}
-														{@render renderFolderNode(child, depth + 1)}
-													{/each}
-												</Accordion.Content>
-											</Accordion.Item>
-										</Accordion.Root>
-									{:else}
-										<!-- Leaf folder (no children) -->
-										<div style="padding-left: {depth * 16}px">
-											<button
-												type="button"
-												class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-												onclick={() => (moveTargetFolderId = node.id.toString())}
-											>
-												{#if moveTargetFolderId === node.id.toString()}
-													<CircleCheck class="h-4 w-4 shrink-0 text-primary" />
-												{:else}
-													<Circle class="h-4 w-4 shrink-0 text-muted-foreground" />
-												{/if}
-												{#if node.name.toLowerCase() === 'public'}
-													<Globe class="h-4 w-4 shrink-0 text-primary" />
-												{:else}
-													<FolderIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
-												{/if}
-												<span class="truncate">{node.name}</span>
-											</button>
-										</div>
-									{/if}
-								{/snippet}
-								{#each folderTree as node (node.id.toString())}
-									{@render renderFolderNode(node, 0)}
-								{/each}
-							{/if}
-						{/if}
-					</div>
-				</div>
-				<div
-					class="mt-4 flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
-				>
-					<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-					<span
-						>Moving this file will break any existing share links and external references to it.</span
-					>
-				</div>
-			</div>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						moveDialogOpen = false;
-						uploadToMove = null;
-						moveTargetFolderId = '';
-					}}
-				>
-					Cancel
-				</Button>
-				<Button onclick={handleMove} disabled={moving}>
-					{moving ? 'Moving...' : 'Move File'}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<RenameUploadDialog
+		upload={uploadToRename}
+		bind:open={renameDialogOpen}
+		onSuccess={refreshData}
+	/>
 
-	<!-- Rename File Dialog -->
-	<Dialog.Root bind:open={renameDialogOpen}>
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>Rename File</Dialog.Title>
-				<Dialog.Description>
-					Enter a new name for "{uploadToRename?.filename}"
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="py-4">
-				<div class="flex flex-col gap-2">
-					<Label for="new-filename">New Filename</Label>
-					<Input
-						id="new-filename"
-						bind:value={newFilename}
-						placeholder="Enter new filename..."
-						onkeydown={(e) => {
-							if (e.key === 'Enter' && newFilename.trim()) {
-								handleRename();
-							}
-						}}
-					/>
-				</div>
-			</div>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						renameDialogOpen = false;
-						uploadToRename = null;
-						newFilename = '';
-					}}
-				>
-					Cancel
-				</Button>
-				<Button onclick={handleRename} disabled={renaming || !newFilename.trim()}>
-					{renaming ? 'Renaming...' : 'Rename'}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
-
-	<!-- Share Link Dialog -->
-	<Dialog.Root bind:open={shareDialogOpen}>
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>Share File</Dialog.Title>
-				<Dialog.Description>
-					Generate a temporary link for "{uploadToShare?.filename}"
-				</Dialog.Description>
-			</Dialog.Header>
-			<div class="space-y-4 py-4">
-				{#if !generatedShareUrl}
-					<div class="flex flex-col gap-2">
-						<Label for="expiry-select">Link validity</Label>
-						<Select.Root type="single" bind:value={shareExpiryValue} name="expiry-select">
-							<Select.Trigger>
-								<Clock class="mr-2 h-4 w-4" />
-								{expiryOptions.find((o) => o.value === shareExpiryValue)?.label ||
-									'Select duration'}
-							</Select.Trigger>
-							<Select.Content>
-								{#each expiryOptions as option (option.value)}
-									<Select.Item value={option.value}>{option.label}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-						<p class="text-xs text-muted-foreground">
-							This link will expire after the selected duration. Anyone with this link can view the
-							file.
-						</p>
-					</div>
-				{:else}
-					<div class="space-y-3">
-						<div class="flex flex-col gap-2">
-							<Label>Share link</Label>
-							<div class="flex gap-2">
-								<Input value={generatedShareUrl} readonly class="font-mono text-xs" />
-								<Button variant="outline" size="icon" onclick={copyShareUrl} title="Copy link">
-									{#if shareLinkCopied}
-										<Check class="h-4 w-4 text-green-500" />
-									{:else}
-										<Copy class="h-4 w-4" />
-									{/if}
-								</Button>
-							</div>
-						</div>
-						{#if shareExpiresAt}
-							<p class="flex items-center gap-1 text-sm text-muted-foreground">
-								<Clock class="h-4 w-4" />
-								Expires: {formatExpiryTime(shareExpiresAt)}
-							</p>
-						{/if}
-					</div>
-				{/if}
-			</div>
-			<Dialog.Footer>
-				<Button
-					variant="outline"
-					onclick={() => {
-						shareDialogOpen = false;
-						uploadToShare = null;
-						generatedShareUrl = null;
-						shareExpiresAt = null;
-					}}
-				>
-					{generatedShareUrl ? 'Close' : 'Cancel'}
-				</Button>
-				{#if !generatedShareUrl}
-					<Button onclick={generateShareLink} disabled={generatingShareLink}>
-						{#if generatingShareLink}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-							Generating...
-						{:else}
-							<Link class="mr-2 h-4 w-4" />
-							Generate Link
-						{/if}
-					</Button>
-				{:else}
-					<Button
-						onclick={() => {
-							generatedShareUrl = null;
-							shareExpiresAt = null;
-						}}
-					>
-						Generate New Link
-					</Button>
-				{/if}
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<ShareUploadDialog upload={uploadToShare} bind:open={shareDialogOpen} />
 {:else}
 	<!-- Not Logged In View -->
 	<div class="flex h-full items-center justify-center p-8">
