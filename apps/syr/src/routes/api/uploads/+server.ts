@@ -1,25 +1,112 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { UploadCreateSchema, UploadUpdateSchema } from '@syr-is/types';
+import {
+	UploadCreateSchema,
+	UploadUpdateSchema,
+	QueryParamsSchema,
+	QueryOptionsSchema
+} from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
+import { folderController } from '$lib/controllers/folder.controller';
+
+export const GET: RequestHandler = async ({ url, locals }) => {
+	if (!locals.user) {
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'Unauthorized'
+		});
+	}
+
+	const user = await userRepository.findById(locals.user.id);
+	if (!user) {
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'Invalid User'
+		});
+	}
+
+	// Parse query parameters
+	const getParam = (key: string): string | undefined => {
+		const value = url.searchParams.get(key);
+		return value === null || value === '' ? undefined : value;
+	};
+
+	const parsed = QueryParamsSchema.safeParse({
+		limit: getParam('limit'),
+		offset: getParam('offset'),
+		sort_field: getParam('sort_field'),
+		sort_order: getParam('sort_order'),
+		search: getParam('search')
+	});
+
+	if (!parsed.success) {
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'Invalid query parameters',
+			details: z.treeifyError(parsed.error)
+		});
+	}
+
+	const options = QueryOptionsSchema.partial().parse(parsed.data);
+	const { limit = 20, offset = 0 } = options;
+
+	// Get folder_id from query params
+	// null = root level only, undefined = all files, string = specific folder
+	const folderIdParam = url.searchParams.get('folder_id');
+	const folderId = folderIdParam === '' ? null : folderIdParam;
+
+	const { data, total } = await uploadController.getUserUploads(user.id, {
+		...options,
+		folder_id: folderId
+	});
+
+	// Get breadcrumbs if viewing a folder
+	const breadcrumbs = folderId ? await folderController.getBreadcrumbs(folderId) : [];
+
+	return json({
+		status: 'success',
+		data,
+		breadcrumbs,
+		pagination: {
+			limit,
+			offset,
+			total,
+			has_more: offset + data.length < total
+		},
+		meta: { timestamp: new Date().toISOString() }
+	});
+};
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
 	if (!locals.user) {
-		throw error(401, 'You must be logged in to upload content!');
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'You must be logged in to upload content!'
+		});
 	}
 	const user = await userRepository.findById(locals.user.id);
 	if (!user) {
-		throw error(400, 'Invalid User');
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'Invalid User'
+		});
 	}
 
 	try {
 		const body = await request.json();
 		const data = UploadCreateSchema.parse(body);
 		const result = await uploadController.getPutUrl(user, data);
-		return json(result);
+		return json(
+			{
+				status: 'success',
+				data: result,
+				meta: { timestamp: new Date().toISOString() }
+			},
+			{ status: 201 }
+		);
 	} catch (err) {
 		// Handle Zod validation errors
 		if (err instanceof z.ZodError) {
@@ -43,13 +130,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) {
-		throw error(401, 'You must be logged in to update an upload');
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'You must be logged in to update an upload'
+		});
 	}
 	try {
 		const body = await request.json();
 		const data = UploadUpdateSchema.parse(body);
 		const result = await uploadController.completeUpload(data.id);
-		return json(result);
+		return json({
+			status: 'success',
+			data: result,
+			meta: { timestamp: new Date().toISOString() }
+		});
 	} catch (err) {
 		// Handle Zod validation errors
 		if (err instanceof z.ZodError) {

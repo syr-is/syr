@@ -2,7 +2,7 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { Button } from '$lib/components/ui/button';
 	import { toggleMode } from 'mode-watcher';
-	import { House } from 'lucide-svelte';
+	import { House, FileText, Upload } from 'lucide-svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import NavUser from '$lib/components/nav-user.svelte';
@@ -31,6 +31,16 @@
 			title: 'Home',
 			href: '/',
 			icon: House
+		},
+		{
+			title: 'Posts',
+			href: '/posts',
+			icon: FileText
+		},
+		{
+			title: 'Uploads',
+			href: '/uploads',
+			icon: Upload
 		}
 	];
 

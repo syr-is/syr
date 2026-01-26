@@ -2,7 +2,9 @@
   "identities": [
     {
       "name": "anonymous",
-      "actions": ["Read:syr/*"]
+      "actions": [
+        "Read:syr/uploads/user:*/public/*"
+      ]
     },
     {
       "name": "syr-access",

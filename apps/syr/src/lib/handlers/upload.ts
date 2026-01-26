@@ -3,7 +3,17 @@
  * Handles the complete upload flow: hash calculation, signed URL retrieval, S3 upload, and completion
  */
 
-export async function handleFileUpload(file: File): Promise<string> {
+export interface UploadOptions {
+	/** Target folder ID for the upload */
+	folder_id?: string | null;
+	/** Post ID for post assets - uploads go to posts/{post_id}/public/ */
+	post_id?: string;
+}
+
+/**
+ * Handle file upload to the default location (or specified folder)
+ */
+export async function handleFileUpload(file: File, options?: UploadOptions): Promise<string> {
 	try {
 		// Calculate SHA256 hash of the file
 		const arrayBuffer = await file.arrayBuffer();
@@ -11,31 +21,50 @@ export async function handleFileUpload(file: File): Promise<string> {
 		const hashArray = Array.from(new Uint8Array(hashBuffer));
 		const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
+		// Determine endpoint based on options
+		const endpoint = options?.post_id ? '/api/uploads/post-assets' : '/api/uploads';
+
+		// Build request body
+		// Fallback to application/octet-stream if browser can't detect MIME type
+		const mimeType = file.type || 'application/octet-stream';
+		const body: Record<string, unknown> = {
+			filename: file.name,
+			mime_type: mimeType,
+			size: file.size,
+			sha256
+		};
+
+		if (options?.post_id) {
+			body.post_id = options.post_id;
+		} else if (options?.folder_id !== undefined) {
+			body.folder_id = options.folder_id;
+		}
+
 		// Step 1: Get signed URL from API
-		const response = await fetch('/api/uploads', {
+		const response = await fetch(endpoint, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({
-				filename: file.name,
-				mime_type: file.type,
-				size: file.size,
-				sha256
-			})
+			body: JSON.stringify(body)
 		});
 
 		if (!response.ok) {
-			throw new Error(`Failed to get upload URL: ${response.statusText}`);
+			const errorBody = await response.json().catch(() => null);
+			console.error('Upload API error:', errorBody);
+			throw new Error(
+				`Failed to get upload URL: ${errorBody?.error?.message || errorBody?.message || response.statusText}`
+			);
 		}
 
-		const { signedUrl, finalUrl, uploadId } = await response.json();
+		const result = await response.json();
+		const { signedUrl, finalUrl, uploadId } = result.data;
 
 		// Step 2: Upload file to S3 using the signed URL
 		const uploadResponse = await fetch(signedUrl, {
 			method: 'PUT',
 			headers: {
-				'Content-Type': file.type
+				'Content-Type': mimeType
 			},
 			body: file
 		});
@@ -62,4 +91,22 @@ export async function handleFileUpload(file: File): Promise<string> {
 		console.error('Upload error:', error);
 		throw error;
 	}
+}
+
+/**
+ * Handle file upload for post assets
+ * Files are stored in: uploads/{user_id}/posts/{post_id}/public/
+ * Folder hierarchy on uploads page: posts/{post_id}/public/{upload_id}
+ * These files are publicly accessible
+ */
+export async function handlePostAssetUpload(file: File, postId: string): Promise<string> {
+	return handleFileUpload(file, { post_id: postId });
+}
+
+/**
+ * Create an upload handler for post assets with a specific post ID
+ * Used by Milkdown editor for image uploads
+ */
+export function createPostAssetUploader(postId: string): (file: File) => Promise<string> {
+	return (file: File) => handlePostAssetUpload(file, postId);
 }

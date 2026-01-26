@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
-	import { Trash2, Pin, PinOff } from 'lucide-svelte';
+	import { Trash2, Pin, PinOff, FilePen } from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
 
 	interface Props {
@@ -15,6 +15,9 @@
 	}
 
 	let { post, isPinned = false, onPinToggle, showPinButton = true }: Props = $props();
+
+	// Check if post is a draft
+	const isDraft = $derived(post.status === 'draft');
 	let deleteDialogOpen = $state(false);
 	let pinLoading = $state(false);
 
@@ -66,13 +69,23 @@
 	}
 </script>
 
-<Card.Root class="transition-all hover:border-primary/50 hover:shadow-md">
+<Card.Root
+	class="hover:border-primary/50 transition-all hover:shadow-md {isDraft
+		? 'border-warning/50 border-dashed'
+		: ''}"
+>
 	<Card.Header>
 		<div class="flex items-start justify-between gap-2">
 			<Card.Title class="line-clamp-2 flex-1">
 				{post.title || 'Untitled Post'}
 			</Card.Title>
 			<div class="flex flex-shrink-0 gap-2">
+				{#if isDraft}
+					<Badge variant="outline" class="border-warning text-warning gap-1 text-xs">
+						<FilePen class="h-3 w-3" />
+						Draft
+					</Badge>
+				{/if}
 				<Badge variant={getVisibilityVariant(post.visibility)} class="text-xs">
 					{post.visibility}
 				</Badge>
@@ -81,13 +94,17 @@
 				</Badge>
 			</div>
 		</div>
-		<Card.Description class="text-xs text-muted-foreground">
-			{formatDate(post.created_at)}
+		<Card.Description class="text-muted-foreground text-xs">
+			{#if isDraft}
+				Last edited {formatDate(post.updated_at)}
+			{:else}
+				{formatDate(post.created_at)}
+			{/if}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content>
 		<div class="flex items-start justify-between gap-2">
-			<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
+			<p class="text-muted-foreground line-clamp-3 flex-1 text-sm">{getDisplayText(post)}</p>
 			<div class="flex gap-1">
 				{#if showPinButton && onPinToggle}
 					<Tooltip.Root>
@@ -119,7 +136,7 @@
 				<Button
 					variant="ghost"
 					size="icon"
-					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+					class="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
 					onclick={(e) => {
 						e.stopPropagation();
 						deleteDialogOpen = true;

@@ -7,11 +7,15 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
-	import { Pencil, ArrowLeft, Pin, PinOff } from 'lucide-svelte';
+	import { Pencil, ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
 
 	let { data }: { data: PageData } = $props();
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
+	let publishLoading = $state(false);
+
+	// Check if post is a draft
+	const isDraft = $derived(data.post.status === 'draft');
 
 	// Check if post is pinned on mount
 	$effect(() => {
@@ -58,6 +62,62 @@
 			toast.error(err instanceof Error ? err.message : 'Failed to toggle pin');
 		} finally {
 			pinLoading = false;
+		}
+	}
+
+	async function handlePublish() {
+		if (publishLoading) return;
+
+		publishLoading = true;
+		try {
+			const response = await fetch(`/api/posts/${data.post.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					status: 'completed'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to publish post');
+			}
+
+			toast.success('Post published successfully!');
+			// Reload page to show updated status
+			window.location.reload();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to publish post');
+		} finally {
+			publishLoading = false;
+		}
+	}
+
+	async function handleUnpublish() {
+		if (publishLoading) return;
+
+		publishLoading = true;
+		try {
+			const response = await fetch(`/api/posts/${data.post.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					status: 'draft'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to unpublish post');
+			}
+
+			toast.success('Post moved back to drafts');
+			// Reload page to show updated status
+			window.location.reload();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to unpublish post');
+		} finally {
+			publishLoading = false;
 		}
 	}
 
@@ -123,6 +183,12 @@
 							{data.post.title || 'Untitled Post'}
 						</Card.Title>
 						<div class="flex gap-2">
+							{#if isDraft}
+								<Badge variant="outline" class="border-warning text-warning gap-1 text-xs">
+									<FilePen class="h-3 w-3" />
+									Draft
+								</Badge>
+							{/if}
 							<Badge variant={getVisibilityVariant(data.post.visibility)} class="text-xs">
 								{data.post.visibility}
 							</Badge>
@@ -132,9 +198,16 @@
 						</div>
 					</div>
 					<Card.Description class="text-sm text-muted-foreground">
-						Published on {formatDate(data.post.created_at)}
-						{#if data.post.updated_at && data.post.updated_at !== data.post.created_at}
-							<span class="ml-2">• Updated on {formatDate(data.post.updated_at)}</span>
+						{#if isDraft}
+							Draft created {formatDate(data.post.created_at)}
+							{#if data.post.updated_at && data.post.updated_at !== data.post.created_at}
+								<span class="ml-2">• Last edited {formatDate(data.post.updated_at)}</span>
+							{/if}
+						{:else}
+							Published on {formatDate(data.post.created_at)}
+							{#if data.post.updated_at && data.post.updated_at !== data.post.created_at}
+								<span class="ml-2">• Updated on {formatDate(data.post.updated_at)}</span>
+							{/if}
 						{/if}
 					</Card.Description>
 				</div>
@@ -142,6 +215,35 @@
 					{@const isOwner = data.post.author_id === data.user.id}
 					{#if isOwner}
 						<div class="flex gap-2">
+							{#if isDraft}
+								<Button
+									variant="default"
+									size="sm"
+									onclick={handlePublish}
+									disabled={publishLoading}
+								>
+									{#if publishLoading}
+										Publishing...
+									{:else}
+										<Send class="mr-2 h-4 w-4" />
+										Publish
+									{/if}
+								</Button>
+							{:else}
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={handleUnpublish}
+									disabled={publishLoading}
+								>
+									{#if publishLoading}
+										Unpublishing...
+									{:else}
+										<EyeOff class="mr-2 h-4 w-4" />
+										Unpublish
+									{/if}
+								</Button>
+							{/if}
 							<Tooltip.Root>
 								<Tooltip.Trigger>
 									{#snippet child({ props })}

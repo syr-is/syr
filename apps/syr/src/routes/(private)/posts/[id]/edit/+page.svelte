@@ -16,12 +16,13 @@
 	import '@milkdown/crepe/theme/nord-dark.css';
 	import '$lib/styles/crepe-custom.css';
 	import { imageBlockConfig } from '@milkdown/components/image-block';
-	import { handleFileUpload } from '$lib/handlers/upload';
+	import { createPostAssetUploader } from '$lib/handlers/upload';
 	import { stringToRecordId } from '@syr-is/types';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
-	import { ArrowLeft, Pin, PinOff } from 'lucide-svelte';
+	import { ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
 
 	let { data }: { data: PageData } = $props();
 
@@ -30,6 +31,10 @@
 	let loading = $state(false);
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
+	let publishLoading = $state(false);
+
+	// Check if post is a draft
+	const isDraft = $derived(data.post.status === 'draft');
 
 	// Check if post is pinned on mount
 	$effect(() => {
@@ -74,6 +79,96 @@
 			toast.error(err instanceof Error ? err.message : 'Failed to toggle pin');
 		} finally {
 			pinLoading = false;
+		}
+	}
+
+	async function handlePublish() {
+		if (publishLoading) return;
+
+		// Sync markdown content before publishing
+		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+			try {
+				const markdown = crepeInstance.getMarkdown();
+				$formData.content = markdown;
+			} catch (error) {
+				console.warn('Could not get markdown:', error);
+			}
+		}
+
+		publishLoading = true;
+		try {
+			const response = await fetch(`/api/posts/${data.post.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					type: $formData.type,
+					content_type: $formData.content_type,
+					title: $formData.title,
+					description: $formData.description,
+					content: $formData.content,
+					visibility: $formData.visibility,
+					status: 'completed'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to publish post');
+			}
+
+			toast.success('Post published successfully!');
+			await invalidateAll();
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto(`/posts/${data.post.id}`);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to publish post');
+		} finally {
+			publishLoading = false;
+		}
+	}
+
+	async function handleUnpublish() {
+		if (publishLoading) return;
+
+		// Sync markdown content before unpublishing
+		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+			try {
+				const markdown = crepeInstance.getMarkdown();
+				$formData.content = markdown;
+			} catch (error) {
+				console.warn('Could not get markdown:', error);
+			}
+		}
+
+		publishLoading = true;
+		try {
+			const response = await fetch(`/api/posts/${data.post.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					type: $formData.type,
+					content_type: $formData.content_type,
+					title: $formData.title,
+					description: $formData.description,
+					content: $formData.content,
+					visibility: $formData.visibility,
+					status: 'draft'
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error?.message || 'Failed to unpublish post');
+			}
+
+			toast.success('Post moved back to drafts');
+			await invalidateAll();
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto(`/posts/${data.post.id}`);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to unpublish post');
+		} finally {
+			publishLoading = false;
 		}
 	}
 
@@ -163,9 +258,10 @@
 		instance.create().then(() => {
 			crepeInstance = instance;
 
+			// Use post-specific uploader so images go to posts/{post_id}/public/
 			instance.editor.ctx.update(imageBlockConfig.key, (defaultConfig) => ({
 				...defaultConfig,
-				onUpload: handleFileUpload
+				onUpload: createPostAssetUploader(data.post.id)
 			}));
 
 			// Use Crepe's built-in markdownUpdated listener to sync with form in real-time
@@ -234,35 +330,45 @@
 	<Card.Root class="flex min-h-0 flex-1 flex-col">
 		<Card.Header class="shrink-0">
 			<div class="flex items-start justify-between">
-				<div>
-					<Card.Title>Edit Post</Card.Title>
-					<Card.Description>Update your blog post</Card.Description>
+				<div class="flex items-center gap-3">
+					<div>
+						<Card.Title>Edit Post</Card.Title>
+						<Card.Description>Update your blog post</Card.Description>
+					</div>
+					{#if isDraft}
+						<Badge variant="outline" class="border-warning text-warning gap-1">
+							<FilePen class="h-3 w-3" />
+							Draft
+						</Badge>
+					{/if}
 				</div>
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								variant="outline"
-								size="sm"
-								onclick={handlePinToggle}
-								disabled={pinLoading}
-								class={isPinned ? 'text-primary' : ''}
-							>
-								{#if isPinned}
-									<PinOff class="mr-2 h-4 w-4" />
-									Unpin
-								{:else}
-									<Pin class="mr-2 h-4 w-4" />
-									Pin
-								{/if}
-							</Button>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isPinned ? 'Remove from pinned posts' : 'Add to pinned posts'}
-					</Tooltip.Content>
-				</Tooltip.Root>
+				<div class="flex gap-2">
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="outline"
+									size="sm"
+									onclick={handlePinToggle}
+									disabled={pinLoading}
+									class={isPinned ? 'text-primary' : ''}
+								>
+									{#if isPinned}
+										<PinOff class="mr-2 h-4 w-4" />
+										Unpin
+									{:else}
+										<Pin class="mr-2 h-4 w-4" />
+										Pin
+									{/if}
+								</Button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{isPinned ? 'Remove from pinned posts' : 'Add to pinned posts'}
+						</Tooltip.Content>
+					</Tooltip.Root>
+				</div>
 			</div>
 		</Card.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -347,7 +453,7 @@
 								<div
 									id="post-editor"
 									use:mountCrepe
-									class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
+									class="border-input max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border p-4"
 								></div>
 							{/key}
 						{:else}
@@ -373,13 +479,38 @@
 			</Card.Content>
 			<Card.Footer class="flex shrink-0 justify-end gap-2">
 				<Form.Button type="button" variant="outline" onclick={goHome}>Cancel</Form.Button>
-				<Form.Button type="submit" disabled={loading}>
+				{#if !isDraft}
+					<Button
+						type="button"
+						variant="outline"
+						onclick={handleUnpublish}
+						disabled={loading || publishLoading}
+					>
+						{#if publishLoading}
+							Unpublishing...
+						{:else}
+							<EyeOff class="mr-2 h-4 w-4" />
+							Unpublish
+						{/if}
+					</Button>
+				{/if}
+				<Form.Button type="submit" disabled={loading || publishLoading}>
 					{#if loading}
-						Updating post...
+						Saving...
 					{:else}
-						Update Post
+						Save Changes
 					{/if}
 				</Form.Button>
+				{#if isDraft}
+					<Button type="button" onclick={handlePublish} disabled={loading || publishLoading}>
+						{#if publishLoading}
+							Publishing...
+						{:else}
+							<Send class="mr-2 h-4 w-4" />
+							Publish
+						{/if}
+					</Button>
+				{/if}
 			</Card.Footer>
 		</form>
 	</Card.Root>

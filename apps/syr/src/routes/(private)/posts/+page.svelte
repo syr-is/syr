@@ -1,6 +1,5 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Select from '$lib/components/ui/select';
 	import * as Pagination from '$lib/components/ui/pagination';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -264,144 +263,93 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Posts | SYR</title>
+</svelte:head>
+
 {#if data.user}
-	<div class="flex gap-4 space-y-8 p-8">
-		<div class="w-[calc(100%-24rem)] space-y-6">
-			<!-- Controls Row -->
-			<div class="flex items-center justify-between gap-4">
-				<div class="flex items-center gap-2">
-					<Select.Root type="single" bind:value={sortField}>
-						<Select.Trigger class="w-[140px]">
-							{getSortFieldLabel(sortField)}
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="created_at">Created</Select.Item>
-							<Select.Item value="updated_at">Updated</Select.Item>
-							<Select.Item value="title">Title</Select.Item>
-						</Select.Content>
-					</Select.Root>
+	<div class="space-y-6 p-8">
+		<!-- Page Header -->
+		<div class="space-y-1">
+			<h1 class="text-3xl font-bold tracking-tight">Posts</h1>
+			<p class="text-muted-foreground">Manage and organize all your posts</p>
+		</div>
 
-					<Select.Root type="single" bind:value={sortOrder}>
-						<Select.Trigger class="w-[140px]">
-							{getSortOrderLabel(sortOrder)}
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="desc">Descending</Select.Item>
-							<Select.Item value="asc">Ascending</Select.Item>
-						</Select.Content>
-					</Select.Root>
+		<!-- Controls Row -->
+		<div class="flex items-center justify-between gap-4">
+			<div class="flex items-center gap-2">
+				<Select.Root type="single" bind:value={sortField}>
+					<Select.Trigger class="w-[140px]">
+						{getSortFieldLabel(sortField)}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="created_at">Created</Select.Item>
+						<Select.Item value="updated_at">Updated</Select.Item>
+						<Select.Item value="title">Title</Select.Item>
+					</Select.Content>
+				</Select.Root>
 
-					{#if totalPages > 1}
-						<Pagination.Root bind:page={currentPage} count={total} perPage={limit} siblingCount={1}>
-							{#snippet children({ pages, currentPage: activePage })}
-								<Pagination.Content>
-									<Pagination.Item>
-										<Pagination.PrevButton />
-									</Pagination.Item>
-									{#each pages as page (page.key)}
-										{#if page.type === 'ellipsis'}
-											<Pagination.Item>
-												<Pagination.Ellipsis />
-											</Pagination.Item>
-										{:else}
-											<Pagination.Item>
-												<Pagination.Link {page} isActive={activePage === page.value}>
-													{page.value}
-												</Pagination.Link>
-											</Pagination.Item>
-										{/if}
-									{/each}
-									<Pagination.Item>
-										<Pagination.NextButton />
-									</Pagination.Item>
-								</Pagination.Content>
-							{/snippet}
-						</Pagination.Root>
-					{/if}
-				</div>
-				<NewPost />
+				<Select.Root type="single" bind:value={sortOrder}>
+					<Select.Trigger class="w-[140px]">
+						{getSortOrderLabel(sortOrder)}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="desc">Descending</Select.Item>
+						<Select.Item value="asc">Ascending</Select.Item>
+					</Select.Content>
+				</Select.Root>
+
+				{#if totalPages > 1}
+					<Pagination.Root bind:page={currentPage} count={total} perPage={limit} siblingCount={1}>
+						{#snippet children({ pages, currentPage: activePage })}
+							<Pagination.Content>
+								<Pagination.Item>
+									<Pagination.PrevButton />
+								</Pagination.Item>
+								{#each pages as page (page.key)}
+									{#if page.type === 'ellipsis'}
+										<Pagination.Item>
+											<Pagination.Ellipsis />
+										</Pagination.Item>
+									{:else}
+										<Pagination.Item>
+											<Pagination.Link {page} isActive={activePage === page.value}>
+												{page.value}
+											</Pagination.Link>
+										</Pagination.Item>
+									{/if}
+								{/each}
+								<Pagination.Item>
+									<Pagination.NextButton />
+								</Pagination.Item>
+							</Pagination.Content>
+						{/snippet}
+					</Pagination.Root>
+				{/if}
 			</div>
+			<NewPost />
+		</div>
 
-			<!-- Pinned Posts Section -->
-			{#if pinnedPosts.length > 0}
-				<div class="space-y-3">
-					<div class="flex items-center gap-2">
-						<Pin class="h-4 w-4 text-primary" />
-						<h2 class="text-lg font-semibold">Pinned Posts</h2>
-						<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
-					</div>
-					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-						{#each pinnedPosts as post, index (post.id.toString())}
-							<DraggableItem
-								{index}
-								{draggedIndex}
-								{dragOverIndex}
-								onDragStart={handleDragStart}
-								onDragOver={handleDragOver}
-								onDragLeave={handleDragLeave}
-								onDrop={handleDrop}
-								onDragEnd={handleDragEnd}
-							>
-								<button
-									type="button"
-									class="w-full text-left"
-									onclick={() => handlePostClick(post)}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											handlePostClick(post);
-										}
-									}}
-								>
-									<PostPreview
-										{post}
-										isPinned={true}
-										onPinToggle={handlePinToggle}
-										showPinButton={true}
-									/>
-								</button>
-							</DraggableItem>
-						{/each}
-					</div>
+		<!-- Pinned Posts Section -->
+		{#if pinnedPosts.length > 0}
+			<div class="space-y-3">
+				<div class="flex items-center gap-2">
+					<Pin class="h-4 w-4 text-primary" />
+					<h2 class="text-lg font-semibold">Pinned Posts</h2>
+					<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 				</div>
-			{/if}
-
-			<!-- Posts List -->
-			{#if loading}
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each Array(6) as _, i (i)}
-						<Card.Root>
-							<Card.Header>
-								<Skeleton class="h-6 w-3/4" />
-								<Skeleton class="mt-2 h-4 w-1/2" />
-							</Card.Header>
-							<Card.Content>
-								<Skeleton class="h-4 w-full" />
-								<Skeleton class="mt-2 h-4 w-5/6" />
-							</Card.Content>
-						</Card.Root>
-					{/each}
-				</div>
-			{:else if error}
-				<Card.Root>
-					<Card.Content class="py-6">
-						<p class="text-center text-destructive">{error}</p>
-					</Card.Content>
-				</Card.Root>
-			{:else if posts.length === 0}
-				<Card.Root>
-					<Card.Content class="py-12">
-						<div class="space-y-2 text-center">
-							<h3 class="text-lg font-semibold">No posts yet</h3>
-							<p class="text-sm text-muted-foreground">Get started by creating your first post!</p>
-						</div>
-					</Card.Content>
-				</Card.Root>
-			{:else}
-				<div class="space-y-3">
-					<h2 class="text-lg font-semibold">All Posts</h2>
-					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-						{#each posts as post (post.id.toString())}
+				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{#each pinnedPosts as post, index (post.id.toString())}
+						<DraggableItem
+							{index}
+							{draggedIndex}
+							{dragOverIndex}
+							onDragStart={handleDragStart}
+							onDragOver={handleDragOver}
+							onDragLeave={handleDragLeave}
+							onDrop={handleDrop}
+							onDragEnd={handleDragEnd}
+						>
 							<button
 								type="button"
 								class="w-full text-left"
@@ -415,85 +363,84 @@
 							>
 								<PostPreview
 									{post}
-									isPinned={isPostPinned(post.id.toString())}
+									isPinned={true}
 									onPinToggle={handlePinToggle}
 									showPinButton={true}
 								/>
 							</button>
-						{/each}
+						</DraggableItem>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Posts List -->
+		{#if loading}
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+				{#each Array(8) as _, i (i)}
+					<Card.Root>
+						<Card.Header>
+							<Skeleton class="h-6 w-3/4" />
+							<Skeleton class="mt-2 h-4 w-1/2" />
+						</Card.Header>
+						<Card.Content>
+							<Skeleton class="h-4 w-full" />
+							<Skeleton class="mt-2 h-4 w-5/6" />
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
+		{:else if error}
+			<Card.Root>
+				<Card.Content class="py-6">
+					<p class="text-center text-destructive">{error}</p>
+				</Card.Content>
+			</Card.Root>
+		{:else if posts.length === 0}
+			<Card.Root>
+				<Card.Content class="py-12">
+					<div class="space-y-2 text-center">
+						<h3 class="text-lg font-semibold">No posts yet</h3>
+						<p class="text-sm text-muted-foreground">Get started by creating your first post!</p>
 					</div>
+				</Card.Content>
+			</Card.Root>
+		{:else}
+			<div class="space-y-3">
+				<h2 class="text-lg font-semibold">All Posts</h2>
+				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{#each posts as post (post.id.toString())}
+						<button
+							type="button"
+							class="w-full text-left"
+							onclick={() => handlePostClick(post)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									handlePostClick(post);
+								}
+							}}
+						>
+							<PostPreview
+								{post}
+								isPinned={isPostPinned(post.id.toString())}
+								onPinToggle={handlePinToggle}
+								showPinButton={true}
+							/>
+						</button>
+					{/each}
 				</div>
-			{/if}
-		</div>
-		<!-- Discord-style Profile Card -->
-		<Card.Root class="w-96 overflow-hidden">
-			<!-- Banner -->
-			{#if data.user.profile?.banner_url}
-				<div class="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
-					<img
-						src={data.user.profile.banner_url}
-						alt="Profile banner"
-						class="h-full w-full object-cover"
-					/>
-				</div>
-			{:else}
-				<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-			{/if}
-
-			<Card.Content class="relative pt-16 pb-6">
-				<!-- Avatar positioned over banner -->
-				<div class="absolute -top-12 left-6">
-					<Avatar.Root class="h-24 w-24 border-4 border-background">
-						<Avatar.Image
-							src={data.user.profile?.avatar_url}
-							alt={data.user.profile?.display_name ?? data.user.username}
-						/>
-						<Avatar.Fallback class="text-2xl">
-							{data.user.profile?.display_name?.charAt(0).toUpperCase() ??
-								data.user.username.charAt(0).toUpperCase()}
-						</Avatar.Fallback>
-					</Avatar.Root>
-				</div>
-
-				<!-- Profile Info -->
-				<div class="space-y-4">
-					<div class="space-y-2">
-						<div class="flex items-center gap-2">
-							<h2 class="text-2xl font-bold">
-								{data.user.profile?.display_name ?? data.user.username}
-							</h2>
-							{#if data.user.role === 'ADMIN'}
-								<span
-									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
-								>
-									Admin
-								</span>
-							{/if}
-						</div>
-						<p class="text-lg text-muted-foreground">@{data.user.username}</p>
-					</div>
-
-					{#if data.user.profile?.bio}
-						<div class="rounded-lg bg-muted/50 p-4">
-							<p class="text-sm leading-relaxed">
-								{data.user.profile.bio}
-							</p>
-						</div>
-					{/if}
-				</div>
-			</Card.Content>
-		</Card.Root>
+			</div>
+		{/if}
 	</div>
 {:else}
-	<!-- Logged Out View -->
-	<div class="mt-4 space-y-4 text-center">
-		<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
-			Welcome to <span class="text-primary">SYR</span>
-		</h1>
-		<p class="text-xl text-muted-foreground">Self-Yield Representation</p>
-		<p class="text-lg text-muted-foreground">
-			Your sovereign digital presence. No algorithms, no lock-in, just you.
-		</p>
-		<p class="text-lg text-muted-foreground">Login to get started or register a new account.</p>
+	<!-- Not Logged In View -->
+	<div class="flex h-full items-center justify-center p-8">
+		<Card.Root class="max-w-md">
+			<Card.Header>
+				<Card.Title>Sign in required</Card.Title>
+				<Card.Description>You need to be logged in to manage your posts.</Card.Description>
+			</Card.Header>
+		</Card.Root>
 	</div>
 {/if}

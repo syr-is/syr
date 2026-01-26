@@ -30,5 +30,8 @@ export * from "./uploads.js";
 // Post types
 export * from "./posts.js";
 
+// Folder types
+export * from "./folders.js";
+
 // KV (Key-Value) types
 export * from "./kv.js";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BaseEntitySchema, RecordIdSchema, MetadataSchema } from "./common.js";
+import { BaseEntitySchema, RecordIdSchema } from "./common.js";
 
 export const PostTypeSchema = z.enum(["blog"]);
 
@@ -19,6 +19,15 @@ export type PostBlogVisibilityType = z.infer<
   typeof PostBlogVisibilityTypeSchema
 >;
 
+/**
+ * Post Status Schema
+ * - draft: Post is being worked on, uploads go to post_assets folder
+ * - completed: Post is finalized and published
+ */
+export const PostStatusSchema = z.enum(["draft", "completed"]);
+
+export type PostStatus = z.infer<typeof PostStatusSchema>;
+
 export const PostSchema = BaseEntitySchema.extend({
   type: PostTypeSchema,
   content_type: PostBlogContentTypeSchema,
@@ -26,6 +35,7 @@ export const PostSchema = BaseEntitySchema.extend({
   description: z.string().max(280).optional(),
   content: z.string().optional(),
   visibility: PostBlogVisibilityTypeSchema.default("public"),
+  status: PostStatusSchema.default("draft"),
   author_id: RecordIdSchema,
 });
 

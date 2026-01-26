@@ -5,6 +5,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Label } from '$lib/components/ui/label';
+	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
 	import { superForm, defaults } from 'sveltekit-superforms';
 	import { zod4 } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
@@ -15,13 +17,15 @@
 	import '@milkdown/crepe/theme/nord-dark.css';
 	import '$lib/styles/crepe-custom.css';
 	import { imageBlockConfig } from '@milkdown/components/image-block';
-	import { handleFileUpload } from '$lib/handlers/upload';
+	import { createPostAssetUploader } from '$lib/handlers/upload';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
+	import { FilePen, Send } from 'lucide-svelte';
 
 	let crepeInstance: CrepeType | null = $state(null);
 	let crepeReady = $state(false);
 	let dialogOpen = $state(false);
 	let loading = $state(false);
+	let draftPostId = $state<string | null>(null);
 
 	const form = superForm(defaults(zod4(PostCreateSchema)), {
 		validators: zod4(PostCreateSchema),
@@ -42,10 +46,17 @@
 
 			loading = true;
 			try {
-				const response = await fetch('/api/posts', {
-					method: 'POST',
+				// If we have a draft, update it; otherwise create new
+				const method = draftPostId ? 'PATCH' : 'POST';
+				const endpoint = draftPostId ? `/api/posts/${draftPostId}` : '/api/posts';
+
+				const response = await fetch(endpoint, {
+					method,
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(form.data)
+					body: JSON.stringify({
+						...form.data,
+						status: 'completed' // Mark as completed when publishing
+					})
 				});
 
 				if (!response.ok) {
@@ -54,17 +65,9 @@
 					return;
 				}
 
-				toast.success('Post created successfully');
-				// Reset form
-				$formData.type = 'blog';
-				$formData.content_type = 'markdown';
-				$formData.title = '';
-				$formData.description = '';
-				$formData.content = '';
-				$formData.visibility = 'public';
-				// Close dialog - editor will be destroyed and recreated on next open
+				toast.success('Post published successfully');
+				resetForm();
 				dialogOpen = false;
-				// Invalidate all to refresh posts list
 				await invalidateAll();
 			} catch (_error) {
 				toast.error('An unexpected error occurred');
@@ -83,6 +86,18 @@
 	$formData.description = '';
 	$formData.content = '';
 	$formData.visibility = 'public';
+	$formData.status = 'draft';
+
+	function resetForm() {
+		$formData.type = 'blog';
+		$formData.content_type = 'markdown';
+		$formData.title = '';
+		$formData.description = '';
+		$formData.content = '';
+		$formData.visibility = 'public';
+		$formData.status = 'draft';
+		draftPostId = null;
+	}
 
 	// Helper function to get display label for visibility
 	function getVisibilityLabel(value: string | undefined): string {
@@ -99,6 +114,84 @@
 		return 'Select content type';
 	}
 
+	// Create draft post to get an ID for asset uploads
+	async function createDraft(): Promise<string | null> {
+		if (draftPostId) return draftPostId;
+
+		try {
+			const response = await fetch('/api/posts', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					type: 'blog',
+					content_type: $formData.content_type,
+					title: $formData.title || 'Untitled Draft',
+					description: $formData.description,
+					content: $formData.content,
+					visibility: $formData.visibility,
+					status: 'draft'
+				})
+			});
+
+			if (!response.ok) {
+				console.error('Failed to create draft');
+				return null;
+			}
+
+			const result = await response.json();
+			const postId = result.data?.id;
+			if (postId) {
+				draftPostId = typeof postId === 'string' ? postId : postId.toString();
+				return draftPostId;
+			}
+		} catch (error) {
+			console.error('Error creating draft:', error);
+		}
+		return null;
+	}
+
+	// Save draft without closing
+	async function saveDraft() {
+		// Sync markdown content
+		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+			try {
+				const markdown = crepeInstance.getMarkdown();
+				$formData.content = markdown;
+			} catch (error) {
+				console.warn('Could not get markdown:', error);
+			}
+		}
+
+		loading = true;
+		try {
+			if (draftPostId) {
+				// Update existing draft
+				const response = await fetch(`/api/posts/${draftPostId}`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						...$formData,
+						status: 'draft'
+					})
+				});
+
+				if (!response.ok) {
+					throw new Error('Failed to save draft');
+				}
+			} else {
+				// Create new draft
+				await createDraft();
+			}
+			toast.success('Draft saved');
+			// Refresh page data to show updated draft in lists
+			await invalidateAll();
+		} catch (_error) {
+			toast.error('Failed to save draft');
+		} finally {
+			loading = false;
+		}
+	}
+
 	function mountCrepe(node: HTMLDivElement) {
 		const instance = new Crepe({
 			root: node,
@@ -106,13 +199,26 @@
 		});
 
 		// Create editor and wait for it to be ready
-		instance.create().then(() => {
+		instance.create().then(async () => {
 			crepeInstance = instance;
 
-			instance.editor.ctx.update(imageBlockConfig.key, (defaultConfig) => ({
-				...defaultConfig,
-				onUpload: handleFileUpload
-			}));
+			// Create a draft to get post ID for image uploads
+			const postId = await createDraft();
+
+			// Configure image upload handler
+			if (postId) {
+				instance.editor.ctx.update(imageBlockConfig.key, (defaultConfig) => ({
+					...defaultConfig,
+					onUpload: createPostAssetUploader(postId)
+				}));
+			} else {
+				// Fallback to regular upload handler (shouldn't happen)
+				const { handleFileUpload } = await import('$lib/handlers/upload');
+				instance.editor.ctx.update(imageBlockConfig.key, (defaultConfig) => ({
+					...defaultConfig,
+					onUpload: handleFileUpload
+				}));
+			}
 
 			// Use Crepe's built-in markdownUpdated listener to sync with form in real-time
 			instance.on((listener) => {
@@ -157,6 +263,16 @@
 			crepeReady = false;
 		}
 	});
+
+	// Cleanup draft if dialog is closed without publishing
+	$effect(() => {
+		if (!dialogOpen && draftPostId) {
+			// Optionally delete the draft or leave it for later
+			// For now, we'll leave drafts in the database
+			draftPostId = null;
+			resetForm();
+		}
+	});
 </script>
 
 <Dialog.Root bind:open={dialogOpen}>
@@ -167,12 +283,23 @@
 	</Dialog.Trigger>
 	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col">
 		<Dialog.Header class="shrink-0">
-			<Dialog.Title>New Post</Dialog.Title>
-			<Dialog.Description>Create a new blog post</Dialog.Description>
+			<div class="flex items-center justify-between">
+				<div>
+					<Dialog.Title>New Post</Dialog.Title>
+					<Dialog.Description>Create a new blog post</Dialog.Description>
+				</div>
+				{#if draftPostId}
+					<Badge variant="secondary" class="gap-1">
+						<FilePen class="h-3 w-3" />
+						Draft saved
+					</Badge>
+				{/if}
+			</div>
 		</Dialog.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<!-- Hidden field for type -->
 			<input type="hidden" name="type" value={$formData.type} />
+			<input type="hidden" name="status" value={$formData.status} />
 			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
 				<Form.Field {form} name="title">
 					<Form.Control>
@@ -252,6 +379,9 @@
 								use:mountCrepe
 								class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
 							></div>
+							<p class="text-xs text-muted-foreground">
+								Images uploaded here are stored publicly for embedding in your post.
+							</p>
 						{:else}
 							<Textarea
 								bind:value={$formData.content}
@@ -273,12 +403,17 @@
 					{/snippet}
 				</Form.ElementField>
 			</div>
-			<Dialog.Footer class="mt-6 shrink-0">
+			<Dialog.Footer class="mt-6 shrink-0 gap-2">
+				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading}>
+					<FilePen class="mr-2 h-4 w-4" />
+					Save Draft
+				</Button>
 				<Form.Button type="submit" disabled={loading} class="w-full sm:w-auto">
 					{#if loading}
-						Creating post...
+						Publishing...
 					{:else}
-						Create Post
+						<Send class="mr-2 h-4 w-4" />
+						Publish
 					{/if}
 				</Form.Button>
 			</Dialog.Footer>

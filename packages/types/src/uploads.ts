@@ -4,16 +4,22 @@ import { stringToRecordId } from "./codecs.js";
 
 /**
  * Upload Key Schema
- * Validates the upload key format: uploads/{owner_id}/{yyyy}/{mm}/{table:id}
- * Uses full SurrealDB RecordId format (table:id)
+ * Validates the upload key format for file storage paths.
+ *
+ * Format patterns:
+ * - With folder: uploads/{owner_id}/{folder_path}/{table:id}
+ * - Without folder (root): uploads/{owner_id}/{table:id}
+ * - Post assets: uploads/{owner_id}/public/post_assets/{post_id}/{table:id}
+ *
+ * Note: folder_path can be nested like "public/images/2024"
  */
 export const UploadKeySchema = z
   .string()
   .regex(
-    /^uploads\/[^\/]+\/\d{4}\/\d{2}\/[^:]+:[^\/]+$/,
-    "Upload key must match format: uploads/{owner_id}/{yyyy}/{mm}/{table:id}"
+    /^uploads\/[^\/]+\/.+$/,
+    "Upload key must start with uploads/{owner_id}/"
   )
-  .describe("Upload key in format uploads/{owner_id}/{yyyy}/{mm}/{table:id}");
+  .describe("Upload key in format uploads/{owner_id}/[folder_path/]{table:id}");
 
 export type UploadKey = z.infer<typeof UploadKeySchema>;
 
@@ -36,10 +42,13 @@ export type UploadStatus = z.infer<typeof UploadStatusSchema>;
  * Represents a file upload in the SYR system
  * - Pending uploads don't require key or url
  * - Completed uploads require key and url
+ * - folder_id references the parent folder (null for root level uploads)
+ * - is_public indicates if the file is in the public folder hierarchy
  */
 export const UploadSchema = BaseEntitySchema.extend({
   key: UploadKeySchema.optional(),
   owner_id: RecordIdSchema,
+  folder_id: RecordIdSchema.nullable().optional(),
   filename: z.string().min(1),
   mime_type: z.string().min(1),
   size: z.number().int().nonnegative(),
@@ -49,6 +58,7 @@ export const UploadSchema = BaseEntitySchema.extend({
     .optional(),
   url: z.url().optional(),
   status: UploadStatusSchema.default("pending"),
+  is_public: z.boolean().default(false),
   metadata: MetadataSchema.optional(),
 }).refine(
   (data) => {
@@ -75,13 +85,18 @@ export type Upload = z.infer<typeof UploadSchema>;
  * Upload Create Schema
  * For creating new uploads
  * Pending uploads don't require key or url
+ * folder_id can be provided as a string ID
  */
-export const UploadCreateSchema = UploadSchema.pick({
-  filename: true,
-  mime_type: true,
-  size: true,
-  sha256: true,
-  metadata: true,
+export const UploadCreateSchema = z.object({
+  filename: z.string().min(1),
+  mime_type: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  sha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i)
+    .optional(),
+  metadata: MetadataSchema.optional(),
+  folder_id: z.string().nullable().optional(),
 });
 
 export type UploadCreate = z.infer<typeof UploadCreateSchema>;
