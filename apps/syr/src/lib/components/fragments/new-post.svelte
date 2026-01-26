@@ -19,7 +19,14 @@
 	import { imageBlockConfig } from '@milkdown/components/image-block';
 	import { createPostAssetUploader } from '$lib/handlers/upload';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
-	import { FilePen, Send } from 'lucide-svelte';
+	import { FilePen, Send, X } from 'lucide-svelte';
+
+	interface Props {
+		onDraftCreated?: () => void;
+		onDraftDeleted?: () => void;
+	}
+
+	let { onDraftCreated, onDraftDeleted }: Props = $props();
 
 	let crepeInstance: CrepeType | null = $state(null);
 	let crepeReady = $state(false);
@@ -142,6 +149,8 @@
 			const postId = result.data?.id;
 			if (postId) {
 				draftPostId = typeof postId === 'string' ? postId : postId.toString();
+				// Notify parent that a draft was created so it can refresh the UI
+				onDraftCreated?.();
 				return draftPostId;
 			}
 		} catch (error) {
@@ -187,6 +196,34 @@
 			await invalidateAll();
 		} catch (_error) {
 			toast.error('Failed to save draft');
+		} finally {
+			loading = false;
+		}
+	}
+
+	// Cancel and delete draft
+	async function cancelAndDelete() {
+		loading = true;
+		try {
+			if (draftPostId) {
+				const response = await fetch(`/api/posts/${draftPostId}`, {
+					method: 'DELETE'
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					toast.error(error.error?.message || 'Failed to delete draft');
+					return;
+				}
+
+				toast.success('Draft discarded');
+				// Notify parent that the draft was deleted so it can refresh the UI
+				onDraftDeleted?.();
+			}
+			resetForm();
+			dialogOpen = false;
+		} catch (_error) {
+			toast.error('Failed to delete draft');
 		} finally {
 			loading = false;
 		}
@@ -277,7 +314,7 @@
 
 <Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Trigger
-		class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-transparent px-4 py-2 text-sm font-medium whitespace-nowrap shadow-xs ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+		class="border-input shadow-xs ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border bg-transparent px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
 	>
 		+ New Post
 	</Dialog.Trigger>
@@ -377,9 +414,9 @@
 							<div
 								id="post-editor"
 								use:mountCrepe
-								class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
+								class="border-input max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border p-4"
 							></div>
-							<p class="text-xs text-muted-foreground">
+							<p class="text-muted-foreground text-xs">
 								Images uploaded here are stored publicly for embedding in your post.
 							</p>
 						{:else}
@@ -404,6 +441,10 @@
 				</Form.ElementField>
 			</div>
 			<Dialog.Footer class="mt-6 shrink-0 gap-2">
+				<Button type="button" variant="ghost" onclick={cancelAndDelete} disabled={loading}>
+					<X class="mr-2 h-4 w-4" />
+					Cancel
+				</Button>
 				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading}>
 					<FilePen class="mr-2 h-4 w-4" />
 					Save Draft

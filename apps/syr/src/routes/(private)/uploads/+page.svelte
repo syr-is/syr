@@ -8,12 +8,15 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Badge } from '$lib/components/ui/badge';
 	import type { Upload, Folder } from '@syr-is/types';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	// Dialog components
 	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
 	import PreviewUploadDialog from '$lib/components/fragments/preview-upload-dialog.svelte';
 	import UploadFilesDialog from '$lib/components/fragments/upload-files-dialog.svelte';
-	import NewFolderDialog from '$lib/components/fragments/new-folder-dialog.svelte';
+	import CreateFolderDialog from '$lib/components/fragments/create-folder-dialog.svelte';
+	import DeleteFolderDialog from '$lib/components/fragments/delete-folder-dialog.svelte';
 	import MoveUploadDialog from '$lib/components/fragments/move-upload-dialog.svelte';
 	import RenameUploadDialog from '$lib/components/fragments/rename-upload-dialog.svelte';
 	import ShareUploadDialog from '$lib/components/fragments/share-upload-dialog.svelte';
@@ -48,9 +51,19 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
-	// Current folder state
-	let currentFolderId = $state<string | null>(null);
+	// Current folder state - initialize from server data
+	let currentFolderId = $state<string | null>(data.initialFolderId ?? null);
 	let breadcrumbs = $state<Array<{ id: string; name: string }>>([]);
+
+	// Show toast if path was invalid
+	$effect(() => {
+		if (data.invalidPath) {
+			toast.error('Folder not found or access denied. Redirected to root.');
+			// Clear the invalid path from URL (same page, just clearing query param)
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			replaceState($page.url.pathname, {});
+		}
+	});
 
 	// Pagination state
 	let currentPage = $state(1);
@@ -62,8 +75,10 @@
 	let sortOrder = $state<'asc' | 'desc'>('desc');
 
 	// Dialog states
-	let deleteDialogOpen = $state(false);
+	let deleteUploadDialogOpen = $state(false);
 	let uploadToDelete = $state<Upload | null>(null);
+
+	let deleteFolderDialogOpen = $state(false);
 	let folderToDelete = $state<Folder | null>(null);
 
 	let previewDialogOpen = $state(false);
@@ -71,7 +86,7 @@
 
 	let uploadDialogOpen = $state(false);
 
-	let newFolderDialogOpen = $state(false);
+	let createFolderDialogOpen = $state(false);
 
 	let moveDialogOpen = $state(false);
 	let uploadToMove = $state<Upload | null>(null);
@@ -95,6 +110,15 @@
 			const response = await fetch(`/api/folders${queryString}`);
 			if (!response.ok) {
 				const errorData = await response.json();
+				// If folder not found or access denied, reset to root
+				if (response.status === 404 || response.status === 403 || response.status === 400) {
+					if (currentFolderId) {
+						toast.error('Folder not found or access denied. Redirected to root.');
+						currentFolderId = null;
+						updateUrlPath(null);
+						return;
+					}
+				}
 				throw new Error(errorData.error?.message || 'Failed to fetch folders');
 			}
 
@@ -103,6 +127,13 @@
 			breadcrumbs = result.data?.breadcrumbs || [];
 		} catch (err) {
 			console.error('Failed to fetch folders:', err);
+			// If there was an error and we're in a folder, try resetting to root
+			if (currentFolderId) {
+				toast.error('Failed to load folder. Redirected to root.');
+				currentFolderId = null;
+				updateUrlPath(null);
+				return;
+			}
 			folders = [];
 		}
 	}
@@ -152,23 +183,34 @@
 		fetchUploads();
 	}
 
-	// Navigate to folder
+	// Navigate to folder and update URL
 	function navigateToFolder(folderId: string | null) {
 		currentFolderId = folderId;
 		currentPage = 1;
+		updateUrlPath(folderId);
+	}
+
+	// Update URL with current folder path (same page, just updating query param)
+	function updateUrlPath(folderId: string | null) {
+		const url = new URL($page.url);
+		if (folderId) {
+			url.searchParams.set('path', folderId);
+		} else {
+			url.searchParams.delete('path');
+		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		replaceState(`${url.pathname}${url.search}`, {});
 	}
 
 	// Open delete dialogs
 	function openDeleteUploadDialog(upload: Upload) {
 		uploadToDelete = upload;
-		folderToDelete = null;
-		deleteDialogOpen = true;
+		deleteUploadDialogOpen = true;
 	}
 
 	function openDeleteFolderDialog(folder: Folder) {
 		folderToDelete = folder;
-		uploadToDelete = null;
-		deleteDialogOpen = true;
+		deleteFolderDialogOpen = true;
 	}
 
 	// Open preview dialog
@@ -404,7 +446,7 @@
 				<span>Root</span>
 			</Button>
 			{#each breadcrumbs as crumb (crumb.id)}
-				<ChevronRight class="h-4 w-4 text-muted-foreground" />
+				<ChevronRight class="text-muted-foreground h-4 w-4" />
 				<Button
 					variant="ghost"
 					size="sm"
@@ -470,10 +512,10 @@
 				{/if}
 			</div>
 			<div class="flex items-center gap-2">
-				<span class="text-sm text-muted-foreground">
+				<span class="text-muted-foreground text-sm">
 					{total} file{total !== 1 ? 's' : ''} total
 				</span>
-				<Button variant="outline" onclick={() => (newFolderDialogOpen = true)}>
+				<Button variant="outline" onclick={() => (createFolderDialogOpen = true)}>
 					<FolderPlus class="mr-2 h-4 w-4" />
 					New Folder
 				</Button>
@@ -489,7 +531,7 @@
 			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
 				{#each folders as folder (folder.id.toString())}
 					<Card.Root
-						class="cursor-pointer transition-colors hover:bg-accent"
+						class="hover:bg-accent cursor-pointer transition-colors"
 						role="button"
 						tabindex={0}
 						onclick={() => navigateToFolder(folder.id.toString())}
@@ -501,22 +543,22 @@
 						}}
 					>
 						<Card.Content class="flex items-center gap-3 p-4">
-							<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+							<div class="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
 								{#if isPublicFolder(folder)}
-									<Globe class="h-5 w-5 text-primary" />
+									<Globe class="text-primary h-5 w-5" />
 								{:else}
-									<FolderIcon class="h-5 w-5 text-muted-foreground" />
+									<FolderIcon class="text-muted-foreground h-5 w-5" />
 								{/if}
 							</div>
 							<div class="min-w-0 flex-1">
 								<p class="truncate font-medium">{folder.name}</p>
 								{#if isPublicFolder(folder)}
-									<p class="text-xs text-muted-foreground">Public folder</p>
+									<p class="text-muted-foreground text-xs">Public folder</p>
 								{/if}
 							</div>
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger
-									class="rounded-md p-1 hover:bg-background"
+									class="hover:bg-background rounded-md p-1"
 									onclick={(e) => e.stopPropagation()}
 								>
 									<MoreVertical class="h-4 w-4" />
@@ -573,16 +615,16 @@
 		{:else if error}
 			<Card.Root>
 				<Card.Content class="py-6">
-					<p class="text-center text-destructive">{error}</p>
+					<p class="text-destructive text-center">{error}</p>
 				</Card.Content>
 			</Card.Root>
 		{:else if uploads.length === 0 && folders.length === 0}
 			<Card.Root>
 				<Card.Content class="py-12">
 					<div class="space-y-2 text-center">
-						<File class="mx-auto h-12 w-12 text-muted-foreground" />
+						<File class="text-muted-foreground mx-auto h-12 w-12" />
 						<h3 class="text-lg font-semibold">No files or folders</h3>
-						<p class="text-sm text-muted-foreground">
+						<p class="text-muted-foreground text-sm">
 							{currentFolderId ? 'This folder is empty' : 'Your uploaded files will appear here'}
 						</p>
 					</div>
@@ -608,18 +650,18 @@
 								{@const FileIcon = getFileIcon(upload.mime_type)}
 								<Table.Row>
 									<Table.Cell>
-										<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-											<FileIcon class="h-5 w-5 text-muted-foreground" />
+										<div class="bg-muted flex h-10 w-10 items-center justify-center rounded-lg">
+											<FileIcon class="text-muted-foreground h-5 w-5" />
 										</div>
 									</Table.Cell>
 									<Table.Cell>
 										<div class="flex flex-col">
 											<span class="max-w-[300px] truncate font-medium">{upload.filename}</span>
-											<span class="text-xs text-muted-foreground">{upload.mime_type}</span>
+											<span class="text-muted-foreground text-xs">{upload.mime_type}</span>
 										</div>
 									</Table.Cell>
 									<Table.Cell>
-										<span class="text-sm text-muted-foreground">{formatFileSize(upload.size)}</span>
+										<span class="text-muted-foreground text-sm">{formatFileSize(upload.size)}</span>
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant={getStatusVariant(upload.status)}>
@@ -640,7 +682,7 @@
 										{/if}
 									</Table.Cell>
 									<Table.Cell>
-										<span class="text-sm text-muted-foreground"
+										<span class="text-muted-foreground text-sm"
 											>{formatDate(upload.created_at)}</span
 										>
 									</Table.Cell>
@@ -715,8 +757,14 @@
 	<!-- Dialog Components -->
 	<DeleteUploadDialog
 		upload={uploadToDelete}
-		folder={folderToDelete}
-		bind:open={deleteDialogOpen}
+		bind:open={deleteUploadDialogOpen}
+		onSuccess={refreshData}
+	/>
+
+	<DeleteFolderDialog
+		folderId={folderToDelete?.id?.toString() ?? null}
+		folderName={folderToDelete?.name ?? null}
+		bind:open={deleteFolderDialogOpen}
 		onSuccess={refreshData}
 	/>
 
@@ -733,7 +781,12 @@
 		onSuccess={refreshData}
 	/>
 
-	<NewFolderDialog {currentFolderId} bind:open={newFolderDialogOpen} onSuccess={refreshData} />
+	<CreateFolderDialog
+		parentId={currentFolderId}
+		parentName={breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1]?.name : null}
+		bind:open={createFolderDialogOpen}
+		onSuccess={refreshData}
+	/>
 
 	<MoveUploadDialog upload={uploadToMove} bind:open={moveDialogOpen} onSuccess={refreshData} />
 

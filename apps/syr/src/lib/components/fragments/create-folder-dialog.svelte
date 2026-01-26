@@ -4,21 +4,24 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { toast } from 'svelte-sonner';
+	import { Loader2, FolderPlus } from 'lucide-svelte';
 
 	let {
-		currentFolderId = null,
 		open = $bindable(false),
+		parentId = null,
+		parentName = null,
 		onSuccess
 	}: {
-		currentFolderId?: string | null;
 		open?: boolean;
+		parentId?: string | null;
+		parentName?: string | null;
 		onSuccess?: () => void;
 	} = $props();
 
 	let folderName = $state('');
 	let creating = $state(false);
 
-	async function handleCreateFolder() {
+	async function handleCreate() {
 		if (!folderName.trim()) {
 			toast.error('Please enter a folder name');
 			return;
@@ -31,7 +34,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: folderName.trim(),
-					parent_id: currentFolderId
+					parent_id: parentId
 				})
 			});
 
@@ -42,7 +45,6 @@
 
 			toast.success('Folder created successfully');
 			open = false;
-			folderName = '';
 			onSuccess?.();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to create folder');
@@ -51,24 +53,26 @@
 		}
 	}
 
-	function handleOpenChange(newOpen: boolean) {
-		open = newOpen;
-		if (!newOpen) {
+	// Reset state when dialog opens
+	$effect(() => {
+		if (open) {
 			folderName = '';
 		}
-	}
+	});
 </script>
 
-<Dialog.Root bind:open onOpenChange={handleOpenChange}>
-	<Dialog.Content>
+<Dialog.Root bind:open>
+	<Dialog.Content class="max-w-sm">
 		<Dialog.Header>
-			<Dialog.Title>Create New Folder</Dialog.Title>
+			<Dialog.Title class="flex items-center gap-2">
+				<FolderPlus class="h-5 w-5" />
+				Create New Folder
+			</Dialog.Title>
 			<Dialog.Description>
-				Create a new folder in
-				{#if currentFolderId}
-					the current directory.
+				{#if parentName}
+					Create a new folder inside "{parentName}".
 				{:else}
-					your root directory.
+					Create a new folder at the root level.
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
@@ -77,20 +81,23 @@
 				<Label for="folder-name">Folder Name</Label>
 				<Input
 					id="folder-name"
+					type="text"
+					placeholder="Enter folder name"
 					bind:value={folderName}
-					placeholder="Enter folder name..."
-					onkeydown={(e) => {
-						if (e.key === 'Enter') {
-							handleCreateFolder();
-						}
-					}}
+					onkeydown={(e) => e.key === 'Enter' && !creating && handleCreate()}
+					disabled={creating}
 				/>
 			</div>
 		</div>
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
-			<Button onclick={handleCreateFolder} disabled={creating || !folderName.trim()}>
-				{creating ? 'Creating...' : 'Create Folder'}
+			<Button variant="outline" onclick={() => (open = false)} disabled={creating}>Cancel</Button>
+			<Button onclick={handleCreate} disabled={creating || !folderName.trim()}>
+				{#if creating}
+					<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+					Creating...
+				{:else}
+					Create Folder
+				{/if}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

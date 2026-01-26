@@ -319,14 +319,14 @@
 						</Pagination.Root>
 					{/if}
 				</div>
-				<NewPost />
+				<NewPost onDraftCreated={fetchPosts} onDraftDeleted={fetchPosts} />
 			</div>
 
 			<!-- Pinned Posts Section -->
 			{#if pinnedPosts.length > 0}
 				<div class="space-y-3">
 					<div class="flex items-center gap-2">
-						<Pin class="h-4 w-4 text-primary" />
+						<Pin class="text-primary h-4 w-4" />
 						<h2 class="text-lg font-semibold">Pinned Posts</h2>
 						<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 					</div>
@@ -385,7 +385,7 @@
 			{:else if error}
 				<Card.Root>
 					<Card.Content class="py-6">
-						<p class="text-center text-destructive">{error}</p>
+						<p class="text-destructive text-center">{error}</p>
 					</Card.Content>
 				</Card.Root>
 			{:else if posts.length === 0}
@@ -393,7 +393,7 @@
 					<Card.Content class="py-12">
 						<div class="space-y-2 text-center">
 							<h3 class="text-lg font-semibold">No posts yet</h3>
-							<p class="text-sm text-muted-foreground">Get started by creating your first post!</p>
+							<p class="text-muted-foreground text-sm">Get started by creating your first post!</p>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -440,10 +440,10 @@
 				<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
 			{/if}
 
-			<Card.Content class="relative pt-16 pb-6">
+			<Card.Content class="relative pb-6 pt-16">
 				<!-- Avatar positioned over banner -->
 				<div class="absolute -top-12 left-6">
-					<Avatar.Root class="h-24 w-24 border-4 border-background">
+					<Avatar.Root class="border-background h-24 w-24 border-4">
 						<Avatar.Image
 							src={data.user.profile?.avatar_url}
 							alt={data.user.profile?.display_name ?? data.user.username}
@@ -464,17 +464,17 @@
 							</h2>
 							{#if data.user.role === 'ADMIN'}
 								<span
-									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+									class="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
 								>
 									Admin
 								</span>
 							{/if}
 						</div>
-						<p class="text-lg text-muted-foreground">@{data.user.username}</p>
+						<p class="text-muted-foreground text-lg">@{data.user.username}</p>
 					</div>
 
 					{#if data.user.profile?.bio}
-						<div class="rounded-lg bg-muted/50 p-4">
+						<div class="bg-muted/50 rounded-lg p-4">
 							<p class="text-sm leading-relaxed">
 								{data.user.profile.bio}
 							</p>
@@ -490,10 +490,10 @@
 		<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 			Welcome to <span class="text-primary">SYR</span>
 		</h1>
-		<p class="text-xl text-muted-foreground">Self-Yield Representation</p>
-		<p class="text-lg text-muted-foreground">
+		<p class="text-muted-foreground text-xl">Self-Yield Representation</p>
+		<p class="text-muted-foreground text-lg">
 			Your sovereign digital presence. No algorithms, no lock-in, just you.
 		</p>
-		<p class="text-lg text-muted-foreground">Login to get started or register a new account.</p>
+		<p class="text-muted-foreground text-lg">Login to get started or register a new account.</p>
 	</div>
 {/if}

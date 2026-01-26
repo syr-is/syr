@@ -1,46 +1,55 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
-	import type { Upload } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, TriangleAlert, Trash2 } from 'lucide-svelte';
 
 	let {
-		upload = null,
 		open = $bindable(false),
+		folderId = null,
+		folderName = null,
 		onSuccess
 	}: {
-		upload?: Upload | null;
 		open?: boolean;
+		folderId?: string | null;
+		folderName?: string | null;
 		onSuccess?: () => void;
 	} = $props();
 
+	let deleteWithContents = $state(false);
 	let deleting = $state(false);
 
 	async function handleDelete() {
-		if (!upload) return;
+		if (!folderId) return;
 
 		deleting = true;
 		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
+			const queryString = deleteWithContents ? '?delete_contents=true' : '';
+			const response = await fetch(`/api/folders/${folderId}${queryString}`, {
 				method: 'DELETE'
 			});
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to delete file');
+				throw new Error(errorData.error?.message || 'Failed to delete folder');
 			}
 
-			toast.success('File deleted successfully');
+			toast.success('Folder deleted successfully');
 			open = false;
 			onSuccess?.();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to delete file');
+			toast.error(err instanceof Error ? err.message : 'Failed to delete folder');
 		} finally {
 			deleting = false;
 		}
 	}
+
+	// Reset state when dialog opens
+	$effect(() => {
+		if (open) {
+			deleteWithContents = false;
+		}
+	});
 </script>
 
 <Dialog.Root bind:open>
@@ -48,17 +57,32 @@
 		<Dialog.Header>
 			<Dialog.Title class="text-destructive flex items-center gap-2">
 				<Trash2 class="h-5 w-5" />
-				Delete File
+				Delete Folder
 			</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to delete "{upload?.filename}"?
+				Are you sure you want to delete "{folderName}"?
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="py-4">
 			<div class="bg-destructive/10 text-destructive flex items-start gap-2 rounded-md p-3 text-sm">
 				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-				<span>This action cannot be undone. The file will be permanently deleted.</span>
+				<span>This action cannot be undone. The folder will be permanently deleted.</span>
 			</div>
+
+			<label class="mt-4 flex items-start gap-3 rounded-md border p-3">
+				<input
+					type="checkbox"
+					bind:checked={deleteWithContents}
+					class="mt-0.5 h-4 w-4 rounded border-gray-300"
+					disabled={deleting}
+				/>
+				<div class="flex flex-col gap-1">
+					<span class="text-sm font-medium">Delete all contents</span>
+					<span class="text-muted-foreground text-xs">
+						Delete all subfolders and files inside this folder. Required if the folder is not empty.
+					</span>
+				</div>
+			</label>
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)} disabled={deleting}>Cancel</Button>
@@ -67,7 +91,7 @@
 					<Loader2 class="mr-2 h-4 w-4 animate-spin" />
 					Deleting...
 				{:else}
-					Delete File
+					Delete Folder
 				{/if}
 			</Button>
 		</Dialog.Footer>
