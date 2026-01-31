@@ -224,95 +224,122 @@ export class KvRepository {
 
 		if (maxValue !== undefined && minValue !== undefined) {
 			// With both min and max constraints
-			// Use LET to capture the computed value, then conditionally apply or reject
+			// Return -1 as sentinel value if quota would be exceeded
+			// Note: SurrealDB math::min/max take arrays
 			query = `
-				LET $current = (SELECT value.${field} FROM ONLY $recordId).${field} ?? 0;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
-				LET $clamped = math::max($minValue, math::min($maxValue, $proposed));
-				IF $proposed > $maxValue THEN
-					THROW "QUOTA_EXCEEDED"
-				ELSE
+				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
+				IF $proposed > $maxValue {
+					RETURN -1;
+				} ELSE {
 					UPSERT $recordId SET
 						kv_type = $type,
 						value.${field} = $clamped,
 						created_at = created_at ?? $now,
 						updated_at = $now;
 					RETURN $clamped;
-				END
+				};
 			`;
 		} else if (maxValue !== undefined) {
 			// With max constraint only
+			// Return -1 as sentinel value if quota would be exceeded
 			query = `
-				LET $current = (SELECT value.${field} FROM ONLY $recordId).${field} ?? 0;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
-				IF $proposed > $maxValue THEN
-					THROW "QUOTA_EXCEEDED"
-				ELSE
+				IF $proposed > $maxValue {
+					RETURN -1;
+				} ELSE {
 					UPSERT $recordId SET
 						kv_type = $type,
 						value.${field} = $proposed,
 						created_at = created_at ?? $now,
 						updated_at = $now;
 					RETURN $proposed;
-				END
+				};
 			`;
 		} else if (minValue !== undefined) {
 			// With min constraint only - use UPSERT for atomic create-or-update
+			// Note: SurrealDB math::max takes an array
 			query = `
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $newVal = math::max([<int> $minValue, <int> ($current + $amount)]);
 				UPSERT $recordId SET
 					kv_type = $type,
-					value.${field} = math::max($minValue, (value.${field} ?? 0) + $amount),
+					value.${field} = $newVal,
 					created_at = created_at ?? $now,
-					updated_at = $now
-				RETURN value.${field}
+					updated_at = $now;
+				RETURN $newVal;
 			`;
 		} else {
 			// No constraints - simple UPSERT
 			query = `
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $newVal = $current + $amount;
 				UPSERT $recordId SET
 					kv_type = $type,
-					value.${field} = (value.${field} ?? 0) + $amount,
+					value.${field} = $newVal,
 					created_at = created_at ?? $now,
-					updated_at = $now
-				RETURN value.${field}
+					updated_at = $now;
+				RETURN $newVal;
 			`;
 		}
 
 		try {
-			const result = await this.db.query<[unknown]>(query, {
+			const params = {
 				recordId,
 				type,
 				amount,
 				minValue: minValue ?? 0,
 				maxValue: maxValue ?? Number.MAX_SAFE_INTEGER,
 				now
-			});
+			};
 
-			// Extract the new value from the result
-			// The result structure varies based on query type
-			const resultArray = result[0];
-			if (Array.isArray(resultArray) && resultArray.length > 0) {
-				// UPSERT returns array of objects with the returned field
-				const firstResult = resultArray[0];
-				if (typeof firstResult === 'object' && firstResult !== null && field in firstResult) {
-					const val = (firstResult as Record<string, unknown>)[field];
-					return typeof val === 'number' ? val : 0;
+			const result = await this.db.query<[unknown]>(query, params);
+
+			// Find the actual return value - it could be at different positions in the result array
+			let returnValue: number | undefined;
+
+			for (let i = result.length - 1; i >= 0; i--) {
+				const item = result[i];
+				if (typeof item === 'number') {
+					returnValue = item;
+					break;
 				}
-				// Could be just the number directly from RETURN
-				if (typeof firstResult === 'number') {
-					return firstResult;
+				if (Array.isArray(item) && item.length > 0) {
+					const firstItem = item[0];
+					if (typeof firstItem === 'number') {
+						returnValue = firstItem;
+						break;
+					}
+					if (typeof firstItem === 'object' && firstItem !== null && field in firstItem) {
+						const val = (firstItem as Record<string, unknown>)[field];
+						if (typeof val === 'number') {
+							returnValue = val;
+							break;
+						}
+					}
 				}
 			}
-			// Direct number result from LET/RETURN
-			if (typeof resultArray === 'number') {
-				return resultArray;
+
+			// Check for sentinel value indicating quota exceeded
+			if (returnValue === -1) {
+				throw new Error('QUOTA_EXCEEDED');
+			}
+
+			if (returnValue !== undefined) {
+				return returnValue;
 			}
 
 			return 0;
 		} catch (err) {
-			// Check if this is a quota exceeded error from our THROW
+			// Re-throw quota exceeded errors as-is
 			if (err instanceof Error && err.message.includes('QUOTA_EXCEEDED')) {
-				throw new Error('QUOTA_EXCEEDED');
+				throw err;
 			}
 			throw err;
 		}
@@ -330,9 +357,9 @@ export class KvRepository {
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
 
-		// Use INSERT which fails silently if record exists, then check if we created it
+		// Use SELECT to check existence, then INSERT if not present
 		const query = `
-			LET $existing = (SELECT id FROM ONLY $recordId);
+			LET $existing = SELECT * FROM ONLY $recordId;
 			IF $existing == NONE THEN
 				INSERT INTO kv {
 					id: $recordId,
