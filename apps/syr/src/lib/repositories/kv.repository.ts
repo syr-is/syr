@@ -194,6 +194,69 @@ export class KvRepository {
 
 		return { data, total };
 	}
+
+	/**
+	 * Atomically increment a numeric field within the value object
+	 * Uses SurrealDB's atomic update to prevent race conditions
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param field - The field within the value object to increment
+	 * @param amount - Amount to add (can be negative for decrement)
+	 * @param minValue - Optional minimum value (will clamp to this)
+	 * @returns The new value of the field
+	 */
+	async atomicIncrementField(
+		type: string,
+		index: string,
+		field: string,
+		amount: number,
+		minValue?: number
+	): Promise<number> {
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+
+		// First check if the record exists
+		const existing = await this.db.select(recordId);
+
+		if (!existing) {
+			// Create new record with initial value
+			const initialValue = minValue !== undefined ? Math.max(minValue, amount) : amount;
+			const data: Record<string, unknown> = {
+				kv_type: type,
+				value: { [field]: initialValue },
+				created_at: now,
+				updated_at: now
+			};
+			await this.db.create(recordId, data);
+			return initialValue;
+		}
+
+		// Use atomic update with SurrealDB
+		// The math::max ensures we don't go below minValue if specified
+		let query: string;
+		if (minValue !== undefined) {
+			query = `UPDATE $recordId SET 
+				value.${field} = math::max($minValue, (value.${field} OR 0) + $amount),
+				updated_at = $now
+			RETURN value.${field}`;
+		} else {
+			query = `UPDATE $recordId SET 
+				value.${field} = (value.${field} OR 0) + $amount,
+				updated_at = $now
+			RETURN value.${field}`;
+		}
+
+		const result = await this.db.query<[Array<{ [key: string]: number }>]>(query, {
+			recordId,
+			amount,
+			minValue: minValue ?? 0,
+			now
+		});
+
+		// Extract the new value from the result
+		const newValue = result[0]?.[0]?.[field];
+		return typeof newValue === 'number' ? newValue : 0;
+	}
 }
 
 // Export singleton instance

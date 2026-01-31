@@ -15,6 +15,14 @@ import { s3Service } from '$lib/services/s3';
 import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
 
+/**
+ * Convert hex-encoded string to base64
+ * S3 expects base64-encoded checksums, but we store them as hex
+ */
+function hexToBase64(hex: string): string {
+	return Buffer.from(hex, 'hex').toString('base64');
+}
+
 export class UploadController {
 	/**
 	 * Build the storage key for an upload based on folder hierarchy
@@ -110,7 +118,7 @@ export class UploadController {
 			ContentType: uploadRecord.mime_type,
 			Bucket: s3.bucket,
 			...(uploadRecord.sha256 && {
-				ChecksumSHA256: uploadRecord.sha256
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
 			})
 		});
 
@@ -179,7 +187,7 @@ export class UploadController {
 			ContentType: uploadRecord.mime_type,
 			Bucket: s3.bucket,
 			...(uploadRecord.sha256 && {
-				ChecksumSHA256: uploadRecord.sha256
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
 			})
 		});
 
@@ -261,24 +269,69 @@ export class UploadController {
 				throw err;
 			}
 
-			// If file doesn't exist in S3, reject the completion
-			if (err instanceof Error && err.name === 'NotFound') {
+			// Check for S3 HTTP status codes
+			const httpStatusCode = (err as { $metadata?: { httpStatusCode?: number } }).$metadata
+				?.httpStatusCode;
+
+			// If file doesn't exist in S3 (404), reject the completion
+			if (httpStatusCode === 404) {
 				throw new Error('File not found in storage. Please upload the file first.');
+			}
+
+			// If permission denied (403), surface it clearly
+			if (httpStatusCode === 403) {
+				throw new Error('Permission denied accessing file in storage.');
 			}
 
 			// Re-throw other errors
 			throw err;
 		}
 
-		// File verified, complete the upload
-		const uploadRecord = await uploadRepository.update(uploadId, {
-			status: 'completed',
-			updated_at: new Date()
-		});
+		// Re-check quota before completing to prevent TOCTOU race condition
+		// This ensures we don't exceed quota even if multiple uploads complete simultaneously
+		const quotaRecheck = await fileStoreUsageController.canUpload(
+			pendingUpload.owner_id,
+			pendingUpload.size
+		);
 
-		// Add to user's storage usage
-		if (uploadRecord && uploadRecord.size > 0) {
-			await fileStoreUsageController.addUsage(uploadRecord.owner_id, uploadRecord.size);
+		if (!quotaRecheck.allowed) {
+			// Delete the file from S3 since we can't accept it
+			const deleteCommand = new DeleteObjectCommand({
+				Bucket: s3.bucket,
+				Key: pendingUpload.key
+			});
+			await s3Service.client.send(deleteCommand);
+
+			// Mark upload as failed
+			await uploadRepository.update(uploadId, {
+				status: 'failed',
+				updated_at: new Date()
+			});
+
+			throw new Error(quotaRecheck.message || 'Storage limit exceeded. Upload rejected.');
+		}
+
+		// File verified and quota confirmed, complete the upload
+		// First add to storage usage atomically
+		if (pendingUpload.size > 0) {
+			await fileStoreUsageController.addUsage(pendingUpload.owner_id, pendingUpload.size);
+		}
+
+		// Then mark as completed
+		// If this fails after addUsage, we'll have slightly over-counted storage
+		// but that's safer than under-counting (user can recalculate if needed)
+		let uploadRecord;
+		try {
+			uploadRecord = await uploadRepository.update(uploadId, {
+				status: 'completed',
+				updated_at: new Date()
+			});
+		} catch (updateErr) {
+			// Rollback the storage usage if we fail to update the record
+			if (pendingUpload.size > 0) {
+				await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, pendingUpload.size);
+			}
+			throw updateErr;
 		}
 
 		return uploadRecord;

@@ -129,6 +129,7 @@ export class FileStoreUsageController {
 
 	/**
 	 * Add to user's storage usage (for uploads)
+	 * Uses atomic increment to prevent race conditions
 	 * @param userId - User ID
 	 * @param bytes - Number of bytes to add
 	 * @returns The new total bytes used
@@ -136,14 +137,13 @@ export class FileStoreUsageController {
 	async addUsage(userId: RecordId | string, bytes: number): Promise<number> {
 		if (bytes <= 0) return this.getUsage(userId);
 
-		const currentUsage = await this.getUsage(userId);
-		const newUsage = currentUsage + bytes;
-		await this.saveUsage(userId, newUsage);
-		return newUsage;
+		const index = this.getUserIndex(userId);
+		return kvService.atomicIncrementField(KV_TYPE, index, 'bytes_used', bytes, 0);
 	}
 
 	/**
 	 * Subtract from user's storage usage (for deletions)
+	 * Uses atomic decrement to prevent race conditions
 	 * @param userId - User ID
 	 * @param bytes - Number of bytes to subtract
 	 * @returns The new total bytes used (never goes below 0)
@@ -151,10 +151,9 @@ export class FileStoreUsageController {
 	async subtractUsage(userId: RecordId | string, bytes: number): Promise<number> {
 		if (bytes <= 0) return this.getUsage(userId);
 
-		const currentUsage = await this.getUsage(userId);
-		const newUsage = Math.max(0, currentUsage - bytes);
-		await this.saveUsage(userId, newUsage);
-		return newUsage;
+		const index = this.getUserIndex(userId);
+		// Use negative amount for decrement, with minValue of 0 to prevent negative values
+		return kvService.atomicIncrementField(KV_TYPE, index, 'bytes_used', -bytes, 0);
 	}
 
 	/**
