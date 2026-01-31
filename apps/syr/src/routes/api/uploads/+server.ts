@@ -168,7 +168,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 		// Handle upload not found or already completed
-		if (err instanceof Error && (err.message.includes('not found') || err.message.includes('already completed'))) {
+		if (
+			err instanceof Error &&
+			(err.message.includes('not found') || err.message.includes('already completed'))
+		) {
 			throw error(400, {
 				code: 'BAD_REQUEST',
 				message: err.message

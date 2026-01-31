@@ -67,16 +67,6 @@
 	});
 </script>
 
-<style>
-	/* Override progress indicator colors based on usage thresholds */
-	.storage-warning :global([data-slot='progress-indicator']) {
-		background-color: rgb(234 179 8); /* yellow-500 */
-	}
-	.storage-critical :global([data-slot='progress-indicator']) {
-		background-color: hsl(var(--destructive));
-	}
-</style>
-
 <Card.Root class={className}>
 	<Card.Content class="p-4">
 		{#if loading}
@@ -118,3 +108,13 @@
 		{/if}
 	</Card.Content>
 </Card.Root>
+
+<style>
+	/* Override progress indicator colors based on usage thresholds */
+	.storage-warning :global([data-slot='progress-indicator']) {
+		background-color: rgb(234 179 8); /* yellow-500 */
+	}
+	.storage-critical :global([data-slot='progress-indicator']) {
+		background-color: hsl(var(--destructive));
+	}
+</style>
