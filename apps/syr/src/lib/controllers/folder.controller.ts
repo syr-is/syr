@@ -5,6 +5,7 @@ import { folderRepository } from '$lib/repositories/folder.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { s3Service } from '$lib/services/s3';
 import { s3 } from '$lib/config';
+import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
 
 export class FolderController {
@@ -191,6 +192,9 @@ export class FolderController {
 			// Build the S3 prefix for this folder before deleting
 			const s3Prefix = await this.buildS3Prefix(ownerId, folder.id);
 
+			// Track total bytes to subtract from storage usage
+			let totalBytesToDelete = 0;
+
 			// Delete all descendant folders and their contents from database
 			const descendants = await folderRepository.getDescendantIds(folder.id);
 			for (const descendantId of descendants) {
@@ -199,6 +203,10 @@ export class FolderController {
 					filters: { folder_id: descendantId }
 				});
 				for (const upload of descendantUploads) {
+					// Track completed upload sizes for storage usage
+					if (upload.status === 'completed' && upload.size > 0) {
+						totalBytesToDelete += upload.size;
+					}
 					// Just delete from database - we'll bulk delete from S3
 					await uploadRepository.delete(upload.id);
 				}
@@ -207,7 +215,16 @@ export class FolderController {
 
 			// Delete uploads in the target folder from database
 			for (const upload of uploads) {
+				// Track completed upload sizes for storage usage
+				if (upload.status === 'completed' && upload.size > 0) {
+					totalBytesToDelete += upload.size;
+				}
 				await uploadRepository.delete(upload.id);
+			}
+
+			// Subtract total deleted bytes from user's storage usage
+			if (totalBytesToDelete > 0) {
+				await fileStoreUsageController.subtractUsage(ownerId, totalBytesToDelete);
 			}
 
 			// Bulk delete all S3 objects under this folder prefix

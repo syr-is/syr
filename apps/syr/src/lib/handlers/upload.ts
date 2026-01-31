@@ -1,3 +1,5 @@
+import { storageEvents } from '$lib/stores/storage-events';
+
 /**
  * Upload handler for file uploads
  * Handles the complete upload flow: hash calculation, signed URL retrieval, S3 upload, and completion
@@ -85,6 +87,9 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 		if (!completeResponse.ok) {
 			throw new Error(`Failed to complete upload: ${completeResponse.statusText}`);
 		}
+
+		// Trigger storage usage refresh
+		storageEvents.refresh();
 
 		return finalUrl;
 	} catch (error) {

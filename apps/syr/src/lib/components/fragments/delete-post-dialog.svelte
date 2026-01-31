@@ -6,6 +6,7 @@
 	import type { Post } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
+	import { storageEvents } from '$lib/stores/storage-events';
 
 	let { post, open = $bindable(false) }: { post: Post; open?: boolean } = $props();
 
@@ -34,6 +35,7 @@
 			toast.success('Post deleted successfully');
 			open = false;
 			confirmText = '';
+			storageEvents.refresh();
 			await invalidateAll();
 		} catch (_error) {
 			toast.error('An unexpected error occurred');

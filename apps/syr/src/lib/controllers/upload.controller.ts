@@ -2,7 +2,8 @@ import {
 	PutObjectCommand,
 	DeleteObjectCommand,
 	GetObjectCommand,
-	CopyObjectCommand
+	CopyObjectCommand,
+	HeadObjectCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { QueryOptions, Upload, UploadCreate, User } from '@syr-is/types';
@@ -11,6 +12,7 @@ import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { s3Service } from '$lib/services/s3';
+import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
 
 export class UploadController {
@@ -53,6 +55,12 @@ export class UploadController {
 	async getPutUrl(user: User, upload: UploadCreate) {
 		const userId = user.id.toString();
 		const now = new Date();
+
+		// Check storage limit before allowing upload
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
 
 		// Parse folder_id if provided
 		const folderId = upload.folder_id ? stringToRecordId.decode(upload.folder_id) : null;
@@ -127,6 +135,12 @@ export class UploadController {
 		const userId = user.id.toString();
 		const now = new Date();
 
+		// Check storage limit before allowing upload
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
+
 		// Get or create the post assets folder hierarchy: posts/{post_id}/public
 		const postsFolder = await folderRepository.findOrCreate(user.id, 'posts', null);
 		const postFolder = await folderRepository.findOrCreate(user.id, postId, postsFolder.id);
@@ -182,10 +196,91 @@ export class UploadController {
 	}
 
 	async completeUpload(uploadId: string | RecordId) {
+		// Get the pending upload record
+		const pendingUpload = await uploadRepository.findById(uploadId);
+		if (!pendingUpload) {
+			throw new Error('Upload not found');
+		}
+
+		if (pendingUpload.status === 'completed') {
+			throw new Error('Upload already completed');
+		}
+
+		if (!pendingUpload.key) {
+			throw new Error('Upload has no storage key');
+		}
+
+		// Verify the file in S3 matches what was requested
+		try {
+			const headCommand = new HeadObjectCommand({
+				Bucket: s3.bucket,
+				Key: pendingUpload.key
+			});
+
+			const headResult = await s3Service.client.send(headCommand);
+			const actualSize = headResult.ContentLength ?? 0;
+
+			// Verify file size matches
+			if (actualSize !== pendingUpload.size) {
+				// Delete the mismatched file from S3
+				const deleteCommand = new DeleteObjectCommand({
+					Bucket: s3.bucket,
+					Key: pendingUpload.key
+				});
+				await s3Service.client.send(deleteCommand);
+
+				// Delete the upload record
+				await uploadRepository.delete(uploadId);
+
+				throw new Error(
+					`File size mismatch: expected ${pendingUpload.size} bytes, got ${actualSize} bytes. Upload rejected.`
+				);
+			}
+
+			// Verify checksum if provided (S3 returns base64-encoded SHA256)
+			if (pendingUpload.sha256 && headResult.ChecksumSHA256) {
+				// Convert hex to base64 for comparison
+				const expectedBase64 = Buffer.from(pendingUpload.sha256, 'hex').toString('base64');
+				if (headResult.ChecksumSHA256 !== expectedBase64) {
+					// Delete the mismatched file from S3
+					const deleteCommand = new DeleteObjectCommand({
+						Bucket: s3.bucket,
+						Key: pendingUpload.key
+					});
+					await s3Service.client.send(deleteCommand);
+
+					// Delete the upload record
+					await uploadRepository.delete(uploadId);
+
+					throw new Error('File checksum mismatch. Upload rejected.');
+				}
+			}
+		} catch (err) {
+			// If the error is one we threw, re-throw it
+			if (err instanceof Error && err.message.includes('mismatch')) {
+				throw err;
+			}
+
+			// If file doesn't exist in S3, reject the completion
+			if (err instanceof Error && err.name === 'NotFound') {
+				throw new Error('File not found in storage. Please upload the file first.');
+			}
+
+			// Re-throw other errors
+			throw err;
+		}
+
+		// File verified, complete the upload
 		const uploadRecord = await uploadRepository.update(uploadId, {
 			status: 'completed',
 			updated_at: new Date()
 		});
+
+		// Add to user's storage usage
+		if (uploadRecord && uploadRecord.size > 0) {
+			await fileStoreUsageController.addUsage(uploadRecord.owner_id, uploadRecord.size);
+		}
+
 		return uploadRecord;
 	}
 
@@ -353,6 +448,11 @@ export class UploadController {
 				Key: upload.key
 			});
 			await s3Service.client.send(command);
+		}
+
+		// Subtract from user's storage usage (only for completed uploads)
+		if (upload.status === 'completed' && upload.size > 0) {
+			await fileStoreUsageController.subtractUsage(upload.owner_id, upload.size);
 		}
 
 		// Delete from database

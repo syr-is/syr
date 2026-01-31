@@ -4,6 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
+	import { storageEvents } from '$lib/stores/storage-events';
 
 	let {
 		currentFolderId = null,
@@ -87,6 +88,7 @@
 
 			toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}`);
 			open = false;
+			storageEvents.refresh();
 			onSuccess?.();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Upload failed');

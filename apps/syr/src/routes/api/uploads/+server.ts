@@ -116,6 +116,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				details: z.treeifyError(err)
 			});
 		}
+		// Handle storage limit errors
+		if (err instanceof Error && err.message.includes('Storage limit')) {
+			throw error(413, {
+				code: 'STORAGE_LIMIT_EXCEEDED',
+				message: err.message
+			});
+		}
 		// Handle repository validation errors
 		if (err instanceof Error && err.message.includes('Validation failed')) {
 			throw error(400, {
@@ -151,6 +158,20 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				code: 'VALIDATION_ERROR',
 				message: 'Invalid upload data',
 				details: z.treeifyError(err)
+			});
+		}
+		// Handle file verification errors (size/checksum mismatch)
+		if (err instanceof Error && err.message.includes('mismatch')) {
+			throw error(400, {
+				code: 'FILE_VERIFICATION_FAILED',
+				message: err.message
+			});
+		}
+		// Handle upload not found or already completed
+		if (err instanceof Error && (err.message.includes('not found') || err.message.includes('already completed'))) {
+			throw error(400, {
+				code: 'BAD_REQUEST',
+				message: err.message
 			});
 		}
 		// Handle repository validation errors

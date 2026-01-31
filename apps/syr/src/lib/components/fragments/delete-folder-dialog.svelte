@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, TriangleAlert, Trash2 } from 'lucide-svelte';
+	import { storageEvents } from '$lib/stores/storage-events';
 
 	let {
 		open = $bindable(false),
@@ -36,6 +37,7 @@
 
 			toast.success('Folder deleted successfully');
 			open = false;
+			storageEvents.refresh();
 			onSuccess?.();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to delete folder');

@@ -6,6 +6,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import NavUser from '$lib/components/nav-user.svelte';
+	import StorageUsage from '$lib/components/fragments/storage-usage.svelte';
 
 	let { user }: { user?: App.Locals['user'] } = $props();
 
@@ -96,6 +97,7 @@
 				<Button href="/login" variant="outline" size="sm" class="flex-1">Login</Button>
 			</div>
 		{:else if navUserData}
+			<StorageUsage class="mx-2 mb-2" />
 			<NavUser user={navUserData} handleSignOut={handleLogout} toggleTheme={toggleMode} />
 		{/if}
 	</Sidebar.Footer>
