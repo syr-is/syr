@@ -197,65 +197,164 @@ export class KvRepository {
 
 	/**
 	 * Atomically increment a numeric field within the value object
-	 * Uses SurrealDB's atomic update to prevent race conditions
+	 * Uses SurrealDB's UPSERT for atomic create-or-update to prevent race conditions
 	 * @param type - The category/type of the entry
 	 * @param index - The unique index within the type
 	 * @param field - The field within the value object to increment
 	 * @param amount - Amount to add (can be negative for decrement)
 	 * @param minValue - Optional minimum value (will clamp to this)
+	 * @param maxValue - Optional maximum value (will reject if exceeded)
 	 * @returns The new value of the field
+	 * @throws Error if maxValue is specified and increment would exceed it
 	 */
 	async atomicIncrementField(
 		type: string,
 		index: string,
 		field: string,
 		amount: number,
-		minValue?: number
+		minValue?: number,
+		maxValue?: number
 	): Promise<number> {
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
 
-		// First check if the record exists
-		const existing = await this.db.select(recordId);
-
-		if (!existing) {
-			// Create new record with initial value
-			const initialValue = minValue !== undefined ? Math.max(minValue, amount) : amount;
-			const data: Record<string, unknown> = {
-				kv_type: type,
-				value: { [field]: initialValue },
-				created_at: now,
-				updated_at: now
-			};
-			await this.db.create(recordId, data);
-			return initialValue;
-		}
-
-		// Use atomic update with SurrealDB
-		// The math::max ensures we don't go below minValue if specified
+		// Build a single atomic UPSERT query that handles both create and update
+		// This eliminates the race condition between select and create
 		let query: string;
-		if (minValue !== undefined) {
-			query = `UPDATE $recordId SET 
-				value.${field} = math::max($minValue, (value.${field} OR 0) + $amount),
-				updated_at = $now
-			RETURN value.${field}`;
+
+		if (maxValue !== undefined && minValue !== undefined) {
+			// With both min and max constraints
+			// Use LET to capture the computed value, then conditionally apply or reject
+			query = `
+				LET $current = (SELECT value.${field} FROM ONLY $recordId).${field} ?? 0;
+				LET $proposed = $current + $amount;
+				LET $clamped = math::max($minValue, math::min($maxValue, $proposed));
+				IF $proposed > $maxValue THEN
+					THROW "QUOTA_EXCEEDED"
+				ELSE
+					UPSERT $recordId SET
+						kv_type = $type,
+						value.${field} = $clamped,
+						created_at = created_at ?? $now,
+						updated_at = $now;
+					RETURN $clamped;
+				END
+			`;
+		} else if (maxValue !== undefined) {
+			// With max constraint only
+			query = `
+				LET $current = (SELECT value.${field} FROM ONLY $recordId).${field} ?? 0;
+				LET $proposed = $current + $amount;
+				IF $proposed > $maxValue THEN
+					THROW "QUOTA_EXCEEDED"
+				ELSE
+					UPSERT $recordId SET
+						kv_type = $type,
+						value.${field} = $proposed,
+						created_at = created_at ?? $now,
+						updated_at = $now;
+					RETURN $proposed;
+				END
+			`;
+		} else if (minValue !== undefined) {
+			// With min constraint only - use UPSERT for atomic create-or-update
+			query = `
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = math::max($minValue, (value.${field} ?? 0) + $amount),
+					created_at = created_at ?? $now,
+					updated_at = $now
+				RETURN value.${field}
+			`;
 		} else {
-			query = `UPDATE $recordId SET 
-				value.${field} = (value.${field} OR 0) + $amount,
-				updated_at = $now
-			RETURN value.${field}`;
+			// No constraints - simple UPSERT
+			query = `
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = (value.${field} ?? 0) + $amount,
+					created_at = created_at ?? $now,
+					updated_at = $now
+				RETURN value.${field}
+			`;
 		}
 
-		const result = await this.db.query<[Array<{ [key: string]: number }>]>(query, {
+		try {
+			const result = await this.db.query<[unknown]>(query, {
+				recordId,
+				type,
+				amount,
+				minValue: minValue ?? 0,
+				maxValue: maxValue ?? Number.MAX_SAFE_INTEGER,
+				now
+			});
+
+			// Extract the new value from the result
+			// The result structure varies based on query type
+			const resultArray = result[0];
+			if (Array.isArray(resultArray) && resultArray.length > 0) {
+				// UPSERT returns array of objects with the returned field
+				const firstResult = resultArray[0];
+				if (typeof firstResult === 'object' && firstResult !== null && field in firstResult) {
+					const val = (firstResult as Record<string, unknown>)[field];
+					return typeof val === 'number' ? val : 0;
+				}
+				// Could be just the number directly from RETURN
+				if (typeof firstResult === 'number') {
+					return firstResult;
+				}
+			}
+			// Direct number result from LET/RETURN
+			if (typeof resultArray === 'number') {
+				return resultArray;
+			}
+
+			return 0;
+		} catch (err) {
+			// Check if this is a quota exceeded error from our THROW
+			if (err instanceof Error && err.message.includes('QUOTA_EXCEEDED')) {
+				throw new Error('QUOTA_EXCEEDED');
+			}
+			throw err;
+		}
+	}
+
+	/**
+	 * Create a KV entry only if it doesn't already exist
+	 * Uses SurrealDB's INSERT to atomically create-if-absent
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param value - The value to store
+	 * @returns true if created, false if already existed
+	 */
+	async createIfAbsent(type: string, index: string, value: unknown): Promise<boolean> {
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+
+		// Use INSERT which fails silently if record exists, then check if we created it
+		const query = `
+			LET $existing = (SELECT id FROM ONLY $recordId);
+			IF $existing == NONE THEN
+				INSERT INTO kv {
+					id: $recordId,
+					kv_type: $type,
+					value: $value,
+					created_at: $now,
+					updated_at: $now
+				};
+				RETURN true;
+			ELSE
+				RETURN false;
+			END
+		`;
+
+		const result = await this.db.query<[boolean]>(query, {
 			recordId,
-			amount,
-			minValue: minValue ?? 0,
+			type,
+			value,
 			now
 		});
 
-		// Extract the new value from the result
-		const newValue = result[0]?.[0]?.[field];
-		return typeof newValue === 'number' ? newValue : 0;
+		return result[0] === true;
 	}
 }
 

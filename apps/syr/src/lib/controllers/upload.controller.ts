@@ -287,37 +287,40 @@ export class UploadController {
 			throw err;
 		}
 
-		// Re-check quota before completing to prevent TOCTOU race condition
-		// This ensures we don't exceed quota even if multiple uploads complete simultaneously
-		const quotaRecheck = await fileStoreUsageController.canUpload(
-			pendingUpload.owner_id,
-			pendingUpload.size
-		);
-
-		if (!quotaRecheck.allowed) {
-			// Delete the file from S3 since we can't accept it
-			const deleteCommand = new DeleteObjectCommand({
-				Bucket: s3.bucket,
-				Key: pendingUpload.key
-			});
-			await s3Service.client.send(deleteCommand);
-
-			// Mark upload as failed
-			await uploadRepository.update(uploadId, {
-				status: 'failed',
-				updated_at: new Date()
-			});
-
-			throw new Error(quotaRecheck.message || 'Storage limit exceeded. Upload rejected.');
-		}
-
-		// File verified and quota confirmed, complete the upload
-		// First add to storage usage atomically
+		// File verified, now atomically add to storage usage with quota enforcement
+		// This is a single atomic operation that checks and updates the quota,
+		// preventing race conditions where two uploads both pass quota check then both add
 		if (pendingUpload.size > 0) {
-			await fileStoreUsageController.addUsage(pendingUpload.owner_id, pendingUpload.size);
+			try {
+				await fileStoreUsageController.addUsage(
+					pendingUpload.owner_id,
+					pendingUpload.size,
+					true // enforceQuota - atomic check-and-add with max cap
+				);
+			} catch (quotaErr) {
+				// Check if this is a quota exceeded error
+				if (quotaErr instanceof Error && quotaErr.message.includes('QUOTA_EXCEEDED')) {
+					// Delete the file from S3 since we can't accept it
+					const deleteCommand = new DeleteObjectCommand({
+						Bucket: s3.bucket,
+						Key: pendingUpload.key
+					});
+					await s3Service.client.send(deleteCommand);
+
+					// Mark upload as failed
+					await uploadRepository.update(uploadId, {
+						status: 'failed',
+						updated_at: new Date()
+					});
+
+					throw new Error('Storage limit exceeded. Upload rejected.');
+				}
+				// Re-throw other errors
+				throw quotaErr;
+			}
 		}
 
-		// Then mark as completed
+		// Storage usage added successfully, now mark as completed
 		// If this fails after addUsage, we'll have slightly over-counted storage
 		// but that's safer than under-counting (user can recalculate if needed)
 		let uploadRecord;

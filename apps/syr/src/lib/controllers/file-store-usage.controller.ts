@@ -77,23 +77,37 @@ export class FileStoreUsageController {
 
 	/**
 	 * Get user's current storage usage in bytes
-	 * If no KV entry exists, calculates from existing uploads and creates the entry
+	 * If no KV entry exists, calculates from existing uploads and creates the entry atomically
+	 * Uses create-if-absent to avoid overwriting concurrent updates from addUsage
 	 */
 	async getUsage(userId: RecordId | string): Promise<number> {
 		const index = this.getUserIndex(userId);
 
-		// Check if KV entry exists
-		const exists = await kvService.has(KV_TYPE, index);
+		// First try to get existing value
+		const data = await kvService.get<FileStoreUsageData>(KV_TYPE, index);
+		if (data !== null) {
+			return data.bytes_used ?? 0;
+		}
 
-		if (!exists) {
-			// Calculate from existing uploads and save
-			const calculatedUsage = await this.calculateUsageFromUploads(userId);
-			await this.saveUsage(userId, calculatedUsage);
+		// No entry exists - calculate from uploads and try to create atomically
+		const calculatedUsage = await this.calculateUsageFromUploads(userId);
+
+		// Use createIfAbsent to avoid overwriting concurrent updates
+		// If another process created the record between our get and createIfAbsent,
+		// createIfAbsent returns false and we fetch the current value
+		const created = await kvService.createIfAbsent(KV_TYPE, index, {
+			bytes_used: Math.max(0, calculatedUsage)
+		} as FileStoreUsageData);
+
+		if (created) {
+			// We successfully created the initial record
 			return calculatedUsage;
 		}
 
-		const data = await kvService.get<FileStoreUsageData>(KV_TYPE, index);
-		return data?.bytes_used ?? 0;
+		// Another process created the record - fetch the current value
+		// This handles the race condition where addUsage ran between our check and create
+		const currentData = await kvService.get<FileStoreUsageData>(KV_TYPE, index);
+		return currentData?.bytes_used ?? 0;
 	}
 
 	/**
@@ -129,16 +143,31 @@ export class FileStoreUsageController {
 
 	/**
 	 * Add to user's storage usage (for uploads)
-	 * Uses atomic increment to prevent race conditions
+	 * Uses atomic increment with max cap to prevent race conditions and enforce quota
 	 * @param userId - User ID
 	 * @param bytes - Number of bytes to add
+	 * @param enforceQuota - If true, throws QUOTA_EXCEEDED if increment would exceed MAX_STORAGE_BYTES
 	 * @returns The new total bytes used
+	 * @throws Error with message 'QUOTA_EXCEEDED' if enforceQuota is true and quota would be exceeded
 	 */
-	async addUsage(userId: RecordId | string, bytes: number): Promise<number> {
+	async addUsage(
+		userId: RecordId | string,
+		bytes: number,
+		enforceQuota: boolean = false
+	): Promise<number> {
 		if (bytes <= 0) return this.getUsage(userId);
 
 		const index = this.getUserIndex(userId);
-		return kvService.atomicIncrementField(KV_TYPE, index, 'bytes_used', bytes, 0);
+
+		// Use atomic increment with optional max cap for quota enforcement
+		return kvService.atomicIncrementField(
+			KV_TYPE,
+			index,
+			'bytes_used',
+			bytes,
+			0, // minValue - never go below 0
+			enforceQuota ? MAX_STORAGE_BYTES : undefined // maxValue - enforce quota if requested
+		);
 	}
 
 	/**
