@@ -1,4 +1,4 @@
-import { storageEvents } from '$lib/stores/storage-events';
+import { storageEvents } from '$lib/stores/storage-events.svelte';
 
 /**
  * Upload handler for file uploads

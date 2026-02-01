@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
-	import { storageEvents } from '$lib/stores/storage-events';
+	import { storageEvents } from '$lib/stores/storage-events.svelte';
 
 	let {
 		currentFolderId = null,

@@ -1,5 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { dbService } from '$lib/services/db';
+import { ensureS3Setup } from '$lib/services/s3-setup';
 import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
@@ -7,6 +8,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
+let s3SetupPromise: Promise<void> | null = null;
 
 async function initializeDatabase() {
 	if (!initPromise) {
@@ -24,15 +26,25 @@ async function initializeDatabase() {
 	return initPromise;
 }
 
-// Initialize on module load
-initializeDatabase().catch(console.error);
+async function initializeS3() {
+	if (!s3SetupPromise) {
+		s3SetupPromise = ensureS3Setup().catch((error) => {
+			s3SetupPromise = null; // allow retry on next request (ensureS3Setup resets its own cache on failure)
+			throw error;
+		});
+	}
+	return s3SetupPromise;
+}
+
+// Initialize on module load (run in parallel; they don't depend on each other)
+Promise.all([initializeDatabase(), initializeS3()]).catch(console.error);
 
 /**
  * SvelteKit server hooks
  */
 export const handle: Handle = async ({ event, resolve }) => {
-	// Ensure database is initialized (will wait if already initializing)
-	await initializeDatabase();
+	// Ensure database and S3 (bucket + CORS) are initialized (parallel for faster first request)
+	await Promise.all([initializeDatabase(), initializeS3()]);
 
 	// Check for session cookie
 	const token = event.cookies.get('session');

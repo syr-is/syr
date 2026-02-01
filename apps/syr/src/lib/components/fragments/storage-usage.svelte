@@ -3,7 +3,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { HardDrive } from 'lucide-svelte';
-	import { storageEvents } from '$lib/stores/storage-events';
+	import { storageEvents } from '$lib/stores/storage-events.svelte';
 
 	let {
 		class: className = ''
@@ -60,9 +60,8 @@
 
 	// Fetch on mount and when global storage events trigger
 	$effect(() => {
-		// Subscribe to global storage events to refetch when storage changes
-		const globalTrigger = $storageEvents;
-		void globalTrigger;
+		// Read reactive value so effect re-runs when storageEvents.refresh() is called
+		void storageEvents.value;
 		fetchUsage();
 	});
 </script>
