@@ -104,7 +104,10 @@ export const jwt = {
 function s3CorsOrigins(): string[] {
 	const raw = config.S3_CORS_ORIGINS?.trim();
 	if (raw) {
-		return raw.split(',').map((o) => o.trim()).filter(Boolean);
+		return raw
+			.split(',')
+			.map((o) => o.trim())
+			.filter(Boolean);
 	}
 	return [config.CORS_ORIGIN];
 }

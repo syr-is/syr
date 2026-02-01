@@ -1,7 +1,7 @@
 /**
  * Storage events store
  * Used to notify storage-usage components to refresh when uploads/deletions occur
- * 
+ *
  * Uses Svelte 5 $state rune for proper reactivity with $effect
  */
 

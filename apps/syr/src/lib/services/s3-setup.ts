@@ -1,8 +1,4 @@
-import {
-	CreateBucketCommand,
-	HeadBucketCommand,
-	PutBucketCorsCommand
-} from '@aws-sdk/client-s3';
+import { CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
 import { s3 } from '$lib/config';
 import { s3Service } from '$lib/services/s3';
 
@@ -13,9 +9,7 @@ let setupPromise: Promise<void> | null = null;
  */
 async function ensureBucket(): Promise<void> {
 	try {
-		await s3Service.client.send(
-			new HeadBucketCommand({ Bucket: s3.bucket })
-		);
+		await s3Service.client.send(new HeadBucketCommand({ Bucket: s3.bucket }));
 	} catch (err: unknown) {
 		const e = err as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
 		const name = e?.name ?? '';
