@@ -134,6 +134,7 @@ export class KvService {
 	 * @param amount - Amount to increment (default: 1)
 	 * @param ttlSeconds - Optional time-to-live in seconds
 	 * @returns The new value
+	 * @deprecated Use atomicIncrementField for race-condition-safe increments
 	 */
 	async increment(type: string, index: string, amount = 1, ttlSeconds?: number): Promise<number> {
 		const current = await this.get<number>(type, index);
@@ -149,9 +150,45 @@ export class KvService {
 	 * @param amount - Amount to decrement (default: 1)
 	 * @param ttlSeconds - Optional time-to-live in seconds
 	 * @returns The new value
+	 * @deprecated Use atomicIncrementField for race-condition-safe decrements
 	 */
 	async decrement(type: string, index: string, amount = 1, ttlSeconds?: number): Promise<number> {
 		return this.increment(type, index, -amount, ttlSeconds);
+	}
+
+	/**
+	 * Atomically increment a numeric field within the value object
+	 * Uses database-level atomic operations to prevent race conditions
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param field - The field within the value object to increment
+	 * @param amount - Amount to add (can be negative for decrement)
+	 * @param minValue - Optional minimum value (will clamp to this)
+	 * @param maxValue - Optional maximum value (will reject if exceeded)
+	 * @returns The new value of the field
+	 * @throws Error with message 'QUOTA_EXCEEDED' if maxValue is specified and would be exceeded
+	 */
+	async atomicIncrementField(
+		type: string,
+		index: string,
+		field: string,
+		amount: number,
+		minValue?: number,
+		maxValue?: number
+	): Promise<number> {
+		return this.repository.atomicIncrementField(type, index, field, amount, minValue, maxValue);
+	}
+
+	/**
+	 * Create a KV entry only if it doesn't already exist
+	 * Uses database-level atomic operation to prevent race conditions
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param value - The value to store
+	 * @returns true if created, false if already existed
+	 */
+	async createIfAbsent<T = unknown>(type: string, index: string, value: T): Promise<boolean> {
+		return this.repository.createIfAbsent(type, index, value);
 	}
 
 	/**

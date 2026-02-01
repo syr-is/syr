@@ -55,6 +55,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				details: z.treeifyError(err)
 			});
 		}
+		// Handle storage limit errors
+		if (err instanceof Error && err.message.includes('Storage limit')) {
+			throw error(413, {
+				code: 'STORAGE_LIMIT_EXCEEDED',
+				message: err.message
+			});
+		}
 		if (err instanceof Error) {
 			throw error(400, {
 				code: 'BAD_REQUEST',

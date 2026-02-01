@@ -173,8 +173,8 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			});
 		}
 
-		// Delete the post
-		await postController.deletePost(postId);
+		// Delete the post (also cleans up associated uploads)
+		await postController.deletePost(postId, user.id);
 
 		return json({
 			status: 'success',

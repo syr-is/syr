@@ -429,9 +429,11 @@
 {#if data.user}
 	<div class="space-y-6 p-8">
 		<!-- Page Header -->
-		<div class="space-y-1">
-			<h1 class="text-3xl font-bold tracking-tight">Uploads</h1>
-			<p class="text-muted-foreground">Manage your uploaded files and folders</p>
+		<div class="flex items-start justify-between gap-4">
+			<div class="space-y-1">
+				<h1 class="text-3xl font-bold tracking-tight">Uploads</h1>
+				<p class="text-muted-foreground">Manage your uploaded files and folders</p>
+			</div>
 		</div>
 
 		<!-- Breadcrumb Navigation -->

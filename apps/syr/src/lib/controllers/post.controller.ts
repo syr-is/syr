@@ -1,4 +1,6 @@
 import { postRepository } from '$lib/repositories/post.repository';
+import { folderRepository } from '$lib/repositories/folder.repository';
+import { folderController } from './folder.controller';
 import type { PostCreate, PostUpdate, QueryOptions, User } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
@@ -19,7 +21,28 @@ export class PostController {
 		});
 		return updatedPost;
 	}
-	async deletePost(id: RecordId) {
+	async deletePost(id: RecordId, ownerId: RecordId) {
+		// Delete associated uploads folder (posts/{post_id}) if it exists
+		// This also handles storage usage updates via folderController
+		try {
+			const postsFolder = await folderRepository.findByNameAndParent(ownerId, 'posts', null);
+			if (postsFolder) {
+				const postFolder = await folderRepository.findByNameAndParent(
+					ownerId,
+					id.toString(),
+					postsFolder.id
+				);
+				if (postFolder) {
+					// Delete the post folder and all its contents (including uploads)
+					// This will update storage usage via folderController
+					await folderController.deleteFolder(postFolder.id.toString(), ownerId, true);
+				}
+			}
+		} catch (err) {
+			// Log but don't fail post deletion if folder cleanup fails
+			console.warn('Failed to clean up post assets folder:', err);
+		}
+
 		await postRepository.delete(id);
 	}
 	async getPost(id: RecordId) {

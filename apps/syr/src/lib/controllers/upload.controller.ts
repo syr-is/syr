@@ -2,7 +2,8 @@ import {
 	PutObjectCommand,
 	DeleteObjectCommand,
 	GetObjectCommand,
-	CopyObjectCommand
+	CopyObjectCommand,
+	HeadObjectCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { QueryOptions, Upload, UploadCreate, User } from '@syr-is/types';
@@ -11,7 +12,16 @@ import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { s3Service } from '$lib/services/s3';
+import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
+
+/**
+ * Convert hex-encoded string to base64
+ * S3 expects base64-encoded checksums, but we store them as hex
+ */
+function hexToBase64(hex: string): string {
+	return Buffer.from(hex, 'hex').toString('base64');
+}
 
 export class UploadController {
 	/**
@@ -53,6 +63,12 @@ export class UploadController {
 	async getPutUrl(user: User, upload: UploadCreate) {
 		const userId = user.id.toString();
 		const now = new Date();
+
+		// Check storage limit before allowing upload
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
 
 		// Parse folder_id if provided
 		const folderId = upload.folder_id ? stringToRecordId.decode(upload.folder_id) : null;
@@ -102,7 +118,7 @@ export class UploadController {
 			ContentType: uploadRecord.mime_type,
 			Bucket: s3.bucket,
 			...(uploadRecord.sha256 && {
-				ChecksumSHA256: uploadRecord.sha256
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
 			})
 		});
 
@@ -126,6 +142,12 @@ export class UploadController {
 	async getPostAssetPutUrl(user: User, postId: string, upload: UploadCreate) {
 		const userId = user.id.toString();
 		const now = new Date();
+
+		// Check storage limit before allowing upload
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
 
 		// Get or create the post assets folder hierarchy: posts/{post_id}/public
 		const postsFolder = await folderRepository.findOrCreate(user.id, 'posts', null);
@@ -165,7 +187,7 @@ export class UploadController {
 			ContentType: uploadRecord.mime_type,
 			Bucket: s3.bucket,
 			...(uploadRecord.sha256 && {
-				ChecksumSHA256: uploadRecord.sha256
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
 			})
 		});
 
@@ -182,10 +204,138 @@ export class UploadController {
 	}
 
 	async completeUpload(uploadId: string | RecordId) {
-		const uploadRecord = await uploadRepository.update(uploadId, {
-			status: 'completed',
-			updated_at: new Date()
-		});
+		// Get the pending upload record
+		const pendingUpload = await uploadRepository.findById(uploadId);
+		if (!pendingUpload) {
+			throw new Error('Upload not found');
+		}
+
+		if (pendingUpload.status === 'completed') {
+			throw new Error('Upload already completed');
+		}
+
+		if (!pendingUpload.key) {
+			throw new Error('Upload has no storage key');
+		}
+
+		// Verify the file in S3 matches what was requested
+		try {
+			const headCommand = new HeadObjectCommand({
+				Bucket: s3.bucket,
+				Key: pendingUpload.key
+			});
+
+			const headResult = await s3Service.client.send(headCommand);
+			const actualSize = headResult.ContentLength ?? 0;
+
+			// Verify file size matches
+			if (actualSize !== pendingUpload.size) {
+				// Delete the mismatched file from S3
+				const deleteCommand = new DeleteObjectCommand({
+					Bucket: s3.bucket,
+					Key: pendingUpload.key
+				});
+				await s3Service.client.send(deleteCommand);
+
+				// Delete the upload record
+				await uploadRepository.delete(uploadId);
+
+				throw new Error(
+					`File size mismatch: expected ${pendingUpload.size} bytes, got ${actualSize} bytes. Upload rejected.`
+				);
+			}
+
+			// Verify checksum if both client and S3 provide SHA256
+			// Note: Some S3-compatible storage (like SeaweedFS) may not return checksums in HEAD
+			// responses, so we only verify when S3 actually returns the checksum
+			if (pendingUpload.sha256 && headResult.ChecksumSHA256) {
+				const expectedBase64 = hexToBase64(pendingUpload.sha256);
+				if (headResult.ChecksumSHA256 !== expectedBase64) {
+					const deleteCommand = new DeleteObjectCommand({
+						Bucket: s3.bucket,
+						Key: pendingUpload.key
+					});
+					await s3Service.client.send(deleteCommand);
+
+					await uploadRepository.delete(uploadId);
+
+					throw new Error('File checksum mismatch. Upload rejected.');
+				}
+			}
+		} catch (err) {
+			// If the error is one we threw, re-throw it
+			if (err instanceof Error && err.message.includes('mismatch')) {
+				throw err;
+			}
+
+			// Check for S3 HTTP status codes
+			const httpStatusCode = (err as { $metadata?: { httpStatusCode?: number } }).$metadata
+				?.httpStatusCode;
+
+			// If file doesn't exist in S3 (404), reject the completion
+			if (httpStatusCode === 404) {
+				throw new Error('File not found in storage. Please upload the file first.');
+			}
+
+			// If permission denied (403), surface it clearly
+			if (httpStatusCode === 403) {
+				throw new Error('Permission denied accessing file in storage.');
+			}
+
+			// Re-throw other errors
+			throw err;
+		}
+
+		// File verified, now atomically add to storage usage with quota enforcement
+		// This is a single atomic operation that checks and updates the quota,
+		// preventing race conditions where two uploads both pass quota check then both add
+		if (pendingUpload.size > 0) {
+			try {
+				await fileStoreUsageController.addUsage(
+					pendingUpload.owner_id,
+					pendingUpload.size,
+					true // enforceQuota - atomic check-and-add with max cap
+				);
+			} catch (quotaErr) {
+				// Check if this is a quota exceeded error
+				if (quotaErr instanceof Error && quotaErr.message.includes('QUOTA_EXCEEDED')) {
+					// Delete the file from S3 since we can't accept it
+					const deleteCommand = new DeleteObjectCommand({
+						Bucket: s3.bucket,
+						Key: pendingUpload.key
+					});
+					await s3Service.client.send(deleteCommand);
+
+					// Mark upload as failed
+					await uploadRepository.update(uploadId, {
+						status: 'failed',
+						updated_at: new Date()
+					});
+
+					throw new Error('Storage limit exceeded. Upload rejected.');
+				}
+				// Re-throw other errors
+				throw quotaErr;
+			}
+		}
+
+		// Storage usage added successfully, now mark as completed
+		// If this fails after addUsage, we'll have slightly over-counted storage
+		// but that's safer than under-counting (user can recalculate if needed)
+		let uploadRecord;
+		try {
+			uploadRecord = await uploadRepository.update(uploadId, {
+				status: 'completed',
+				updated_at: new Date()
+			});
+		} catch (updateErr) {
+			// Rollback the storage usage if we fail to update the record
+			if (pendingUpload.size > 0) {
+				await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, pendingUpload.size);
+			}
+			throw updateErr;
+		}
+
 		return uploadRecord;
 	}
 
@@ -355,8 +505,16 @@ export class UploadController {
 			await s3Service.client.send(command);
 		}
 
-		// Delete from database
+		// Delete from database BEFORE subtracting storage usage
+		// This prevents double-subtraction if this operation is retried after a DB failure
+		// (If we subtracted first and DB delete failed, retry would subtract again)
 		await uploadRepository.delete(id);
+
+		// Subtract from user's storage usage (only for completed uploads)
+		// If this fails after DB delete, storage will be over-counted (safer than under-counted)
+		if (upload.status === 'completed' && upload.size > 0) {
+			await fileStoreUsageController.subtractUsage(upload.owner_id, upload.size);
+		}
 	}
 
 	/**

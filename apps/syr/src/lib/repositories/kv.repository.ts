@@ -194,6 +194,227 @@ export class KvRepository {
 
 		return { data, total };
 	}
+
+	/**
+	 * Regex to validate field names for safe interpolation into SurrealQL
+	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
+	 */
+	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+	/**
+	 * Atomically increment a numeric field within the value object
+	 * Uses SurrealDB's BEGIN...COMMIT transaction for atomic read-check-write
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param field - The field within the value object to increment (must be a valid identifier)
+	 * @param amount - Amount to add (can be negative for decrement)
+	 * @param minValue - Optional minimum value (will clamp to this)
+	 * @param maxValue - Optional maximum value (will reject if exceeded)
+	 * @returns The new value of the field
+	 * @throws Error if field name is invalid (potential injection)
+	 * @throws Error with message 'QUOTA_EXCEEDED' if maxValue is specified and would be exceeded
+	 * @throws Error if SurrealDB returns an unexpected response shape
+	 */
+	async atomicIncrementField(
+		type: string,
+		index: string,
+		field: string,
+		amount: number,
+		minValue?: number,
+		maxValue?: number
+	): Promise<number> {
+		// Validate field name to prevent SurrealQL injection
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
+		}
+
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+
+		// Build a single atomic transaction query using BEGIN...COMMIT
+		// This ensures the SELECT, check, and UPSERT happen atomically
+		let query: string;
+
+		if (maxValue !== undefined && minValue !== undefined) {
+			// With both min and max constraints
+			// Use THROW to signal quota exceeded - caught in error handler below
+			// Note: SurrealDB math::min/max take arrays
+			query = `
+				BEGIN TRANSACTION;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $proposed = $current + $amount;
+				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
+				IF $proposed > $maxValue {
+					THROW "QUOTA_EXCEEDED";
+				};
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = $clamped,
+					created_at = created_at ?? $now,
+					updated_at = $now;
+				COMMIT TRANSACTION;
+				RETURN $clamped;
+			`;
+		} else if (maxValue !== undefined) {
+			// With max constraint only
+			// Use THROW to signal quota exceeded - caught in error handler below
+			query = `
+				BEGIN TRANSACTION;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $proposed = $current + $amount;
+				IF $proposed > $maxValue {
+					THROW "QUOTA_EXCEEDED";
+				};
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = $proposed,
+					created_at = created_at ?? $now,
+					updated_at = $now;
+				COMMIT TRANSACTION;
+				RETURN $proposed;
+			`;
+		} else if (minValue !== undefined) {
+			// With min constraint only - use transaction for atomic create-or-update
+			// Note: SurrealDB math::max takes an array
+			query = `
+				BEGIN TRANSACTION;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $newVal = math::max([<int> $minValue, <int> ($current + $amount)]);
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = $newVal,
+					created_at = created_at ?? $now,
+					updated_at = $now;
+				COMMIT TRANSACTION;
+				RETURN $newVal;
+			`;
+		} else {
+			// No constraints - simple transaction with UPSERT
+			query = `
+				BEGIN TRANSACTION;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $newVal = $current + $amount;
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = $newVal,
+					created_at = created_at ?? $now,
+					updated_at = $now;
+				COMMIT TRANSACTION;
+				RETURN $newVal;
+			`;
+		}
+
+		try {
+			const params = {
+				recordId,
+				type,
+				amount,
+				minValue: minValue ?? 0,
+				maxValue: maxValue ?? Number.MAX_SAFE_INTEGER,
+				now
+			};
+
+			const result = await this.db.query<[unknown]>(query, params);
+
+			// Find the actual return value - it could be at different positions in the result array
+			let returnValue: number | undefined;
+
+			for (let i = result.length - 1; i >= 0; i--) {
+				const item = result[i];
+				if (typeof item === 'number') {
+					returnValue = item;
+					break;
+				}
+				if (Array.isArray(item) && item.length > 0) {
+					const firstItem = item[0];
+					if (typeof firstItem === 'number') {
+						returnValue = firstItem;
+						break;
+					}
+					if (typeof firstItem === 'object' && firstItem !== null && field in firstItem) {
+						const val = (firstItem as Record<string, unknown>)[field];
+						if (typeof val === 'number') {
+							returnValue = val;
+							break;
+						}
+					}
+				}
+			}
+
+			if (returnValue !== undefined) {
+				return returnValue;
+			}
+
+			// Don't silently mask unexpected responses - throw with context for debugging
+			throw new Error(
+				`atomicIncrementField: unexpected SurrealDB response shape. ` +
+					`recordId=${recordId.toString()}, field=${field}, amount=${amount}, ` +
+					`result=${JSON.stringify(result)}`
+			);
+		} catch (err) {
+			// Check if SurrealDB threw QUOTA_EXCEEDED
+			const errMessage = err instanceof Error ? err.message : String(err);
+			if (errMessage.includes('QUOTA_EXCEEDED')) {
+				throw new Error('QUOTA_EXCEEDED');
+			}
+			throw err;
+		}
+	}
+
+	/**
+	 * Create a KV entry only if it doesn't already exist
+	 * Uses a single INSERT attempt and catches duplicate-id errors for atomicity
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param value - The value to store
+	 * @returns true if created, false if already existed (duplicate id)
+	 */
+	async createIfAbsent(type: string, index: string, value: unknown): Promise<boolean> {
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+
+		// Attempt INSERT directly - SurrealDB will error if the record already exists
+		// This is atomic: no race condition between check and insert
+		const query = `
+			INSERT INTO kv {
+				id: $recordId,
+				kv_type: $type,
+				value: $value,
+				created_at: $now,
+				updated_at: $now
+			};
+		`;
+
+		try {
+			await this.db.query(query, {
+				recordId,
+				type,
+				value,
+				now
+			});
+			// INSERT succeeded - record was created
+			return true;
+		} catch (err) {
+			// Check if this is a duplicate-id error (record already exists)
+			const errMessage = err instanceof Error ? err.message : String(err);
+			if (
+				errMessage.includes('already exists') ||
+				errMessage.includes('duplicate') ||
+				errMessage.includes('Database record')
+			) {
+				// Record already existed - this is expected, return false
+				return false;
+			}
+			// Some other error - rethrow
+			throw err;
+		}
+	}
 }
 
 // Export singleton instance

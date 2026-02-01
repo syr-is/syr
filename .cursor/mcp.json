@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "SurrealDB": {
-      "url": "http://localhost:8090/mcp",
-      "description": "Connects to SurrealMCP running in docker-compose (port 8090). Start with: docker-compose --profile mcp up"
-    },
     "svelte": {
       "command": "npx",
       "args": ["-y", "@sveltejs/mcp"],
       "description": "Svelte MCP server for component and route management"
+    },
+    "SurrealDB": {
+      "url": "http://localhost:8090/mcp",
+      "description": "SurrealDB MCP – query and manage SurrealDB (Docker Compose)"
     }
   }
 }

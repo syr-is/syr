@@ -1,6 +1,7 @@
 services:
   # SurrealDB - Multi-model database
   surrealdb:
+    container_name: syr-surrealdb
     image: surrealdb/surrealdb:v2.3.10
     command: start --log trace --user ${SURREALDB_USER:-root} --pass ${SURREALDB_PASS:-syr-dev-password} rocksdb://data
     ports:
@@ -20,6 +21,7 @@ services:
 
   # SeaweedFS - S3-compatible distributed storage
   seaweedfs:
+    container_name: syr-seaweedfs
     image: chrislusf/seaweedfs:latest
     command: >
       server -s3 -s3.config=/etc/seaweedfs/s3_config.json
@@ -56,6 +58,7 @@ services:
 
   # Surrealist - Visual IDE for SurrealDB
   surrealist:
+    container_name: syr-surrealist
     image: surrealdb/surrealist:latest
     ports:
       - "8091:8080"
@@ -67,12 +70,19 @@ services:
 
   # SurrealMCP - Official SurrealDB MCP server for AI tool integration
   surrealmcp:
+    container_name: syr-surrealmcp
     image: surrealdb/surrealmcp:latest
-    command: start --bind-address 0.0.0.0:8090 --server-url http://localhost:8090
+    command: >
+      start
+      --bind-address 0.0.0.0:8090
+      --server-url http://localhost:8090
+      --auth-disabled
+      --rate-limit-rps 1000
+      --rate-limit-burst 2000
     ports:
       - "8090:8090"
     environment:
-      - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+      - SURREALDB_URL=ws://surrealdb:8000/rpc
       - SURREALDB_NS=${SURREALDB_NAMESPACE:-syr}
       - SURREALDB_DB=${SURREALDB_DATABASE:-syr}
       - SURREALDB_USER=${SURREALDB_USER:-root}
@@ -86,6 +96,7 @@ services:
 
   # SYR Application
   syr-dev:
+    container_name: syr-syr-dev
     build:
       context: .
       dockerfile: docker/dev/syr.dockerfile
