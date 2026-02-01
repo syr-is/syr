@@ -246,18 +246,29 @@ export class UploadController {
 			}
 
 			// Verify checksum if provided (S3 returns base64-encoded SHA256)
-			if (pendingUpload.sha256 && headResult.ChecksumSHA256) {
-				// Convert hex to base64 for comparison
-				const expectedBase64 = Buffer.from(pendingUpload.sha256, 'hex').toString('base64');
-				if (headResult.ChecksumSHA256 !== expectedBase64) {
-					// Delete the mismatched file from S3
+			if (pendingUpload.sha256) {
+				// If we expect a checksum but S3 didn't return one, treat as verification failure
+				if (!headResult.ChecksumSHA256) {
 					const deleteCommand = new DeleteObjectCommand({
 						Bucket: s3.bucket,
 						Key: pendingUpload.key
 					});
 					await s3Service.client.send(deleteCommand);
 
-					// Delete the upload record
+					await uploadRepository.delete(uploadId);
+
+					throw new Error('File checksum mismatch. Upload rejected.');
+				}
+
+				// Compare checksums using existing hex-to-base64 helper
+				const expectedBase64 = hexToBase64(pendingUpload.sha256);
+				if (headResult.ChecksumSHA256 !== expectedBase64) {
+					const deleteCommand = new DeleteObjectCommand({
+						Bucket: s3.bucket,
+						Key: pendingUpload.key
+					});
+					await s3Service.client.send(deleteCommand);
+
 					await uploadRepository.delete(uploadId);
 
 					throw new Error('File checksum mismatch. Upload rejected.');
