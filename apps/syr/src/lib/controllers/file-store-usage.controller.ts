@@ -221,7 +221,7 @@ export class FileStoreUsageController {
 			available_space: availableSpace,
 			message: allowed
 				? undefined
-				: `Not enough storage space. You need ${formatBytes(bytes)} but only have ${formatBytes(availableSpace)} available.`
+				: `Storage limit exceeded. You need ${formatBytes(bytes)} but only have ${formatBytes(availableSpace)} available.`
 		};
 	}
 
