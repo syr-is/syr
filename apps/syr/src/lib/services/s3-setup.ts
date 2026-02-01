@@ -50,9 +50,7 @@ async function ensureBucket(): Promise<void> {
 			const name = ce?.name ?? '';
 			const code = ce?.Code ?? '';
 			const isAlreadyOwned =
-				status === 409 ||
-				name === 'BucketAlreadyOwnedByYou' ||
-				code === 'BucketAlreadyOwnedByYou';
+				status === 409 || name === 'BucketAlreadyOwnedByYou' || code === 'BucketAlreadyOwnedByYou';
 			if (isAlreadyOwned) {
 				console.log(`S3 bucket "${s3.bucket}" already existed (concurrent creation)`);
 				return;
