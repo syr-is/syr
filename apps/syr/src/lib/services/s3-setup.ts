@@ -87,14 +87,19 @@ async function ensureBucketCors(): Promise<void> {
 
 /**
  * Ensures the S3 bucket exists and has CORS configured from env.
- * Safe to call repeatedly; runs once per process.
+ * Safe to call repeatedly; runs once per process. On failure, resets the cached
+ * promise so the next call performs a fresh retry (ensureBucket/ensureBucketCors).
  */
 export async function ensureS3Setup(): Promise<void> {
 	if (!setupPromise) {
 		setupPromise = (async () => {
 			await ensureBucket();
 			await ensureBucketCors();
-		})();
+		})().catch((error) => {
+			setupPromise = null;
+			console.error('Failed to ensure S3 bucket and CORS:', error);
+			throw error;
+		});
 	}
 	return setupPromise;
 }

@@ -29,8 +29,7 @@ async function initializeDatabase() {
 async function initializeS3() {
 	if (!s3SetupPromise) {
 		s3SetupPromise = ensureS3Setup().catch((error) => {
-			console.error('Failed to ensure S3 bucket and CORS:', error);
-			s3SetupPromise = null;
+			s3SetupPromise = null; // allow retry on next request (ensureS3Setup resets its own cache on failure)
 			throw error;
 		});
 	}
