@@ -1,4 +1,9 @@
-import { CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
+import {
+	CreateBucketCommand,
+	HeadBucketCommand,
+	PutBucketCorsCommand,
+	type BucketLocationConstraint
+} from '@aws-sdk/client-s3';
 import { s3 } from '$lib/config';
 import { s3Service } from '$lib/services/s3';
 
@@ -29,7 +34,7 @@ async function ensureBucket(): Promise<void> {
 				Bucket: s3.bucket,
 				...(s3.region !== 'us-east-1' && {
 					CreateBucketConfiguration: {
-						LocationConstraint: s3.region
+						LocationConstraint: s3.region as BucketLocationConstraint
 					}
 				})
 			})
@@ -42,7 +47,7 @@ async function ensureBucket(): Promise<void> {
  * Applies CORS rules to the S3 bucket from config (S3_CORS_ORIGINS or CORS_ORIGIN).
  */
 async function ensureBucketCors(): Promise<void> {
-	const origins = s3.corsOrigins.length > 0 ? s3.corsOrigins : [s3.endpoint];
+	const origins = s3.corsOrigins;
 	await s3Service.client.send(
 		new PutBucketCorsCommand({
 			Bucket: s3.bucket,

@@ -37,17 +37,15 @@ async function initializeS3() {
 	return s3SetupPromise;
 }
 
-// Initialize on module load
-initializeDatabase().catch(console.error);
-initializeS3().catch(console.error);
+// Initialize on module load (run in parallel; they don't depend on each other)
+Promise.all([initializeDatabase(), initializeS3()]).catch(console.error);
 
 /**
  * SvelteKit server hooks
  */
 export const handle: Handle = async ({ event, resolve }) => {
-	// Ensure database and S3 (bucket + CORS) are initialized
-	await initializeDatabase();
-	await initializeS3();
+	// Ensure database and S3 (bucket + CORS) are initialized (parallel for faster first request)
+	await Promise.all([initializeDatabase(), initializeS3()]);
 
 	// Check for session cookie
 	const token = event.cookies.get('session');

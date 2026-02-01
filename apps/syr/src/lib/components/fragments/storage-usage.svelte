@@ -60,9 +60,8 @@
 
 	// Fetch on mount and when global storage events trigger
 	$effect(() => {
-		// Access the reactive value to track it as a dependency
-		// When storageEvents.refresh() is called, this effect re-runs
-		storageEvents.value;
+		// Read reactive value so effect re-runs when storageEvents.refresh() is called
+		void storageEvents.value;
 		fetchUsage();
 	});
 </script>
