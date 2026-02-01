@@ -1,9 +1,38 @@
-➜ s3 git:(main) ✗ aws --endpoint-url=http://localhost:8333 \
- s3api create-bucket \
- --bucket syr \
- --region us-east-1
+# S3 / SeaweedFS setup
 
-➜ s3 git:(main) ✗ aws --endpoint-url=http://localhost:8333 \
- s3api put-bucket-cors \
- --bucket syr \
- --cors-configuration file://cors-config.json
+The **apps/syr** application ensures the S3 bucket and CORS rules exist on startup. You do not need to run manual `aws s3api` commands if the app is configured with the correct environment variables.
+
+## Required environment variables
+
+Set these (e.g. in `.env` or your deployment config) so the app can create the bucket and apply CORS:
+
+- `S3_ENDPOINT` – S3 endpoint URL (e.g. `http://localhost:8333` or `http://seaweedfs:8333`)
+- `S3_ACCESS_KEY_ID` – Access key (e.g. from `s3_config.json` identities)
+- `S3_SECRET_ACCESS_KEY` – Secret key
+- `S3_BUCKET` – Bucket name (e.g. `syr` or `syr-storage`)
+- `S3_REGION` – Region (e.g. `us-east-1`)
+
+CORS allowed origins are taken from `S3_CORS_ORIGINS` (comma-separated) if set, otherwise from `CORS_ORIGIN`. Example:
+
+- `CORS_ORIGIN=http://localhost:5173` (single origin, used for S3 CORS when `S3_CORS_ORIGINS` is unset)
+- `S3_CORS_ORIGINS=http://localhost:5173,https://app.example.com` (optional, multiple origins)
+
+On first request, the app will create the bucket if it does not exist and apply the CORS configuration.
+
+## Manual setup (optional)
+
+If you prefer to create the bucket and CORS yourself (e.g. before starting the app), you can use:
+
+```bash
+aws --endpoint-url=http://localhost:8333 \
+  s3api create-bucket \
+  --bucket syr \
+  --region us-east-1
+
+aws --endpoint-url=http://localhost:8333 \
+  s3api put-bucket-cors \
+  --bucket syr \
+  --cors-configuration file://cors-config.json
+```
+
+The `cors-config.json` in this directory is a reference; the app builds CORS from the env vars above.

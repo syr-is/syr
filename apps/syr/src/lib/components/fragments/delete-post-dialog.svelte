@@ -6,7 +6,7 @@
 	import type { Post } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
-	import { storageEvents } from '$lib/stores/storage-events';
+	import { storageEvents } from '$lib/stores/storage-events.svelte';
 
 	let { post, open = $bindable(false) }: { post: Post; open?: boolean } = $props();
 

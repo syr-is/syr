@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, TriangleAlert, Trash2 } from 'lucide-svelte';
-	import { storageEvents } from '$lib/stores/storage-events';
+	import { storageEvents } from '$lib/stores/storage-events.svelte';
 
 	let {
 		open = $bindable(false),

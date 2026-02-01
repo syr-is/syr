@@ -1,5 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { dbService } from '$lib/services/db';
+import { ensureS3Setup } from '$lib/services/s3-setup';
 import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
@@ -7,6 +8,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
+let s3SetupPromise: Promise<void> | null = null;
 
 async function initializeDatabase() {
 	if (!initPromise) {
@@ -24,15 +26,28 @@ async function initializeDatabase() {
 	return initPromise;
 }
 
+async function initializeS3() {
+	if (!s3SetupPromise) {
+		s3SetupPromise = ensureS3Setup().catch((error) => {
+			console.error('Failed to ensure S3 bucket and CORS:', error);
+			s3SetupPromise = null;
+			throw error;
+		});
+	}
+	return s3SetupPromise;
+}
+
 // Initialize on module load
 initializeDatabase().catch(console.error);
+initializeS3().catch(console.error);
 
 /**
  * SvelteKit server hooks
  */
 export const handle: Handle = async ({ event, resolve }) => {
-	// Ensure database is initialized (will wait if already initializing)
+	// Ensure database and S3 (bucket + CORS) are initialized
 	await initializeDatabase();
+	await initializeS3();
 
 	// Check for session cookie
 	const token = event.cookies.get('session');

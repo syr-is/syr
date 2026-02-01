@@ -34,6 +34,8 @@ const ConfigSchema = z.object({
 	S3_SECRET_ACCESS_KEY: z.string().default('syr-secret-key'),
 	S3_BUCKET: z.string().default('syr'),
 	S3_REGION: z.string().default('us-east-1'),
+	// Comma-separated origins for S3 bucket CORS (defaults to CORS_ORIGIN)
+	S3_CORS_ORIGINS: z.string().optional(),
 
 	// OAuth
 	OAUTH_ISSUER: z.url().optional(),
@@ -98,12 +100,22 @@ export const jwt = {
 // 	domain: config.DID_WEB_DOMAIN
 // } as const;
 
+/** S3 CORS allowed origins: S3_CORS_ORIGINS if set, otherwise [CORS_ORIGIN] */
+function s3CorsOrigins(): string[] {
+	const raw = config.S3_CORS_ORIGINS?.trim();
+	if (raw) {
+		return raw.split(',').map((o) => o.trim()).filter(Boolean);
+	}
+	return [config.CORS_ORIGIN];
+}
+
 export const s3 = {
 	endpoint: config.S3_ENDPOINT,
 	accessKeyId: config.S3_ACCESS_KEY_ID,
 	secretAccessKey: config.S3_SECRET_ACCESS_KEY,
 	bucket: config.S3_BUCKET,
-	region: config.S3_REGION
+	region: config.S3_REGION,
+	corsOrigins: s3CorsOrigins()
 } as const;
 
 export const oauth = {
