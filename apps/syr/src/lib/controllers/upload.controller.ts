@@ -506,13 +506,16 @@ export class UploadController {
 			await s3Service.client.send(command);
 		}
 
+		// Delete from database BEFORE subtracting storage usage
+		// This prevents double-subtraction if this operation is retried after a DB failure
+		// (If we subtracted first and DB delete failed, retry would subtract again)
+		await uploadRepository.delete(id);
+
 		// Subtract from user's storage usage (only for completed uploads)
+		// If this fails after DB delete, storage will be over-counted (safer than under-counted)
 		if (upload.status === 'completed' && upload.size > 0) {
 			await fileStoreUsageController.subtractUsage(upload.owner_id, upload.size);
 		}
-
-		// Delete from database
-		await uploadRepository.delete(id);
 	}
 
 	/**
