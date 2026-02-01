@@ -196,16 +196,23 @@ export class KvRepository {
 	}
 
 	/**
+	 * Regex to validate field names for safe interpolation into SurrealQL
+	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
+	 */
+	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+	/**
 	 * Atomically increment a numeric field within the value object
 	 * Uses SurrealDB's UPSERT for atomic create-or-update to prevent race conditions
 	 * @param type - The category/type of the entry
 	 * @param index - The unique index within the type
-	 * @param field - The field within the value object to increment
+	 * @param field - The field within the value object to increment (must be a valid identifier)
 	 * @param amount - Amount to add (can be negative for decrement)
 	 * @param minValue - Optional minimum value (will clamp to this)
 	 * @param maxValue - Optional maximum value (will reject if exceeded)
 	 * @returns The new value of the field
-	 * @throws Error if maxValue is specified and increment would exceed it
+	 * @throws Error if field name is invalid (potential injection)
+	 * @throws Error with message 'QUOTA_EXCEEDED' if maxValue is specified and would be exceeded
 	 */
 	async atomicIncrementField(
 		type: string,
@@ -215,6 +222,13 @@ export class KvRepository {
 		minValue?: number,
 		maxValue?: number
 	): Promise<number> {
+		// Validate field name to prevent SurrealQL injection
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
+		}
+
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
 
@@ -224,7 +238,7 @@ export class KvRepository {
 
 		if (maxValue !== undefined && minValue !== undefined) {
 			// With both min and max constraints
-			// Return -1 as sentinel value if quota would be exceeded
+			// Use THROW to signal quota exceeded - caught in error handler below
 			// Note: SurrealDB math::min/max take arrays
 			query = `
 				LET $record = SELECT * FROM ONLY $recordId;
@@ -232,7 +246,7 @@ export class KvRepository {
 				LET $proposed = $current + $amount;
 				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
 				IF $proposed > $maxValue {
-					RETURN -1;
+					THROW "QUOTA_EXCEEDED";
 				} ELSE {
 					UPSERT $recordId SET
 						kv_type = $type,
@@ -244,13 +258,13 @@ export class KvRepository {
 			`;
 		} else if (maxValue !== undefined) {
 			// With max constraint only
-			// Return -1 as sentinel value if quota would be exceeded
+			// Use THROW to signal quota exceeded - caught in error handler below
 			query = `
 				LET $record = SELECT * FROM ONLY $recordId;
 				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
 				IF $proposed > $maxValue {
-					RETURN -1;
+					THROW "QUOTA_EXCEEDED";
 				} ELSE {
 					UPSERT $recordId SET
 						kv_type = $type,
@@ -326,20 +340,16 @@ export class KvRepository {
 				}
 			}
 
-			// Check for sentinel value indicating quota exceeded
-			if (returnValue === -1) {
-				throw new Error('QUOTA_EXCEEDED');
-			}
-
 			if (returnValue !== undefined) {
 				return returnValue;
 			}
 
 			return 0;
 		} catch (err) {
-			// Re-throw quota exceeded errors as-is
-			if (err instanceof Error && err.message.includes('QUOTA_EXCEEDED')) {
-				throw err;
+			// Check if SurrealDB threw QUOTA_EXCEEDED
+			const errMessage = err instanceof Error ? err.message : String(err);
+			if (errMessage.includes('QUOTA_EXCEEDED')) {
+				throw new Error('QUOTA_EXCEEDED');
 			}
 			throw err;
 		}
