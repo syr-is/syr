@@ -100,16 +100,16 @@ export const jwt = {
 // 	domain: config.DID_WEB_DOMAIN
 // } as const;
 
-/** S3 CORS allowed origins: S3_CORS_ORIGINS if set, otherwise [CORS_ORIGIN] */
+/** S3 CORS allowed origins: S3_CORS_ORIGINS if set, otherwise [CORS_ORIGIN]. Never empty. */
 function s3CorsOrigins(): string[] {
 	const raw = config.S3_CORS_ORIGINS?.trim();
-	if (raw) {
-		return raw
-			.split(',')
-			.map((o) => o.trim())
-			.filter(Boolean);
-	}
-	return [config.CORS_ORIGIN];
+	const list = raw
+		? raw
+				.split(',')
+				.map((o) => o.trim())
+				.filter(Boolean)
+		: [config.CORS_ORIGIN];
+	return list.length > 0 ? list : [config.CORS_ORIGIN];
 }
 
 export const s3 = {

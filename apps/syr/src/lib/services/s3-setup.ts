@@ -29,17 +29,36 @@ async function ensureBucket(): Promise<void> {
 		if (!isNotFound) {
 			throw err;
 		}
-		await s3Service.client.send(
-			new CreateBucketCommand({
-				Bucket: s3.bucket,
-				...(s3.region !== 'us-east-1' && {
-					CreateBucketConfiguration: {
-						LocationConstraint: s3.region as BucketLocationConstraint
-					}
+		try {
+			await s3Service.client.send(
+				new CreateBucketCommand({
+					Bucket: s3.bucket,
+					CreateBucketConfiguration:
+						s3.region !== 'us-east-1'
+							? { LocationConstraint: s3.region as BucketLocationConstraint }
+							: undefined
 				})
-			})
-		);
-		console.log(`S3 bucket "${s3.bucket}" created`);
+			);
+			console.log(`S3 bucket "${s3.bucket}" created`);
+		} catch (createErr: unknown) {
+			const ce = createErr as {
+				name?: string;
+				Code?: string;
+				$metadata?: { httpStatusCode?: number };
+			};
+			const status = ce?.$metadata?.httpStatusCode;
+			const name = ce?.name ?? '';
+			const code = ce?.Code ?? '';
+			const isAlreadyOwned =
+				status === 409 ||
+				name === 'BucketAlreadyOwnedByYou' ||
+				code === 'BucketAlreadyOwnedByYou';
+			if (isAlreadyOwned) {
+				console.log(`S3 bucket "${s3.bucket}" already existed (concurrent creation)`);
+				return;
+			}
+			throw createErr;
+		}
 	}
 }
 

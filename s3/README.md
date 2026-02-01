@@ -17,7 +17,7 @@ CORS allowed origins are taken from `S3_CORS_ORIGINS` (comma-separated) if set, 
 - `CORS_ORIGIN=http://localhost:5173` (single origin, used for S3 CORS when `S3_CORS_ORIGINS` is unset)
 - `S3_CORS_ORIGINS=http://localhost:5173,https://app.example.com` (optional, multiple origins)
 
-On first request, the app will create the bucket if it does not exist and apply the CORS configuration.
+At server startup (module load), the app ensures the bucket exists and applies the CORS configuration. `initializeS3()` is invoked in `hooks.server.ts` when the server loads (via `Promise.all([initializeDatabase(), initializeS3()]).catch(console.error)`), so bucket creation and CORS happen during startup rather than on the first incoming request.
 
 ## Manual setup (optional)
 
