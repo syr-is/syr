@@ -79,10 +79,7 @@
 	{#if currentMode === 'carousel'}
 		<!-- Carousel mode -->
 		<div class="mx-auto w-full max-w-3xl">
-			<Carousel.Root
-				class="w-full"
-				setApi={(emblaApi) => (api = emblaApi)}
-			>
+			<Carousel.Root class="w-full" setApi={(emblaApi) => (api = emblaApi)}>
 				<Carousel.Content>
 					{#each mediaUrls as url, i (url)}
 						<Carousel.Item>

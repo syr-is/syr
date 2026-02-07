@@ -37,7 +37,20 @@ export const PostStatusSchema = z.enum(["draft", "completed"]);
 
 export type PostStatus = z.infer<typeof PostStatusSchema>;
 
-export const PostSchema = BaseEntitySchema.extend({
+/**
+ * Refinement: media posts must not have content_type set
+ */
+function refinePostType(data: { type?: string; content_type?: string }, ctx: z.RefinementCtx) {
+  if (data.type === "media" && data.content_type != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "content_type must not be set for media posts",
+      path: ["content_type"],
+    });
+  }
+}
+
+const PostObjectSchema = BaseEntitySchema.extend({
   type: PostTypeSchema,
   content_type: PostBlogContentTypeSchema.optional(),
   title: z.string().optional(),
@@ -50,21 +63,27 @@ export const PostSchema = BaseEntitySchema.extend({
   author_id: RecordIdSchema,
 });
 
+export const PostSchema = PostObjectSchema.superRefine(refinePostType);
+
 export type Post = z.infer<typeof PostSchema>;
 
-export const PostCreateSchema = PostSchema.omit({
-  id: true,
-  created_at: true,
-  updated_at: true,
-  author_id: true,
-});
+export const PostCreateSchema = PostObjectSchema
+  .omit({
+    id: true,
+    created_at: true,
+    updated_at: true,
+    author_id: true,
+  })
+  .superRefine(refinePostType);
 
 export type PostCreate = z.infer<typeof PostCreateSchema>;
 
-export const PostUpdateSchema = PostSchema.omit({
-  created_at: true,
-  updated_at: true,
-  author_id: true,
-});
+export const PostUpdateSchema = PostObjectSchema
+  .omit({
+    created_at: true,
+    updated_at: true,
+    author_id: true,
+  })
+  .superRefine(refinePostType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;

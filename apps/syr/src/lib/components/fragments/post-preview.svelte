@@ -51,9 +51,7 @@
 		}
 		if (post.type === 'media') {
 			const count = post.media_urls?.length ?? 0;
-			return count === 0
-				? 'No media items'
-				: `${count} media item${count === 1 ? '' : 's'}`;
+			return count === 0 ? 'No media items' : `${count} media item${count === 1 ? '' : 's'}`;
 		}
 		if (!post.content) return 'No content';
 		// Strip markdown syntax and HTML tags for fallback

@@ -713,11 +713,7 @@
 								{#each mediaUrls as url, i (url)}
 									<div class="group relative overflow-hidden rounded-lg border bg-muted/30">
 										{#if isVideoUrl(url)}
-											<video
-												src={url}
-												class="aspect-square w-full object-cover"
-												preload="metadata"
-											>
+											<video src={url} class="aspect-square w-full object-cover" preload="metadata">
 												<track kind="captions" />
 											</video>
 										{:else}
@@ -730,7 +726,7 @@
 										{/if}
 										<button
 											type="button"
-											class="absolute top-1 right-1 rounded-full bg-destructive/90 p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+											class="text-destructive-foreground absolute top-1 right-1 rounded-full bg-destructive/90 p-1 opacity-0 transition-opacity group-hover:opacity-100"
 											onclick={(e) => {
 												e.stopPropagation();
 												removeMediaUrl(i);
