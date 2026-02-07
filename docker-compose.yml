@@ -68,7 +68,6 @@ services:
       - surrealdb
     restart: unless-stopped
 
-
   # # SYR Application
   # syr-dev:
   #   container_name: syr-syr-dev
