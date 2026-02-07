@@ -28,6 +28,7 @@
 		"@types/jsonwebtoken": "^9.0.10",
 		"@types/node": "^20",
 		"bits-ui": "^2.15.4",
+		"embla-carousel-svelte": "^8.6.0",
 		"eslint": "^9.36.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.12.4",

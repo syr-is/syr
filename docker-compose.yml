@@ -68,92 +68,94 @@ services:
       - surrealdb
     restart: unless-stopped
 
-  # SurrealMCP - Official SurrealDB MCP server for AI tool integration
-  surrealmcp:
-    container_name: syr-surrealmcp
-    image: surrealdb/surrealmcp:latest
-    command: >
-      start
-      --bind-address 0.0.0.0:8090
-      --server-url http://localhost:8090
-      --auth-disabled
-      --rate-limit-rps 1000
-      --rate-limit-burst 2000
-    ports:
-      - "8090:8090"
-    environment:
-      - SURREALDB_URL=ws://surrealdb:8000/rpc
-      - SURREALDB_NS=${SURREALDB_NAMESPACE:-syr}
-      - SURREALDB_DB=${SURREALDB_DATABASE:-syr}
-      - SURREALDB_USER=${SURREALDB_USER:-root}
-      - SURREALDB_PASS=${SURREALDB_PASS:-syr-dev-password}
-      - SURREAL_MCP_AUTH_REQUIRED=false
-    depends_on:
-      - surrealdb
-    profiles:
-      - mcp
-    restart: unless-stopped
 
-  # SYR Application
-  syr-dev:
-    container_name: syr-syr-dev
-    build:
-      context: .
-      dockerfile: docker/dev/syr.dockerfile
-    ports:
-      - "${PORT:-5173}:${PORT:-5173}"
-    env_file:
-      - .env
-    environment:
-      - PORT=${PORT:-5173}
-      - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
-      - S3_ENDPOINT=${S3_ENDPOINT:-http://seaweedfs:8333}
-    depends_on:
-      surrealdb:
-        condition: service_healthy
-      seaweedfs:
-        condition: service_healthy
-    stdin_open: true
-    tty: true
-    develop:
-      watch:
-        # Sync entire app directory for hot reload
-        - action: sync
-          path: ./apps/syr
-          target: /app/apps/syr
-          ignore:
-            - node_modules/
-            - "**/*.swp"
-            - "**/.DS_Store"
-            - .svelte-kit/
-            - build/
-            - package.json
+  # # SYR Application
+  # syr-dev:
+  #   container_name: syr-syr-dev
+  #   build:
+  #     context: .
+  #     dockerfile: docker/dev/syr.dockerfile
+  #   ports:
+  #     - "${PORT:-5173}:${PORT:-5173}"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - PORT=${PORT:-5173}
+  #     - SURREALDB_URL=${SURREALDB_URL:-ws://surrealdb:8000/rpc}
+  #     - S3_ENDPOINT=${S3_ENDPOINT:-http://seaweedfs:8333}
+  #   depends_on:
+  #     surrealdb:
+  #       condition: service_healthy
+  #     seaweedfs:
+  #       condition: service_healthy
+  #   stdin_open: true
+  #   tty: true
+  #   develop:
+  #     watch:
+  #       # Sync entire app directory for hot reload
+  #       - action: sync
+  #         path: ./apps/syr
+  #         target: /app/apps/syr
+  #         ignore:
+  #           - node_modules/
+  #           - "**/*.swp"
+  #           - "**/.DS_Store"
+  #           - .svelte-kit/
+  #           - build/
+  #           - package.json
 
-        # Sync shared types package
-        - action: sync
-          path: ./packages/types
-          target: /app/packages/types
-          ignore:
-            - node_modules/
-            - dist/
+  #       # Sync shared types package
+  #       - action: sync
+  #         path: ./packages/types
+  #         target: /app/packages/types
+  #         ignore:
+  #           - node_modules/
+  #           - dist/
 
-        # Rebuild when workspace configuration changes
-        - action: rebuild
-          path: ./package.json
+  #       # Rebuild when workspace configuration changes
+  #       - action: rebuild
+  #         path: ./package.json
 
-        - action: rebuild
-          path: ./pnpm-lock.yaml
+  #       - action: rebuild
+  #         path: ./pnpm-lock.yaml
 
-        - action: rebuild
-          path: ./pnpm-workspace.yaml
+  #       - action: rebuild
+  #         path: ./pnpm-workspace.yaml
 
-        - action: rebuild
-          path: ./turbo.json
+  #       - action: rebuild
+  #         path: ./turbo.json
 
-        # Rebuild when app dependencies change
-        - action: rebuild
-          path: ./apps/syr/package.json
+  #       # Rebuild when app dependencies change
+  #       - action: rebuild
+  #         path: ./apps/syr/package.json
 
-        # Rebuild when types package changes
-        - action: rebuild
-          path: ./packages/types/package.json
+  #       # Rebuild when types package changes
+  #       - action: rebuild
+  #         path: ./packages/types/package.json
+
+  # # -- This is absolutely shit, I am just keeping it incase they ever make it good --
+  # # SurrealMCP - Official SurrealDB MCP server for AI tool integration
+  # surrealmcp:
+  #   container_name: syr-surrealmcp
+  #   image: surrealdb/surrealmcp:latest
+  #   command: >
+  #     start
+  #     --bind-address 0.0.0.0:8090
+  #     --server-url http://localhost:8090
+  #     --auth-disabled
+  #     --rate-limit-rps 1000
+  #     --rate-limit-burst 2000
+  #   ports:
+  #     - "8090:8090"
+  #   environment:
+  #     - SURREALDB_URL=ws://surrealdb:8000/rpc
+  #     - SURREALDB_NS=${SURREALDB_NAMESPACE:-syr}
+  #     - SURREALDB_DB=${SURREALDB_DATABASE:-syr}
+  #     - SURREALDB_USER=${SURREALDB_USER:-root}
+  #     - SURREALDB_PASS=${SURREALDB_PASS:-syr-dev-password}
+  #     - SURREAL_MCP_AUTH_REQUIRED=false
+  #   depends_on:
+  #     - surrealdb
+  #   profiles:
+  #     - mcp
+  #   restart: unless-stopped

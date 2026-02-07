@@ -97,16 +97,18 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		// Parse the update data (without id since it's in the URL)
 		const data = PostUpdateSchema.omit({ id: true }).partial().parse(body);
 
-		// Merge existing post data with updates to satisfy required fields
+		// Merge existing post data with updates, preserving fields not included in the request
 		const result = await postController.updatePost({
 			id: postId,
 			type: data.type ?? existingPost.type,
 			content_type: data.content_type ?? existingPost.content_type,
 			visibility: data.visibility ?? existingPost.visibility,
 			status: data.status ?? existingPost.status,
-			title: data.title,
-			description: data.description,
-			content: data.content
+			title: data.title ?? existingPost.title,
+			description: data.description ?? existingPost.description,
+			content: data.content ?? existingPost.content,
+			media_urls: data.media_urls ?? existingPost.media_urls,
+			display_mode: data.display_mode ?? existingPost.display_mode
 		});
 
 		return json({

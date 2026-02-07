@@ -330,7 +330,7 @@
 						<h2 class="text-lg font-semibold">Pinned Posts</h2>
 						<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 					</div>
-					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+					<div class="grid gap-4 md:grid-cols-2">
 						{#each pinnedPosts as post, index (post.id.toString())}
 							<DraggableItem
 								{index}
@@ -368,7 +368,7 @@
 
 			<!-- Posts List -->
 			{#if loading}
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+				<div class="grid gap-4 md:grid-cols-2">
 					{#each Array(6) as _, i (i)}
 						<Card.Root>
 							<Card.Header>
@@ -400,7 +400,7 @@
 			{:else}
 				<div class="space-y-3">
 					<h2 class="text-lg font-semibold">All Posts</h2>
-					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+					<div class="grid gap-4 md:grid-cols-2">
 						{#each posts as post (post.id.toString())}
 							<button
 								type="button"

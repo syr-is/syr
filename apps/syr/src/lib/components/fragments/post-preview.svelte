@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
-	import { Trash2, Pin, PinOff, FilePen } from 'lucide-svelte';
+	import { Trash2, Pin, PinOff, FilePen, ImageIcon } from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
 
 	interface Props {
@@ -44,10 +44,16 @@
 		}).format(d);
 	}
 
-	// Get display text - prefer description, fall back to truncated content
+	// Get display text - prefer description, fall back to truncated content or media count
 	function getDisplayText(post: Post): string {
 		if (post.description) {
 			return post.description;
+		}
+		if (post.type === 'media') {
+			const count = post.media_urls?.length ?? 0;
+			return count === 0
+				? 'No media items'
+				: `${count} media item${count === 1 ? '' : 's'}`;
 		}
 		if (!post.content) return 'No content';
 		// Strip markdown syntax and HTML tags for fallback
@@ -75,11 +81,11 @@
 		: ''}"
 >
 	<Card.Header>
-		<div class="flex items-start justify-between gap-2">
-			<Card.Title class="line-clamp-2 flex-1">
+		<div class="flex flex-wrap items-start gap-2">
+			<Card.Title class="line-clamp-2 min-w-0 flex-1">
 				{post.title || 'Untitled Post'}
 			</Card.Title>
-			<div class="flex flex-shrink-0 gap-2">
+			<div class="ml-auto flex flex-wrap gap-1">
 				{#if isDraft}
 					<Badge variant="outline" class="border-warning text-warning gap-1 text-xs">
 						<FilePen class="h-3 w-3" />
@@ -90,7 +96,7 @@
 					{post.visibility}
 				</Badge>
 				<Badge variant="outline" class="text-xs">
-					{post.content_type}
+					{post.type === 'media' ? 'media' : post.content_type}
 				</Badge>
 			</div>
 		</div>
@@ -103,49 +109,115 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content>
-		<div class="flex items-start justify-between gap-2">
-			<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
-			<div class="flex gap-1">
-				{#if showPinButton && onPinToggle}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							{#snippet child({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8 {isPinned
-										? 'text-primary hover:bg-primary/10'
-										: 'text-muted-foreground hover:bg-muted'}"
-									onclick={handlePinToggle}
-									disabled={pinLoading}
-								>
-									{#if isPinned}
-										<PinOff class="h-4 w-4" />
-									{:else}
-										<Pin class="h-4 w-4" />
-									{/if}
-								</Button>
-							{/snippet}
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isPinned ? 'Unpin post' : 'Pin post'}
-						</Tooltip.Content>
-					</Tooltip.Root>
+		{#if post.type === 'media' && post.media_urls && post.media_urls.length > 0}
+			<!-- Media preview: stacked vertical layout -->
+			<div class="relative mb-3 overflow-hidden rounded-lg bg-muted">
+				<img
+					src={post.media_urls[0]}
+					alt="Preview"
+					class="h-40 w-full object-cover"
+					loading="lazy"
+				/>
+				{#if post.media_urls.length > 1}
+					<div
+						class="absolute right-2 bottom-2 rounded-md bg-black/60 px-2 py-0.5 text-xs font-medium text-white"
+					>
+						+{post.media_urls.length - 1} more
+					</div>
 				{/if}
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-					onclick={(e) => {
-						e.stopPropagation();
-						deleteDialogOpen = true;
-					}}
-				>
-					<Trash2 class="h-4 w-4" />
-				</Button>
 			</div>
-		</div>
+			<div class="flex items-start justify-between gap-2">
+				<p class="flex-1 text-sm text-muted-foreground">
+					<ImageIcon class="mr-1 inline h-3.5 w-3.5" />
+					{getDisplayText(post)}
+				</p>
+				<div class="flex gap-1">
+					{#if showPinButton && onPinToggle}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon"
+										class="h-8 w-8 {isPinned
+											? 'text-primary hover:bg-primary/10'
+											: 'text-muted-foreground hover:bg-muted'}"
+										onclick={handlePinToggle}
+										disabled={pinLoading}
+									>
+										{#if isPinned}
+											<PinOff class="h-4 w-4" />
+										{:else}
+											<Pin class="h-4 w-4" />
+										{/if}
+									</Button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{isPinned ? 'Unpin post' : 'Pin post'}
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+						onclick={(e) => {
+							e.stopPropagation();
+							deleteDialogOpen = true;
+						}}
+					>
+						<Trash2 class="h-4 w-4" />
+					</Button>
+				</div>
+			</div>
+		{:else}
+			<!-- Blog / default preview -->
+			<div class="flex items-start justify-between gap-2">
+				<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
+				<div class="flex gap-1">
+					{#if showPinButton && onPinToggle}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon"
+										class="h-8 w-8 {isPinned
+											? 'text-primary hover:bg-primary/10'
+											: 'text-muted-foreground hover:bg-muted'}"
+										onclick={handlePinToggle}
+										disabled={pinLoading}
+									>
+										{#if isPinned}
+											<PinOff class="h-4 w-4" />
+										{:else}
+											<Pin class="h-4 w-4" />
+										{/if}
+									</Button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{isPinned ? 'Unpin post' : 'Pin post'}
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+						onclick={(e) => {
+							e.stopPropagation();
+							deleteDialogOpen = true;
+						}}
+					>
+						<Trash2 class="h-4 w-4" />
+					</Button>
+				</div>
+			</div>
+		{/if}
 	</Card.Content>
 </Card.Root>
 
