@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Play, Music, FileDown } from 'lucide-svelte';
-	import { getMediaType, fetchAlbumArt } from '$lib/utils/media';
+	import { getMediaType, fetchAlbumArt, trackAlbumArt } from '$lib/utils/media';
 
 	let {
 		url,
@@ -44,7 +44,16 @@
 {#if mode === 'card'}
 	<!-- Card: square thumbnail, no controls, play overlay on video, album art or icon for audio -->
 	{#if mediaType === 'image'}
-		<img src={url} {alt} class="h-full w-full object-cover" loading="lazy" />
+		<img
+			src={url}
+			{alt}
+			class="h-full w-full object-cover"
+			loading="lazy"
+			onerror={(e) => {
+				const el = e.currentTarget as HTMLImageElement;
+				if (el) el.style.display = 'none';
+			}}
+		/>
 	{:else if mediaType === 'video'}
 		<video src={url} class="h-full w-full object-cover" preload="metadata" muted>
 			<track kind="captions" />
@@ -55,13 +64,24 @@
 			</div>
 		</div>
 	{:else if mediaType === 'audio'}
-		{#if albumArtUrl}
-			<img src={albumArtUrl} alt="Album art" class="h-full w-full object-cover" />
-		{:else}
-			<div class="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
-				<Music class="h-10 w-10 text-muted-foreground" />
-			</div>
-		{/if}
+		<!-- svelte-ignore a11y_missing_attribute -->
+		<div class="h-full w-full" use:trackAlbumArt={url}>
+			{#if albumArtUrl}
+				<img
+					src={albumArtUrl}
+					alt="Album art"
+					class="h-full w-full object-cover"
+					onerror={(e) => {
+						const el = e.currentTarget as HTMLImageElement;
+						if (el) el.style.display = 'none';
+					}}
+				/>
+			{:else}
+				<div class="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
+					<Music class="h-10 w-10 text-muted-foreground" />
+				</div>
+			{/if}
+		</div>
 	{:else}
 		<div class="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
 			<FileDown class="h-10 w-10 text-muted-foreground" />
@@ -77,6 +97,10 @@
 					{alt}
 					class="max-h-[500px] w-full rounded-md object-contain {className}"
 					loading="lazy"
+					onerror={(e) => {
+						const el = e.currentTarget as HTMLImageElement;
+						if (el) el.style.display = 'none';
+					}}
 				/>
 			</button>
 		{:else}
@@ -85,6 +109,10 @@
 				{alt}
 				class="max-h-[500px] w-full rounded-md object-contain {className}"
 				loading="lazy"
+				onerror={(e) => {
+					const el = e.currentTarget as HTMLImageElement;
+					if (el) el.style.display = 'none';
+				}}
 			/>
 		{/if}
 	{:else if mediaType === 'video'}
@@ -97,12 +125,16 @@
 			<track kind="captions" />
 		</video>
 	{:else if mediaType === 'audio'}
-		<div class="flex flex-col items-center gap-4 py-4 {className}">
+		<div class="flex flex-col items-center gap-4 py-4 {className}" use:trackAlbumArt={url}>
 			{#if albumArtUrl}
 				<img
 					src={albumArtUrl}
 					alt="Album art"
 					class="h-48 w-48 rounded-lg object-cover shadow-md"
+					onerror={(e) => {
+						const el = e.currentTarget as HTMLImageElement;
+						if (el) el.style.display = 'none';
+					}}
 				/>
 			{:else}
 				<div class="flex h-48 w-48 items-center justify-center rounded-lg bg-muted">

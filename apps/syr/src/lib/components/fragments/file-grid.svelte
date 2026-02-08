@@ -41,14 +41,12 @@
 	<!-- Gallery: uniform aspect-square grid -->
 	<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 		{#each folderItems as item (item.id)}
-			{#if item.kind === 'folder'}
-				<FolderCard
-					folder={item.data}
-					isPublic={isPublicFolder(item.data)}
-					onclick={() => onFolderClick?.(item.data)}
-					onDelete={onFolderDelete}
-				/>
-			{/if}
+			<FolderCard
+				folder={item.data}
+				isPublic={isPublicFolder(item.data)}
+				onclick={() => onFolderClick?.(item.data)}
+				onDelete={onFolderDelete}
+			/>
 		{/each}
 		{#each fileItems as item, i (item.id)}
 			<FileCard {item} onclick={() => onItemClick?.(i)} />
@@ -59,14 +57,12 @@
 	{#if folderItems.length > 0}
 		<div class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
 			{#each folderItems as item (item.id)}
-				{#if item.kind === 'folder'}
-					<FolderCard
-						folder={item.data}
-						isPublic={isPublicFolder(item.data)}
-						onclick={() => onFolderClick?.(item.data)}
-						onDelete={onFolderDelete}
-					/>
-				{/if}
+				<FolderCard
+					folder={item.data}
+					isPublic={isPublicFolder(item.data)}
+					onclick={() => onFolderClick?.(item.data)}
+					onDelete={onFolderDelete}
+				/>
 			{/each}
 		</div>
 	{/if}

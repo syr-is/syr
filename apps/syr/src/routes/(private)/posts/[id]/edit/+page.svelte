@@ -51,7 +51,8 @@
 	let mediaUrls = $state<string[]>(data.post.media_urls ?? []);
 	// Mime type map: pre-populated from server for existing URLs, updated during upload
 	let mediaMimeTypes = $state<Record<string, string>>(data.mediaUrlMimeTypes ?? {});
-	let uploading = $state(false);
+	let uploadingCount = $state(0);
+	const uploading = $derived(uploadingCount > 0);
 	let dragOver = $state(false);
 
 	// Check if post is a draft
@@ -316,12 +317,12 @@
 		return 'Select display mode';
 	}
 
-	// Media upload handling
+	// Media upload handling (counter supports concurrent batches)
 	async function handleMediaFiles(files: FileList | File[]) {
 		const fileArray = Array.from(files);
 		if (fileArray.length === 0) return;
 
-		uploading = true;
+		uploadingCount++;
 		try {
 			for (const file of fileArray) {
 				try {
@@ -336,7 +337,7 @@
 
 			$formData.media_urls = mediaUrls;
 		} finally {
-			uploading = false;
+			uploadingCount--;
 		}
 	}
 
@@ -746,13 +747,15 @@
 				{/if}
 			</Card.Content>
 			<Card.Footer class="flex shrink-0 justify-end gap-2">
-				<Form.Button type="button" variant="outline" onclick={goHome}>Cancel</Form.Button>
+				<Form.Button type="button" variant="outline" onclick={goHome} disabled={loading || publishLoading || uploading}>
+					Cancel
+				</Form.Button>
 				{#if !isDraft}
 					<Button
 						type="button"
 						variant="outline"
 						onclick={handleUnpublish}
-						disabled={loading || publishLoading}
+						disabled={loading || publishLoading || uploading}
 					>
 						{#if publishLoading}
 							Unpublishing...
@@ -762,17 +765,21 @@
 						{/if}
 					</Button>
 				{/if}
-				<Form.Button type="submit" disabled={loading || publishLoading}>
+				<Form.Button type="submit" disabled={loading || publishLoading || uploading}>
 					{#if loading}
 						Saving...
+					{:else if uploading}
+						Uploading...
 					{:else}
 						Save Changes
 					{/if}
 				</Form.Button>
 				{#if isDraft}
-					<Button type="button" onclick={handlePublish} disabled={loading || publishLoading}>
+					<Button type="button" onclick={handlePublish} disabled={loading || publishLoading || uploading}>
 						{#if publishLoading}
 							Publishing...
+						{:else if uploading}
+							Uploading...
 						{:else}
 							<Send class="mr-2 h-4 w-4" />
 							Publish

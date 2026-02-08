@@ -48,7 +48,8 @@
 	// Media post state
 	let mediaUrls = $state<string[]>([]);
 	let mediaMimeTypes = $state<Record<string, string>>({});
-	let uploading = $state(false);
+	let uploadingCount = $state(0);
+	const uploading = $derived(uploadingCount > 0);
 	let dragOver = $state(false);
 
 	const form = superForm(defaults(zod4(PostCreateSchema)), {
@@ -293,12 +294,12 @@
 		}
 	}
 
-	// Media upload handling
+	// Media upload handling (counter supports concurrent batches)
 	async function handleMediaFiles(files: FileList | File[]) {
 		const fileArray = Array.from(files);
 		if (fileArray.length === 0) return;
 
-		uploading = true;
+		uploadingCount++;
 		try {
 			// Ensure we have a draft for asset uploads
 			const postId = await createDraft();
@@ -321,7 +322,7 @@
 			// Sync with form data
 			$formData.media_urls = mediaUrls;
 		} finally {
-			uploading = false;
+			uploadingCount--;
 		}
 	}
 
@@ -755,17 +756,24 @@
 				{/if}
 			</div>
 			<Dialog.Footer class="mt-6 shrink-0 gap-2">
-				<Button type="button" variant="ghost" onclick={cancelAndDelete} disabled={loading}>
+				<Button
+					type="button"
+					variant="ghost"
+					onclick={cancelAndDelete}
+					disabled={loading || uploading}
+				>
 					<X class="mr-2 h-4 w-4" />
 					Cancel
 				</Button>
-				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading}>
+				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading || uploading}>
 					<FilePen class="mr-2 h-4 w-4" />
 					Save Draft
 				</Button>
-				<Form.Button type="submit" disabled={loading} class="w-full sm:w-auto">
+				<Form.Button type="submit" disabled={loading || uploading} class="w-full sm:w-auto">
 					{#if loading}
 						Publishing...
+					{:else if uploading}
+						Uploading...
 					{:else}
 						<Send class="mr-2 h-4 w-4" />
 						Publish

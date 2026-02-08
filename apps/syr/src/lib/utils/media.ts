@@ -57,17 +57,162 @@ function safeParsePositiveInt(value: string | null | undefined): number | undefi
  * Client-side album art extraction for audio files.
  * Uses a Range request to fetch only the first chunk of the file (where ID3/metadata
  * tags live) instead of downloading the entire audio file.
+ *
+ * The cache is bounded (LRU): when it exceeds ALBUM_ART_CACHE_MAX entries the
+ * oldest blob URLs are revoked and their entries dropped, preventing unbounded
+ * memory growth during long browsing sessions.
  */
-const albumArtCache = new Map<string, Promise<string | null>>();
 
 /** Max file size (in bytes) to attempt album art extraction from. Default 200 MB. */
 const ALBUM_ART_MAX_FILE_SIZE = 200 * 1024 * 1024;
 /** How many bytes to request via Range header. 256 KB covers most embedded artwork. */
 const ALBUM_ART_RANGE_BYTES = 256 * 1024;
+/** Maximum number of album art blob URLs to keep in memory. */
+const ALBUM_ART_CACHE_MAX = 50;
+
+/**
+ * LRU cache for album art blob URLs.
+ * Keys are audio file URLs; values are promises that resolve to a blob URL or null.
+ * Map iteration order (insertion order) is used as the eviction order — on every
+ * cache hit the entry is moved to the end so the least-recently-used entries are
+ * at the front.
+ *
+ * Visibility tracking via IntersectionObserver ensures entries whose album art
+ * is currently rendered on-screen are never evicted. Only off-screen, least-
+ * recently-used entries are candidates for eviction.
+ */
+const albumArtCache = new Map<string, Promise<string | null>>();
+
+// ---------------------------------------------------------------------------
+// Visibility tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps audio URL -> set of DOM elements currently rendering its album art.
+ * When the set is non-empty the URL is considered "visible" and protected
+ * from eviction.
+ */
+const visibleElements = new Map<string, Set<Element>>();
+
+/** Reverse lookup: element -> audio URL it's tracking. */
+const elementToUrl = new WeakMap<Element, string>();
+
+/** Shared IntersectionObserver (created lazily, client-side only). */
+let observer: IntersectionObserver | null = null;
+
+function getObserver(): IntersectionObserver {
+	if (!observer) {
+		observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					const url = elementToUrl.get(entry.target);
+					if (!url) continue;
+					const elSet = visibleElements.get(url);
+					if (!elSet) continue;
+					if (entry.isIntersecting) {
+						elSet.add(entry.target);
+					} else {
+						elSet.delete(entry.target);
+						if (elSet.size === 0) visibleElements.delete(url);
+					}
+				}
+				// Opportunistically trim when things scroll off-screen
+				trimAlbumArtCache();
+			},
+			{ rootMargin: '200px' } // keep a buffer so art near the viewport isn't evicted
+		);
+	}
+	return observer;
+}
+
+/** Check whether any on-screen element is showing art for this URL. */
+function isAlbumArtVisible(url: string): boolean {
+	const elSet = visibleElements.get(url);
+	return !!elSet && elSet.size > 0;
+}
+
+/**
+ * Svelte action: attach to the DOM element that displays album art for a
+ * given audio URL. Tracks visibility via IntersectionObserver so the cache
+ * knows which blob URLs are on-screen.
+ *
+ * Usage: `<div use:trackAlbumArt={audioUrl}>...</div>`
+ */
+export function trackAlbumArt(node: Element, url: string) {
+	function observe(u: string) {
+		if (!u) return;
+		elementToUrl.set(node, u);
+		let elSet = visibleElements.get(u);
+		if (!elSet) {
+			elSet = new Set();
+			visibleElements.set(u, elSet);
+		}
+		elSet.add(node); // assume visible until observer says otherwise
+		getObserver().observe(node);
+	}
+
+	function unobserve() {
+		const prevUrl = elementToUrl.get(node);
+		if (prevUrl) {
+			const elSet = visibleElements.get(prevUrl);
+			if (elSet) {
+				elSet.delete(node);
+				if (elSet.size === 0) visibleElements.delete(prevUrl);
+			}
+		}
+		getObserver().unobserve(node);
+	}
+
+	observe(url);
+
+	return {
+		update(newUrl: string) {
+			unobserve();
+			observe(newUrl);
+		},
+		destroy() {
+			unobserve();
+			trimAlbumArtCache();
+		}
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Eviction helpers
+// ---------------------------------------------------------------------------
+
+/** Revoke a resolved blob URL and remove the entry from the cache. */
+function evictAlbumArt(key: string) {
+	const entry = albumArtCache.get(key);
+	if (!entry) return;
+	albumArtCache.delete(key);
+	// Revoke asynchronously — the promise may still be pending
+	entry.then((blobUrl) => {
+		if (blobUrl) URL.revokeObjectURL(blobUrl);
+	}).catch(() => {});
+}
+
+/** Trim the cache to ALBUM_ART_CACHE_MAX by evicting oldest off-screen entries. */
+function trimAlbumArtCache() {
+	if (albumArtCache.size <= ALBUM_ART_CACHE_MAX) return;
+
+	// Collect eviction candidates: entries not currently visible, oldest first
+	for (const key of albumArtCache.keys()) {
+		if (albumArtCache.size <= ALBUM_ART_CACHE_MAX) break;
+		if (!isAlbumArtVisible(key)) {
+			evictAlbumArt(key);
+		}
+	}
+}
 
 export function fetchAlbumArt(url: string): Promise<string | null> {
 	const cached = albumArtCache.get(url);
-	if (cached) return cached;
+	if (cached) {
+		// Move to end (most-recently-used) by re-inserting
+		albumArtCache.delete(url);
+		albumArtCache.set(url, cached);
+		return cached;
+	}
 
 	const promise = (async (): Promise<string | null> => {
 		try {
@@ -121,5 +266,6 @@ export function fetchAlbumArt(url: string): Promise<string | null> {
 	})();
 
 	albumArtCache.set(url, promise);
+	trimAlbumArtCache();
 	return promise;
 }

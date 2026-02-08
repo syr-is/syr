@@ -25,17 +25,18 @@
 	const count = $derived(api ? api.scrollSnapList().length : 0);
 
 	$effect(() => {
-		if (!api) return;
+		const emblaApi = api;
+		if (!emblaApi) return;
 
 		const onSelect = () => {
-			current = api!.selectedScrollSnap() + 1;
+			current = emblaApi.selectedScrollSnap() + 1;
 		};
 
-		api.on('select', onSelect);
+		emblaApi.on('select', onSelect);
 		onSelect();
 
 		return () => {
-			api!.off('select', onSelect);
+			emblaApi.off('select', onSelect);
 		};
 	});
 </script>
