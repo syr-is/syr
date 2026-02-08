@@ -6,16 +6,31 @@
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
 	import { Trash2, Pin, PinOff, FilePen, ImageIcon } from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
-	import { isVideo } from '$lib/utils/media';
+	import { getMediaType } from '$lib/utils/media';
 
 	interface Props {
 		post: Post;
 		isPinned?: boolean;
 		onPinToggle?: (postId: string, isPinned: boolean) => void;
 		showPinButton?: boolean;
+		/** Optional URL -> mime_type map for accurate media type detection */
+		mediaUrlMimeTypes?: Record<string, string>;
 	}
 
-	let { post, isPinned = false, onPinToggle, showPinButton = true }: Props = $props();
+	let {
+		post,
+		isPinned = false,
+		onPinToggle,
+		showPinButton = true,
+		mediaUrlMimeTypes = {}
+	}: Props = $props();
+
+	// Determine media type of first media URL using mime type map when available
+	const firstMediaType = $derived.by(() => {
+		const url = post.media_urls?.[0];
+		if (!url) return 'other';
+		return getMediaType(url, mediaUrlMimeTypes[url]);
+	});
 
 	// Check if post is a draft
 	const isDraft = $derived(post.status === 'draft');
@@ -111,16 +126,25 @@
 		{#if post.type === 'media' && post.media_urls && post.media_urls.length > 0}
 			<!-- Media preview: stacked vertical layout -->
 			<div class="relative mb-3 overflow-hidden rounded-lg bg-muted">
-				{#if isVideo(post.media_urls[0])}
+				{#if firstMediaType === 'video'}
 					<video src={post.media_urls[0]} class="h-40 w-full object-cover" preload="metadata">
 						<track kind="captions" />
 					</video>
+				{:else if firstMediaType === 'audio'}
+					<div class="flex h-40 w-full items-center justify-center">
+						<ImageIcon class="h-12 w-12 text-muted-foreground" />
+					</div>
 				{:else}
+					<!-- Use <img> for images and as fallback for unknown types (S3 serves correct Content-Type) -->
 					<img
 						src={post.media_urls[0]}
 						alt="Preview"
 						class="h-40 w-full object-cover"
 						loading="lazy"
+						onerror={(e) => {
+							const target = e.currentTarget as HTMLImageElement;
+							target.style.display = 'none';
+						}}
 					/>
 				{/if}
 				{#if post.media_urls.length > 1}

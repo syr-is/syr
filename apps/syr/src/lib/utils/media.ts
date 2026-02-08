@@ -31,3 +31,65 @@ export function isAudio(url: string): boolean {
 export function isViewable(url: string): boolean {
 	return isImage(url) || isVideo(url) || isAudio(url);
 }
+
+export type MediaType = 'image' | 'video' | 'audio' | 'other';
+
+/**
+ * Determine the media type of a file.
+ * Prefers mime type when available (accurate for uploads), falls back to URL extension checks.
+ */
+export function getMediaType(url: string, mimeType?: string): MediaType {
+	if (mimeType) {
+		if (mimeType.startsWith('image/')) return 'image';
+		if (mimeType.startsWith('video/')) return 'video';
+		if (mimeType.startsWith('audio/')) return 'audio';
+		return 'other';
+	}
+	if (isImage(url)) return 'image';
+	if (isVideo(url)) return 'video';
+	if (isAudio(url)) return 'audio';
+	return 'other';
+}
+
+/** Extract a display filename from a URL */
+export function getFileName(url: string): string {
+	const path = url.split('?')[0].split('#')[0];
+	const segments = path.split('/');
+	return decodeURIComponent(segments[segments.length - 1] || 'file');
+}
+
+/**
+ * Client-side album art extraction for audio files.
+ * Fetches the audio file, parses ID3/Vorbis/etc tags, and returns a blob URL
+ * for the embedded cover image, or null if none found.
+ */
+const albumArtCache = new Map<string, Promise<string | null>>();
+
+export function fetchAlbumArt(url: string): Promise<string | null> {
+	const cached = albumArtCache.get(url);
+	if (cached) return cached;
+
+	const promise = (async (): Promise<string | null> => {
+		try {
+			const { parseWebStream, selectCover } = await import('music-metadata');
+			const response = await fetch(url);
+			if (!response.ok || !response.body) return null;
+
+			const contentLength = response.headers.get('Content-Length');
+			const size = contentLength ? parseInt(contentLength, 10) : undefined;
+			const mimeType = response.headers.get('Content-Type') ?? undefined;
+
+			const metadata = await parseWebStream(response.body, { mimeType, size });
+			const cover = selectCover(metadata.common.picture);
+			if (!cover) return null;
+
+			const blob = new Blob([new Uint8Array(cover.data)], { type: cover.format });
+			return URL.createObjectURL(blob);
+		} catch {
+			return null;
+		}
+	})();
+
+	albumArtCache.set(url, promise);
+	return promise;
+}

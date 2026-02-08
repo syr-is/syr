@@ -18,7 +18,7 @@
 	import { imageBlockConfig } from '@milkdown/components/image-block';
 	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import { stringToRecordId } from '@syr-is/types';
-	import { isVideo as isVideoUrl } from '$lib/utils/media';
+	import MediaThumbnail from '$lib/components/fragments/media-thumbnail.svelte';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
 	import {
@@ -32,7 +32,8 @@
 		Trash2,
 		ImageIcon,
 		LayoutGrid,
-		GalleryHorizontal
+		GalleryHorizontal,
+		Grid3x3
 	} from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -48,6 +49,8 @@
 
 	// Media post state
 	let mediaUrls = $state<string[]>(data.post.media_urls ?? []);
+	// Mime type map: pre-populated from server for existing URLs, updated during upload
+	let mediaMimeTypes = $state<Record<string, string>>(data.mediaUrlMimeTypes ?? {});
 	let uploading = $state(false);
 	let dragOver = $state(false);
 
@@ -309,6 +312,7 @@
 	function getDisplayModeLabel(value: string | undefined): string {
 		if (value === 'carousel') return 'Carousel';
 		if (value === 'masonry') return 'Masonry Grid';
+		if (value === 'gallery') return 'Gallery';
 		return 'Select display mode';
 	}
 
@@ -323,6 +327,7 @@
 				try {
 					const url = await handlePostAssetUpload(file, data.post.id);
 					mediaUrls = [...mediaUrls, url];
+					mediaMimeTypes = { ...mediaMimeTypes, [url]: file.type };
 				} catch (err) {
 					console.error('Failed to upload file:', file.name, err);
 					toast.error(`Failed to upload ${file.name}`);
@@ -629,6 +634,12 @@
 												Carousel
 											</span>
 										</Select.Item>
+										<Select.Item value="gallery">
+											<span class="flex items-center gap-2">
+												<Grid3x3 class="h-4 w-4" />
+												Gallery
+											</span>
+										</Select.Item>
 									</Select.Content>
 								</Select.Root>
 								<Form.Description>How viewers will see your media by default</Form.Description>
@@ -708,19 +719,13 @@
 							<Label>Uploaded Media ({mediaUrls.length})</Label>
 							<div class="mt-2 grid grid-cols-3 gap-3 sm:grid-cols-4">
 								{#each mediaUrls as url, i (`${url}-${i}`)}
-									<div class="group relative overflow-hidden rounded-lg border bg-muted/30">
-										{#if isVideoUrl(url)}
-											<video src={url} class="aspect-square w-full object-cover" preload="metadata">
-												<track kind="captions" />
-											</video>
-										{:else}
-											<img
-												src={url}
-												alt="Upload {i + 1}"
-												class="aspect-square w-full object-cover"
-												loading="lazy"
-											/>
-										{/if}
+									<div class="group relative aspect-square w-full overflow-hidden rounded-lg border bg-muted/30">
+										<MediaThumbnail
+											{url}
+											mimeType={mediaMimeTypes[url]}
+											mode="card"
+											alt="Upload {i + 1}"
+										/>
 										<button
 											type="button"
 											class="text-destructive-foreground absolute top-1 right-1 rounded-full bg-destructive/90 p-1 opacity-0 transition-opacity group-hover:opacity-100"

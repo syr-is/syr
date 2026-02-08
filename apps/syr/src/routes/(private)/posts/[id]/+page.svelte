@@ -295,6 +295,7 @@
 				{#if data.post.media_urls && data.post.media_urls.length > 0}
 					<MediaViewer
 						mediaUrls={data.post.media_urls}
+						mediaUrlMimeTypes={data.mediaUrlMimeTypes}
 						defaultMode={data.post.display_mode ?? 'masonry'}
 					/>
 				{:else}

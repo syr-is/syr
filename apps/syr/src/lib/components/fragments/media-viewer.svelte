@@ -1,44 +1,32 @@
 <script lang="ts">
-	import * as Carousel from '$lib/components/ui/carousel/index.js';
-	import type { CarouselAPI } from '$lib/components/ui/carousel/context.js';
-	import { Button } from '$lib/components/ui/button';
-	import { LayoutGrid, GalleryHorizontal, FileDown } from 'lucide-svelte';
 	import type { MediaDisplayMode } from '@syr-is/types';
-	import { isVideo, isImage, isAudio } from '$lib/utils/media';
+	import { urlsToDisplayItems, type ViewMode } from '$lib/types/display-item';
+	import ViewModeToggle from '$lib/components/fragments/view-mode-toggle.svelte';
+	import FileGrid from '$lib/components/fragments/file-grid.svelte';
+	import FileCarousel from '$lib/components/fragments/file-carousel.svelte';
+	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
 
 	interface Props {
 		mediaUrls: string[];
+		mediaUrlMimeTypes?: Record<string, string>;
 		defaultMode?: MediaDisplayMode;
 	}
 
-	let { mediaUrls, defaultMode = 'masonry' }: Props = $props();
+	let { mediaUrls, mediaUrlMimeTypes = {}, defaultMode = 'masonry' }: Props = $props();
 
-	let currentMode: MediaDisplayMode = $state(defaultMode);
-	let api = $state<CarouselAPI>();
-	let current = $state(0);
-	const count = $derived(api ? api.scrollSnapList().length : 0);
+	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
+	let currentMode: ViewMode = $state(defaultMode as ViewMode);
 
-	$effect(() => {
-		if (!api) return;
+	// Gallery preview modal state
+	let previewOpen = $state(false);
+	let previewIndex = $state(0);
 
-		const onSelect = () => {
-			current = api!.selectedScrollSnap() + 1;
-		};
+	// Convert bare URLs to DisplayItems with mime type info from DB
+	const displayItems = $derived(urlsToDisplayItems(mediaUrls, mediaUrlMimeTypes));
 
-		api.on('select', onSelect);
-		// Set initial value
-		onSelect();
-
-		return () => {
-			api!.off('select', onSelect);
-		};
-	});
-
-	/** Extract a display filename from a URL */
-	function getFileName(url: string): string {
-		const path = url.split('?')[0];
-		const segments = path.split('/');
-		return decodeURIComponent(segments[segments.length - 1] || 'file');
+	function openPreview(index: number) {
+		previewIndex = index;
+		previewOpen = true;
 	}
 </script>
 
@@ -46,121 +34,18 @@
 	<p class="py-8 text-center text-muted-foreground">No media items.</p>
 {:else}
 	<!-- View toggle -->
-	<div class="mb-4 flex items-center justify-end gap-1">
-		<Button
-			variant={currentMode === 'masonry' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => (currentMode = 'masonry')}
-		>
-			<LayoutGrid class="mr-1.5 h-4 w-4" />
-			Grid
-		</Button>
-		<Button
-			variant={currentMode === 'carousel' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => (currentMode = 'carousel')}
-		>
-			<GalleryHorizontal class="mr-1.5 h-4 w-4" />
-			Carousel
-		</Button>
+	<div class="mb-4 flex items-center justify-end">
+		<ViewModeToggle bind:mode={currentMode} availableModes={['masonry', 'carousel', 'gallery']} />
 	</div>
 
 	{#if currentMode === 'carousel'}
-		<!-- Carousel mode -->
-		<div class="mx-auto w-full max-w-3xl">
-			<Carousel.Root class="w-full" setApi={(emblaApi) => (api = emblaApi)}>
-				<Carousel.Content>
-					{#each mediaUrls as url, i (`${url}-${i}`)}
-						<Carousel.Item>
-							<div class="flex items-center justify-center rounded-lg bg-muted/30 p-2">
-								{#if isVideo(url)}
-									<video
-										src={url}
-										controls
-										class="max-h-[500px] w-full rounded-md object-contain"
-										preload="metadata"
-									>
-										<track kind="captions" />
-									</video>
-								{:else if isAudio(url)}
-									<audio src={url} controls class="w-full">
-										<track kind="captions" />
-									</audio>
-								{:else if isImage(url)}
-									<a href={url} target="_blank" rel="noopener noreferrer">
-										<img
-											src={url}
-											alt="Media {i + 1}"
-											class="max-h-[500px] w-full cursor-pointer rounded-md object-contain"
-											loading="lazy"
-										/>
-									</a>
-								{:else}
-									<!-- Non-viewable file: show download link -->
-									<a
-										href={url}
-										download
-										class="flex flex-col items-center gap-2 rounded-md bg-muted/50 p-8 text-muted-foreground transition-colors hover:bg-muted"
-									>
-										<FileDown class="h-10 w-10" />
-										<span class="text-sm font-medium">{getFileName(url)}</span>
-										<span class="text-xs">Click to download</span>
-									</a>
-								{/if}
-							</div>
-						</Carousel.Item>
-					{/each}
-				</Carousel.Content>
-				<Carousel.Previous />
-				<Carousel.Next />
-			</Carousel.Root>
-			{#if count > 0}
-				<div class="py-2 text-center text-sm text-muted-foreground">
-					{current} of {count}
-				</div>
-			{/if}
-		</div>
+		<FileCarousel items={displayItems} onItemClick={openPreview} />
+	{:else if currentMode === 'gallery'}
+		<FileGrid mode="gallery" items={displayItems} onItemClick={openPreview} />
 	{:else}
-		<!-- Masonry grid mode -->
-		<div class="columns-1 gap-4 sm:columns-2 lg:columns-3">
-			{#each mediaUrls as url, i (`${url}-${i}`)}
-				<div class="mb-4 break-inside-avoid">
-					{#if isVideo(url)}
-						<video
-							src={url}
-							controls
-							class="w-full rounded-lg shadow-sm transition-shadow hover:shadow-md"
-							preload="metadata"
-						>
-							<track kind="captions" />
-						</video>
-					{:else if isAudio(url)}
-						<audio src={url} controls class="w-full">
-							<track kind="captions" />
-						</audio>
-					{:else if isImage(url)}
-						<a href={url} target="_blank" rel="noopener noreferrer">
-							<img
-								src={url}
-								alt="Media {i + 1}"
-								class="w-full cursor-pointer rounded-lg shadow-sm transition-shadow hover:shadow-md"
-								loading="lazy"
-							/>
-						</a>
-					{:else}
-						<!-- Non-viewable file: show download link -->
-						<a
-							href={url}
-							download
-							class="flex flex-col items-center gap-2 rounded-lg bg-muted/50 p-6 text-muted-foreground shadow-sm transition-shadow hover:bg-muted hover:shadow-md"
-						>
-							<FileDown class="h-10 w-10" />
-							<span class="text-sm font-medium">{getFileName(url)}</span>
-							<span class="text-xs">Click to download</span>
-						</a>
-					{/if}
-				</div>
-			{/each}
-		</div>
+		<FileGrid mode="masonry" items={displayItems} onItemClick={openPreview} />
 	{/if}
 {/if}
+
+<!-- Preview modal -->
+<MediaPreviewModal bind:open={previewOpen} items={displayItems} initialIndex={previewIndex} />

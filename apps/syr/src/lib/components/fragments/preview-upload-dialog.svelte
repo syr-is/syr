@@ -5,6 +5,7 @@
 	import type { Upload } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Download, Link, FileAudio } from 'lucide-svelte';
+	import { getMediaType } from '$lib/utils/media';
 
 	let {
 		upload = null,
@@ -31,11 +32,10 @@
 
 	// Get preview type for rendering the appropriate element
 	function getPreviewType(mimeType: string): 'image' | 'video' | 'audio' | 'pdf' | null {
-		if (mimeType.startsWith('image/')) return 'image';
-		if (mimeType.startsWith('video/')) return 'video';
-		if (mimeType.startsWith('audio/')) return 'audio';
 		if (mimeType === 'application/pdf') return 'pdf';
-		return null;
+		const mt = getMediaType('', mimeType);
+		if (mt === 'other') return null;
+		return mt;
 	}
 
 	// Download file
