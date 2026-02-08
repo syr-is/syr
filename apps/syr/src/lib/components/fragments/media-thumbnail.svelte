@@ -20,13 +20,24 @@
 
 	const mediaType = $derived(getMediaType(url, mimeType));
 	let albumArtUrl = $state<string | null>(null);
+	let albumArtRequestId = 0;
 
 	$effect(() => {
-		if (mediaType !== 'audio' || !url) return;
 		albumArtUrl = null;
-		fetchAlbumArt(url).then((u) => {
-			albumArtUrl = u;
-		});
+		if (mediaType !== 'audio' || !url) return;
+
+		const requestId = ++albumArtRequestId;
+		fetchAlbumArt(url)
+			.then((artUrl) => {
+				if (requestId === albumArtRequestId) {
+					albumArtUrl = artUrl;
+				}
+			})
+			.catch(() => {
+				if (requestId === albumArtRequestId) {
+					albumArtUrl = null;
+				}
+			});
 	});
 </script>
 

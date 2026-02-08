@@ -183,7 +183,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			});
 		}
 
-		// Delete the post (also cleans up associated uploads)
+		// Delete the post record (uploads are preserved in user storage)
 		await postController.deletePost(postId, user.id);
 
 		return json({

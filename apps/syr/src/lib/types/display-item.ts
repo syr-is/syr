@@ -102,7 +102,7 @@ export function getFileItems(items: DisplayItem[]): DisplayItem[] {
 export function getFileUrls(items: DisplayItem[]): string[] {
 	return items
 		.filter((item): item is Exclude<DisplayItem, { kind: 'folder' }> => item.kind !== 'folder')
-		.map((item) => (item.kind === 'file' ? item.url : item.url));
+		.map((item) => item.url);
 }
 
 /** Check if a media type is viewable (image, video, or audio) */

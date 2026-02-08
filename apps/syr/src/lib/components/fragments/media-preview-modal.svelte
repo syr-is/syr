@@ -7,8 +7,10 @@
 		FileAudio,
 		FileDown,
 		ExternalLink,
-		Download
+		Download,
+		Loader2
 	} from 'lucide-svelte';
+	import { toast } from 'svelte-sonner';
 	import { fetchAlbumArt } from '$lib/utils/media';
 	import {
 		type DisplayItem,
@@ -45,15 +47,54 @@
 		}
 	});
 
-	// Load album art for audio files
+	// Load album art for audio files with race-condition guard
+	let albumArtRequestId = 0;
 	$effect(() => {
 		albumArtUrl = null;
-		if (currentMediaType === 'audio' && currentUrl) {
-			fetchAlbumArt(currentUrl).then((url) => {
-				albumArtUrl = url;
+		const url = currentUrl;
+		const type = currentMediaType;
+		if (type !== 'audio' || !url) return;
+
+		const requestId = ++albumArtRequestId;
+		fetchAlbumArt(url)
+			.then((artUrl) => {
+				if (requestId === albumArtRequestId) {
+					albumArtUrl = artUrl;
+				}
+			})
+			.catch(() => {
+				if (requestId === albumArtRequestId) {
+					albumArtUrl = null;
+				}
 			});
-		}
 	});
+
+	// Download via fetch+Blob to handle cross-origin URLs
+	let downloading = $state(false);
+
+	async function handleDownload() {
+		if (!currentUrl || downloading) return;
+		downloading = true;
+		try {
+			const response = await fetch(currentUrl, { mode: 'cors' });
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const blob = await response.blob();
+			const objectUrl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = objectUrl;
+			a.download = currentFilename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(objectUrl);
+		} catch {
+			// Fallback: open in new tab so the user can save manually
+			window.open(currentUrl, '_blank');
+			toast.info('Could not download directly — opened in a new tab instead');
+		} finally {
+			downloading = false;
+		}
+	}
 
 	// Keyboard navigation
 	$effect(() => {
@@ -160,12 +201,15 @@
 					Open in new tab
 				</Button>
 			{/if}
-			<a href={currentUrl} download={currentFilename}>
-				<Button>
+			<Button onclick={handleDownload} disabled={downloading}>
+				{#if downloading}
+					<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+					Downloading...
+				{:else}
 					<Download class="mr-2 h-4 w-4" />
 					Download
-				</Button>
-			</a>
+				{/if}
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
