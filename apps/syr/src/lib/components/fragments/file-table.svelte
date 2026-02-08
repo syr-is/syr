@@ -23,7 +23,6 @@
 	} from 'lucide-svelte';
 	import { type DisplayItem, getItemMediaType, getItemFilename } from '$lib/types/display-item';
 	import { getMediaType, type MediaType } from '$lib/utils/media';
-	import type { Upload } from '@syr-is/types';
 
 	let {
 		items,
