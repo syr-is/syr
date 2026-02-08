@@ -97,21 +97,26 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		// Parse the update data (without id since it's in the URL)
 		const data = PostUpdateSchema.omit({ id: true }).partial().parse(body);
 
-		// Merge existing post data with updates, preserving fields not included in the request
+		// Merge existing post data with updates, preserving fields not included in the request.
+		// When switching post types, explicitly clear fields that belong to the old type.
 		const resolvedType = data.type ?? existingPost.type;
 		const result = await postController.updatePost({
 			id: postId,
 			type: resolvedType,
-			// Strip content_type for media posts (must not be set per schema validation)
+			// Blog-only fields: clear when type is media
 			content_type:
 				resolvedType === 'media' ? undefined : (data.content_type ?? existingPost.content_type),
+			content: resolvedType === 'media' ? undefined : (data.content ?? existingPost.content),
+			// Media-only fields: clear when type is blog
+			media_urls:
+				resolvedType === 'blog' ? undefined : (data.media_urls ?? existingPost.media_urls),
+			display_mode:
+				resolvedType === 'blog' ? undefined : (data.display_mode ?? existingPost.display_mode),
+			// Shared fields
 			visibility: data.visibility ?? existingPost.visibility,
 			status: data.status ?? existingPost.status,
 			title: data.title ?? existingPost.title,
-			description: data.description ?? existingPost.description,
-			content: data.content ?? existingPost.content,
-			media_urls: data.media_urls ?? existingPost.media_urls,
-			display_mode: data.display_mode ?? existingPost.display_mode
+			description: data.description ?? existingPost.description
 		});
 
 		return json({

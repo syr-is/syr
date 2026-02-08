@@ -18,6 +18,7 @@
 	import { imageBlockConfig } from '@milkdown/components/image-block';
 	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import { stringToRecordId } from '@syr-is/types';
+	import { isVideo as isVideoUrl, isAcceptedMediaFile } from '$lib/utils/media';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
 	import {
@@ -316,9 +317,19 @@
 		const fileArray = Array.from(files);
 		if (fileArray.length === 0) return;
 
+		// Validate MIME types - only accept image/* and video/*
+		const accepted = fileArray.filter((file) => isAcceptedMediaFile(file));
+		const rejected = fileArray.length - accepted.length;
+		if (rejected > 0) {
+			toast.error(
+				`${rejected} file${rejected > 1 ? 's' : ''} rejected: only images and videos are supported`
+			);
+		}
+		if (accepted.length === 0) return;
+
 		uploading = true;
 		try {
-			for (const file of fileArray) {
+			for (const file of accepted) {
 				try {
 					const url = await handlePostAssetUpload(file, data.post.id);
 					mediaUrls = [...mediaUrls, url];
@@ -335,6 +346,8 @@
 	}
 
 	function removeMediaUrl(index: number) {
+		// TODO: Also delete the asset from the server to avoid orphaned files.
+		// Currently only removes from the local list; the uploaded file remains on S3.
 		mediaUrls = mediaUrls.filter((_, i) => i !== index);
 		$formData.media_urls = mediaUrls;
 	}
@@ -362,11 +375,6 @@
 			handleMediaFiles(input.files);
 			input.value = '';
 		}
-	}
-
-	function isVideoUrl(url: string): boolean {
-		const lower = url.toLowerCase().split('?')[0];
-		return ['.mp4', '.webm', '.mov', '.avi', '.mkv'].some((ext) => lower.endsWith(ext));
 	}
 
 	function mountCrepe(node: HTMLDivElement) {
@@ -664,7 +672,6 @@
 					<!-- Media Upload Area -->
 					<div>
 						<Label>Media</Label>
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
 							class="mt-2 flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors {dragOver
 								? 'border-primary bg-primary/5'
@@ -710,7 +717,7 @@
 						<div>
 							<Label>Uploaded Media ({mediaUrls.length})</Label>
 							<div class="mt-2 grid grid-cols-3 gap-3 sm:grid-cols-4">
-								{#each mediaUrls as url, i (url)}
+								{#each mediaUrls as url, i (`${url}-${i}`)}
 									<div class="group relative overflow-hidden rounded-lg border bg-muted/30">
 										{#if isVideoUrl(url)}
 											<video src={url} class="aspect-square w-full object-cover" preload="metadata">

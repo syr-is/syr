@@ -6,6 +6,7 @@
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
 	import { Trash2, Pin, PinOff, FilePen, ImageIcon } from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
+	import { isVideo } from '$lib/utils/media';
 
 	interface Props {
 		post: Post;
@@ -110,12 +111,18 @@
 		{#if post.type === 'media' && post.media_urls && post.media_urls.length > 0}
 			<!-- Media preview: stacked vertical layout -->
 			<div class="relative mb-3 overflow-hidden rounded-lg bg-muted">
-				<img
-					src={post.media_urls[0]}
-					alt="Preview"
-					class="h-40 w-full object-cover"
-					loading="lazy"
-				/>
+				{#if isVideo(post.media_urls[0])}
+					<video src={post.media_urls[0]} class="h-40 w-full object-cover" preload="metadata">
+						<track kind="captions" />
+					</video>
+				{:else}
+					<img
+						src={post.media_urls[0]}
+						alt="Preview"
+						class="h-40 w-full object-cover"
+						loading="lazy"
+					/>
+				{/if}
 				{#if post.media_urls.length > 1}
 					<div
 						class="absolute right-2 bottom-2 rounded-md bg-black/60 px-2 py-0.5 text-xs font-medium text-white"

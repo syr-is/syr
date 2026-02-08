@@ -2,8 +2,9 @@
 	import * as Carousel from '$lib/components/ui/carousel/index.js';
 	import type { CarouselAPI } from '$lib/components/ui/carousel/context.js';
 	import { Button } from '$lib/components/ui/button';
-	import { LayoutGrid, GalleryHorizontal } from 'lucide-svelte';
+	import { LayoutGrid, GalleryHorizontal, FileDown } from 'lucide-svelte';
 	import type { MediaDisplayMode } from '@syr-is/types';
+	import { isVideo, isImage, isAudio } from '$lib/utils/media';
 
 	interface Props {
 		mediaUrls: string[];
@@ -18,38 +19,26 @@
 	const count = $derived(api ? api.scrollSnapList().length : 0);
 
 	$effect(() => {
-		if (api) {
-			current = api.selectedScrollSnap() + 1;
-			api.on('select', () => {
-				current = api!.selectedScrollSnap() + 1;
-			});
-		}
+		if (!api) return;
+
+		const onSelect = () => {
+			current = api!.selectedScrollSnap() + 1;
+		};
+
+		api.on('select', onSelect);
+		// Set initial value
+		onSelect();
+
+		return () => {
+			api!.off('select', onSelect);
+		};
 	});
 
-	const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
-	const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg'];
-	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'];
-
-	function isVideo(url: string): boolean {
-		const lower = url.toLowerCase().split('?')[0];
-		return VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
-	}
-
-	function isAudio(url: string): boolean {
-		const lower = url.toLowerCase().split('?')[0];
-		return AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
-	}
-
-	function isImage(url: string): boolean {
-		const lower = url.toLowerCase().split('?')[0];
-		if (IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext))) return true;
-		// If it's not a video or audio, default to treating it as an image
-		return !isVideo(url) && !isAudio(url);
-	}
-
-	/** Check if a URL points to a browser-viewable type (image, video, audio) */
-	function isViewable(url: string): boolean {
-		return isImage(url) || isVideo(url) || isAudio(url);
+	/** Extract a display filename from a URL */
+	function getFileName(url: string): string {
+		const path = url.split('?')[0];
+		const segments = path.split('/');
+		return decodeURIComponent(segments[segments.length - 1] || 'file');
 	}
 </script>
 
@@ -81,7 +70,7 @@
 		<div class="mx-auto w-full max-w-3xl">
 			<Carousel.Root class="w-full" setApi={(emblaApi) => (api = emblaApi)}>
 				<Carousel.Content>
-					{#each mediaUrls as url, i (url)}
+					{#each mediaUrls as url, i (`${url}-${i}`)}
 						<Carousel.Item>
 							<div class="flex items-center justify-center rounded-lg bg-muted/30 p-2">
 								{#if isVideo(url)}
@@ -94,21 +83,28 @@
 										<track kind="captions" />
 									</video>
 								{:else if isAudio(url)}
-									<!-- svelte-ignore a11y_media_has_caption -->
-									<audio src={url} controls class="w-full"></audio>
-								{:else}
-									<a
-										href={url}
-										target="_blank"
-										rel="noopener noreferrer"
-										download={!isViewable(url) || undefined}
-									>
+									<audio src={url} controls class="w-full">
+										<track kind="captions" />
+									</audio>
+								{:else if isImage(url)}
+									<a href={url} target="_blank" rel="noopener noreferrer">
 										<img
 											src={url}
 											alt="Media {i + 1}"
 											class="max-h-[500px] w-full cursor-pointer rounded-md object-contain"
 											loading="lazy"
 										/>
+									</a>
+								{:else}
+									<!-- Non-viewable file: show download link -->
+									<a
+										href={url}
+										download
+										class="flex flex-col items-center gap-2 rounded-md bg-muted/50 p-8 text-muted-foreground transition-colors hover:bg-muted"
+									>
+										<FileDown class="h-10 w-10" />
+										<span class="text-sm font-medium">{getFileName(url)}</span>
+										<span class="text-xs">Click to download</span>
 									</a>
 								{/if}
 							</div>
@@ -127,7 +123,7 @@
 	{:else}
 		<!-- Masonry grid mode -->
 		<div class="columns-1 gap-4 sm:columns-2 lg:columns-3">
-			{#each mediaUrls as url, i (url)}
+			{#each mediaUrls as url, i (`${url}-${i}`)}
 				<div class="mb-4 break-inside-avoid">
 					{#if isVideo(url)}
 						<video
@@ -139,21 +135,28 @@
 							<track kind="captions" />
 						</video>
 					{:else if isAudio(url)}
-						<!-- svelte-ignore a11y_media_has_caption -->
-						<audio src={url} controls class="w-full"></audio>
-					{:else}
-						<a
-							href={url}
-							target="_blank"
-							rel="noopener noreferrer"
-							download={!isViewable(url) || undefined}
-						>
+						<audio src={url} controls class="w-full">
+							<track kind="captions" />
+						</audio>
+					{:else if isImage(url)}
+						<a href={url} target="_blank" rel="noopener noreferrer">
 							<img
 								src={url}
 								alt="Media {i + 1}"
 								class="w-full cursor-pointer rounded-lg shadow-sm transition-shadow hover:shadow-md"
 								loading="lazy"
 							/>
+						</a>
+					{:else}
+						<!-- Non-viewable file: show download link -->
+						<a
+							href={url}
+							download
+							class="flex flex-col items-center gap-2 rounded-lg bg-muted/50 p-6 text-muted-foreground shadow-sm transition-shadow hover:bg-muted hover:shadow-md"
+						>
+							<FileDown class="h-10 w-10" />
+							<span class="text-sm font-medium">{getFileName(url)}</span>
+							<span class="text-xs">Click to download</span>
 						</a>
 					{/if}
 				</div>
