@@ -342,8 +342,6 @@
 	}
 
 	function removeMediaUrl(index: number) {
-		// TODO: Also delete the asset from the server to avoid orphaned files.
-		// Currently only removes from the local list; the uploaded file remains on S3.
 		mediaUrls = mediaUrls.filter((_, i) => i !== index);
 		$formData.media_urls = mediaUrls;
 	}

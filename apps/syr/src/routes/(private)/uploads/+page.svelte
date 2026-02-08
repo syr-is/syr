@@ -324,14 +324,6 @@
 		if (item.kind === 'file') openDeleteUploadDialog(item.data);
 	}
 
-	function handleTableFolderClick(item: DisplayItem) {
-		if (item.kind === 'folder') navigateToFolder(item.id);
-	}
-
-	function handleTableFolderDelete(item: DisplayItem) {
-		if (item.kind === 'folder') openDeleteFolderDialog(item.data);
-	}
-
 	function handleGridFolderClick(folder: Folder) {
 		navigateToFolder(typeof folder.id === 'string' ? folder.id : folder.id.toString());
 	}
@@ -559,8 +551,8 @@
 				onRename={handleTableRename}
 				onMove={handleTableMove}
 				onDelete={handleTableDelete}
-				onFolderClick={handleTableFolderClick}
-				onFolderDelete={handleTableFolderDelete}
+				onFolderClick={handleGridFolderClick}
+				onFolderDelete={handleGridFolderDelete}
 			/>
 		{:else if viewMode === 'carousel'}
 			<!-- Carousel view: folders shown above as cards, then carousel for files -->

@@ -23,6 +23,7 @@
 	} from 'lucide-svelte';
 	import { type DisplayItem, getItemMediaType, getItemFilename } from '$lib/types/display-item';
 	import { getMediaType, type MediaType } from '$lib/utils/media';
+	import type { Folder } from '@syr-is/types';
 
 	let {
 		items,
@@ -42,8 +43,8 @@
 		onRename?: (item: DisplayItem) => void;
 		onMove?: (item: DisplayItem) => void;
 		onDelete?: (item: DisplayItem) => void;
-		onFolderClick?: (item: DisplayItem) => void;
-		onFolderDelete?: (item: DisplayItem) => void;
+		onFolderClick?: (folder: Folder) => void;
+		onFolderDelete?: (folder: Folder) => void;
 	} = $props();
 
 	// Check if any items are full file objects (to show extra columns)
@@ -126,7 +127,10 @@
 			<Table.Body>
 				{#each items as item (item.id)}
 					{#if item.kind === 'folder'}
-						<Table.Row class="cursor-pointer hover:bg-accent" onclick={() => onFolderClick?.(item)}>
+						<Table.Row
+							class="cursor-pointer hover:bg-accent"
+							onclick={() => onFolderClick?.(item.data)}
+						>
 							<Table.Cell>
 								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
 									{#if item.isPublic}
@@ -160,7 +164,7 @@
 											size="sm"
 											onclick={(e) => {
 												e.stopPropagation();
-												onFolderDelete?.(item);
+												onFolderDelete?.(item.data);
 											}}
 											title="Delete"
 										>

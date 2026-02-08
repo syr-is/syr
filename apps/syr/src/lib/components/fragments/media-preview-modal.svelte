@@ -145,6 +145,10 @@
 						src={currentUrl}
 						alt={currentFilename}
 						class="max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
+						onerror={(e) => {
+							const el = e.currentTarget as HTMLImageElement;
+							if (el) el.style.display = 'none';
+						}}
 					/>
 				{:else if currentMediaType === 'video'}
 					<video
