@@ -10,7 +10,6 @@
 
 	// Dialog components
 	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
-	import PreviewUploadDialog from '$lib/components/fragments/preview-upload-dialog.svelte';
 	import UploadFilesDialog from '$lib/components/fragments/upload-files-dialog.svelte';
 	import CreateFolderDialog from '$lib/components/fragments/create-folder-dialog.svelte';
 	import DeleteFolderDialog from '$lib/components/fragments/delete-folder-dialog.svelte';
@@ -74,9 +73,6 @@
 
 	let deleteFolderDialogOpen = $state(false);
 	let folderToDelete = $state<Folder | null>(null);
-
-	let previewDialogOpen = $state(false);
-	let previewUpload = $state<Upload | null>(null);
 
 	let uploadDialogOpen = $state(false);
 
@@ -215,12 +211,6 @@
 		deleteFolderDialogOpen = true;
 	}
 
-	// Open preview dialog
-	function openPreview(upload: Upload) {
-		previewUpload = upload;
-		previewDialogOpen = true;
-	}
-
 	// Download file
 	async function downloadFile(upload: Upload) {
 		try {
@@ -301,7 +291,12 @@
 
 	// Callbacks that adapt DisplayItem events to Upload-specific logic
 	function handleTablePreview(item: DisplayItem) {
-		if (item.kind === 'file') openPreview(item.data);
+		if (item.kind !== 'file') return;
+		const index = fileDisplayItems.findIndex((di) => di.id === item.id);
+		if (index >= 0) {
+			mediaPreviewIndex = index;
+			mediaPreviewOpen = true;
+		}
 	}
 
 	function handleTableDownload(item: DisplayItem) {
@@ -595,12 +590,6 @@
 		onSuccess={refreshData}
 	/>
 
-	<PreviewUploadDialog
-		upload={previewUpload}
-		bind:open={previewDialogOpen}
-		onOpenShareDialog={openShareDialog}
-	/>
-
 	<UploadFilesDialog
 		{currentFolderId}
 		{isInPublicFolder}
@@ -625,11 +614,12 @@
 
 	<ShareUploadDialog upload={uploadToShare} bind:open={shareDialogOpen} />
 
-	<!-- Media preview modal for visual browsing in gallery/masonry/carousel modes -->
+	<!-- Media preview modal for visual browsing -->
 	<MediaPreviewModal
 		bind:open={mediaPreviewOpen}
 		items={fileDisplayItems}
 		initialIndex={mediaPreviewIndex}
+		onOpenShareDialog={openShareDialog}
 	/>
 {:else}
 	<!-- Not Logged In View -->

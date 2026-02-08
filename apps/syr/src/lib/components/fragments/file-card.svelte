@@ -25,7 +25,7 @@
 	class="group relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-muted transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 	{onclick}
 >
-	<MediaThumbnail {url} {mimeType} mode="card" alt={filename} />
+	<MediaThumbnail {url} {mimeType} mode="card" alt={filename} {item} />
 
 	<!-- Filename overlay at bottom -->
 	<div

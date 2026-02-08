@@ -98,8 +98,35 @@ export function getFileItems(items: DisplayItem[]): DisplayItem[] {
 	return items.filter((item) => item.kind !== 'folder');
 }
 
-/** Check if a media type is viewable (image, video, or audio) */
+/** Check if a media type is viewable (image, video, audio, or pdf) */
 export function isItemViewable(item: DisplayItem): boolean {
 	const mt = getItemMediaType(item);
-	return mt === 'image' || mt === 'video' || mt === 'audio';
+	return mt === 'image' || mt === 'video' || mt === 'audio' || mt === 'pdf';
+}
+
+/**
+ * Resolve a usable download/preview URL for a DisplayItem.
+ * - 'media-url' items already have a resolved URL, returned immediately.
+ * - 'file' items need a signed URL fetched from the uploads API.
+ * - 'folder' items return null (not previewable).
+ */
+export async function resolveItemUrl(
+	item: DisplayItem
+): Promise<{ url: string; isPublic: boolean } | null> {
+	if (item.kind === 'folder') return null;
+	if (item.kind === 'media-url') return { url: item.url, isPublic: true };
+	// kind === 'file' — fetch a signed download URL via the API
+	try {
+		const response = await fetch(`/api/uploads/${item.id}`);
+		if (!response.ok) return null;
+		const result = await response.json();
+		const url = result.data?.downloadUrl;
+		if (!url) return null;
+		return {
+			url,
+			isPublic: result.data?.isPublic ?? item.isPublic
+		};
+	} catch {
+		return null;
+	}
 }

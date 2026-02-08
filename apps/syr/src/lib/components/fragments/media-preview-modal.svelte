@@ -1,6 +1,8 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import type { Upload } from '@syr-is/types';
 	import {
 		ChevronLeft,
 		ChevronRight,
@@ -8,37 +10,57 @@
 		FileDown,
 		ExternalLink,
 		Download,
+		Link,
 		Loader2
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { fetchAlbumArt } from '$lib/utils/media';
+	import { formatFileSize } from '$lib/utils/format';
 	import {
 		type DisplayItem,
 		getItemUrl,
 		getItemFilename,
 		getItemMediaType,
-		isItemViewable
+		isItemViewable,
+		resolveItemUrl
 	} from '$lib/types/display-item';
 
 	let {
 		items,
 		open = $bindable(false),
-		initialIndex = 0
+		initialIndex = 0,
+		onOpenShareDialog
 	}: {
 		items: DisplayItem[];
 		open?: boolean;
 		initialIndex?: number;
+		/** Called when user clicks Share on a file-kind item (private files) */
+		onOpenShareDialog?: (upload: Upload) => void;
 	} = $props();
 
 	let currentIndex = $state(initialIndex);
 	let albumArtUrl = $state<string | null>(null);
 
+	// URL resolution state for 'file' kind items (need signed URLs)
+	let resolvedUrl = $state<string | null>(null);
+	let resolvedIsPublic = $state(false);
+	let urlLoading = $state(false);
+
 	const currentItem = $derived(items[currentIndex]);
-	const currentUrl = $derived(currentItem ? getItemUrl(currentItem) : '');
 	const currentFilename = $derived(currentItem ? getItemFilename(currentItem) : 'file');
 	const currentMediaType = $derived(currentItem ? getItemMediaType(currentItem) : 'other');
 	const hasPrev = $derived(currentIndex > 0);
 	const hasNext = $derived(currentIndex < items.length - 1);
+
+	// The effective URL to use for rendering — either directly from the item or resolved via API
+	const effectiveUrl = $derived(
+		currentItem?.kind === 'file' ? resolvedUrl : currentItem ? getItemUrl(currentItem) : null
+	);
+
+	// Whether to show file metadata (mime type, size) in the header
+	const currentFileItem = $derived(
+		currentItem?.kind === 'file' ? currentItem : null
+	);
 
 	// Sync currentIndex when the modal opens with a new initialIndex
 	$effect(() => {
@@ -47,11 +69,52 @@
 		}
 	});
 
+	// Resolve URL for 'file' kind items when currentItem changes
+	let urlRequestId = 0;
+	$effect(() => {
+		// Reset URL state
+		resolvedUrl = null;
+		resolvedIsPublic = false;
+
+		const item = currentItem;
+		if (!item) return;
+
+		if (item.kind === 'media-url') {
+			// Already have a usable URL
+			resolvedUrl = item.url;
+			resolvedIsPublic = true;
+			return;
+		}
+
+		if (item.kind === 'folder') return;
+
+		// kind === 'file' — need to fetch a signed URL
+		urlLoading = true;
+		const requestId = ++urlRequestId;
+
+		resolveItemUrl(item)
+			.then((result) => {
+				if (requestId !== urlRequestId) return; // stale
+				if (result) {
+					resolvedUrl = result.url;
+					resolvedIsPublic = result.isPublic;
+				}
+			})
+			.catch(() => {
+				if (requestId !== urlRequestId) return;
+				resolvedUrl = null;
+			})
+			.finally(() => {
+				if (requestId !== urlRequestId) return;
+				urlLoading = false;
+			});
+	});
+
 	// Load album art for audio files with race-condition guard
 	let albumArtRequestId = 0;
 	$effect(() => {
 		albumArtUrl = null;
-		const url = currentUrl;
+		const url = effectiveUrl;
 		const type = currentMediaType;
 		if (type !== 'audio' || !url) return;
 
@@ -69,31 +132,75 @@
 			});
 	});
 
-	// Download via fetch+Blob to handle cross-origin URLs
+	// Download handler — adapts strategy based on item kind
 	let downloading = $state(false);
 
 	async function handleDownload() {
-		if (!currentUrl || downloading) return;
+		if (downloading) return;
+		const item = currentItem;
+		if (!item || item.kind === 'folder') return;
+
 		downloading = true;
 		try {
-			const response = await fetch(currentUrl, { mode: 'cors' });
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const blob = await response.blob();
-			const objectUrl = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = objectUrl;
-			a.download = currentFilename;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(objectUrl);
+			if (item.kind === 'file') {
+				// For file items, fetch download URL via API
+				const result = await resolveItemUrl(item);
+				if (result?.url) {
+					window.open(result.url, '_blank');
+				} else {
+					toast.error('Download URL not available');
+				}
+			} else {
+				// For media-url items, use fetch+Blob for cross-origin support
+				const url = getItemUrl(item);
+				const response = await fetch(url, { mode: 'cors' });
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const blob = await response.blob();
+				const objectUrl = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = objectUrl;
+				a.download = currentFilename;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(objectUrl);
+			}
 		} catch {
-			// Fallback: open in new tab so the user can save manually
-			window.open(currentUrl, '_blank');
-			toast.info('Could not download directly — opened in a new tab instead');
+			// Fallback: open in new tab
+			const url = effectiveUrl;
+			if (url) {
+				window.open(url, '_blank');
+				toast.info('Could not download directly — opened in a new tab instead');
+			} else {
+				toast.error('Failed to download file');
+			}
 		} finally {
 			downloading = false;
 		}
+	}
+
+	// Copy Link / Share handler for file items
+	async function handleCopyOrShare() {
+		const item = currentItem;
+		if (!item || item.kind !== 'file') return;
+
+		if (!effectiveUrl) {
+			toast.error('URL not available');
+			return;
+		}
+
+		if (resolvedIsPublic) {
+			try {
+				await navigator.clipboard.writeText(effectiveUrl);
+				toast.success('Link copied to clipboard');
+			} catch {
+				toast.error('Failed to copy link');
+			}
+			return;
+		}
+
+		// For private files, open share dialog for custom expiry
+		onOpenShareDialog?.(item.data);
 	}
 
 	// Keyboard navigation
@@ -120,7 +227,16 @@
 		<Dialog.Header>
 			<Dialog.Title class="max-w-[500px] truncate">{currentFilename}</Dialog.Title>
 			<Dialog.Description>
-				{currentIndex + 1} of {items.length}
+				{#if items.length > 1}
+					{currentIndex + 1} of {items.length}
+					{#if currentFileItem}
+						<span class="ml-2 text-muted-foreground">
+							• {currentFileItem.mimeType} • {formatFileSize(currentFileItem.size)}
+						</span>
+					{/if}
+				{:else if currentFileItem}
+					{currentFileItem.mimeType} • {formatFileSize(currentFileItem.size)}
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -140,48 +256,62 @@
 
 			<!-- Media content -->
 			{#key currentIndex}
-				{#if currentMediaType === 'image'}
-					<img
-						src={currentUrl}
-						alt={currentFilename}
-						class="max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
-						onerror={(e) => {
-							const el = e.currentTarget as HTMLImageElement;
-							if (el) el.style.display = 'none';
-						}}
-					/>
-				{:else if currentMediaType === 'video'}
-					<video
-						src={currentUrl}
-						controls
-						class="max-h-[80vh] w-auto max-w-full rounded-lg"
-						preload="metadata"
-					>
-						<track kind="captions" />
-					</video>
-				{:else if currentMediaType === 'audio'}
-					<div class="flex w-full flex-col items-center gap-4 py-8">
-						{#if albumArtUrl}
-							<img
-								src={albumArtUrl}
-								alt="Album art"
-								class="h-48 w-48 rounded-lg object-cover shadow-md"
-							/>
-						{:else}
-							<FileAudio class="h-16 w-16 text-muted-foreground" />
-						{/if}
-						<p class="text-sm font-medium">{currentFilename}</p>
-						<audio src={currentUrl} controls class="w-full max-w-md" preload="metadata">
+				{#if urlLoading}
+					<Skeleton class="h-64 w-full" />
+				{:else if effectiveUrl}
+					{#if currentMediaType === 'image'}
+						<img
+							src={effectiveUrl}
+							alt={currentFilename}
+							class="max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
+							onerror={(e) => {
+								const el = e.currentTarget as HTMLImageElement;
+								if (el) el.style.display = 'none';
+							}}
+						/>
+					{:else if currentMediaType === 'video'}
+						<video
+							src={effectiveUrl}
+							controls
+							class="max-h-[80vh] w-auto max-w-full rounded-lg"
+							preload="metadata"
+						>
 							<track kind="captions" />
-						</audio>
-					</div>
+						</video>
+					{:else if currentMediaType === 'audio'}
+						<div class="flex w-full flex-col items-center gap-4 py-8">
+							{#if albumArtUrl}
+								<img
+									src={albumArtUrl}
+									alt="Album art"
+									class="h-48 w-48 rounded-lg object-cover shadow-md"
+								/>
+							{:else}
+								<FileAudio class="h-16 w-16 text-muted-foreground" />
+							{/if}
+							<p class="text-sm font-medium">{currentFilename}</p>
+							<audio src={effectiveUrl} controls class="w-full max-w-md" preload="metadata">
+								<track kind="captions" />
+							</audio>
+						</div>
+					{:else if currentMediaType === 'pdf'}
+						<iframe
+							src={effectiveUrl}
+							title={currentFilename}
+							class="h-[60vh] w-full rounded-lg border"
+						>
+							Your browser does not support PDF preview.
+						</iframe>
+					{:else}
+						<!-- Non-viewable file -->
+						<div class="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+							<FileDown class="h-16 w-16" />
+							<p class="text-sm font-medium">{currentFilename}</p>
+							<p class="text-xs">This file type cannot be previewed</p>
+						</div>
+					{/if}
 				{:else}
-					<!-- Non-viewable file -->
-					<div class="flex flex-col items-center gap-3 py-12 text-muted-foreground">
-						<FileDown class="h-16 w-16" />
-						<p class="text-sm font-medium">{currentFilename}</p>
-						<p class="text-xs">This file type cannot be previewed</p>
-					</div>
+					<p class="text-muted-foreground">Preview not available</p>
 				{/if}
 			{/key}
 
@@ -199,8 +329,14 @@
 		</div>
 
 		<Dialog.Footer>
-			{#if currentItem && isItemViewable(currentItem)}
-				<Button variant="outline" onclick={() => window.open(currentUrl, '_blank')}>
+			{#if currentItem?.kind === 'file' && effectiveUrl}
+				<Button variant="outline" onclick={handleCopyOrShare}>
+					<Link class="mr-2 h-4 w-4" />
+					{resolvedIsPublic ? 'Copy Link' : 'Share...'}
+				</Button>
+			{/if}
+			{#if currentItem && isItemViewable(currentItem) && effectiveUrl}
+				<Button variant="outline" onclick={() => effectiveUrl && window.open(effectiveUrl, '_blank')}>
 					<ExternalLink class="mr-2 h-4 w-4" />
 					Open in new tab
 				</Button>

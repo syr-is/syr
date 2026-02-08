@@ -6,6 +6,7 @@
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg'];
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'];
+const PDF_EXTENSIONS = ['.pdf'];
 
 /** Strip query string and fragment, then return the lowercased path portion of a URL */
 function urlPath(url: string): string {
@@ -27,7 +28,12 @@ export function isAudio(url: string): boolean {
 	return AUDIO_EXTENSIONS.some((ext) => path.endsWith(ext));
 }
 
-export type MediaType = 'image' | 'video' | 'audio' | 'other';
+export function isPdf(url: string): boolean {
+	const path = urlPath(url);
+	return PDF_EXTENSIONS.some((ext) => path.endsWith(ext));
+}
+
+export type MediaType = 'image' | 'video' | 'audio' | 'pdf' | 'other';
 
 /**
  * Determine the media type of a file.
@@ -38,11 +44,13 @@ export function getMediaType(url: string, mimeType?: string): MediaType {
 		if (mimeType.startsWith('image/')) return 'image';
 		if (mimeType.startsWith('video/')) return 'video';
 		if (mimeType.startsWith('audio/')) return 'audio';
+		if (mimeType === 'application/pdf') return 'pdf';
 		return 'other';
 	}
 	if (isImage(url)) return 'image';
 	if (isVideo(url)) return 'video';
 	if (isAudio(url)) return 'audio';
+	if (isPdf(url)) return 'pdf';
 	return 'other';
 }
 

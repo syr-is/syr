@@ -50,14 +50,15 @@
 				{@const mimeType = getItemMimeType(item)}
 				<Carousel.Item>
 					<div class="flex items-center justify-center rounded-lg bg-muted/30 p-2">
-						<MediaThumbnail
-							{url}
-							{mimeType}
-							mode="full"
-							alt={filename}
-							class="max-h-[500px] w-full rounded-md object-contain"
-							onImageClick={() => onItemClick?.(i)}
-						/>
+					<MediaThumbnail
+						{url}
+						{mimeType}
+						mode="full"
+						alt={filename}
+						{item}
+						class="max-h-[500px] w-full rounded-md object-contain"
+						onImageClick={() => onItemClick?.(i)}
+					/>
 					</div>
 				</Carousel.Item>
 			{/each}

@@ -73,6 +73,7 @@
 					{mimeType}
 					mode="full"
 					alt={filename}
+					{item}
 					class="w-full rounded-lg shadow-sm transition-shadow hover:shadow-md"
 					onImageClick={() => onItemClick?.(i)}
 				/>

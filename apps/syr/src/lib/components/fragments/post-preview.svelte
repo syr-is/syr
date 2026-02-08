@@ -251,8 +251,9 @@
 					{getDisplayText(post)}
 				</p>
 			{:else}
+				<!-- Summary label only (content shown in h-40 area above) -->
 				<p class="line-clamp-1 flex-1 text-sm text-muted-foreground">
-					{getDisplayText(post)}
+					{post.type === 'blog' ? 'Blog post' : 'No media items'}
 				</p>
 			{/if}
 			<div class="flex gap-1">

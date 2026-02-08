@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { Play, Music, FileDown } from 'lucide-svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { getMediaType, fetchAlbumArt, trackAlbumArt } from '$lib/utils/media';
+	import { type DisplayItem, resolveItemUrl } from '$lib/types/display-item';
 
 	let {
 		url,
 		mimeType,
+		item,
 		mode = 'card',
 		alt = '',
 		class: className = '',
@@ -12,22 +15,55 @@
 	}: {
 		url: string;
 		mimeType?: string;
+		/** When provided and kind === 'file', resolves a signed URL lazily */
+		item?: DisplayItem;
 		mode?: 'card' | 'full';
 		alt?: string;
 		class?: string;
 		onImageClick?: () => void;
 	} = $props();
 
-	const mediaType = $derived(getMediaType(url, mimeType));
+	// --- Lazy URL resolution for private 'file' items ---
+	let resolvedUrl = $state<string | null>(null);
+	let urlLoading = $state(false);
+	let urlRequestId = 0;
+
+	$effect(() => {
+		resolvedUrl = null;
+		urlLoading = false;
+		if (!item || item.kind !== 'file') return;
+
+		urlLoading = true;
+		const requestId = ++urlRequestId;
+		resolveItemUrl(item)
+			.then((result) => {
+				if (requestId !== urlRequestId) return;
+				resolvedUrl = result?.url ?? null;
+			})
+			.catch(() => {
+				if (requestId !== urlRequestId) return;
+				resolvedUrl = null;
+			})
+			.finally(() => {
+				if (requestId !== urlRequestId) return;
+				urlLoading = false;
+			});
+	});
+
+	// The effective URL: resolved for 'file' items, raw url prop otherwise
+	const effectiveUrl = $derived(item?.kind === 'file' ? (resolvedUrl ?? '') : url);
+
+	const mediaType = $derived(getMediaType(effectiveUrl || url, mimeType));
 	let albumArtUrl = $state<string | null>(null);
 	let albumArtRequestId = 0;
 
 	$effect(() => {
 		albumArtUrl = null;
-		if (mediaType !== 'audio' || !url) return;
+		const artSourceUrl = effectiveUrl;
+		if (mediaType !== 'audio' || !artSourceUrl) return;
 
 		const requestId = ++albumArtRequestId;
-		fetchAlbumArt(url)
+		fetchAlbumArt(artSourceUrl)
 			.then((artUrl) => {
 				if (requestId === albumArtRequestId) {
 					albumArtUrl = artUrl;
@@ -41,11 +77,18 @@
 	});
 </script>
 
-{#if mode === 'card'}
+{#if urlLoading}
+	<!-- Skeleton placeholder while resolving a signed URL -->
+	{#if mode === 'card'}
+		<Skeleton class="h-full w-full" />
+	{:else}
+		<Skeleton class="h-48 w-full rounded-md {className}" />
+	{/if}
+{:else if mode === 'card'}
 	<!-- Card: square thumbnail, no controls, play overlay on video, album art or icon for audio -->
 	{#if mediaType === 'image'}
 		<img
-			src={url}
+			src={effectiveUrl}
 			{alt}
 			class="h-full w-full object-cover"
 			loading="lazy"
@@ -55,7 +98,7 @@
 			}}
 		/>
 	{:else if mediaType === 'video'}
-		<video src={url} class="h-full w-full object-cover" preload="metadata" muted>
+		<video src={effectiveUrl} class="h-full w-full object-cover" preload="metadata" muted>
 			<track kind="captions" />
 		</video>
 		<div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
@@ -64,7 +107,7 @@
 			</div>
 		</div>
 	{:else if mediaType === 'audio'}
-		<div class="h-full w-full" use:trackAlbumArt={url}>
+		<div class="h-full w-full" use:trackAlbumArt={effectiveUrl}>
 			{#if albumArtUrl}
 				<img
 					src={albumArtUrl}
@@ -92,7 +135,7 @@
 		{#if onImageClick}
 			<button type="button" class="w-full cursor-pointer" onclick={onImageClick}>
 				<img
-					src={url}
+					src={effectiveUrl}
 					{alt}
 					class="max-h-[500px] w-full rounded-md object-contain {className}"
 					loading="lazy"
@@ -104,7 +147,7 @@
 			</button>
 		{:else}
 			<img
-				src={url}
+				src={effectiveUrl}
 				{alt}
 				class="max-h-[500px] w-full rounded-md object-contain {className}"
 				loading="lazy"
@@ -116,7 +159,7 @@
 		{/if}
 	{:else if mediaType === 'video'}
 		<video
-			src={url}
+			src={effectiveUrl}
 			controls
 			class="max-h-[500px] w-full rounded-md object-contain {className}"
 			preload="metadata"
@@ -124,7 +167,7 @@
 			<track kind="captions" />
 		</video>
 	{:else if mediaType === 'audio'}
-		<div class="flex flex-col items-center gap-4 py-4 {className}" use:trackAlbumArt={url}>
+		<div class="flex flex-col items-center gap-4 py-4 {className}" use:trackAlbumArt={effectiveUrl}>
 			{#if albumArtUrl}
 				<img
 					src={albumArtUrl}
@@ -140,13 +183,13 @@
 					<Music class="h-16 w-16 text-muted-foreground" />
 				</div>
 			{/if}
-			<audio src={url} controls class="w-full max-w-md" preload="metadata">
+			<audio src={effectiveUrl} controls class="w-full max-w-md" preload="metadata">
 				<track kind="captions" />
 			</audio>
 		</div>
 	{:else}
 		<a
-			href={url}
+			href={effectiveUrl}
 			download={alt || undefined}
 			class="flex flex-col items-center gap-2 rounded-md bg-muted/50 p-8 text-muted-foreground transition-colors hover:bg-muted {className}"
 		>
