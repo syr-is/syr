@@ -131,98 +131,58 @@
 					</div>
 				{/if}
 			</div>
-			<div class="flex items-start justify-between gap-2">
+		{/if}
+
+		<div class="flex items-start justify-between gap-2">
+			{#if post.type === 'media' && post.media_urls && post.media_urls.length > 0}
 				<p class="flex-1 text-sm text-muted-foreground">
 					<ImageIcon class="mr-1 inline h-3.5 w-3.5" />
 					{getDisplayText(post)}
 				</p>
-				<div class="flex gap-1">
-					{#if showPinButton && onPinToggle}
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="ghost"
-										size="icon"
-										class="h-8 w-8 {isPinned
-											? 'text-primary hover:bg-primary/10'
-											: 'text-muted-foreground hover:bg-muted'}"
-										onclick={handlePinToggle}
-										disabled={pinLoading}
-									>
-										{#if isPinned}
-											<PinOff class="h-4 w-4" />
-										{:else}
-											<Pin class="h-4 w-4" />
-										{/if}
-									</Button>
-								{/snippet}
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{isPinned ? 'Unpin post' : 'Pin post'}
-							</Tooltip.Content>
-						</Tooltip.Root>
-					{/if}
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-						onclick={(e) => {
-							e.stopPropagation();
-							deleteDialogOpen = true;
-						}}
-					>
-						<Trash2 class="h-4 w-4" />
-					</Button>
-				</div>
-			</div>
-		{:else}
-			<!-- Blog / default preview -->
-			<div class="flex items-start justify-between gap-2">
+			{:else}
 				<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
-				<div class="flex gap-1">
-					{#if showPinButton && onPinToggle}
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="ghost"
-										size="icon"
-										class="h-8 w-8 {isPinned
-											? 'text-primary hover:bg-primary/10'
-											: 'text-muted-foreground hover:bg-muted'}"
-										onclick={handlePinToggle}
-										disabled={pinLoading}
-									>
-										{#if isPinned}
-											<PinOff class="h-4 w-4" />
-										{:else}
-											<Pin class="h-4 w-4" />
-										{/if}
-									</Button>
-								{/snippet}
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{isPinned ? 'Unpin post' : 'Pin post'}
-							</Tooltip.Content>
-						</Tooltip.Root>
-					{/if}
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-						onclick={(e) => {
-							e.stopPropagation();
-							deleteDialogOpen = true;
-						}}
-					>
-						<Trash2 class="h-4 w-4" />
-					</Button>
-				</div>
+			{/if}
+			<div class="flex gap-1">
+				{#if showPinButton && onPinToggle}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon"
+									class="h-8 w-8 {isPinned
+										? 'text-primary hover:bg-primary/10'
+										: 'text-muted-foreground hover:bg-muted'}"
+									onclick={handlePinToggle}
+									disabled={pinLoading}
+								>
+									{#if isPinned}
+										<PinOff class="h-4 w-4" />
+									{:else}
+										<Pin class="h-4 w-4" />
+									{/if}
+								</Button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{isPinned ? 'Unpin post' : 'Pin post'}
+						</Tooltip.Content>
+					</Tooltip.Root>
+				{/if}
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+					onclick={(e) => {
+						e.stopPropagation();
+						deleteDialogOpen = true;
+					}}
+				>
+					<Trash2 class="h-4 w-4" />
+				</Button>
 			</div>
-		{/if}
+		</div>
 	</Card.Content>
 </Card.Root>
 

@@ -12,7 +12,7 @@
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
 	import { PostCreateSchema } from '@syr-is/types';
-	import { isVideo as isVideoUrl, isAcceptedMediaFile } from '$lib/utils/media';
+	import { isVideo as isVideoUrl } from '$lib/utils/media';
 	import { Crepe } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/nord-dark.css';
@@ -294,16 +294,6 @@
 		const fileArray = Array.from(files);
 		if (fileArray.length === 0) return;
 
-		// Validate MIME types - only accept image/* and video/*
-		const accepted = fileArray.filter((file) => isAcceptedMediaFile(file));
-		const rejected = fileArray.length - accepted.length;
-		if (rejected > 0) {
-			toast.error(
-				`${rejected} file${rejected > 1 ? 's' : ''} rejected: only images and videos are supported`
-			);
-		}
-		if (accepted.length === 0) return;
-
 		uploading = true;
 		try {
 			// Ensure we have a draft for asset uploads
@@ -313,7 +303,7 @@
 				return;
 			}
 
-			for (const file of accepted) {
+			for (const file of fileArray) {
 				try {
 					const url = await handlePostAssetUpload(file, postId);
 					mediaUrls = [...mediaUrls, url];
@@ -704,14 +694,14 @@
 								<div class="flex flex-col items-center gap-2 text-muted-foreground">
 									<ImageIcon class="h-8 w-8" />
 									<p class="text-sm font-medium">Drop files here or click to browse</p>
-									<p class="text-xs">Supports images and videos</p>
+									<p class="text-xs">Supports all file types</p>
 								</div>
 							{/if}
 						</div>
 						<input
 							id="media-file-input"
 							type="file"
-							accept="image/*,video/*"
+							accept="*/*"
 							multiple
 							class="hidden"
 							onchange={handleFileInput}

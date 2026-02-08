@@ -32,10 +32,3 @@ export function isViewable(url: string): boolean {
 	return isImage(url) || isVideo(url) || isAudio(url);
 }
 
-/** Accepted MIME type prefixes for media uploads */
-const ACCEPTED_MEDIA_MIME_PREFIXES = ['image/', 'video/'];
-
-/** Check whether a File has an accepted media MIME type for upload */
-export function isAcceptedMediaFile(file: File): boolean {
-	return ACCEPTED_MEDIA_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix));
-}

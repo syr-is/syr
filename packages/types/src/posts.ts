@@ -38,13 +38,31 @@ export const PostStatusSchema = z.enum(["draft", "completed"]);
 export type PostStatus = z.infer<typeof PostStatusSchema>;
 
 /**
- * Refinement: media posts must not have content_type set
+ * Base refinement: media posts must not have content_type set.
+ * Used by all schemas including partial-update contexts.
  */
-function refinePostType(data: { type?: string; content_type?: string }, ctx: z.RefinementCtx) {
+function refineMediaNoContentType(data: { type?: string; content_type?: string }, ctx: z.RefinementCtx) {
   if (data.type === "media" && data.content_type != null) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "content_type must not be set for media posts",
+      path: ["content_type"],
+    });
+  }
+}
+
+/**
+ * Full refinement: media posts must not have content_type,
+ * and blog posts must have content_type.
+ * Only used on non-partial schemas (PostSchema, PostCreateSchema)
+ * because partial updates may omit content_type legitimately.
+ */
+function refinePostType(data: { type?: string; content_type?: string }, ctx: z.RefinementCtx) {
+  refineMediaNoContentType(data, ctx);
+  if (data.type === "blog" && data.content_type == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "content_type is required for blog posts",
       path: ["content_type"],
     });
   }
@@ -84,6 +102,6 @@ export const PostUpdateSchema = PostObjectSchema
     updated_at: true,
     author_id: true,
   })
-  .superRefine(refinePostType);
+  .superRefine(refineMediaNoContentType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;
