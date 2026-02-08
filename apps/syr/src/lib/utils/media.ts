@@ -187,9 +187,11 @@ function evictAlbumArt(key: string) {
 	if (!entry) return;
 	albumArtCache.delete(key);
 	// Revoke asynchronously — the promise may still be pending
-	entry.then((blobUrl) => {
-		if (blobUrl) URL.revokeObjectURL(blobUrl);
-	}).catch(() => {});
+	entry
+		.then((blobUrl) => {
+			if (blobUrl) URL.revokeObjectURL(blobUrl);
+		})
+		.catch(() => {});
 }
 
 /** Trim the cache to ALBUM_ART_CACHE_MAX by evicting oldest off-screen entries. */

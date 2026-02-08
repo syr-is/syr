@@ -747,7 +747,12 @@
 				{/if}
 			</Card.Content>
 			<Card.Footer class="flex shrink-0 justify-end gap-2">
-				<Form.Button type="button" variant="outline" onclick={goHome} disabled={loading || publishLoading || uploading}>
+				<Form.Button
+					type="button"
+					variant="outline"
+					onclick={goHome}
+					disabled={loading || publishLoading || uploading}
+				>
 					Cancel
 				</Form.Button>
 				{#if !isDraft}
@@ -775,7 +780,11 @@
 					{/if}
 				</Form.Button>
 				{#if isDraft}
-					<Button type="button" onclick={handlePublish} disabled={loading || publishLoading || uploading}>
+					<Button
+						type="button"
+						onclick={handlePublish}
+						disabled={loading || publishLoading || uploading}
+					>
 						{#if publishLoading}
 							Publishing...
 						{:else if uploading}
