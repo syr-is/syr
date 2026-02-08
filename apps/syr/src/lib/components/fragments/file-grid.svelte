@@ -31,10 +31,6 @@
 	const fileItems = $derived(
 		items.filter((i): i is Exclude<DisplayItem, { kind: 'folder' }> => i.kind !== 'folder')
 	);
-
-	function isPublicFolder(folder: Folder): boolean {
-		return folder.name.toLowerCase() === 'public';
-	}
 </script>
 
 {#if mode === 'gallery'}
@@ -43,7 +39,7 @@
 		{#each folderItems as item (item.id)}
 			<FolderCard
 				folder={item.data}
-				isPublic={isPublicFolder(item.data)}
+				isPublic={item.isPublic}
 				onclick={() => onFolderClick?.(item.data)}
 				onDelete={onFolderDelete}
 			/>
@@ -59,7 +55,7 @@
 			{#each folderItems as item (item.id)}
 				<FolderCard
 					folder={item.data}
-					isPublic={isPublicFolder(item.data)}
+					isPublic={item.isPublic}
 					onclick={() => onFolderClick?.(item.data)}
 					onDelete={onFolderDelete}
 				/>

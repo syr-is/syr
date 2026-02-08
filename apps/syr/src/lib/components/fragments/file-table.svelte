@@ -21,8 +21,13 @@
 		Pencil,
 		Trash2
 	} from 'lucide-svelte';
-	import { type DisplayItem, getItemMediaType, getItemFilename } from '$lib/types/display-item';
-	import { getMediaType, type MediaType } from '$lib/utils/media';
+	import {
+		type DisplayItem,
+		getItemMediaType,
+		getItemFilename,
+		getItemMimeType
+	} from '$lib/types/display-item';
+	import { getMediaType } from '$lib/utils/media';
 	import type { Folder } from '@syr-is/types';
 
 	let {
@@ -50,19 +55,23 @@
 	// Check if any items are full file objects (to show extra columns)
 	const hasFileMetadata = $derived(items.some((i) => i.kind === 'file'));
 
-	function getFileIconByMediaType(mediaType: MediaType) {
+	function getIconForItem(item: DisplayItem) {
+		const mimeType = getItemMimeType(item);
+
+		if (mimeType) {
+			if (mimeType.startsWith('image/')) return FileImage;
+			if (mimeType.startsWith('video/')) return FileVideo;
+			if (mimeType.startsWith('audio/')) return FileAudio;
+			if (mimeType.startsWith('text/') || mimeType.includes('document') || mimeType.includes('pdf'))
+				return FileText;
+		}
+
+		// Fallback for items with no mime type, using URL extension
+		const mediaType = getItemMediaType(item);
 		if (mediaType === 'image') return FileImage;
 		if (mediaType === 'video') return FileVideo;
 		if (mediaType === 'audio') return FileAudio;
-		return File;
-	}
 
-	function getFileIcon(mimeType: string) {
-		if (mimeType.startsWith('image/')) return FileImage;
-		if (mimeType.startsWith('video/')) return FileVideo;
-		if (mimeType.startsWith('audio/')) return FileAudio;
-		if (mimeType.startsWith('text/') || mimeType.includes('document') || mimeType.includes('pdf'))
-			return FileText;
 		return File;
 	}
 
@@ -175,11 +184,11 @@
 							</Table.Cell>
 						</Table.Row>
 					{:else if item.kind === 'file'}
-						{@const FileIcon = getFileIcon(item.mimeType)}
+						{@const ItemIcon = getIconForItem(item)}
 						<Table.Row>
 							<Table.Cell>
 								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-									<FileIcon class="h-5 w-5 text-muted-foreground" />
+									<ItemIcon class="h-5 w-5 text-muted-foreground" />
 								</div>
 							</Table.Cell>
 							<Table.Cell>
@@ -283,7 +292,7 @@
 					{:else}
 						<!-- media-url: minimal row -->
 						{@const filename = getItemFilename(item)}
-						{@const ItemIcon = getFileIconByMediaType(getItemMediaType(item))}
+						{@const ItemIcon = getIconForItem(item)}
 						<Table.Row>
 							<Table.Cell>
 								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
