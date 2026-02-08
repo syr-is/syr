@@ -165,6 +165,31 @@ export abstract class BaseRepository<T> {
 	}
 
 	/**
+	 * Update a record by first removing given keys (via JSON Patch) then merging the rest.
+	 * Use when switching record shape (e.g. post type): merge() does not remove fields
+	 * when values are undefined, so stale fields must be explicitly removed.
+	 */
+	async updateWithUnset(
+		id: RecordId | string,
+		data: Partial<T>,
+		keysToUnset: string[]
+	): Promise<T> {
+		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
+		const dataRecord = data as Record<string, unknown>;
+		const mergePayload: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(dataRecord)) {
+			if (keysToUnset.includes(key) || value === undefined) continue;
+			mergePayload[key] = value;
+		}
+		if (keysToUnset.length > 0) {
+			const patchOps = keysToUnset.map((key) => ({ op: 'remove' as const, path: `/${key}` }));
+			await this.db.patch(recordId, patchOps);
+		}
+		const record = await this.db.merge(recordId, mergePayload);
+		return this.validate(record);
+	}
+
+	/**
 	 * Merge data into all records in the table
 	 * Updates all records with the provided data
 	 */

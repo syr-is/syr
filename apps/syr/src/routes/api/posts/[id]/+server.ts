@@ -109,8 +109,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			description: data.description ?? existingPost.description
 		};
 
-		// Build type-specific payload so switching types always has correct defaults
-		// and fields from the other type are explicitly cleared.
+		// Build type-specific payload. When switching type, the other type's fields
+		// must be removed via patch (merge ignores undefined and leaves stale fields).
 		const updatePayload =
 			resolvedType === 'blog'
 				? {
@@ -128,7 +128,13 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 						display_mode: data.display_mode ?? existingPost.display_mode ?? 'masonry'
 					};
 
-		const result = await postController.updatePost(updatePayload);
+		const typeSwitched = existingPost.type !== resolvedType;
+		const keysToUnset = typeSwitched
+			? resolvedType === 'blog'
+				? ['media_urls', 'display_mode']
+				: ['content_type', 'content']
+			: undefined;
+		const result = await postController.updatePost(updatePayload, keysToUnset);
 
 		return json({
 			status: 'success',

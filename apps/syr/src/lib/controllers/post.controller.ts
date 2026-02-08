@@ -12,11 +12,12 @@ export class PostController {
 		});
 		return newPost;
 	}
-	async updatePost(post: PostUpdate) {
-		const updatedPost = await postRepository.update(post.id, {
-			...post,
-			updated_at: new Date()
-		});
+	async updatePost(post: PostUpdate, keysToUnset?: string[]) {
+		const payload = { ...post, updated_at: new Date() };
+		const updatedPost =
+			(keysToUnset?.length ?? 0) > 0
+				? await postRepository.updateWithUnset(post.id, payload, keysToUnset!)
+				: await postRepository.update(post.id, payload);
 		return updatedPost;
 	}
 	async deletePost(id: RecordId, _ownerId: RecordId) {
