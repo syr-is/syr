@@ -31,4 +31,3 @@ export function isAudio(url: string): boolean {
 export function isViewable(url: string): boolean {
 	return isImage(url) || isVideo(url) || isAudio(url);
 }
-
