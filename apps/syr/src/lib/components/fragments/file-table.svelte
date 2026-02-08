@@ -277,19 +277,19 @@
 								</div>
 							</Table.Cell>
 						</Table.Row>
-				{:else}
-					<!-- media-url: minimal row -->
-					{@const filename = getItemFilename(item)}
-					{@const ItemIcon = getFileIconByMediaType(getItemMediaType(item))}
-					<Table.Row>
-						<Table.Cell>
-							<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-								<ItemIcon class="h-5 w-5 text-muted-foreground" />
-							</div>
-						</Table.Cell>
-						<Table.Cell>
-							<span class="max-w-[300px] truncate font-medium">{filename}</span>
-						</Table.Cell>
+					{:else}
+						<!-- media-url: minimal row -->
+						{@const filename = getItemFilename(item)}
+						{@const ItemIcon = getFileIconByMediaType(getItemMediaType(item))}
+						<Table.Row>
+							<Table.Cell>
+								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+									<ItemIcon class="h-5 w-5 text-muted-foreground" />
+								</div>
+							</Table.Cell>
+							<Table.Cell>
+								<span class="max-w-[300px] truncate font-medium">{filename}</span>
+							</Table.Cell>
 							{#if hasFileMetadata}
 								<Table.Cell>--</Table.Cell>
 								<Table.Cell>--</Table.Cell>

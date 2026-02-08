@@ -46,11 +46,11 @@ export function getMediaType(url: string, mimeType?: string): MediaType {
 	return 'other';
 }
 
-/** Extract a display filename from a URL */
-export function getFileName(url: string): string {
-	const path = url.split('?')[0].split('#')[0];
-	const segments = path.split('/');
-	return decodeURIComponent(segments[segments.length - 1] || 'file');
+/** Parse a string as a positive integer, returning undefined if invalid */
+function safeParsePositiveInt(value: string | null | undefined): number | undefined {
+	if (!value) return undefined;
+	const n = parseInt(value, 10);
+	return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 /**
@@ -79,8 +79,7 @@ export function fetchAlbumArt(url: string): Promise<string | null> {
 			try {
 				const head = await fetch(url, { method: 'HEAD' });
 				if (head.ok) {
-					const cl = head.headers.get('Content-Length');
-					if (cl) totalSize = parseInt(cl, 10);
+					totalSize = safeParsePositiveInt(head.headers.get('Content-Length'));
 					mimeType = head.headers.get('Content-Type') ?? undefined;
 					if (totalSize && totalSize > ALBUM_ART_MAX_FILE_SIZE) return null;
 				}
@@ -103,8 +102,7 @@ export function fetchAlbumArt(url: string): Promise<string | null> {
 				size = totalSize;
 			} else {
 				// Server returned the full file (200 OK); use Content-Length
-				const cl = response.headers.get('Content-Length');
-				size = cl ? parseInt(cl, 10) : totalSize;
+				size = safeParsePositiveInt(response.headers.get('Content-Length')) ?? totalSize;
 			}
 
 			if (!mimeType) {

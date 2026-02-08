@@ -44,7 +44,7 @@
 {#if mode === 'card'}
 	<!-- Card: square thumbnail, no controls, play overlay on video, album art or icon for audio -->
 	{#if mediaType === 'image'}
-		<img src={url} alt={alt} class="h-full w-full object-cover" loading="lazy" />
+		<img src={url} {alt} class="h-full w-full object-cover" loading="lazy" />
 	{:else if mediaType === 'video'}
 		<video src={url} class="h-full w-full object-cover" preload="metadata" muted>
 			<track kind="captions" />
@@ -74,7 +74,7 @@
 			<button type="button" class="w-full cursor-pointer" onclick={onImageClick}>
 				<img
 					src={url}
-					alt={alt}
+					{alt}
 					class="max-h-[500px] w-full rounded-md object-contain {className}"
 					loading="lazy"
 				/>
@@ -82,7 +82,7 @@
 		{:else}
 			<img
 				src={url}
-				alt={alt}
+				{alt}
 				class="max-h-[500px] w-full rounded-md object-contain {className}"
 				loading="lazy"
 			/>

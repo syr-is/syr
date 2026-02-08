@@ -98,13 +98,6 @@ export function getFileItems(items: DisplayItem[]): DisplayItem[] {
 	return items.filter((item) => item.kind !== 'folder');
 }
 
-/** Extract only file/media-url items, returning their URLs */
-export function getFileUrls(items: DisplayItem[]): string[] {
-	return items
-		.filter((item): item is Exclude<DisplayItem, { kind: 'folder' }> => item.kind !== 'folder')
-		.map((item) => item.url);
-}
-
 /** Check if a media type is viewable (image, video, or audio) */
 export function isItemViewable(item: DisplayItem): boolean {
 	const mt = getItemMediaType(item);

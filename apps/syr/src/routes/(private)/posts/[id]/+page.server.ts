@@ -1,16 +1,9 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { postController } from '$lib/controllers/post.controller';
-import { uploadController } from '$lib/controllers/upload.controller';
 import { userRepository } from '$lib/repositories/user.repository';
+import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
 import { stringToRecordId } from '@syr-is/types';
-
-/** Extract upload record ID from the last segment of a media URL */
-function extractUploadId(url: string): string | null {
-	const path = url.split('?')[0].split('#')[0];
-	const segments = path.split('/');
-	return segments[segments.length - 1] || null;
-}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Get post by ID
@@ -77,24 +70,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		: null;
 
 	// Resolve mime types for media post URLs from the upload DB records
-	const mediaUrlMimeTypes: Record<string, string> = {};
-	if (post.type === 'media' && post.media_urls?.length) {
-		await Promise.all(
-			post.media_urls.map(async (url) => {
-				const uploadId = extractUploadId(url);
-				if (uploadId) {
-					try {
-						const upload = await uploadController.getUpload(uploadId);
-						if (upload) {
-							mediaUrlMimeTypes[url] = upload.mime_type;
-						}
-					} catch {
-						// Skip if upload record not found
-					}
-				}
-			})
-		);
-	}
+	const mediaUrlMimeTypes =
+		post.type === 'media' && post.media_urls?.length
+			? await resolveMediaUrlMimeTypes(post.media_urls)
+			: {};
 
 	return {
 		post: serializedPost,

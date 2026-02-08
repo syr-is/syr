@@ -728,7 +728,9 @@
 							<Label>Uploaded Media ({mediaUrls.length})</Label>
 							<div class="mt-2 grid grid-cols-3 gap-3 sm:grid-cols-4">
 								{#each mediaUrls as url, i (`${url}-${i}`)}
-									<div class="group relative aspect-square w-full overflow-hidden rounded-lg border bg-muted/30">
+									<div
+										class="group relative aspect-square w-full overflow-hidden rounded-lg border bg-muted/30"
+									>
 										<MediaThumbnail
 											{url}
 											mimeType={mediaMimeTypes[url]}
