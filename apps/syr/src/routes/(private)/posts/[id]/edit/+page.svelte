@@ -284,7 +284,7 @@
 
 	const { form: formData, enhance } = form;
 
-	// Initialize form with post data
+	// Initialize form and local media state from post data (re-runs when data.post changes, e.g. after invalidateAll)
 	$effect(() => {
 		if (data.post) {
 			// Convert string id to RecordId for form (API will handle conversion on submit)
@@ -298,6 +298,9 @@
 			$formData.visibility = data.post.visibility;
 			$formData.media_urls = data.post.media_urls;
 			$formData.display_mode = data.post.display_mode;
+			// Keep local media state in sync so removeMediaUrl / handleMediaFiles don't overwrite with stale data
+			mediaUrls = data.post.media_urls ?? [];
+			mediaMimeTypes = data.mediaUrlMimeTypes ?? {};
 		}
 	});
 
