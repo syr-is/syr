@@ -203,23 +203,25 @@
 						<!-- Prev / Next arrows -->
 						<button
 							type="button"
+							aria-label="Previous slide"
 							class="absolute top-1/2 left-1 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity hover:bg-black/70"
 							onclick={(e) => {
 								e.stopPropagation();
 								carouselApi?.scrollPrev();
 							}}
 						>
-							<ChevronLeft class="h-4 w-4" />
+							<ChevronLeft class="h-4 w-4" aria-hidden="true" />
 						</button>
 						<button
 							type="button"
+							aria-label="Next slide"
 							class="absolute top-1/2 right-1 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity hover:bg-black/70"
 							onclick={(e) => {
 								e.stopPropagation();
 								carouselApi?.scrollNext();
 							}}
 						>
-							<ChevronRight class="h-4 w-4" />
+							<ChevronRight class="h-4 w-4" aria-hidden="true" />
 						</button>
 						<!-- Slide counter -->
 						<div

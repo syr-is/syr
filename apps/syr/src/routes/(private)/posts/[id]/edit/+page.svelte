@@ -119,6 +119,17 @@
 		return body;
 	}
 
+	/** Ask user to confirm before switching post type; only updates $formData.type if confirmed. */
+	function confirmTypeSwitch(targetType: 'blog' | 'media') {
+		if ($formData.type === targetType) return;
+		const message =
+			targetType === 'blog'
+				? 'Switch to Blog? Your media and uploads will be discarded and cannot be recovered from this form.'
+				: 'Switch to Media? Your blog content (text, markdown, or HTML) will be discarded and cannot be recovered from this form.';
+		if (!window.confirm(message)) return;
+		$formData.type = targetType;
+	}
+
 	async function handlePublish() {
 		if (publishLoading) return;
 
@@ -532,7 +543,7 @@
 								'blog'
 									? 'bg-background text-foreground shadow-xs'
 									: 'text-muted-foreground hover:text-foreground'}"
-								onclick={() => ($formData.type = 'blog')}
+								onclick={() => confirmTypeSwitch('blog')}
 							>
 								Blog
 							</button>
@@ -542,7 +553,7 @@
 								'media'
 									? 'bg-background text-foreground shadow-xs'
 									: 'text-muted-foreground hover:text-foreground'}"
-								onclick={() => ($formData.type = 'media')}
+								onclick={() => confirmTypeSwitch('media')}
 							>
 								Media
 							</button>
