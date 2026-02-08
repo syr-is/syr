@@ -363,6 +363,11 @@
 			return { destroy() {} };
 		}
 
+		// Track whether the Svelte action's destroy() has already fired (e.g. user
+		// switched to media type before Crepe finished). Prevents .then() / setTimeout
+		// from setting crepeInstance to a destroyed editor.
+		let destroyed = false;
+
 		const instance = new Crepe({
 			root: node,
 			defaultValue: $formData.content || ''
@@ -370,6 +375,11 @@
 
 		// Create editor and wait for it to be ready
 		instance.create().then(async () => {
+			// DOM was removed (type switched to media or content_type to HTML) — tear down and bail
+			if (destroyed) {
+				instance.destroy?.();
+				return;
+			}
 			// Dialog may have closed while Crepe was initialising — tear down and bail
 			if (!dialogOpen) {
 				instance.destroy?.();
@@ -380,6 +390,8 @@
 
 			// Create a draft to get post ID for image uploads
 			const postId = await createDraft();
+
+			if (destroyed) return;
 
 			// Configure image upload handler
 			if (postId) {
@@ -407,6 +419,7 @@
 
 			// Wait a bit longer for editor to be fully ready before calling getMarkdown
 			setTimeout(() => {
+				if (destroyed) return;
 				crepeReady = true;
 
 				// Sync initial content after editor is ready
@@ -424,6 +437,7 @@
 
 		return {
 			destroy() {
+				destroyed = true;
 				instance?.destroy?.();
 				crepeInstance = null;
 				crepeReady = false;
