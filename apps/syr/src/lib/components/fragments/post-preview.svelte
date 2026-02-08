@@ -252,7 +252,7 @@
 				</p>
 			{:else}
 				<p class="line-clamp-1 flex-1 text-sm text-muted-foreground">
-					{post.title || 'Untitled Post'}
+					{getDisplayText(post)}
 				</p>
 			{/if}
 			<div class="flex gap-1">
