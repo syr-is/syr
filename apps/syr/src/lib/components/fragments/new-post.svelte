@@ -152,13 +152,6 @@
 		return 'Select content type';
 	}
 
-	// Helper function to get display label for post type
-	function getPostTypeLabel(value: string | undefined): string {
-		if (value === 'blog') return 'Blog';
-		if (value === 'media') return 'Media';
-		return 'Select post type';
-	}
-
 	// Helper function to get display label for display mode
 	function getDisplayModeLabel(value: string | undefined): string {
 		if (value === 'carousel') return 'Carousel';
