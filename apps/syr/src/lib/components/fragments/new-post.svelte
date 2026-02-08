@@ -41,10 +41,13 @@
 	let uploadingCount = $state(0);
 	const uploading = $derived(uploadingCount > 0);
 
+	// Mutex for createDraft – prevents concurrent calls from creating duplicate drafts
+	let draftCreatePromise: Promise<string | null> | null = null;
+
 	const form = superForm(defaults(zod4(PostCreateSchema)), {
 		validators: zod4(PostCreateSchema),
 		SPA: true,
-		resetForm: true,
+		resetForm: false,
 		onUpdate: async ({ form }) => {
 			if (!form.valid) return;
 
@@ -66,6 +69,12 @@
 			// For media posts, sync media_urls
 			if ($formData.type === 'media') {
 				$formData.media_urls = mediaUrls;
+			}
+
+			// Wait for any in-flight draft creation to finish so we PATCH the
+			// existing draft instead of accidentally POSTing a duplicate.
+			if (draftCreatePromise) {
+				await draftCreatePromise;
 			}
 
 			loading = true;
@@ -125,6 +134,7 @@
 		mediaUrls = [];
 		mediaMimeTypes = {};
 		draftPostId = null;
+		draftCreatePromise = null;
 	}
 
 	// Helper function to get display label for visibility
@@ -157,50 +167,61 @@
 		return 'Select display mode';
 	}
 
-	// Create draft post to get an ID for asset uploads
+	// Create draft post to get an ID for asset uploads.
+	// Uses draftCreatePromise as a mutex so concurrent callers share a single request.
 	async function createDraft(): Promise<string | null> {
+		if (!dialogOpen) return null;
 		if (draftPostId) return draftPostId;
+		if (draftCreatePromise) return draftCreatePromise;
+
+		draftCreatePromise = (async () => {
+			try {
+				const draftBody: Record<string, unknown> = {
+					type: $formData.type,
+					title: $formData.title || 'Untitled Draft',
+					description: $formData.description,
+					visibility: $formData.visibility,
+					status: 'draft'
+				};
+
+				if ($formData.type === 'blog') {
+					draftBody.content_type = $formData.content_type;
+					draftBody.content = $formData.content;
+				} else {
+					draftBody.media_urls = mediaUrls;
+					draftBody.display_mode = $formData.display_mode || 'masonry';
+				}
+
+				const response = await fetch('/api/posts', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(draftBody)
+				});
+
+				if (!response.ok) {
+					console.error('Failed to create draft');
+					return null;
+				}
+
+				const result = await response.json();
+				const postId = result.data?.id;
+				if (postId) {
+					draftPostId = typeof postId === 'string' ? postId : postId.toString();
+					// Notify parent that a draft was created so it can refresh the UI
+					onDraftCreated?.();
+					return draftPostId;
+				}
+			} catch (error) {
+				console.error('Error creating draft:', error);
+			}
+			return null;
+		})();
 
 		try {
-			const draftBody: Record<string, unknown> = {
-				type: $formData.type,
-				title: $formData.title || 'Untitled Draft',
-				description: $formData.description,
-				visibility: $formData.visibility,
-				status: 'draft'
-			};
-
-			if ($formData.type === 'blog') {
-				draftBody.content_type = $formData.content_type;
-				draftBody.content = $formData.content;
-			} else {
-				draftBody.media_urls = mediaUrls;
-				draftBody.display_mode = $formData.display_mode || 'masonry';
-			}
-
-			const response = await fetch('/api/posts', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(draftBody)
-			});
-
-			if (!response.ok) {
-				console.error('Failed to create draft');
-				return null;
-			}
-
-			const result = await response.json();
-			const postId = result.data?.id;
-			if (postId) {
-				draftPostId = typeof postId === 'string' ? postId : postId.toString();
-				// Notify parent that a draft was created so it can refresh the UI
-				onDraftCreated?.();
-				return draftPostId;
-			}
-		} catch (error) {
-			console.error('Error creating draft:', error);
+			return await draftCreatePromise;
+		} finally {
+			draftCreatePromise = null;
 		}
-		return null;
 	}
 
 	// Save draft without closing
@@ -223,6 +244,11 @@
 		// Sync media URLs
 		if ($formData.type === 'media') {
 			$formData.media_urls = mediaUrls;
+		}
+
+		// Wait for any in-flight draft creation to finish
+		if (draftCreatePromise) {
+			await draftCreatePromise;
 		}
 
 		loading = true;
@@ -257,6 +283,11 @@
 
 	// Cancel and delete draft
 	async function cancelAndDelete() {
+		// Wait for any in-flight draft creation so we know the ID to delete
+		if (draftCreatePromise) {
+			await draftCreatePromise;
+		}
+
 		loading = true;
 		try {
 			if (draftPostId) {
@@ -321,6 +352,12 @@
 	}
 
 	function mountCrepe(node: HTMLDivElement) {
+		// Don't initialise the editor if the dialog is already closing/closed
+		// (can happen when resetForm resets type/content_type while exit animation runs)
+		if (!dialogOpen) {
+			return { destroy() {} };
+		}
+
 		const instance = new Crepe({
 			root: node,
 			defaultValue: $formData.content || ''
@@ -328,6 +365,12 @@
 
 		// Create editor and wait for it to be ready
 		instance.create().then(async () => {
+			// Dialog may have closed while Crepe was initialising — tear down and bail
+			if (!dialogOpen) {
+				instance.destroy?.();
+				return;
+			}
+
 			crepeInstance = instance;
 
 			// Create a draft to get post ID for image uploads
@@ -420,8 +463,6 @@
 	// Cleanup draft if dialog is closed without publishing
 	$effect(() => {
 		if (!dialogOpen && draftPostId) {
-			// Optionally delete the draft or leave it for later
-			// For now, we'll leave drafts in the database
 			draftPostId = null;
 			resetForm();
 		}
@@ -459,19 +500,36 @@
 			<!-- Hidden fields -->
 			<input type="hidden" name="status" value={$formData.status} />
 			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
-				<!-- Post Type Selector -->
+				<!-- Post Type: prominent so users can switch to Media -->
 				<Form.ElementField {form} name="type">
 					{#snippet children({ value: _value, errors })}
 						<Label>Post Type</Label>
-						<Select.Root type="single" bind:value={$formData.type}>
-							<Select.Trigger>
-								{getPostTypeLabel($formData.type)}
-							</Select.Trigger>
-							<Select.Content>
-								<Select.Item value="blog">Blog</Select.Item>
-								<Select.Item value="media">Media</Select.Item>
-							</Select.Content>
-						</Select.Root>
+						<div
+							class="inline-flex rounded-lg border border-input bg-muted/30 p-0.5"
+							role="group"
+							aria-label="Post type"
+						>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'blog'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'blog')}
+							>
+								Blog
+							</button>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'media'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'media')}
+							>
+								Media
+							</button>
+						</div>
 						<Form.Description>Choose the type of post you want to create</Form.Description>
 						{#if errors}
 							<Form.FieldErrors />

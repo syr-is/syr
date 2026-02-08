@@ -9,6 +9,7 @@ import {
 	PostCreateSchema,
 	PostUpdateSchema
 } from '@syr-is/types';
+import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -56,9 +57,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	// Get posts with pagination options
 	const { data, total } = await postController.getUserPosts(user.id, options);
 
+	// Resolve mime types for all media URLs across all posts
+	const allMediaUrls = data.flatMap((p) =>
+		p.type === 'media' && p.media_urls ? p.media_urls : []
+	);
+	const mediaUrlMimeTypes =
+		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
+
 	return json({
 		status: 'success',
 		data,
+		mediaUrlMimeTypes,
 		pagination: {
 			limit,
 			offset,
@@ -169,7 +178,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		const result = await postController.updatePost(data);
+		// When switching post type, explicitly remove stale fields from the old type.
+		// merge() alone won't clear undefined values in SurrealDB.
+		const resolvedType = data.type ?? existingPost.type;
+		const typeSwitched = existingPost.type !== resolvedType;
+		const keysToUnset = typeSwitched
+			? resolvedType === 'blog'
+				? ['media_urls', 'display_mode']
+				: ['content_type', 'content']
+			: undefined;
+
+		const result = await postController.updatePost(data, keysToUnset);
 
 		return json({
 			status: 'success',

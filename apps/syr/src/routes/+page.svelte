@@ -25,6 +25,9 @@
 	let pinnedPostIds = $state<string[]>([]);
 	let _pinnedLoading = $state(false);
 
+	// Mime type map for media URLs (shared across all posts)
+	let mediaUrlMimeTypes = $state<Record<string, string>>({});
+
 	// Drag and drop state
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
@@ -62,6 +65,8 @@
 			const result = await response.json();
 			posts = result.data || [];
 			total = result.pagination?.total || 0;
+			const newMimeTypes: Record<string, string> = result.mediaUrlMimeTypes || {};
+			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			posts = [];
@@ -85,6 +90,8 @@
 			const result = await response.json();
 			pinnedPosts = result.data?.posts || [];
 			pinnedPostIds = result.data?.post_ids || [];
+			const newMimeTypes: Record<string, string> = result.data?.mediaUrlMimeTypes || {};
+			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
 		} catch (err) {
 			console.error('Failed to fetch pinned posts:', err);
 			pinnedPosts = [];
@@ -358,6 +365,7 @@
 										isPinned={true}
 										onPinToggle={handlePinToggle}
 										showPinButton={true}
+										{mediaUrlMimeTypes}
 									/>
 								</button>
 							</DraggableItem>
@@ -418,6 +426,7 @@
 									isPinned={isPostPinned(post.id.toString())}
 									onPinToggle={handlePinToggle}
 									showPinButton={true}
+									{mediaUrlMimeTypes}
 								/>
 							</button>
 						{/each}

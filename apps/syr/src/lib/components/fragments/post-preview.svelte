@@ -1,12 +1,25 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
+	import * as Carousel from '$lib/components/ui/carousel/index.js';
+	import type { CarouselAPI } from '$lib/components/ui/carousel/context.js';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
-	import { Trash2, Pin, PinOff, FilePen, ImageIcon } from 'lucide-svelte';
+	import MediaThumbnail from '$lib/components/fragments/media-thumbnail.svelte';
+	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { urlsToDisplayItems } from '$lib/types/display-item';
+	import {
+		Trash2,
+		Pin,
+		PinOff,
+		FilePen,
+		ImageIcon,
+		ChevronLeft,
+		ChevronRight
+	} from 'lucide-svelte';
 	import type { Post } from '@syr-is/types';
-	import { getMediaType } from '$lib/utils/media';
 
 	interface Props {
 		post: Post;
@@ -25,17 +38,43 @@
 		mediaUrlMimeTypes = {}
 	}: Props = $props();
 
-	// Determine media type of first media URL using mime type map when available
-	const firstMediaType = $derived.by(() => {
-		const url = post.media_urls?.[0];
-		if (!url) return 'other';
-		return getMediaType(url, mediaUrlMimeTypes[url]);
-	});
-
 	// Check if post is a draft
 	const isDraft = $derived(post.status === 'draft');
 	let deleteDialogOpen = $state(false);
 	let pinLoading = $state(false);
+
+	// Carousel state
+	let carouselApi = $state<CarouselAPI>();
+	let currentSlide = $state(0);
+	const slideCount = $derived(post.media_urls?.length ?? 0);
+
+	$effect(() => {
+		if (!carouselApi) return;
+		const onSelect = () => {
+			currentSlide = carouselApi!.selectedScrollSnap();
+		};
+		carouselApi.on('select', onSelect);
+		onSelect();
+		return () => {
+			carouselApi!.off('select', onSelect);
+		};
+	});
+
+	// Preview modal state
+	let previewOpen = $state(false);
+	let previewIndex = $state(0);
+	const displayItems = $derived(
+		post.type === 'media' && post.media_urls?.length
+			? urlsToDisplayItems(post.media_urls, mediaUrlMimeTypes)
+			: []
+	);
+
+	function openPreview(index: number, e: MouseEvent) {
+		e.stopPropagation();
+		e.preventDefault();
+		previewIndex = index;
+		previewOpen = true;
+	}
 
 	async function handlePinToggle(e: MouseEvent) {
 		e.stopPropagation();
@@ -124,36 +163,79 @@
 	</Card.Header>
 	<Card.Content>
 		{#if post.type === 'media' && post.media_urls && post.media_urls.length > 0}
-			<!-- Media preview: stacked vertical layout -->
+			<!-- Media carousel preview -->
 			<div class="relative mb-3 overflow-hidden rounded-lg bg-muted">
-				{#if firstMediaType === 'video'}
-					<video src={post.media_urls[0]} class="h-40 w-full object-cover" preload="metadata">
-						<track kind="captions" />
-					</video>
-				{:else if firstMediaType === 'audio'}
-					<div class="flex h-40 w-full items-center justify-center">
-						<ImageIcon class="h-12 w-12 text-muted-foreground" />
-					</div>
-				{:else}
-					<!-- Use <img> for images and as fallback for unknown types (S3 serves correct Content-Type) -->
-					<img
-						src={post.media_urls[0]}
-						alt="Preview"
-						class="h-40 w-full object-cover"
-						loading="lazy"
-						onerror={(e) => {
-							const target = e.currentTarget as HTMLImageElement;
-							target.style.display = 'none';
-						}}
-					/>
-				{/if}
-				{#if post.media_urls.length > 1}
-					<div
-						class="absolute right-2 bottom-2 rounded-md bg-black/60 px-2 py-0.5 text-xs font-medium text-white"
-					>
-						+{post.media_urls.length - 1} more
-					</div>
-				{/if}
+				<Carousel.Root
+					class="w-full"
+					setApi={(api) => (carouselApi = api)}
+					opts={{ loop: post.media_urls.length > 1 }}
+				>
+					<Carousel.Content class="-ml-0">
+						{#each post.media_urls as url, i (`${url}-${i}`)}
+							<Carousel.Item class="pl-0">
+								<div class="relative h-40 overflow-hidden">
+									<!-- Loading placeholder -->
+									<Skeleton class="absolute inset-0 h-full w-full rounded-none" />
+									<!-- Media content via shared component -->
+									<div class="relative z-[1] h-full w-full">
+										<MediaThumbnail
+											{url}
+											mimeType={mediaUrlMimeTypes[url]}
+											mode="card"
+											alt="Media {i + 1}"
+										/>
+									</div>
+									<!-- Invisible click overlay (opens preview, sits below arrows) -->
+									<button
+										type="button"
+										class="absolute inset-0 z-[5] cursor-pointer opacity-0 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+										aria-label="Preview media {i + 1}"
+										onclick={(e) => openPreview(i, e)}
+									></button>
+								</div>
+							</Carousel.Item>
+						{/each}
+					</Carousel.Content>
+					{#if post.media_urls.length > 1}
+						<!-- Prev / Next arrows -->
+						<button
+							type="button"
+							class="absolute top-1/2 left-1 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity hover:bg-black/70"
+							onclick={(e) => {
+								e.stopPropagation();
+								carouselApi?.scrollPrev();
+							}}
+						>
+							<ChevronLeft class="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							class="absolute top-1/2 right-1 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity hover:bg-black/70"
+							onclick={(e) => {
+								e.stopPropagation();
+								carouselApi?.scrollNext();
+							}}
+						>
+							<ChevronRight class="h-4 w-4" />
+						</button>
+						<!-- Slide counter -->
+						<div
+							class="absolute right-2 bottom-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-xs font-medium text-white"
+						>
+							{currentSlide + 1} / {slideCount}
+						</div>
+					{/if}
+				</Carousel.Root>
+			</div>
+		{:else}
+			<!-- Blog / empty-media preview: text content area matching media card height -->
+			<div class="relative mb-3 h-40 overflow-hidden rounded-lg bg-muted/30 p-4">
+				<p class="text-sm leading-relaxed text-muted-foreground">
+					{getDisplayText(post)}
+				</p>
+				<div
+					class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background to-transparent"
+				></div>
 			</div>
 		{/if}
 
@@ -164,7 +246,9 @@
 					{getDisplayText(post)}
 				</p>
 			{:else}
-				<p class="line-clamp-3 flex-1 text-sm text-muted-foreground">{getDisplayText(post)}</p>
+				<p class="line-clamp-1 flex-1 text-sm text-muted-foreground">
+					{post.title || 'Untitled Post'}
+				</p>
 			{/if}
 			<div class="flex gap-1">
 				{#if showPinButton && onPinToggle}
@@ -211,3 +295,7 @@
 </Card.Root>
 
 <DeletePostDialog bind:open={deleteDialogOpen} {post} />
+
+{#if displayItems.length > 0}
+	<MediaPreviewModal bind:open={previewOpen} items={displayItems} initialIndex={previewIndex} />
+{/if}

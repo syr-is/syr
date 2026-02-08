@@ -248,10 +248,10 @@
 
 			loading = true;
 			try {
-				const response = await fetch('/api/posts', {
+				const response = await fetch(`/api/posts/${data.post.id}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(form.data)
+					body: JSON.stringify(buildPatchBody())
 				});
 
 				if (!response.ok) {
@@ -475,10 +475,45 @@
 			</div>
 		</Card.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
-			<!-- Hidden field for id and type -->
 			<input type="hidden" name="id" value={$formData.id} />
-			<input type="hidden" name="type" value={$formData.type} />
 			<Card.Content class="min-h-0 flex-1 space-y-4 overflow-y-auto">
+				<!-- Post Type: allow switching between Blog and Media when editing -->
+				<Form.ElementField {form} name="type">
+					{#snippet children({ value: _value, errors })}
+						<Label>Post Type</Label>
+						<div
+							class="inline-flex rounded-lg border border-input bg-muted/30 p-0.5"
+							role="group"
+							aria-label="Post type"
+						>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'blog'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'blog')}
+							>
+								Blog
+							</button>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'media'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'media')}
+							>
+								Media
+							</button>
+						</div>
+						<Form.Description>Switch post type (blog content vs media uploads)</Form.Description>
+						{#if errors}
+							<Form.FieldErrors />
+						{/if}
+					{/snippet}
+				</Form.ElementField>
+
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}

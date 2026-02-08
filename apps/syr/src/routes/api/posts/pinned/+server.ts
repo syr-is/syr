@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
+import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
 
 /**
  * GET /api/posts/pinned
@@ -27,11 +28,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const pinnedPosts = await pinnedPostsController.getPinnedPosts(user.id);
 	const pinnedPostIds = await pinnedPostsController.getPinnedPostIds(user.id);
 
+	// Resolve mime types for all media URLs across pinned posts
+	const allMediaUrls = pinnedPosts.flatMap((p) =>
+		p.type === 'media' && p.media_urls ? p.media_urls : []
+	);
+	const mediaUrlMimeTypes =
+		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
+
 	return json({
 		status: 'success',
 		data: {
 			posts: pinnedPosts,
-			post_ids: pinnedPostIds
+			post_ids: pinnedPostIds,
+			mediaUrlMimeTypes
 		},
 		meta: { timestamp: new Date().toISOString() }
 	});
