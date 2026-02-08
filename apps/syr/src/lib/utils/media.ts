@@ -7,9 +7,9 @@ const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg'];
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'];
 
-/** Strip query string and extract the lowercased path portion of a URL */
+/** Strip query string and fragment, then return the lowercased path portion of a URL */
 function urlPath(url: string): string {
-	return url.toLowerCase().split('?')[0];
+	return url.split('?')[0].split('#')[0].toLowerCase();
 }
 
 export function isVideo(url: string): boolean {
