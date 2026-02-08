@@ -307,7 +307,9 @@
 		}
 	}
 
-	// Media upload handling (counter supports concurrent batches)
+	// Media upload handling (counter supports concurrent batches).
+	// Guards against dialog close / form reset during async uploads to prevent
+	// stale URLs from a previous session leaking into the current state.
 	async function handleMediaFiles(files: FileList | File[]) {
 		const fileArray = Array.from(files);
 		if (fileArray.length === 0) return;
@@ -321,9 +323,17 @@
 				return;
 			}
 
+			// Capture the draft this upload session belongs to
+			const sessionDraftId = draftPostId;
+
 			for (const file of fileArray) {
+				// Bail if dialog closed or form was reset during upload
+				if (!dialogOpen || draftPostId !== sessionDraftId) return;
+
 				try {
 					const url = await handlePostAssetUpload(file, postId);
+					// Re-check after async upload completes
+					if (!dialogOpen || draftPostId !== sessionDraftId) return;
 					mediaUrls = [...mediaUrls, url];
 					mediaMimeTypes = { ...mediaMimeTypes, [url]: file.type };
 				} catch (err) {
@@ -332,8 +342,10 @@
 				}
 			}
 
-			// Sync with form data
-			$formData.media_urls = mediaUrls;
+			// Only sync if still in the same session
+			if (dialogOpen && draftPostId === sessionDraftId) {
+				$formData.media_urls = mediaUrls;
+			}
 		} finally {
 			uploadingCount--;
 		}

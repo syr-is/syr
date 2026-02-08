@@ -165,9 +165,14 @@ export abstract class BaseRepository<T> {
 	}
 
 	/**
-	 * Update a record by first removing given keys (via JSON Patch) then merging the rest.
+	 * Update a record by first removing given keys then merging the rest.
 	 * Use when switching record shape (e.g. post type): merge() does not remove fields
 	 * when values are undefined, so stale fields must be explicitly removed.
+	 *
+	 * Uses SurrealQL UNSET + MERGE inside a transaction so the operation is atomic
+	 * (no window where the record is partially updated). Unlike JSON Patch `remove`,
+	 * SurrealQL UNSET safely ignores fields that don't exist on the record, so
+	 * optional fields that were never set won't cause failures.
 	 */
 	async updateWithUnset(
 		id: RecordId | string,
@@ -181,10 +186,48 @@ export abstract class BaseRepository<T> {
 			if (keysToUnset.includes(key) || value === undefined) continue;
 			mergePayload[key] = value;
 		}
+
 		if (keysToUnset.length > 0) {
-			const patchOps = keysToUnset.map((key) => ({ op: 'remove' as const, path: `/${key}` }));
-			await this.db.patch(recordId, patchOps);
+			// Validate field names to prevent injection (should only contain word chars)
+			for (const key of keysToUnset) {
+				if (!/^\w+$/.test(key)) {
+					throw new Error(`Invalid field name for unset: ${key}`);
+				}
+			}
+
+			// Atomic UNSET + MERGE inside a single transaction
+			const unsetFields = keysToUnset.join(', ');
+			const results = await this.db.query(
+				`BEGIN TRANSACTION; UPDATE $id UNSET ${unsetFields}; UPDATE $id MERGE $merge; COMMIT TRANSACTION;`,
+				{ id: recordId, merge: mergePayload }
+			);
+
+			// Extract the updated record from transaction results.
+			// Result shape varies by SurrealDB version; scan backwards for the first
+			// non-empty array entry (the last UPDATE's return value).
+			let record: unknown = null;
+			if (Array.isArray(results)) {
+				for (let i = results.length - 1; i >= 0; i--) {
+					const entry = results[i];
+					if (Array.isArray(entry) && entry.length > 0) {
+						record = entry[0];
+						break;
+					}
+				}
+			}
+
+			// Fallback: fetch the record directly if we couldn't extract from results
+			if (!record) {
+				record = await this.db.select(recordId);
+			}
+
+			if (!record) {
+				throw new Error(`Record not found after updateWithUnset: ${recordId}`);
+			}
+
+			return this.validate(record);
 		}
+
 		const record = await this.db.merge(recordId, mergePayload);
 		return this.validate(record);
 	}

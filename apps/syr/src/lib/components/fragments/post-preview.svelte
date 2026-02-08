@@ -50,13 +50,16 @@
 
 	$effect(() => {
 		if (!carouselApi) return;
+		// Capture the API instance so the cleanup closure always has a valid reference,
+		// even if carouselApi is reassigned to undefined before teardown runs.
+		const api = carouselApi;
 		const onSelect = () => {
-			currentSlide = carouselApi!.selectedScrollSnap();
+			currentSlide = api.selectedScrollSnap();
 		};
-		carouselApi.on('select', onSelect);
+		api.on('select', onSelect);
 		onSelect();
 		return () => {
-			carouselApi!.off('select', onSelect);
+			api.off('select', onSelect);
 		};
 	});
 

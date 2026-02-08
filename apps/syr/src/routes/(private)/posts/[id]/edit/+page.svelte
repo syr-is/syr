@@ -346,6 +346,11 @@
 		// Get content from form data (should be populated by the effect)
 		const initialContent = data.post?.content || $formData.content || '';
 
+		// Track whether the Svelte action's destroy() has already fired.
+		// This prevents the async .then() callback from setting crepeInstance
+		// to an already-destroyed editor when the user switches type quickly.
+		let destroyed = false;
+
 		const instance = new Crepe({
 			root: node,
 			defaultValue: initialContent
@@ -353,6 +358,13 @@
 
 		// Create editor and wait for it to be ready
 		instance.create().then(() => {
+			// If the node was already unmounted (type switched to media while
+			// Crepe was initialising), tear down and bail.
+			if (destroyed) {
+				instance.destroy?.();
+				return;
+			}
+
 			crepeInstance = instance;
 
 			// Use post-specific uploader so images go to posts/{post_id}/public/
@@ -372,6 +384,8 @@
 
 			// Wait a bit longer for editor to be fully ready before calling getMarkdown
 			setTimeout(() => {
+				// Guard again — destroy() may have fired during the 200ms wait
+				if (destroyed) return;
 				crepeReady = true;
 
 				// Sync initial content after editor is ready
@@ -389,6 +403,7 @@
 
 		return {
 			destroy() {
+				destroyed = true;
 				instance?.destroy?.();
 				crepeInstance = null;
 				crepeReady = false;
@@ -402,6 +417,31 @@
 			crepeInstance.destroy();
 			crepeInstance = null;
 			crepeReady = false;
+		}
+	});
+
+	// Watch for type changes and cleanup Crepe if switching to media
+	$effect(() => {
+		if ($formData.type === 'media' && crepeInstance) {
+			crepeInstance.destroy();
+			crepeInstance = null;
+			crepeReady = false;
+		}
+	});
+
+	// Set default display_mode and clear content_type when switching to media type,
+	// restore content_type default when switching back to blog.
+	// Guards prevent unconditional writes that would re-trigger the store and cause infinite loops.
+	$effect(() => {
+		if ($formData.type === 'media') {
+			if (!$formData.display_mode) {
+				$formData.display_mode = 'masonry';
+			}
+			if ($formData.content_type !== undefined) {
+				$formData.content_type = undefined;
+			}
+		} else if ($formData.type === 'blog' && !$formData.content_type) {
+			$formData.content_type = 'markdown';
 		}
 	});
 
