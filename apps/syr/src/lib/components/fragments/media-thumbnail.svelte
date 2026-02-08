@@ -64,7 +64,6 @@
 			</div>
 		</div>
 	{:else if mediaType === 'audio'}
-		<!-- svelte-ignore a11y_missing_attribute -->
 		<div class="h-full w-full" use:trackAlbumArt={url}>
 			{#if albumArtUrl}
 				<img
