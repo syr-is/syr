@@ -188,7 +188,34 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				: ['content_type', 'content']
 			: undefined;
 
-		const result = await postController.updatePost(data, keysToUnset);
+		// Build payload with fallbacks so required fields are always set (e.g. content_type for blog).
+		// Raw data may omit these when switching media→blog, which would fail PostSchema validation.
+		const basePayload = {
+			id: data.id,
+			type: resolvedType,
+			visibility: data.visibility ?? existingPost.visibility,
+			status: data.status ?? existingPost.status,
+			title: data.title ?? existingPost.title,
+			description: data.description ?? existingPost.description
+		};
+		const updatePayload =
+			resolvedType === 'blog'
+				? {
+						...basePayload,
+						content_type: data.content_type ?? existingPost.content_type ?? 'markdown',
+						content: data.content ?? existingPost.content ?? '',
+						media_urls: undefined,
+						display_mode: undefined
+					}
+				: {
+						...basePayload,
+						content_type: undefined,
+						content: undefined,
+						media_urls: data.media_urls ?? existingPost.media_urls ?? [],
+						display_mode: data.display_mode ?? existingPost.display_mode ?? 'masonry'
+					};
+
+		const result = await postController.updatePost(updatePayload, keysToUnset);
 
 		return json({
 			status: 'success',
