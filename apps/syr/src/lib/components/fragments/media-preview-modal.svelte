@@ -58,13 +58,15 @@
 	);
 
 	// Whether to show file metadata (mime type, size) in the header
-	const currentFileItem = $derived(
-		currentItem?.kind === 'file' ? currentItem : null
-	);
+	const currentFileItem = $derived(currentItem?.kind === 'file' ? currentItem : null);
 
-	// Sync currentIndex when the modal opens with a new initialIndex
+	// Sync currentIndex only when the modal transitions from closed to open,
+	// so parent re-renders that change initialIndex while open don't overwrite user navigation.
+	let prevOpen = $state(false);
 	$effect(() => {
-		if (open) {
+		const wasOpen = prevOpen;
+		prevOpen = open;
+		if (open && !wasOpen) {
 			currentIndex = initialIndex;
 		}
 	});
@@ -77,16 +79,23 @@
 		resolvedIsPublic = false;
 
 		const item = currentItem;
-		if (!item) return;
+		if (!item) {
+			urlLoading = false;
+			return;
+		}
 
 		if (item.kind === 'media-url') {
 			// Already have a usable URL
 			resolvedUrl = item.url;
 			resolvedIsPublic = true;
+			urlLoading = false;
 			return;
 		}
 
-		if (item.kind === 'folder') return;
+		if (item.kind === 'folder') {
+			urlLoading = false;
+			return;
+		}
 
 		// kind === 'file' — need to fetch a signed URL
 		urlLoading = true;
@@ -336,7 +345,10 @@
 				</Button>
 			{/if}
 			{#if currentItem && isItemViewable(currentItem) && effectiveUrl}
-				<Button variant="outline" onclick={() => effectiveUrl && window.open(effectiveUrl, '_blank')}>
+				<Button
+					variant="outline"
+					onclick={() => effectiveUrl && window.open(effectiveUrl, '_blank')}
+				>
 					<ExternalLink class="mr-2 h-4 w-4" />
 					Open in new tab
 				</Button>

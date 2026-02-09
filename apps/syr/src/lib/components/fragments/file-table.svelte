@@ -303,7 +303,7 @@
 							{/if}
 							<Table.Cell>
 								<div class="flex items-center gap-1">
-									{#if onPreview}
+									{#if onPreview && canPreview(getItemMimeType(item) ?? '')}
 										<Button
 											variant="ghost"
 											size="sm"
@@ -313,11 +313,14 @@
 											<Eye class="h-4 w-4" />
 										</Button>
 									{/if}
-									<a href={item.url} download={filename}>
-										<Button variant="ghost" size="sm" title="Download">
-											<Download class="h-4 w-4" />
-										</Button>
-									</a>
+									<Button
+										variant="ghost"
+										size="sm"
+										onclick={() => onDownload?.(item)}
+										title="Download"
+									>
+										<Download class="h-4 w-4" />
+									</Button>
 								</div>
 							</Table.Cell>
 						</Table.Row>

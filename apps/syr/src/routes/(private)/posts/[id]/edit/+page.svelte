@@ -32,6 +32,7 @@
 		GalleryHorizontal,
 		Grid3x3
 	} from 'lucide-svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 
@@ -43,6 +44,10 @@
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
 	let publishLoading = $state(false);
+
+	// Type-switch confirmation dialog
+	let typeSwitchDialogOpen = $state(false);
+	let typeSwitchTarget = $state<'blog' | 'media' | null>(null);
 
 	// Media post state
 	let mediaUrls = $state<string[]>(data.post.media_urls ?? []);
@@ -119,15 +124,19 @@
 		return body;
 	}
 
-	/** Ask user to confirm before switching post type; only updates $formData.type if confirmed. */
+	/** Open confirmation dialog before switching post type. */
 	function confirmTypeSwitch(targetType: 'blog' | 'media') {
 		if ($formData.type === targetType) return;
-		const message =
-			targetType === 'blog'
-				? 'Switch to Blog? Your media and uploads will be discarded and cannot be recovered from this form.'
-				: 'Switch to Media? Your blog content (text, markdown, or HTML) will be discarded and cannot be recovered from this form.';
-		if (!window.confirm(message)) return;
-		$formData.type = targetType;
+		typeSwitchTarget = targetType;
+		typeSwitchDialogOpen = true;
+	}
+
+	function applyTypeSwitch() {
+		if (typeSwitchTarget) {
+			$formData.type = typeSwitchTarget;
+			typeSwitchTarget = null;
+		}
+		typeSwitchDialogOpen = false;
 	}
 
 	async function handlePublish() {
@@ -792,4 +801,26 @@
 			</Card.Footer>
 		</form>
 	</Card.Root>
+
+	<!-- Type-switch confirmation dialog -->
+	<Dialog.Root bind:open={typeSwitchDialogOpen}>
+		<Dialog.Content class="max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>
+					{typeSwitchTarget === 'blog' ? 'Switch to Blog?' : 'Switch to Media?'}
+				</Dialog.Title>
+				<Dialog.Description>
+					{typeSwitchTarget === 'blog'
+						? 'Your media and uploads will be discarded and cannot be recovered from this form.'
+						: 'Your blog content (text, markdown, or HTML) will be discarded and cannot be recovered from this form.'}
+				</Dialog.Description>
+			</Dialog.Header>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => (typeSwitchDialogOpen = false)}>Cancel</Button>
+				<Button onclick={() => applyTypeSwitch()}>
+					{typeSwitchTarget === 'blog' ? 'Switch to Blog' : 'Switch to Media'}
+				</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 </div>

@@ -563,7 +563,7 @@
 					{/each}
 				</div>
 			{/if}
-			<FileCarousel items={displayItems} onItemClick={handleGridItemClick} />
+			<FileCarousel items={fileDisplayItems} onItemClick={handleGridItemClick} />
 		{:else}
 			<!-- Gallery or Masonry view -->
 			<FileGrid
