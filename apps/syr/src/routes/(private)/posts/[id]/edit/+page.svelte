@@ -811,7 +811,7 @@
 				</Dialog.Title>
 				<Dialog.Description>
 					{typeSwitchTarget === 'blog'
-						? 'Your media and uploads will be discarded and cannot be recovered from this form.'
+						? 'Your media items will be unlinked from this post but will remain in your uploads library.'
 						: 'Your blog content (text, markdown, or HTML) will be discarded and cannot be recovered from this form.'}
 				</Dialog.Description>
 			</Dialog.Header>
