@@ -3,6 +3,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
 	import { marked } from 'marked';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -193,7 +194,7 @@
 								{data.post.visibility}
 							</Badge>
 							<Badge variant="outline" class="text-xs">
-								{data.post.content_type}
+								{data.post.type === 'media' ? 'media' : data.post.content_type}
 							</Badge>
 						</div>
 					</div>
@@ -286,18 +287,32 @@
 			</div>
 		</Card.Header>
 		<Card.Content
-			class="prose prose-slate dark:prose-invert min-h-0 max-w-none flex-1 overflow-y-auto"
+			class="min-h-0 max-w-none flex-1 overflow-y-auto {data.post.type !== 'media'
+				? 'prose prose-slate dark:prose-invert'
+				: ''}"
 		>
-			<!-- eslint-disable svelte/no-at-html-tags -->
-			<!-- This is a self hosted blog, so we can trust the content -->
-			{#if data.post.content_type === 'html'}
-				{@html data.post.content || ''}
-			{:else if data.post.content_type === 'markdown'}
-				{@html renderMarkdown(data.post.content)}
+			{#if data.post.type === 'media'}
+				{#if data.post.media_urls && data.post.media_urls.length > 0}
+					<MediaViewer
+						mediaUrls={data.post.media_urls}
+						mediaUrlMimeTypes={data.mediaUrlMimeTypes}
+						defaultMode={data.post.display_mode ?? 'masonry'}
+					/>
+				{:else}
+					<p class="py-8 text-center text-muted-foreground">No media items in this post.</p>
+				{/if}
 			{:else}
-				<p class="text-muted-foreground">No content available.</p>
+				<!-- eslint-disable svelte/no-at-html-tags -->
+				<!-- This is a self hosted blog, so we can trust the content -->
+				{#if data.post.content_type === 'html'}
+					{@html data.post.content || ''}
+				{:else if data.post.content_type === 'markdown'}
+					{@html renderMarkdown(data.post.content)}
+				{:else}
+					<p class="text-muted-foreground">No content available.</p>
+				{/if}
+				<!-- eslint-enable svelte/no-at-html-tags -->
 			{/if}
-			<!-- eslint-enable svelte/no-at-html-tags -->
 		</Card.Content>
 	</Card.Root>
 </div>

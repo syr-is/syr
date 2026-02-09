@@ -16,11 +16,23 @@
 	import '@milkdown/crepe/theme/nord-dark.css';
 	import '$lib/styles/crepe-custom.css';
 	import { imageBlockConfig } from '@milkdown/components/image-block';
-	import { createPostAssetUploader } from '$lib/handlers/upload';
+	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import { stringToRecordId } from '@syr-is/types';
+	import MediaUploadZone from '$lib/components/fragments/media-upload-zone.svelte';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
-	import { ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
+	import {
+		ArrowLeft,
+		Pin,
+		PinOff,
+		FilePen,
+		Send,
+		EyeOff,
+		LayoutGrid,
+		GalleryHorizontal,
+		Grid3x3
+	} from 'lucide-svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 
@@ -32,6 +44,17 @@
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
 	let publishLoading = $state(false);
+
+	// Type-switch confirmation dialog
+	let typeSwitchDialogOpen = $state(false);
+	let typeSwitchTarget = $state<'blog' | 'media' | null>(null);
+
+	// Media post state
+	let mediaUrls = $state<string[]>(data.post.media_urls ?? []);
+	// Mime type map: pre-populated from server for existing URLs, updated during upload
+	let mediaMimeTypes = $state<Record<string, string>>(data.mediaUrlMimeTypes ?? {});
+	let uploadingCount = $state(0);
+	const uploading = $derived(uploadingCount > 0);
 
 	// Check if post is a draft
 	const isDraft = $derived(data.post.status === 'draft');
@@ -82,11 +105,50 @@
 		}
 	}
 
+	function buildPatchBody() {
+		const body: Record<string, unknown> = {
+			type: $formData.type,
+			title: $formData.title,
+			description: $formData.description,
+			visibility: $formData.visibility
+		};
+
+		if ($formData.type === 'blog') {
+			body.content_type = $formData.content_type;
+			body.content = $formData.content;
+		} else {
+			body.media_urls = mediaUrls;
+			body.display_mode = $formData.display_mode;
+		}
+
+		return body;
+	}
+
+	/** Open confirmation dialog before switching post type. */
+	function confirmTypeSwitch(targetType: 'blog' | 'media') {
+		if ($formData.type === targetType) return;
+		typeSwitchTarget = targetType;
+		typeSwitchDialogOpen = true;
+	}
+
+	function applyTypeSwitch() {
+		if (typeSwitchTarget) {
+			$formData.type = typeSwitchTarget;
+			typeSwitchTarget = null;
+		}
+		typeSwitchDialogOpen = false;
+	}
+
 	async function handlePublish() {
 		if (publishLoading) return;
 
 		// Sync markdown content before publishing
-		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+		if (
+			$formData.type === 'blog' &&
+			$formData.content_type === 'markdown' &&
+			crepeInstance &&
+			crepeReady
+		) {
 			try {
 				const markdown = crepeInstance.getMarkdown();
 				$formData.content = markdown;
@@ -95,18 +157,18 @@
 			}
 		}
 
+		// Sync media URLs
+		if ($formData.type === 'media') {
+			$formData.media_urls = mediaUrls;
+		}
+
 		publishLoading = true;
 		try {
 			const response = await fetch(`/api/posts/${data.post.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					type: $formData.type,
-					content_type: $formData.content_type,
-					title: $formData.title,
-					description: $formData.description,
-					content: $formData.content,
-					visibility: $formData.visibility,
+					...buildPatchBody(),
 					status: 'completed'
 				})
 			});
@@ -131,7 +193,12 @@
 		if (publishLoading) return;
 
 		// Sync markdown content before unpublishing
-		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+		if (
+			$formData.type === 'blog' &&
+			$formData.content_type === 'markdown' &&
+			crepeInstance &&
+			crepeReady
+		) {
 			try {
 				const markdown = crepeInstance.getMarkdown();
 				$formData.content = markdown;
@@ -140,18 +207,18 @@
 			}
 		}
 
+		// Sync media URLs
+		if ($formData.type === 'media') {
+			$formData.media_urls = mediaUrls;
+		}
+
 		publishLoading = true;
 		try {
 			const response = await fetch(`/api/posts/${data.post.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					type: $formData.type,
-					content_type: $formData.content_type,
-					title: $formData.title,
-					description: $formData.description,
-					content: $formData.content,
-					visibility: $formData.visibility,
+					...buildPatchBody(),
 					status: 'draft'
 				})
 			});
@@ -180,7 +247,12 @@
 			if (!form.valid) return;
 
 			// Ensure markdown content is synced before submission
-			if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+			if (
+				$formData.type === 'blog' &&
+				$formData.content_type === 'markdown' &&
+				crepeInstance &&
+				crepeReady
+			) {
 				try {
 					const markdown = crepeInstance.getMarkdown();
 					$formData.content = markdown;
@@ -189,12 +261,17 @@
 				}
 			}
 
+			// Sync media URLs
+			if ($formData.type === 'media') {
+				$formData.media_urls = mediaUrls;
+			}
+
 			loading = true;
 			try {
-				const response = await fetch('/api/posts', {
+				const response = await fetch(`/api/posts/${data.post.id}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(form.data)
+					body: JSON.stringify(buildPatchBody())
 				});
 
 				if (!response.ok) {
@@ -216,17 +293,23 @@
 
 	const { form: formData, enhance } = form;
 
-	// Initialize form with post data
+	// Initialize form and local media state from post data (re-runs when data.post changes, e.g. after invalidateAll)
 	$effect(() => {
 		if (data.post) {
 			// Convert string id to RecordId for form (API will handle conversion on submit)
 			$formData.id = stringToRecordId.decode(data.post.id);
 			$formData.type = data.post.type;
-			$formData.content_type = data.post.content_type;
+			// Only set content_type for blog posts; clear it for media posts
+			$formData.content_type = data.post.type === 'media' ? undefined : data.post.content_type;
 			$formData.title = data.post.title || '';
 			$formData.description = data.post.description || '';
 			$formData.content = data.post.content || '';
 			$formData.visibility = data.post.visibility;
+			$formData.media_urls = data.post.media_urls;
+			$formData.display_mode = data.post.display_mode;
+			// Keep local media state in sync so removeMediaUrl / handleMediaFiles don't overwrite with stale data
+			mediaUrls = data.post.media_urls ?? [];
+			mediaMimeTypes = data.mediaUrlMimeTypes ?? {};
 		}
 	});
 
@@ -245,9 +328,51 @@
 		return 'Select content type';
 	}
 
+	// Helper function to get display label for display mode
+	function getDisplayModeLabel(value: string | undefined): string {
+		if (value === 'carousel') return 'Carousel';
+		if (value === 'masonry') return 'Masonry Grid';
+		if (value === 'gallery') return 'Gallery';
+		return 'Select display mode';
+	}
+
+	// Media upload handling (counter supports concurrent batches)
+	async function handleMediaFiles(files: FileList | File[]) {
+		const fileArray = Array.from(files);
+		if (fileArray.length === 0) return;
+
+		uploadingCount++;
+		try {
+			for (const file of fileArray) {
+				try {
+					const url = await handlePostAssetUpload(file, data.post.id);
+					mediaUrls = [...mediaUrls, url];
+					mediaMimeTypes = { ...mediaMimeTypes, [url]: file.type };
+				} catch (err) {
+					console.error('Failed to upload file:', file.name, err);
+					toast.error(`Failed to upload ${file.name}`);
+				}
+			}
+
+			$formData.media_urls = mediaUrls;
+		} finally {
+			uploadingCount--;
+		}
+	}
+
+	function removeMediaUrl(index: number) {
+		mediaUrls = mediaUrls.filter((_, i) => i !== index);
+		$formData.media_urls = mediaUrls;
+	}
+
 	function mountCrepe(node: HTMLDivElement) {
 		// Get content from form data (should be populated by the effect)
 		const initialContent = data.post?.content || $formData.content || '';
+
+		// Track whether the Svelte action's destroy() has already fired.
+		// This prevents the async .then() callback from setting crepeInstance
+		// to an already-destroyed editor when the user switches type quickly.
+		let destroyed = false;
 
 		const instance = new Crepe({
 			root: node,
@@ -256,6 +381,13 @@
 
 		// Create editor and wait for it to be ready
 		instance.create().then(() => {
+			// If the node was already unmounted (type switched to media while
+			// Crepe was initialising), tear down and bail.
+			if (destroyed) {
+				instance.destroy?.();
+				return;
+			}
+
 			crepeInstance = instance;
 
 			// Use post-specific uploader so images go to posts/{post_id}/public/
@@ -275,6 +407,8 @@
 
 			// Wait a bit longer for editor to be fully ready before calling getMarkdown
 			setTimeout(() => {
+				// Guard again — destroy() may have fired during the 200ms wait
+				if (destroyed) return;
 				crepeReady = true;
 
 				// Sync initial content after editor is ready
@@ -292,6 +426,7 @@
 
 		return {
 			destroy() {
+				destroyed = true;
 				instance?.destroy?.();
 				crepeInstance = null;
 				crepeReady = false;
@@ -305,6 +440,31 @@
 			crepeInstance.destroy();
 			crepeInstance = null;
 			crepeReady = false;
+		}
+	});
+
+	// Watch for type changes and cleanup Crepe if switching to media
+	$effect(() => {
+		if ($formData.type === 'media' && crepeInstance) {
+			crepeInstance.destroy();
+			crepeInstance = null;
+			crepeReady = false;
+		}
+	});
+
+	// Set default display_mode and clear content_type when switching to media type,
+	// restore content_type default when switching back to blog.
+	// Guards prevent unconditional writes that would re-trigger the store and cause infinite loops.
+	$effect(() => {
+		if ($formData.type === 'media') {
+			if (!$formData.display_mode) {
+				$formData.display_mode = 'masonry';
+			}
+			if ($formData.content_type !== undefined) {
+				$formData.content_type = undefined;
+			}
+		} else if ($formData.type === 'blog' && !$formData.content_type) {
+			$formData.content_type = 'markdown';
 		}
 	});
 
@@ -333,7 +493,13 @@
 				<div class="flex items-center gap-3">
 					<div>
 						<Card.Title>Edit Post</Card.Title>
-						<Card.Description>Update your blog post</Card.Description>
+						<Card.Description>
+							{#if data.post.type === 'media'}
+								Update your media post
+							{:else}
+								Update your blog post
+							{/if}
+						</Card.Description>
 					</div>
 					{#if isDraft}
 						<Badge variant="outline" class="border-warning text-warning gap-1">
@@ -372,10 +538,45 @@
 			</div>
 		</Card.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
-			<!-- Hidden field for id and type -->
 			<input type="hidden" name="id" value={$formData.id} />
-			<input type="hidden" name="type" value={$formData.type} />
 			<Card.Content class="min-h-0 flex-1 space-y-4 overflow-y-auto">
+				<!-- Post Type: allow switching between Blog and Media when editing -->
+				<Form.ElementField {form} name="type">
+					{#snippet children({ value: _value, errors })}
+						<Label>Post Type</Label>
+						<div
+							class="inline-flex rounded-lg border border-input bg-muted/30 p-0.5"
+							role="group"
+							aria-label="Post type"
+						>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'blog'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => confirmTypeSwitch('blog')}
+							>
+								Blog
+							</button>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'media'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => confirmTypeSwitch('media')}
+							>
+								Media
+							</button>
+						</div>
+						<Form.Description>Switch post type (blog content vs media uploads)</Form.Description>
+						{#if errors}
+							<Form.FieldErrors />
+						{/if}
+					{/snippet}
+				</Form.ElementField>
+
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -404,87 +605,165 @@
 					<Form.FieldErrors />
 				</Form.Field>
 
-				<div class="grid grid-cols-2 gap-4">
-					<Form.ElementField {form} name="content_type">
-						{#snippet children({ value: _value, errors })}
-							<Label>Content Type</Label>
-							<Select.Root type="single" bind:value={$formData.content_type}>
-								<Select.Trigger>
-									{getContentTypeLabel($formData.content_type)}
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="markdown">Markdown</Select.Item>
-									<Select.Item value="html">HTML</Select.Item>
-								</Select.Content>
-							</Select.Root>
-							<Form.Description>Format of your post content</Form.Description>
-							{#if errors}
-								<Form.FieldErrors />
-							{/if}
-						{/snippet}
-					</Form.ElementField>
+				{#if $formData.type === 'blog'}
+					<!-- Blog-specific fields -->
+					<div class="grid grid-cols-2 gap-4">
+						<Form.ElementField {form} name="content_type">
+							{#snippet children({ value: _value, errors })}
+								<Label>Content Type</Label>
+								<Select.Root type="single" bind:value={$formData.content_type}>
+									<Select.Trigger>
+										{getContentTypeLabel($formData.content_type)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="markdown">Markdown</Select.Item>
+										<Select.Item value="html">HTML</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Format of your post content</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
 
-					<Form.ElementField {form} name="visibility">
-						{#snippet children({ value: _value, errors })}
-							<Label>Visibility</Label>
-							<Select.Root type="single" bind:value={$formData.visibility}>
-								<Select.Trigger>
-									{getVisibilityLabel($formData.visibility)}
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="public">Public</Select.Item>
-									<Select.Item value="unlisted">Unlisted</Select.Item>
-									<Select.Item value="private">Private</Select.Item>
-								</Select.Content>
-							</Select.Root>
-							<Form.Description>Who can see this post</Form.Description>
-							{#if errors}
-								<Form.FieldErrors />
-							{/if}
-						{/snippet}
-					</Form.ElementField>
-				</div>
+						<Form.ElementField {form} name="visibility">
+							{#snippet children({ value: _value, errors })}
+								<Label>Visibility</Label>
+								<Select.Root type="single" bind:value={$formData.visibility}>
+									<Select.Trigger>
+										{getVisibilityLabel($formData.visibility)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="public">Public</Select.Item>
+										<Select.Item value="unlisted">Unlisted</Select.Item>
+										<Select.Item value="private">Private</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Who can see this post</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+					</div>
 
-				<Form.ElementField {form} name="content">
-					{#snippet children({ value: _value, errors })}
-						<Label>Content</Label>
-						{#if $formData.content_type === 'markdown'}
-							{#key data.post?.id}
-								<div
-									id="post-editor"
-									use:mountCrepe
-									class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
-								></div>
-							{/key}
-						{:else}
-							<Textarea
-								bind:value={$formData.content}
-								placeholder="Write your HTML content here..."
-								class="min-h-[400px] w-full font-mono text-sm"
-								rows={20}
-							/>
-						{/if}
-						<Form.Description>
+					<Form.ElementField {form} name="content">
+						{#snippet children({ value: _value, errors })}
+							<Label>Content</Label>
 							{#if $formData.content_type === 'markdown'}
-								Write your post content using markdown
+								{#key data.post?.id}
+									<div
+										id="post-editor"
+										use:mountCrepe
+										class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
+									></div>
+								{/key}
 							{:else}
-								Write your post content using HTML
+								<Textarea
+									bind:value={$formData.content}
+									placeholder="Write your HTML content here..."
+									class="min-h-[400px] w-full font-mono text-sm"
+									rows={20}
+								/>
 							{/if}
-						</Form.Description>
-						{#if errors}
-							<Form.FieldErrors />
-						{/if}
-					{/snippet}
-				</Form.ElementField>
+							<Form.Description>
+								{#if $formData.content_type === 'markdown'}
+									Write your post content using markdown
+								{:else}
+									Write your post content using HTML
+								{/if}
+							</Form.Description>
+							{#if errors}
+								<Form.FieldErrors />
+							{/if}
+						{/snippet}
+					</Form.ElementField>
+				{:else}
+					<!-- Media-specific fields -->
+					<div class="grid grid-cols-2 gap-4">
+						<Form.ElementField {form} name="display_mode">
+							{#snippet children({ value: _value, errors })}
+								<Label>Default Display Mode</Label>
+								<Select.Root type="single" bind:value={$formData.display_mode}>
+									<Select.Trigger>
+										{getDisplayModeLabel($formData.display_mode)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="masonry">
+											<span class="flex items-center gap-2">
+												<LayoutGrid class="h-4 w-4" />
+												Masonry Grid
+											</span>
+										</Select.Item>
+										<Select.Item value="carousel">
+											<span class="flex items-center gap-2">
+												<GalleryHorizontal class="h-4 w-4" />
+												Carousel
+											</span>
+										</Select.Item>
+										<Select.Item value="gallery">
+											<span class="flex items-center gap-2">
+												<Grid3x3 class="h-4 w-4" />
+												Gallery
+											</span>
+										</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>How viewers will see your media by default</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+
+						<Form.ElementField {form} name="visibility">
+							{#snippet children({ value: _value, errors })}
+								<Label>Visibility</Label>
+								<Select.Root type="single" bind:value={$formData.visibility}>
+									<Select.Trigger>
+										{getVisibilityLabel($formData.visibility)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="public">Public</Select.Item>
+										<Select.Item value="unlisted">Unlisted</Select.Item>
+										<Select.Item value="private">Private</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Who can see this post</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+					</div>
+
+					<!-- Media Upload Area -->
+					<MediaUploadZone
+						{mediaUrls}
+						{mediaMimeTypes}
+						{uploading}
+						onUpload={handleMediaFiles}
+						onRemove={removeMediaUrl}
+						inputId="edit-media-file-input"
+					/>
+				{/if}
 			</Card.Content>
 			<Card.Footer class="flex shrink-0 justify-end gap-2">
-				<Form.Button type="button" variant="outline" onclick={goHome}>Cancel</Form.Button>
+				<Form.Button
+					type="button"
+					variant="outline"
+					onclick={goHome}
+					disabled={loading || publishLoading || uploading}
+				>
+					Cancel
+				</Form.Button>
 				{#if !isDraft}
 					<Button
 						type="button"
 						variant="outline"
 						onclick={handleUnpublish}
-						disabled={loading || publishLoading}
+						disabled={loading || publishLoading || uploading}
 					>
 						{#if publishLoading}
 							Unpublishing...
@@ -494,17 +773,25 @@
 						{/if}
 					</Button>
 				{/if}
-				<Form.Button type="submit" disabled={loading || publishLoading}>
+				<Form.Button type="submit" disabled={loading || publishLoading || uploading}>
 					{#if loading}
 						Saving...
+					{:else if uploading}
+						Uploading...
 					{:else}
 						Save Changes
 					{/if}
 				</Form.Button>
 				{#if isDraft}
-					<Button type="button" onclick={handlePublish} disabled={loading || publishLoading}>
+					<Button
+						type="button"
+						onclick={handlePublish}
+						disabled={loading || publishLoading || uploading}
+					>
 						{#if publishLoading}
 							Publishing...
+						{:else if uploading}
+							Uploading...
 						{:else}
 							<Send class="mr-2 h-4 w-4" />
 							Publish
@@ -514,4 +801,26 @@
 			</Card.Footer>
 		</form>
 	</Card.Root>
+
+	<!-- Type-switch confirmation dialog -->
+	<Dialog.Root bind:open={typeSwitchDialogOpen}>
+		<Dialog.Content class="max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>
+					{typeSwitchTarget === 'blog' ? 'Switch to Blog?' : 'Switch to Media?'}
+				</Dialog.Title>
+				<Dialog.Description>
+					{typeSwitchTarget === 'blog'
+						? 'Your media items will be unlinked from this post but will remain in your uploads library.'
+						: 'Your blog content (text, markdown, or HTML) will be discarded and cannot be recovered from this form.'}
+				</Dialog.Description>
+			</Dialog.Header>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => (typeSwitchDialogOpen = false)}>Cancel</Button>
+				<Button onclick={() => applyTypeSwitch()}>
+					{typeSwitchTarget === 'blog' ? 'Switch to Blog' : 'Switch to Media'}
+				</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 </div>

@@ -12,14 +12,15 @@
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
 	import { PostCreateSchema } from '@syr-is/types';
+	import MediaUploadZone from '$lib/components/fragments/media-upload-zone.svelte';
 	import { Crepe } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/nord-dark.css';
 	import '$lib/styles/crepe-custom.css';
 	import { imageBlockConfig } from '@milkdown/components/image-block';
-	import { createPostAssetUploader } from '$lib/handlers/upload';
+	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
-	import { FilePen, Send, X } from 'lucide-svelte';
+	import { FilePen, Send, X, LayoutGrid, GalleryHorizontal, Grid3x3 } from 'lucide-svelte';
 
 	interface Props {
 		onDraftCreated?: () => void;
@@ -34,21 +35,46 @@
 	let loading = $state(false);
 	let draftPostId = $state<string | null>(null);
 
+	// Media post state
+	let mediaUrls = $state<string[]>([]);
+	let mediaMimeTypes = $state<Record<string, string>>({});
+	let uploadingCount = $state(0);
+	const uploading = $derived(uploadingCount > 0);
+
+	// Mutex for createDraft – prevents concurrent calls from creating duplicate drafts
+	let draftCreatePromise: Promise<string | null> | null = null;
+
 	const form = superForm(defaults(zod4(PostCreateSchema)), {
 		validators: zod4(PostCreateSchema),
 		SPA: true,
-		resetForm: true,
+		resetForm: false,
 		onUpdate: async ({ form }) => {
 			if (!form.valid) return;
 
 			// Ensure markdown content is synced before submission
-			if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+			if (
+				$formData.type === 'blog' &&
+				$formData.content_type === 'markdown' &&
+				crepeInstance &&
+				crepeReady
+			) {
 				try {
 					const markdown = crepeInstance.getMarkdown();
 					$formData.content = markdown;
 				} catch (error) {
 					console.warn('Could not get markdown before submission:', error);
 				}
+			}
+
+			// For media posts, sync media_urls
+			if ($formData.type === 'media') {
+				$formData.media_urls = mediaUrls;
+			}
+
+			// Wait for any in-flight draft creation to finish so we PATCH the
+			// existing draft instead of accidentally POSTing a duplicate.
+			if (draftCreatePromise) {
+				await draftCreatePromise;
 			}
 
 			loading = true;
@@ -101,9 +127,14 @@
 		$formData.title = '';
 		$formData.description = '';
 		$formData.content = '';
+		$formData.media_urls = undefined;
+		$formData.display_mode = undefined;
 		$formData.visibility = 'public';
 		$formData.status = 'draft';
+		mediaUrls = [];
+		mediaMimeTypes = {};
 		draftPostId = null;
+		draftCreatePromise = null;
 	}
 
 	// Helper function to get display label for visibility
@@ -121,54 +152,96 @@
 		return 'Select content type';
 	}
 
-	// Create draft post to get an ID for asset uploads
-	async function createDraft(): Promise<string | null> {
-		if (draftPostId) return draftPostId;
+	// Helper function to get display label for display mode
+	function getDisplayModeLabel(value: string | undefined): string {
+		if (value === 'carousel') return 'Carousel';
+		if (value === 'masonry') return 'Masonry Grid';
+		if (value === 'gallery') return 'Gallery';
+		return 'Select display mode';
+	}
 
-		try {
-			const response = await fetch('/api/posts', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					type: 'blog',
-					content_type: $formData.content_type,
+	// Create draft post to get an ID for asset uploads.
+	// Uses draftCreatePromise as a mutex so concurrent callers share a single request.
+	async function createDraft(): Promise<string | null> {
+		if (!dialogOpen) return null;
+		if (draftPostId) return draftPostId;
+		if (draftCreatePromise) return draftCreatePromise;
+
+		draftCreatePromise = (async () => {
+			try {
+				const draftBody: Record<string, unknown> = {
+					type: $formData.type,
 					title: $formData.title || 'Untitled Draft',
 					description: $formData.description,
-					content: $formData.content,
 					visibility: $formData.visibility,
 					status: 'draft'
-				})
-			});
+				};
 
-			if (!response.ok) {
-				console.error('Failed to create draft');
-				return null;
-			}
+				if ($formData.type === 'blog') {
+					draftBody.content_type = $formData.content_type;
+					draftBody.content = $formData.content;
+				} else {
+					draftBody.media_urls = mediaUrls;
+					draftBody.display_mode = $formData.display_mode || 'masonry';
+				}
 
-			const result = await response.json();
-			const postId = result.data?.id;
-			if (postId) {
-				draftPostId = typeof postId === 'string' ? postId : postId.toString();
-				// Notify parent that a draft was created so it can refresh the UI
-				onDraftCreated?.();
-				return draftPostId;
+				const response = await fetch('/api/posts', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(draftBody)
+				});
+
+				if (!response.ok) {
+					console.error('Failed to create draft');
+					return null;
+				}
+
+				const result = await response.json();
+				const postId = result.data?.id;
+				if (postId) {
+					draftPostId = typeof postId === 'string' ? postId : postId.toString();
+					// Notify parent that a draft was created so it can refresh the UI
+					onDraftCreated?.();
+					return draftPostId;
+				}
+			} catch (error) {
+				console.error('Error creating draft:', error);
 			}
-		} catch (error) {
-			console.error('Error creating draft:', error);
+			return null;
+		})();
+
+		try {
+			return await draftCreatePromise;
+		} finally {
+			draftCreatePromise = null;
 		}
-		return null;
 	}
 
 	// Save draft without closing
 	async function saveDraft() {
 		// Sync markdown content
-		if ($formData.content_type === 'markdown' && crepeInstance && crepeReady) {
+		if (
+			$formData.type === 'blog' &&
+			$formData.content_type === 'markdown' &&
+			crepeInstance &&
+			crepeReady
+		) {
 			try {
 				const markdown = crepeInstance.getMarkdown();
 				$formData.content = markdown;
 			} catch (error) {
 				console.warn('Could not get markdown:', error);
 			}
+		}
+
+		// Sync media URLs
+		if ($formData.type === 'media') {
+			$formData.media_urls = mediaUrls;
+		}
+
+		// Wait for any in-flight draft creation to finish
+		if (draftCreatePromise) {
+			await draftCreatePromise;
 		}
 
 		loading = true;
@@ -203,6 +276,11 @@
 
 	// Cancel and delete draft
 	async function cancelAndDelete() {
+		// Wait for any in-flight draft creation so we know the ID to delete
+		if (draftCreatePromise) {
+			await draftCreatePromise;
+		}
+
 		loading = true;
 		try {
 			if (draftPostId) {
@@ -229,7 +307,67 @@
 		}
 	}
 
+	// Media upload handling (counter supports concurrent batches).
+	// Guards against dialog close / form reset during async uploads to prevent
+	// stale URLs from a previous session leaking into the current state.
+	async function handleMediaFiles(files: FileList | File[]) {
+		const fileArray = Array.from(files);
+		if (fileArray.length === 0) return;
+
+		uploadingCount++;
+		try {
+			// Ensure we have a draft for asset uploads
+			const postId = await createDraft();
+			if (!postId) {
+				toast.error('Failed to create draft for uploads');
+				return;
+			}
+
+			// Capture the draft this upload session belongs to
+			const sessionDraftId = draftPostId;
+
+			for (const file of fileArray) {
+				// Bail if dialog closed or form was reset during upload
+				if (!dialogOpen || draftPostId !== sessionDraftId) return;
+
+				try {
+					const url = await handlePostAssetUpload(file, postId);
+					// Re-check after async upload completes
+					if (!dialogOpen || draftPostId !== sessionDraftId) return;
+					mediaUrls = [...mediaUrls, url];
+					mediaMimeTypes = { ...mediaMimeTypes, [url]: file.type };
+				} catch (err) {
+					console.error('Failed to upload file:', file.name, err);
+					toast.error(`Failed to upload ${file.name}`);
+				}
+			}
+
+			// Only sync if still in the same session
+			if (dialogOpen && draftPostId === sessionDraftId) {
+				$formData.media_urls = mediaUrls;
+			}
+		} finally {
+			uploadingCount--;
+		}
+	}
+
+	function removeMediaUrl(index: number) {
+		mediaUrls = mediaUrls.filter((_, i) => i !== index);
+		$formData.media_urls = mediaUrls;
+	}
+
 	function mountCrepe(node: HTMLDivElement) {
+		// Don't initialise the editor if the dialog is already closing/closed
+		// (can happen when resetForm resets type/content_type while exit animation runs)
+		if (!dialogOpen) {
+			return { destroy() {} };
+		}
+
+		// Track whether the Svelte action's destroy() has already fired (e.g. user
+		// switched to media type before Crepe finished). Prevents .then() / setTimeout
+		// from setting crepeInstance to a destroyed editor.
+		let destroyed = false;
+
 		const instance = new Crepe({
 			root: node,
 			defaultValue: $formData.content || ''
@@ -237,10 +375,23 @@
 
 		// Create editor and wait for it to be ready
 		instance.create().then(async () => {
+			// DOM was removed (type switched to media or content_type to HTML) — tear down and bail
+			if (destroyed) {
+				instance.destroy?.();
+				return;
+			}
+			// Dialog may have closed while Crepe was initialising — tear down and bail
+			if (!dialogOpen) {
+				instance.destroy?.();
+				return;
+			}
+
 			crepeInstance = instance;
 
 			// Create a draft to get post ID for image uploads
 			const postId = await createDraft();
+
+			if (destroyed) return;
 
 			// Configure image upload handler
 			if (postId) {
@@ -268,6 +419,7 @@
 
 			// Wait a bit longer for editor to be fully ready before calling getMarkdown
 			setTimeout(() => {
+				if (destroyed) return;
 				crepeReady = true;
 
 				// Sync initial content after editor is ready
@@ -285,6 +437,7 @@
 
 		return {
 			destroy() {
+				destroyed = true;
 				instance?.destroy?.();
 				crepeInstance = null;
 				crepeReady = false;
@@ -301,11 +454,34 @@
 		}
 	});
 
+	// Watch for type changes and cleanup Crepe if switching to media
+	$effect(() => {
+		if ($formData.type === 'media' && crepeInstance) {
+			crepeInstance.destroy();
+			crepeInstance = null;
+			crepeReady = false;
+		}
+	});
+
+	// Set default display_mode and clear content_type when switching to media type,
+	// restore content_type default when switching back to blog.
+	// Guards prevent unconditional writes that would re-trigger the store and cause infinite loops.
+	$effect(() => {
+		if ($formData.type === 'media') {
+			if (!$formData.display_mode) {
+				$formData.display_mode = 'masonry';
+			}
+			if ($formData.content_type !== undefined) {
+				$formData.content_type = undefined;
+			}
+		} else if ($formData.type === 'blog' && !$formData.content_type) {
+			$formData.content_type = 'markdown';
+		}
+	});
+
 	// Cleanup draft if dialog is closed without publishing
 	$effect(() => {
 		if (!dialogOpen && draftPostId) {
-			// Optionally delete the draft or leave it for later
-			// For now, we'll leave drafts in the database
 			draftPostId = null;
 			resetForm();
 		}
@@ -323,7 +499,13 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<Dialog.Title>New Post</Dialog.Title>
-					<Dialog.Description>Create a new blog post</Dialog.Description>
+					<Dialog.Description>
+						{#if $formData.type === 'media'}
+							Create a new media post
+						{:else}
+							Create a new blog post
+						{/if}
+					</Dialog.Description>
 				</div>
 				{#if draftPostId}
 					<Badge variant="secondary" class="gap-1">
@@ -334,10 +516,46 @@
 			</div>
 		</Dialog.Header>
 		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
-			<!-- Hidden field for type -->
-			<input type="hidden" name="type" value={$formData.type} />
+			<!-- Hidden fields -->
 			<input type="hidden" name="status" value={$formData.status} />
 			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+				<!-- Post Type: prominent so users can switch to Media -->
+				<Form.ElementField {form} name="type">
+					{#snippet children({ value: _value, errors })}
+						<Label>Post Type</Label>
+						<div
+							class="inline-flex rounded-lg border border-input bg-muted/30 p-0.5"
+							role="group"
+							aria-label="Post type"
+						>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'blog'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'blog')}
+							>
+								Blog
+							</button>
+							<button
+								type="button"
+								class="rounded-md px-4 py-2 text-sm font-medium transition-colors {$formData.type ===
+								'media'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => ($formData.type = 'media')}
+							>
+								Media
+							</button>
+						</div>
+						<Form.Description>Choose the type of post you want to create</Form.Description>
+						{#if errors}
+							<Form.FieldErrors />
+						{/if}
+					{/snippet}
+				</Form.ElementField>
+
 				<Form.Field {form} name="title">
 					<Form.Control>
 						{#snippet children({ props })}
@@ -366,92 +584,170 @@
 					<Form.FieldErrors />
 				</Form.Field>
 
-				<div class="grid grid-cols-2 gap-4">
-					<Form.ElementField {form} name="content_type">
-						{#snippet children({ value: _value, errors })}
-							<Label>Content Type</Label>
-							<Select.Root type="single" bind:value={$formData.content_type}>
-								<Select.Trigger>
-									{getContentTypeLabel($formData.content_type)}
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="markdown">Markdown</Select.Item>
-									<Select.Item value="html">HTML</Select.Item>
-								</Select.Content>
-							</Select.Root>
-							<Form.Description>Format of your post content</Form.Description>
-							{#if errors}
-								<Form.FieldErrors />
-							{/if}
-						{/snippet}
-					</Form.ElementField>
+				{#if $formData.type === 'blog'}
+					<!-- Blog-specific fields -->
+					<div class="grid grid-cols-2 gap-4">
+						<Form.ElementField {form} name="content_type">
+							{#snippet children({ value: _value, errors })}
+								<Label>Content Type</Label>
+								<Select.Root type="single" bind:value={$formData.content_type}>
+									<Select.Trigger>
+										{getContentTypeLabel($formData.content_type)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="markdown">Markdown</Select.Item>
+										<Select.Item value="html">HTML</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Format of your post content</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
 
-					<Form.ElementField {form} name="visibility">
-						{#snippet children({ value: _value, errors })}
-							<Label>Visibility</Label>
-							<Select.Root type="single" bind:value={$formData.visibility}>
-								<Select.Trigger>
-									{getVisibilityLabel($formData.visibility)}
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="public">Public</Select.Item>
-									<Select.Item value="unlisted">Unlisted</Select.Item>
-									<Select.Item value="private">Private</Select.Item>
-								</Select.Content>
-							</Select.Root>
-							<Form.Description>Who can see this post</Form.Description>
-							{#if errors}
-								<Form.FieldErrors />
-							{/if}
-						{/snippet}
-					</Form.ElementField>
-				</div>
+						<Form.ElementField {form} name="visibility">
+							{#snippet children({ value: _value, errors })}
+								<Label>Visibility</Label>
+								<Select.Root type="single" bind:value={$formData.visibility}>
+									<Select.Trigger>
+										{getVisibilityLabel($formData.visibility)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="public">Public</Select.Item>
+										<Select.Item value="unlisted">Unlisted</Select.Item>
+										<Select.Item value="private">Private</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Who can see this post</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+					</div>
 
-				<Form.ElementField {form} name="content">
-					{#snippet children({ value: _value, errors })}
-						<Label>Content</Label>
-						{#if $formData.content_type === 'markdown'}
-							<div
-								id="post-editor"
-								use:mountCrepe
-								class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
-							></div>
-							<p class="text-xs text-muted-foreground">
-								Images uploaded here are stored publicly for embedding in your post.
-							</p>
-						{:else}
-							<Textarea
-								bind:value={$formData.content}
-								placeholder="Write your HTML content here..."
-								class="min-h-[400px] w-full font-mono text-sm"
-								rows={20}
-							/>
-						{/if}
-						<Form.Description>
+					<Form.ElementField {form} name="content">
+						{#snippet children({ value: _value, errors })}
+							<Label>Content</Label>
 							{#if $formData.content_type === 'markdown'}
-								Write your post content using markdown
+								<div
+									id="post-editor"
+									use:mountCrepe
+									class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
+								></div>
+								<p class="text-xs text-muted-foreground">
+									Images uploaded here are stored publicly for embedding in your post.
+								</p>
 							{:else}
-								Write your post content using HTML
+								<Textarea
+									bind:value={$formData.content}
+									placeholder="Write your HTML content here..."
+									class="min-h-[400px] w-full font-mono text-sm"
+									rows={20}
+								/>
 							{/if}
-						</Form.Description>
-						{#if errors}
-							<Form.FieldErrors />
-						{/if}
-					{/snippet}
-				</Form.ElementField>
+							<Form.Description>
+								{#if $formData.content_type === 'markdown'}
+									Write your post content using markdown
+								{:else}
+									Write your post content using HTML
+								{/if}
+							</Form.Description>
+							{#if errors}
+								<Form.FieldErrors />
+							{/if}
+						{/snippet}
+					</Form.ElementField>
+				{:else}
+					<!-- Media-specific fields -->
+					<div class="grid grid-cols-2 gap-4">
+						<Form.ElementField {form} name="display_mode">
+							{#snippet children({ value: _value, errors })}
+								<Label>Default Display Mode</Label>
+								<Select.Root type="single" bind:value={$formData.display_mode}>
+									<Select.Trigger>
+										{getDisplayModeLabel($formData.display_mode)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="masonry">
+											<span class="flex items-center gap-2">
+												<LayoutGrid class="h-4 w-4" />
+												Masonry Grid
+											</span>
+										</Select.Item>
+										<Select.Item value="carousel">
+											<span class="flex items-center gap-2">
+												<GalleryHorizontal class="h-4 w-4" />
+												Carousel
+											</span>
+										</Select.Item>
+										<Select.Item value="gallery">
+											<span class="flex items-center gap-2">
+												<Grid3x3 class="h-4 w-4" />
+												Gallery
+											</span>
+										</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>How viewers will see your media by default</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+
+						<Form.ElementField {form} name="visibility">
+							{#snippet children({ value: _value, errors })}
+								<Label>Visibility</Label>
+								<Select.Root type="single" bind:value={$formData.visibility}>
+									<Select.Trigger>
+										{getVisibilityLabel($formData.visibility)}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="public">Public</Select.Item>
+										<Select.Item value="unlisted">Unlisted</Select.Item>
+										<Select.Item value="private">Private</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Form.Description>Who can see this post</Form.Description>
+								{#if errors}
+									<Form.FieldErrors />
+								{/if}
+							{/snippet}
+						</Form.ElementField>
+					</div>
+
+					<!-- Media Upload Area -->
+					<MediaUploadZone
+						{mediaUrls}
+						{mediaMimeTypes}
+						{uploading}
+						onUpload={handleMediaFiles}
+						onRemove={removeMediaUrl}
+						inputId="media-file-input"
+					/>
+				{/if}
 			</div>
 			<Dialog.Footer class="mt-6 shrink-0 gap-2">
-				<Button type="button" variant="ghost" onclick={cancelAndDelete} disabled={loading}>
+				<Button
+					type="button"
+					variant="ghost"
+					onclick={cancelAndDelete}
+					disabled={loading || uploading}
+				>
 					<X class="mr-2 h-4 w-4" />
 					Cancel
 				</Button>
-				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading}>
+				<Button type="button" variant="outline" onclick={saveDraft} disabled={loading || uploading}>
 					<FilePen class="mr-2 h-4 w-4" />
 					Save Draft
 				</Button>
-				<Form.Button type="submit" disabled={loading} class="w-full sm:w-auto">
+				<Form.Button type="submit" disabled={loading || uploading} class="w-full sm:w-auto">
 					{#if loading}
 						Publishing...
+					{:else if uploading}
+						Uploading...
 					{:else}
 						<Send class="mr-2 h-4 w-4" />
 						Publish

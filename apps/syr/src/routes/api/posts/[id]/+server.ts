@@ -97,17 +97,44 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		// Parse the update data (without id since it's in the URL)
 		const data = PostUpdateSchema.omit({ id: true }).partial().parse(body);
 
-		// Merge existing post data with updates to satisfy required fields
-		const result = await postController.updatePost({
+		const resolvedType = data.type ?? existingPost.type;
+
+		// Shared fields for all post types
+		const basePayload = {
 			id: postId,
-			type: data.type ?? existingPost.type,
-			content_type: data.content_type ?? existingPost.content_type,
+			type: resolvedType,
 			visibility: data.visibility ?? existingPost.visibility,
 			status: data.status ?? existingPost.status,
-			title: data.title,
-			description: data.description,
-			content: data.content
-		});
+			title: data.title ?? existingPost.title,
+			description: data.description ?? existingPost.description
+		};
+
+		// Build type-specific payload. When switching type, the other type's fields
+		// must be removed via patch (merge ignores undefined and leaves stale fields).
+		const updatePayload =
+			resolvedType === 'blog'
+				? {
+						...basePayload,
+						content_type: data.content_type ?? existingPost.content_type ?? 'markdown',
+						content: data.content ?? existingPost.content ?? '',
+						media_urls: undefined,
+						display_mode: undefined
+					}
+				: {
+						...basePayload,
+						content_type: undefined,
+						content: undefined,
+						media_urls: data.media_urls ?? existingPost.media_urls ?? [],
+						display_mode: data.display_mode ?? existingPost.display_mode ?? 'masonry'
+					};
+
+		const typeSwitched = existingPost.type !== resolvedType;
+		const keysToUnset = typeSwitched
+			? resolvedType === 'blog'
+				? ['media_urls', 'display_mode']
+				: ['content_type', 'content']
+			: undefined;
+		const result = await postController.updatePost(updatePayload, keysToUnset);
 
 		return json({
 			status: 'success',
@@ -173,7 +200,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			});
 		}
 
-		// Delete the post (also cleans up associated uploads)
+		// Delete the post record (uploads are preserved in user storage)
 		await postController.deletePost(postId, user.id);
 
 		return json({

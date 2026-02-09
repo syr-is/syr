@@ -2,48 +2,41 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Select from '$lib/components/ui/select';
 	import * as Pagination from '$lib/components/ui/pagination';
-	import * as Table from '$lib/components/ui/table';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Badge } from '$lib/components/ui/badge';
 	import type { Upload, Folder } from '@syr-is/types';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 
 	// Dialog components
 	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
-	import PreviewUploadDialog from '$lib/components/fragments/preview-upload-dialog.svelte';
 	import UploadFilesDialog from '$lib/components/fragments/upload-files-dialog.svelte';
 	import CreateFolderDialog from '$lib/components/fragments/create-folder-dialog.svelte';
 	import DeleteFolderDialog from '$lib/components/fragments/delete-folder-dialog.svelte';
 	import MoveUploadDialog from '$lib/components/fragments/move-upload-dialog.svelte';
 	import RenameUploadDialog from '$lib/components/fragments/rename-upload-dialog.svelte';
 	import ShareUploadDialog from '$lib/components/fragments/share-upload-dialog.svelte';
+	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
 	import { toast } from 'svelte-sonner';
+	import { Plus, FolderPlus, ChevronRight, Home, File } from 'lucide-svelte';
+
+	// Shared view components
+	import ViewModeToggle from '$lib/components/fragments/view-mode-toggle.svelte';
+	import FileTable from '$lib/components/fragments/file-table.svelte';
+	import FileGrid from '$lib/components/fragments/file-grid.svelte';
+	import FileCarousel from '$lib/components/fragments/file-carousel.svelte';
+	import FolderCard from '$lib/components/fragments/folder-card.svelte';
 	import {
-		Download,
-		Trash2,
-		FileImage,
-		FileText,
-		FileVideo,
-		FileAudio,
-		File,
-		Eye,
-		Link,
-		Plus,
-		FolderIcon,
-		FolderPlus,
-		ChevronRight,
-		Home,
-		MoreVertical,
-		Move,
-		Globe,
-		Lock,
-		Pencil
-	} from 'lucide-svelte';
+		type ViewMode,
+		type DisplayItem,
+		uploadsToDisplayItems,
+		getFileItems
+	} from '$lib/types/display-item';
 
 	let { data } = $props();
+
+	// View mode state
+	let viewMode = $state<ViewMode>('list');
 
 	// Uploads state
 	let uploads = $state<Upload[]>([]);
@@ -81,9 +74,6 @@
 	let deleteFolderDialogOpen = $state(false);
 	let folderToDelete = $state<Folder | null>(null);
 
-	let previewDialogOpen = $state(false);
-	let previewUpload = $state<Upload | null>(null);
-
 	let uploadDialogOpen = $state(false);
 
 	let createFolderDialogOpen = $state(false);
@@ -96,6 +86,14 @@
 
 	let shareDialogOpen = $state(false);
 	let uploadToShare = $state<Upload | null>(null);
+
+	// Media preview modal for visual browsing (gallery/masonry modes)
+	let mediaPreviewOpen = $state(false);
+	let mediaPreviewIndex = $state(0);
+
+	// Computed DisplayItems for shared components
+	const displayItems = $derived(uploadsToDisplayItems(folders, uploads));
+	const fileDisplayItems = $derived(getFileItems(displayItems));
 
 	// Fetch folders
 	async function fetchFolders() {
@@ -213,12 +211,6 @@
 		deleteFolderDialogOpen = true;
 	}
 
-	// Open preview dialog
-	function openPreview(upload: Upload) {
-		previewUpload = upload;
-		previewDialogOpen = true;
-	}
-
 	// Download file
 	async function downloadFile(upload: Upload) {
 		try {
@@ -297,63 +289,47 @@
 		shareDialogOpen = true;
 	}
 
-	// Get file icon based on mime type
-	function getFileIcon(mimeType: string) {
-		if (mimeType.startsWith('image/')) return FileImage;
-		if (mimeType.startsWith('video/')) return FileVideo;
-		if (mimeType.startsWith('audio/')) return FileAudio;
-		if (mimeType.startsWith('text/') || mimeType.includes('document') || mimeType.includes('pdf'))
-			return FileText;
-		return File;
-	}
-
-	// Format file size
-	function formatFileSize(bytes: number): string {
-		if (bytes === 0) return '0 Bytes';
-		const k = 1024;
-		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-	}
-
-	// Format date
-	function formatDate(date: Date | string): string {
-		const d = typeof date === 'string' ? new Date(date) : date;
-		return d.toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
-
-	// Get status badge variant
-	function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-		switch (status) {
-			case 'completed':
-				return 'default';
-			case 'pending':
-				return 'secondary';
-			case 'uploading':
-				return 'outline';
-			case 'failed':
-				return 'destructive';
-			case 'cancelled':
-				return 'destructive';
-			default:
-				return 'secondary';
+	// Callbacks that adapt DisplayItem events to Upload-specific logic
+	function handleTablePreview(item: DisplayItem) {
+		if (item.kind !== 'file') return;
+		const index = fileDisplayItems.findIndex((di) => di.id === item.id);
+		if (index >= 0) {
+			mediaPreviewIndex = index;
+			mediaPreviewOpen = true;
 		}
 	}
 
-	// Can preview (images, videos, audio, and PDFs)
-	function canPreview(mimeType: string): boolean {
-		return (
-			mimeType.startsWith('image/') ||
-			mimeType.startsWith('video/') ||
-			mimeType.startsWith('audio/') ||
-			mimeType === 'application/pdf'
-		);
+	function handleTableDownload(item: DisplayItem) {
+		if (item.kind === 'file') downloadFile(item.data);
+	}
+
+	function handleTableCopyLink(item: DisplayItem) {
+		if (item.kind === 'file') copyLink(item.data);
+	}
+
+	function handleTableRename(item: DisplayItem) {
+		if (item.kind === 'file') openRenameDialog(item.data);
+	}
+
+	function handleTableMove(item: DisplayItem) {
+		if (item.kind === 'file') openMoveDialog(item.data);
+	}
+
+	function handleTableDelete(item: DisplayItem) {
+		if (item.kind === 'file') openDeleteUploadDialog(item.data);
+	}
+
+	function handleGridFolderClick(folder: Folder) {
+		navigateToFolder(typeof folder.id === 'string' ? folder.id : folder.id.toString());
+	}
+
+	function handleGridFolderDelete(folder: Folder) {
+		openDeleteFolderDialog(folder);
+	}
+
+	function handleGridItemClick(index: number) {
+		mediaPreviewIndex = index;
+		mediaPreviewOpen = true;
 	}
 
 	// Track previous sort values
@@ -461,8 +437,8 @@
 		</nav>
 
 		<!-- Controls Row -->
-		<div class="flex items-center justify-between gap-4">
-			<div class="flex items-center gap-2">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div class="flex flex-wrap items-center gap-2">
 				<Select.Root type="single" bind:value={sortField}>
 					<Select.Trigger class="w-[140px]">
 						{getSortFieldLabel(sortField)}
@@ -513,7 +489,11 @@
 					</Pagination.Root>
 				{/if}
 			</div>
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center gap-2">
+				<ViewModeToggle
+					bind:mode={viewMode}
+					availableModes={['list', 'gallery', 'masonry', 'carousel']}
+				/>
 				<span class="text-sm text-muted-foreground">
 					{total} file{total !== 1 ? 's' : ''} total
 				</span>
@@ -528,90 +508,14 @@
 			</div>
 		</div>
 
-		<!-- Folders Grid -->
-		{#if folders.length > 0}
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-				{#each folders as folder (folder.id.toString())}
-					<Card.Root
-						class="cursor-pointer transition-colors hover:bg-accent"
-						role="button"
-						tabindex={0}
-						onclick={() => navigateToFolder(folder.id.toString())}
-						onkeydown={(e) => {
-							if (e.key === 'Enter' || e.key === ' ') {
-								e.preventDefault();
-								navigateToFolder(folder.id.toString());
-							}
-						}}
-					>
-						<Card.Content class="flex items-center gap-3 p-4">
-							<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-								{#if isPublicFolder(folder)}
-									<Globe class="h-5 w-5 text-primary" />
-								{:else}
-									<FolderIcon class="h-5 w-5 text-muted-foreground" />
-								{/if}
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="truncate font-medium">{folder.name}</p>
-								{#if isPublicFolder(folder)}
-									<p class="text-xs text-muted-foreground">Public folder</p>
-								{/if}
-							</div>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger
-									class="rounded-md p-1 hover:bg-background"
-									onclick={(e) => e.stopPropagation()}
-								>
-									<MoreVertical class="h-4 w-4" />
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content>
-									<DropdownMenu.Item
-										class="text-destructive"
-										onclick={(e) => {
-											e.stopPropagation();
-											openDeleteFolderDialog(folder);
-										}}
-									>
-										<Trash2 class="mr-2 h-4 w-4" />
-										Delete
-									</DropdownMenu.Item>
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
-						</Card.Content>
-					</Card.Root>
-				{/each}
-			</div>
-		{/if}
-
-		<!-- Uploads Table -->
+		<!-- Content Area -->
 		{#if loading}
 			<Card.Root>
-				<Card.Content class="p-0">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head class="w-12"></Table.Head>
-								<Table.Head>Filename</Table.Head>
-								<Table.Head>Size</Table.Head>
-								<Table.Head>Status</Table.Head>
-								<Table.Head>Created</Table.Head>
-								<Table.Head class="w-24">Actions</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each Array(5) as _, i (i)}
-								<Table.Row>
-									<Table.Cell><Skeleton class="h-8 w-8" /></Table.Cell>
-									<Table.Cell><Skeleton class="h-4 w-48" /></Table.Cell>
-									<Table.Cell><Skeleton class="h-4 w-16" /></Table.Cell>
-									<Table.Cell><Skeleton class="h-5 w-20" /></Table.Cell>
-									<Table.Cell><Skeleton class="h-4 w-32" /></Table.Cell>
-									<Table.Cell><Skeleton class="h-8 w-20" /></Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
+				<Card.Content class="py-12">
+					<div class="flex flex-col items-center gap-2">
+						<Skeleton class="h-8 w-48" />
+						<Skeleton class="h-4 w-32" />
+					</div>
 				</Card.Content>
 			</Card.Root>
 		{:else if error}
@@ -632,127 +536,43 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
-		{:else if uploads.length > 0}
-			<Card.Root>
-				<Card.Content class="p-0">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head class="w-12"></Table.Head>
-								<Table.Head>Filename</Table.Head>
-								<Table.Head>Size</Table.Head>
-								<Table.Head>Status</Table.Head>
-								<Table.Head>Access</Table.Head>
-								<Table.Head>Created</Table.Head>
-								<Table.Head class="w-40">Actions</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each uploads as upload (upload.id.toString())}
-								{@const FileIcon = getFileIcon(upload.mime_type)}
-								<Table.Row>
-									<Table.Cell>
-										<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-											<FileIcon class="h-5 w-5 text-muted-foreground" />
-										</div>
-									</Table.Cell>
-									<Table.Cell>
-										<div class="flex flex-col">
-											<span class="max-w-[300px] truncate font-medium">{upload.filename}</span>
-											<span class="text-xs text-muted-foreground">{upload.mime_type}</span>
-										</div>
-									</Table.Cell>
-									<Table.Cell>
-										<span class="text-sm text-muted-foreground">{formatFileSize(upload.size)}</span>
-									</Table.Cell>
-									<Table.Cell>
-										<Badge variant={getStatusVariant(upload.status)}>
-											{upload.status}
-										</Badge>
-									</Table.Cell>
-									<Table.Cell>
-										{#if upload.is_public}
-											<Badge variant="outline" class="gap-1">
-												<Globe class="h-3 w-3" />
-												Public
-											</Badge>
-										{:else}
-											<Badge variant="secondary" class="gap-1">
-												<Lock class="h-3 w-3" />
-												Private
-											</Badge>
-										{/if}
-									</Table.Cell>
-									<Table.Cell>
-										<span class="text-sm text-muted-foreground"
-											>{formatDate(upload.created_at)}</span
-										>
-									</Table.Cell>
-									<Table.Cell>
-										<div class="flex items-center gap-1">
-											{#if canPreview(upload.mime_type) && upload.status === 'completed'}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => openPreview(upload)}
-													title="Preview"
-												>
-													<Eye class="h-4 w-4" />
-												</Button>
-											{/if}
-											{#if upload.status === 'completed' && upload.url}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => copyLink(upload)}
-													title={upload.is_public ? 'Copy Link' : 'Share'}
-												>
-													<Link class="h-4 w-4" />
-												</Button>
-											{/if}
-											{#if upload.status === 'completed'}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => downloadFile(upload)}
-													title="Download"
-												>
-													<Download class="h-4 w-4" />
-												</Button>
-											{/if}
-											<DropdownMenu.Root>
-												<DropdownMenu.Trigger>
-													<Button variant="ghost" size="sm" title="More options">
-														<MoreVertical class="h-4 w-4" />
-													</Button>
-												</DropdownMenu.Trigger>
-												<DropdownMenu.Content>
-													<DropdownMenu.Item onclick={() => openRenameDialog(upload)}>
-														<Pencil class="mr-2 h-4 w-4" />
-														Rename
-													</DropdownMenu.Item>
-													<DropdownMenu.Item onclick={() => openMoveDialog(upload)}>
-														<Move class="mr-2 h-4 w-4" />
-														Move to folder
-													</DropdownMenu.Item>
-													<DropdownMenu.Separator />
-													<DropdownMenu.Item
-														class="text-destructive"
-														onclick={() => openDeleteUploadDialog(upload)}
-													>
-														<Trash2 class="mr-2 h-4 w-4" />
-														Delete
-													</DropdownMenu.Item>
-												</DropdownMenu.Content>
-											</DropdownMenu.Root>
-										</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</Card.Content>
-			</Card.Root>
+		{:else if viewMode === 'list'}
+			<!-- List/Table view -->
+			<FileTable
+				items={displayItems}
+				onPreview={handleTablePreview}
+				onDownload={handleTableDownload}
+				onCopyLink={handleTableCopyLink}
+				onRename={handleTableRename}
+				onMove={handleTableMove}
+				onDelete={handleTableDelete}
+				onFolderClick={handleGridFolderClick}
+				onFolderDelete={handleGridFolderDelete}
+			/>
+		{:else if viewMode === 'carousel'}
+			<!-- Carousel view: folders shown above as cards, then carousel for files -->
+			{#if folders.length > 0}
+				<div class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+					{#each folders as folder (folder.id.toString())}
+						<FolderCard
+							{folder}
+							isPublic={isPublicFolder(folder)}
+							onclick={() => handleGridFolderClick(folder)}
+							onDelete={handleGridFolderDelete}
+						/>
+					{/each}
+				</div>
+			{/if}
+			<FileCarousel items={fileDisplayItems} onItemClick={handleGridItemClick} />
+		{:else}
+			<!-- Gallery or Masonry view -->
+			<FileGrid
+				items={displayItems}
+				mode={viewMode === 'gallery' ? 'gallery' : 'masonry'}
+				onItemClick={handleGridItemClick}
+				onFolderClick={handleGridFolderClick}
+				onFolderDelete={handleGridFolderDelete}
+			/>
 		{/if}
 	</div>
 
@@ -768,12 +588,6 @@
 		folderName={folderToDelete?.name ?? null}
 		bind:open={deleteFolderDialogOpen}
 		onSuccess={refreshData}
-	/>
-
-	<PreviewUploadDialog
-		upload={previewUpload}
-		bind:open={previewDialogOpen}
-		onOpenShareDialog={openShareDialog}
 	/>
 
 	<UploadFilesDialog
@@ -799,6 +613,14 @@
 	/>
 
 	<ShareUploadDialog upload={uploadToShare} bind:open={shareDialogOpen} />
+
+	<!-- Media preview modal for visual browsing -->
+	<MediaPreviewModal
+		bind:open={mediaPreviewOpen}
+		items={fileDisplayItems}
+		initialIndex={mediaPreviewIndex}
+		onOpenShareDialog={openShareDialog}
+	/>
 {:else}
 	<!-- Not Logged In View -->
 	<div class="flex h-full items-center justify-center p-8">

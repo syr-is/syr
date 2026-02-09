@@ -24,6 +24,9 @@
 	let pinnedPostIds = $state<string[]>([]);
 	let _pinnedLoading = $state(false);
 
+	// Mime type map for media URLs (shared across all posts)
+	let mediaUrlMimeTypes = $state<Record<string, string>>({});
+
 	// Drag and drop state
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
@@ -61,6 +64,8 @@
 			const result = await response.json();
 			posts = result.data || [];
 			total = result.pagination?.total || 0;
+			const newMimeTypes: Record<string, string> = result.mediaUrlMimeTypes || {};
+			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			posts = [];
@@ -84,6 +89,8 @@
 			const result = await response.json();
 			pinnedPosts = result.data?.posts || [];
 			pinnedPostIds = result.data?.post_ids || [];
+			const newMimeTypes: Record<string, string> = result.data?.mediaUrlMimeTypes || {};
+			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
 		} catch (err) {
 			console.error('Failed to fetch pinned posts:', err);
 			pinnedPosts = [];
@@ -338,7 +345,7 @@
 					<h2 class="text-lg font-semibold">Pinned Posts</h2>
 					<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 				</div>
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 					{#each pinnedPosts as post, index (post.id.toString())}
 						<DraggableItem
 							{index}
@@ -366,6 +373,7 @@
 									isPinned={true}
 									onPinToggle={handlePinToggle}
 									showPinButton={true}
+									{mediaUrlMimeTypes}
 								/>
 							</button>
 						</DraggableItem>
@@ -376,7 +384,7 @@
 
 		<!-- Posts List -->
 		{#if loading}
-			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 				{#each Array(8) as _, i (i)}
 					<Card.Root>
 						<Card.Header>
@@ -408,7 +416,7 @@
 		{:else}
 			<div class="space-y-3">
 				<h2 class="text-lg font-semibold">All Posts</h2>
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 					{#each posts as post (post.id.toString())}
 						<button
 							type="button"
@@ -426,6 +434,7 @@
 								isPinned={isPostPinned(post.id.toString())}
 								onPinToggle={handlePinToggle}
 								showPinButton={true}
+								{mediaUrlMimeTypes}
 							/>
 						</button>
 					{/each}
