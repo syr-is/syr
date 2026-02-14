@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { BaseEntitySchema, RecordIdSchema } from "./common.js";
+import { z } from 'zod';
+import { BaseEntitySchema, RecordIdSchema } from './common.js';
 
 /**
  * Folder Schema
@@ -12,16 +12,13 @@ import { BaseEntitySchema, RecordIdSchema } from "./common.js";
  * without signed URLs
  */
 export const FolderSchema = BaseEntitySchema.extend({
-  name: z
-    .string()
-    .min(1, "Folder name is required")
-    .max(255, "Folder name must be 255 characters or less")
-    .regex(
-      /^[^/\\*?"<>|]+$/,
-      'Folder name cannot contain special characters: / \\ * ? " < > |',
-    ),
-  owner_id: RecordIdSchema,
-  parent_id: RecordIdSchema.nullable().optional(),
+	name: z
+		.string()
+		.min(1, 'Folder name is required')
+		.max(255, 'Folder name must be 255 characters or less')
+		.regex(/^[^/\\*?"<>|]+$/, 'Folder name cannot contain special characters: / \\ * ? " < > |'),
+	owner_id: RecordIdSchema,
+	parent_id: RecordIdSchema.nullable().optional()
 });
 
 export type Folder = z.infer<typeof FolderSchema>;
@@ -31,8 +28,8 @@ export type Folder = z.infer<typeof FolderSchema>;
  * For creating new folders
  */
 export const FolderCreateSchema = z.object({
-  name: FolderSchema.shape.name,
-  parent_id: z.string().nullable().optional(),
+	name: FolderSchema.shape.name,
+	parent_id: z.string().nullable().optional()
 });
 
 export type FolderCreate = z.infer<typeof FolderCreateSchema>;
@@ -42,8 +39,8 @@ export type FolderCreate = z.infer<typeof FolderCreateSchema>;
  * For updating existing folders
  */
 export const FolderUpdateSchema = z.object({
-  name: FolderSchema.shape.name.optional(),
-  parent_id: z.string().nullable().optional(),
+	name: FolderSchema.shape.name.optional(),
+	parent_id: z.string().nullable().optional()
 });
 
 export type FolderUpdate = z.infer<typeof FolderUpdateSchema>;
@@ -52,5 +49,5 @@ export type FolderUpdate = z.infer<typeof FolderUpdateSchema>;
  * Check if a folder name is the special "public" folder
  */
 export function isPublicFolder(name: string): boolean {
-  return name.toLowerCase() === "public";
+	return name.toLowerCase() === 'public';
 }

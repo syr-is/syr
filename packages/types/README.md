@@ -26,33 +26,33 @@ pnpm add @syr-is/types
 
 ```typescript
 import {
-  UserSchema,
-  UserRegistrationSchema,
-  type User,
-  type UserRegistration,
-} from "@syr-is/types";
+	UserSchema,
+	UserRegistrationSchema,
+	type User,
+	type UserRegistration
+} from '@syr-is/types';
 
 // Validate data
 const result = UserRegistrationSchema.safeParse({
-  username: "alice",
-  password: "SecurePass123",
-  display_name: "Alice",
+	username: 'alice',
+	password: 'SecurePass123',
+	display_name: 'Alice'
 });
 
 if (result.success) {
-  const userData: UserRegistration = result.data;
-  // ... proceed with registration
+	const userData: UserRegistration = result.data;
+	// ... proceed with registration
 }
 ```
 
 ### Using Codecs
 
 ```typescript
-import { isoDatetimeToDate, json } from "@syr-is/types";
-import { z } from "zod";
+import { isoDatetimeToDate, json } from '@syr-is/types';
+import { z } from 'zod';
 
 // Date transformation
-const date = isoDatetimeToDate.decode("2024-01-15T10:30:00.000Z");
+const date = isoDatetimeToDate.decode('2024-01-15T10:30:00.000Z');
 // => Date object
 
 const isoString = isoDatetimeToDate.encode(new Date());
@@ -63,29 +63,29 @@ const personCodec = json(z.object({ name: z.string(), age: z.number() }));
 const person = personCodec.decode('{"name":"Alice","age":30}');
 // => { name: "Alice", age: 30 }
 
-const jsonString = personCodec.encode({ name: "Bob", age: 25 });
+const jsonString = personCodec.encode({ name: 'Bob', age: 25 });
 // => '{"name":"Bob","age":25}'
 ```
 
 ### Extending Base Schemas
 
 ```typescript
-import { BaseEntitySchema, DIDSchema, isoDatetimeToDate } from "@syr-is/types";
-import { z } from "zod";
+import { BaseEntitySchema, DIDSchema, isoDatetimeToDate } from '@syr-is/types';
+import { z } from 'zod';
 
 // Create a new entity type extending the base
 const MyEntitySchema = BaseEntitySchema.extend({
-  name: z.string(),
-  did: DIDSchema.optional(),
-  // id, created_at, updated_at inherited from BaseEntitySchema (all as ISO strings)
+	name: z.string(),
+	did: DIDSchema.optional()
+	// id, created_at, updated_at inherited from BaseEntitySchema (all as ISO strings)
 });
 
 // Parse data from database/API (timestamps as ISO strings)
 const entity = MyEntitySchema.parse({
-  id: "123e4567-e89b-12d3-a456-426614174000",
-  name: "Example",
-  created_at: "2024-01-15T10:30:00.000Z",
-  updated_at: "2024-01-15T10:30:00.000Z",
+	id: '123e4567-e89b-12d3-a456-426614174000',
+	name: 'Example',
+	created_at: '2024-01-15T10:30:00.000Z',
+	updated_at: '2024-01-15T10:30:00.000Z'
 });
 
 // Convert timestamps to Date objects when needed
@@ -160,10 +160,10 @@ Bi-directional data transformations based on [Zod v4 codecs](https://zod.dev/cod
 **Example Usage:**
 
 ```typescript
-import { isoDatetimeToDate } from "@syr-is/types";
+import { isoDatetimeToDate } from '@syr-is/types';
 
 // Decode: ISO string → Date
-const date = isoDatetimeToDate.decode("2024-01-15T10:30:00.000Z");
+const date = isoDatetimeToDate.decode('2024-01-15T10:30:00.000Z');
 
 // Encode: Date → ISO string
 const isoString = isoDatetimeToDate.encode(new Date());
@@ -226,18 +226,18 @@ const isoString = isoDatetimeToDate.encode(new Date());
 ## Validation Example
 
 ```typescript
-import { VerifiableCredentialSchema } from "@syr-is/types";
+import { VerifiableCredentialSchema } from '@syr-is/types';
 
 // Validate a credential
 const credential = {
-  "@context": ["https://www.w3.org/2018/credentials/v1"],
-  type: ["VerifiableCredential"],
-  issuer: "did:example:issuer",
-  issuanceDate: "2025-01-01T00:00:00Z",
-  credentialSubject: {
-    id: "did:example:subject",
-    reputation: 100,
-  },
+	'@context': ['https://www.w3.org/2018/credentials/v1'],
+	type: ['VerifiableCredential'],
+	issuer: 'did:example:issuer',
+	issuanceDate: '2025-01-01T00:00:00Z',
+	credentialSubject: {
+		id: 'did:example:subject',
+		reputation: 100
+	}
 };
 
 const result = VerifiableCredentialSchema.safeParse(credential);
@@ -248,14 +248,14 @@ const result = VerifiableCredentialSchema.safeParse(credential);
 All schemas automatically infer TypeScript types:
 
 ```typescript
-import { UserSchema, type User } from "@syr-is/types";
+import { UserSchema, type User } from '@syr-is/types';
 
 // Type is automatically inferred from schema
 type User = z.infer<typeof UserSchema>;
 
 // Use the exported type directly
 function getUser(id: string): User {
-  // ...
+	// ...
 }
 ```
 
