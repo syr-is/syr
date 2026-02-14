@@ -207,9 +207,9 @@ before returning the portable identity bundle. Callers MUST present either:
 
 **Failure responses:**
 
-| Code | Meaning |
-| ---- | ------- |
-| 401  | Unauthorized — missing or invalid proof |
+| Code | Meaning                                                           |
+| ---- | ----------------------------------------------------------------- |
+| 401  | Unauthorized — missing or invalid proof                           |
 | 403  | Forbidden — insufficient delegation (e.g. key lacks export scope) |
 
 Returns a **portable identity bundle** containing:
