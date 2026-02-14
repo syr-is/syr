@@ -1,4 +1,4 @@
-// This help your get the type tips for sveltepress virtual modules
+// This helps you get the type tips for sveltepress virtual modules
 /// <reference types="@sveltepress/theme-default/types" />
 /// <reference types="@sveltepress/vite/types" />
 

@@ -66,6 +66,7 @@ const config = defineConfig({
 						}
 					]
 				},
+				// TODO: Replace with Syr logo before release (e.g. logo: '/syr.svg')
 				logo: '/sveltepress.svg',
 				editLink: 'https://github.com/syr-is/syr/edit/main/apps/docs/src/routes/:route',
 				github: 'https://github.com/syr-is/syr',

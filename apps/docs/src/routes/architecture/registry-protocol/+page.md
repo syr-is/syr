@@ -83,21 +83,21 @@ Each DID maps to a **single latest hosting record**.
 
 ### 3.2 Canonical Signing Payload
 
-The signed payload MUST be the UTF-8 JSON serialization of:
+The signed payload MUST be the **UTF-8 JCS (RFC 8785)** deterministic JSON
+serialization of the object `{ "did", "provider", "updatedAt" }`.
 
-```json
-{
-	"did": "...",
-	"provider": "...",
-	"updatedAt": "..."
-}
-```
+This means:
 
-Rules:
+- **Lexicographically sorted object keys** (e.g. `did`, `provider`, `updatedAt`).
+- **Compact JSON** — no insignificant whitespace.
+- **UTF-8** — no BOM.
+- **No trailing newline**.
+- **Deterministic number formatting** — integers and floats per RFC 8785.
 
-- No whitespace normalization allowed.
-- Field order MUST be preserved.
-- Signature uses **Ed25519**.
+Both signers and verifiers MUST apply the same canonicalization algorithm
+(reference RFC 8785) before signing or verifying to avoid ambiguity.
+
+Signature uses **Ed25519**.
 
 ---
 

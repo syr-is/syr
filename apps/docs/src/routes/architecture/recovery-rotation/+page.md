@@ -132,7 +132,7 @@ Systems MUST:
 
 Each identity maintains a **verifiable chain** of root keys:
 
-```
+```text
 root₀ → root₁ → root₂ → ...
 ```
 

@@ -56,9 +56,10 @@ If any of the above is missing → Phase 0 is incomplete.
 
 This blueprint assumes current monorepo structure:
 
-```
+```text
 apps/
   syr/              ← SvelteKit web app (primary target)
+  docs/             ← SveltePress docs app
 
 packages/
   types/            ← shared schemas
@@ -66,8 +67,9 @@ packages/
   (future) did/     ← new: DID + resolver helpers
   (future) registry-client/ ← new later
 
-docs/
-  architecture/
+apps/docs/src/routes/
+  architecture/     ← architecture specs (identity-model, did-method, etc.)
+  implementation/   ← implementation blueprints
 ```
 
 ---

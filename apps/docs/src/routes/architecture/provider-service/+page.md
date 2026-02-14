@@ -193,6 +193,25 @@ Additional claims are **optional**.
 GET /export
 ```
 
+**Authentication:** The `/export` endpoint MUST require proof of authorization
+before returning the portable identity bundle. Callers MUST present either:
+
+- a signed assertion from the root key, or
+- an authorized delegated key
+
+**Accepted proof mechanism:** Providers MUST accept one of:
+
+- `Authorization: Bearer <JWT>` where the JWT is signed by the root or delegated key, or
+- `Authorization: Syr-Signature <base64>` with a signed HTTP Authorization header
+  containing a timestamped assertion from the root or delegated key
+
+**Failure responses:**
+
+| Code | Meaning |
+| ---- | ------- |
+| 401  | Unauthorized — missing or invalid proof |
+| 403  | Forbidden — insufficient delegation (e.g. key lacks export scope) |
+
 Returns a **portable identity bundle** containing:
 
 - profile data
