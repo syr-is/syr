@@ -1,0 +1,1 @@
+export { default as component } from "../../../../src/routes/architecture/key-hierarchy-delegation/+page.md";
