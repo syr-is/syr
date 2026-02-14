@@ -1,6 +1,6 @@
-import { defaultTheme } from '@sveltepress/theme-default'
-import { sveltepress } from '@sveltepress/vite'
-import { defineConfig } from 'vite'
+import { defaultTheme } from '@sveltepress/theme-default';
+import { sveltepress } from '@sveltepress/vite';
+import { defineConfig } from 'vite';
 
 const config = defineConfig({
 	plugins: [
@@ -8,7 +8,7 @@ const config = defineConfig({
 			theme: defaultTheme({
 				navbar: [
 					{ title: 'Home', to: '/' },
-					{ title: 'Docs', to: '/architecture/identity-model' },
+					{ title: 'Docs', to: '/architecture/identity-model' }
 				],
 				sidebar: {
 					'/': [
@@ -20,16 +20,14 @@ const config = defineConfig({
 								{ title: 'did:syr Method v0.1', to: '/architecture/did-method' },
 								{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 								{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
-								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' },
-							],
+								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }
+							]
 						},
 						{
 							title: 'Implementation',
 							collapsible: true,
-							items: [
-								{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' },
-							],
-						},
+							items: [{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' }]
+						}
 					],
 					'/architecture/': [
 						{
@@ -40,16 +38,14 @@ const config = defineConfig({
 								{ title: 'did:syr Method v0.1', to: '/architecture/did-method' },
 								{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 								{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
-								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' },
-							],
+								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }
+							]
 						},
 						{
 							title: 'Implementation',
 							collapsible: true,
-							items: [
-								{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' },
-							],
-						},
+							items: [{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' }]
+						}
 					],
 					'/implementation/': [
 						{
@@ -60,31 +56,29 @@ const config = defineConfig({
 								{ title: 'did:syr Method v0.1', to: '/architecture/did-method' },
 								{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 								{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
-								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' },
-							],
+								{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }
+							]
 						},
 						{
 							title: 'Implementation',
 							collapsible: true,
-							items: [
-								{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' },
-							],
-						},
-					],
+							items: [{ title: 'Phase 0 Blueprint', to: '/implementation/phase-0-blueprint' }]
+						}
+					]
 				},
 				logo: '/sveltepress.svg',
 				editLink: 'https://github.com/syr-is/syr/edit/main/apps/docs/src/routes/:route',
 				github: 'https://github.com/syr-is/syr',
 				highlighter: {
-					languages: ['svelte', 'sh', 'js', 'html', 'ts', 'md', 'css', 'scss', 'json'],
-				},
+					languages: ['svelte', 'sh', 'js', 'html', 'ts', 'md', 'css', 'scss', 'json']
+				}
 			}),
 			siteConfig: {
 				title: 'Syr',
-				description: 'Syr architecture and identity documentation',
-			},
-		}),
-	],
-})
+				description: 'Syr architecture and identity documentation'
+			}
+		})
+	]
+});
 
-export default config
+export default config;

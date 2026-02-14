@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { RecordId } from "surrealdb";
+import { z } from 'zod';
+import { RecordId } from 'surrealdb';
 
 /**
  * Zod Codecs
@@ -15,11 +15,11 @@ import { RecordId } from "surrealdb";
  * DB (RecordId) -> encode -> string (Network)
  */
 export const stringToRecordId = z.codec(z.string(), z.instanceof(RecordId), {
-  decode: (str) => {
-    const [table, id] = str.split(":");
-    return new RecordId(table, id);
-  },
-  encode: (recordId) => recordId.toString(),
+	decode: (str) => {
+		const [table, id] = str.split(':');
+		return new RecordId(table, id);
+	},
+	encode: (recordId) => recordId.toString()
 });
 
 /**
@@ -27,8 +27,8 @@ export const stringToRecordId = z.codec(z.string(), z.instanceof(RecordId), {
  * Converts string representations of numbers to JavaScript number type
  */
 export const stringToNumber = z.codec(z.string(), z.number(), {
-  decode: (str) => Number(str),
-  encode: (num) => num.toString(),
+	decode: (str) => Number(str),
+	encode: (num) => num.toString()
 });
 
 /**
@@ -36,8 +36,8 @@ export const stringToNumber = z.codec(z.string(), z.number(), {
  * Converts string representations of integers to JavaScript number type
  */
 export const stringToInt = z.codec(z.string().regex(/^-?\d+$/), z.int(), {
-  decode: (str) => Number.parseInt(str, 10),
-  encode: (num) => num.toString(),
+	decode: (str) => Number.parseInt(str, 10),
+	encode: (num) => num.toString()
 });
 
 /**
@@ -45,8 +45,8 @@ export const stringToInt = z.codec(z.string().regex(/^-?\d+$/), z.int(), {
  * Converts string representations to JavaScript bigint type
  */
 export const stringToBigInt = z.codec(z.string(), z.bigint(), {
-  decode: (str) => BigInt(str),
-  encode: (bigint) => bigint.toString(),
+	decode: (str) => BigInt(str),
+	encode: (bigint) => bigint.toString()
 });
 
 /**
@@ -55,14 +55,14 @@ export const stringToBigInt = z.codec(z.string(), z.bigint(), {
  * For large integers over HTTP, use stringToBigInt instead
  */
 export const numberToBigInt = z.codec(z.int(), z.bigint(), {
-  decode: (num) => BigInt(num),
-  encode: (bigint) => {
-    const num = Number(bigint);
-    if (num > Number.MAX_SAFE_INTEGER || num < Number.MIN_SAFE_INTEGER) {
-      throw new Error("BigInt value exceeds safe integer range");
-    }
-    return num;
-  },
+	decode: (num) => BigInt(num),
+	encode: (bigint) => {
+		const num = Number(bigint);
+		if (num > Number.MAX_SAFE_INTEGER || num < Number.MIN_SAFE_INTEGER) {
+			throw new Error('BigInt value exceeds safe integer range');
+		}
+		return num;
+	}
 });
 
 /**
@@ -71,8 +71,8 @@ export const numberToBigInt = z.codec(z.int(), z.bigint(), {
  * This is the primary codec for handling dates in the SYR platform
  */
 export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
-  decode: (isoString) => new Date(isoString),
-  encode: (date) => date.toISOString(),
+	decode: (isoString) => new Date(isoString),
+	encode: (date) => date.toISOString()
 });
 
 /**
@@ -80,8 +80,8 @@ export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
  * Converts Unix timestamps (seconds since epoch) to JavaScript Date objects
  */
 export const epochSecondsToDate = z.codec(z.int().min(0), z.date(), {
-  decode: (seconds) => new Date(seconds * 1000),
-  encode: (date) => Math.floor(date.getTime() / 1000),
+	decode: (seconds) => new Date(seconds * 1000),
+	encode: (date) => Math.floor(date.getTime() / 1000)
 });
 
 /**
@@ -89,8 +89,8 @@ export const epochSecondsToDate = z.codec(z.int().min(0), z.date(), {
  * Converts Unix timestamps (milliseconds since epoch) to JavaScript Date objects
  */
 export const epochMillisToDate = z.codec(z.int().min(0), z.date(), {
-  decode: (millis) => new Date(millis),
-  encode: (date) => date.getTime(),
+	decode: (millis) => new Date(millis),
+	encode: (date) => date.getTime()
 });
 
 /**
@@ -99,34 +99,35 @@ export const epochMillisToDate = z.codec(z.int().min(0), z.date(), {
  * @param schema - Zod schema to validate parsed JSON data
  */
 export const json = <T extends z.ZodTypeAny>(schema: T) =>
-  z.codec(z.string(), schema, {
-    decode: (jsonString) => {
-      try {
-        return JSON.parse(jsonString);
-      } catch (err: any) {
-        throw new Error(`Invalid JSON: ${err.message}`);
-      }
-    },
-    encode: (value) => JSON.stringify(value),
-  });
+	z.codec(z.string(), schema, {
+		decode: (jsonString) => {
+			try {
+				return JSON.parse(jsonString);
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				throw new Error(`Invalid JSON: ${message}`);
+			}
+		},
+		encode: (value) => JSON.stringify(value)
+	});
 
 /**
  * Hex to Bytes Codec
  * Converts hexadecimal strings to Uint8Array byte arrays
  */
 export const hexToBytes = z.codec(z.hex(), z.instanceof(Uint8Array), {
-  decode: (hexString) => {
-    const bytes = new Uint8Array(hexString.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = parseInt(hexString.substr(i * 2, 2), 16);
-    }
-    return bytes;
-  },
-  encode: (bytes) => {
-    return Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-  },
+	decode: (hexString) => {
+		const bytes = new Uint8Array(hexString.length / 2);
+		for (let i = 0; i < bytes.length; i++) {
+			bytes[i] = parseInt(hexString.substr(i * 2, 2), 16);
+		}
+		return bytes;
+	},
+	encode: (bytes) => {
+		return Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join('');
+	}
 });
 
 /**
@@ -134,17 +135,17 @@ export const hexToBytes = z.codec(z.hex(), z.instanceof(Uint8Array), {
  * Encodes and decodes URI components
  */
 export const uriComponent = z.codec(z.string(), z.string(), {
-  decode: (encodedString) => decodeURIComponent(encodedString),
-  encode: (decodedString) => encodeURIComponent(decodedString),
+	decode: (encodedString) => decodeURIComponent(encodedString),
+	encode: (decodedString) => encodeURIComponent(decodedString)
 });
 
 /**
  * Boolean String Codec
  * Converts "true"/"false" strings to boolean
  */
-export const stringToBoolean = z.codec(z.enum(["true", "false"]), z.boolean(), {
-  decode: (str) => str === "true",
-  encode: (bool) => (bool ? "true" : "false"),
+export const stringToBoolean = z.codec(z.enum(['true', 'false']), z.boolean(), {
+	decode: (str) => str === 'true',
+	encode: (bool) => (bool ? 'true' : 'false')
 });
 
 /**
@@ -152,6 +153,6 @@ export const stringToBoolean = z.codec(z.enum(["true", "false"]), z.boolean(), {
  * Converts null to undefined and vice versa
  */
 export const nullToUndefined = z.codec(z.null(), z.undefined(), {
-  decode: () => undefined,
-  encode: () => null,
+	decode: () => undefined,
+	encode: () => null
 });

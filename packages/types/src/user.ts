@@ -1,16 +1,11 @@
-import { z } from "zod";
-import {
-  BaseEntitySchema,
-  MetadataSchema,
-  TimestampSchema,
-  RecordIdSchema,
-} from "./common.js";
+import { z } from 'zod';
+import { BaseEntitySchema, MetadataSchema, TimestampSchema, RecordIdSchema } from './common.js';
 
 /**
  * User Role Schema
  * For instance-level access control
  */
-export const UserRoleSchema = z.enum(["ADMIN", "USER"]);
+export const UserRoleSchema = z.enum(['ADMIN', 'USER']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 /**
@@ -19,16 +14,16 @@ export type UserRole = z.infer<typeof UserRoleSchema>;
  * Designed for sovereignty - username and DID only, no email
  */
 export const UserSchema = BaseEntitySchema.extend({
-  username: z
-    .string()
-    .min(3, "Username must be at least 3 characters")
-    .max(30, "Username must be at most 30 characters")
-    .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      "Username can only contain letters, numbers, underscores, and hyphens"
-    ),
-  password_hash: z.string(),
-  role: UserRoleSchema.default("USER"), // Instance-level role for access control
+	username: z
+		.string()
+		.min(3, 'Username must be at least 3 characters')
+		.max(30, 'Username must be at most 30 characters')
+		.regex(
+			/^[a-zA-Z0-9_-]+$/,
+			'Username can only contain letters, numbers, underscores, and hyphens'
+		),
+	password_hash: z.string(),
+	role: UserRoleSchema.default('USER') // Instance-level role for access control
 });
 
 export type User = z.infer<typeof UserSchema>;
@@ -38,19 +33,19 @@ export type User = z.infer<typeof UserSchema>;
  * User profile information
  */
 export const ProfileSchema = BaseEntitySchema.extend({
-  user_id: RecordIdSchema,
-  display_name: z.string().min(1).max(100),
-  bio: z.string().max(500).optional(),
-  avatar_url: z.url().optional(),
-  banner_url: z.url().optional(),
-  metadata: MetadataSchema.optional(),
+	user_id: RecordIdSchema,
+	display_name: z.string().min(1).max(100),
+	bio: z.string().max(500).optional(),
+	avatar_url: z.url().optional(),
+	banner_url: z.url().optional(),
+	metadata: MetadataSchema.optional()
 });
 
 export type Profile = z.infer<typeof ProfileSchema>;
 
 export const ProfileCreateSchema = ProfileSchema.pick({
-  user_id: true,
-  display_name: true,
+	user_id: true,
+	display_name: true
 });
 
 export type ProfileCreate = z.infer<typeof ProfileCreateSchema>;
@@ -61,14 +56,14 @@ export type ProfileCreate = z.infer<typeof ProfileCreateSchema>;
  * True digital sovereignty - no email required
  */
 export const UserRegistrationInputSchema = z.object({
-  username: UserSchema.shape.username,
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
-  display_name: z.string().min(1).max(100),
+	username: UserSchema.shape.username,
+	password: z
+		.string()
+		.min(8, 'Password must be at least 8 characters')
+		.regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+		.regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+		.regex(/[0-9]/, 'Password must contain at least one number'),
+	display_name: z.string().min(1).max(100)
 });
 
 export type UserRegistrationInput = z.infer<typeof UserRegistrationInputSchema>;
@@ -78,10 +73,10 @@ export type UserRegistrationInput = z.infer<typeof UserRegistrationInputSchema>;
  * For validating user registration forms with password confirmation
  */
 export const UserRegistrationSchema = UserRegistrationInputSchema.extend({
-  confirmPassword: z.string(),
+	confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
+	message: 'Passwords do not match',
+	path: ['confirmPassword']
 });
 
 export type UserRegistration = z.infer<typeof UserRegistrationSchema>;
@@ -91,8 +86,8 @@ export type UserRegistration = z.infer<typeof UserRegistrationSchema>;
  * For validating user login requests
  */
 export const UserLoginSchema = z.object({
-  username: z.string().min(1),
-  password: z.string().min(1),
+	username: z.string().min(1),
+	password: z.string().min(1)
 });
 
 export type UserLogin = z.infer<typeof UserLoginSchema>;
@@ -103,11 +98,11 @@ export type UserLogin = z.infer<typeof UserLoginSchema>;
  * Uses zod traversal to remove defaults and make all fields optional
  */
 export const ProfileUpdateSchema = ProfileSchema.pick({
-  display_name: true,
-  bio: true,
-  avatar_url: true,
-  banner_url: true,
-  metadata: true,
+	display_name: true,
+	bio: true,
+	avatar_url: true,
+	banner_url: true,
+	metadata: true
 }).partial();
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
@@ -117,15 +112,15 @@ export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
  * Represents an authenticated session
  */
 export const SessionSchema = BaseEntitySchema.pick({
-  id: true,
-  created_at: true,
+	id: true,
+	created_at: true
 }).extend({
-  user_id: RecordIdSchema,
-  token: z.string(),
-  expires_at: TimestampSchema,
-  ip: z.string().optional(),
-  user_agent: z.string().optional(),
-  last_active: TimestampSchema.optional(),
+	user_id: RecordIdSchema,
+	token: z.string(),
+	expires_at: TimestampSchema,
+	ip: z.string().optional(),
+	user_agent: z.string().optional(),
+	last_active: TimestampSchema.optional()
 });
 
 export type Session = z.infer<typeof SessionSchema>;
@@ -135,13 +130,13 @@ export type Session = z.infer<typeof SessionSchema>;
  * Combined user and profile information for authenticated contexts
  */
 export const AuthenticatedUserSchema = UserSchema.pick({
-  id: true,
-  username: true,
-  did: true,
-  role: true,
+	id: true,
+	username: true,
+	did: true,
+	role: true
 }).extend({
-  display_name: ProfileSchema.shape.display_name,
-  avatar_url: ProfileSchema.shape.avatar_url,
+	display_name: ProfileSchema.shape.display_name,
+	avatar_url: ProfileSchema.shape.avatar_url
 });
 
 export type AuthenticatedUser = z.infer<typeof AuthenticatedUserSchema>;

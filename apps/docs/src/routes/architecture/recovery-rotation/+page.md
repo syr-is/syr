@@ -75,10 +75,10 @@ Root key replacement is expressed as:
 
 ```json
 {
-  "did": "did:syr:...",
-  "newRoot": "<newRootPublicKey>",
-  "recoveredAt": "ISO-8601 timestamp",
-  "signature": "<signed by recovery key>"
+	"did": "did:syr:...",
+	"newRoot": "<newRootPublicKey>",
+	"recoveredAt": "ISO-8601 timestamp",
+	"signature": "<signed by recovery key>"
 }
 ```
 
@@ -109,10 +109,10 @@ Rotation may occur without compromise for:
 
 ```json
 {
-  "did": "did:syr:...",
-  "newRoot": "<newRootPublicKey>",
-  "rotatedAt": "ISO-8601 timestamp",
-  "signature": "<signed by current root key>"
+	"did": "did:syr:...",
+	"newRoot": "<newRootPublicKey>",
+	"rotatedAt": "ISO-8601 timestamp",
+	"signature": "<signed by current root key>"
 }
 ```
 

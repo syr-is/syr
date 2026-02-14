@@ -92,15 +92,15 @@ GET /.well-known/syr
 
 ```json
 {
-  "did": "did:syr:...",
-  "provider": "https://provider.example",
-  "endpoints": {
-    "profile": "/profile",
-    "oauth_authorize": "/oauth/authorize",
-    "oauth_token": "/oauth/token",
-    "oauth_userinfo": "/oauth/userinfo",
-    "export": "/export"
-  }
+	"did": "did:syr:...",
+	"provider": "https://provider.example",
+	"endpoints": {
+		"profile": "/profile",
+		"oauth_authorize": "/oauth/authorize",
+		"oauth_token": "/oauth/token",
+		"oauth_userinfo": "/oauth/userinfo",
+		"export": "/export"
+	}
 }
 ```
 
@@ -125,11 +125,11 @@ Example:
 
 ```json
 {
-  "did": "did:syr:...",
-  "displayName": "Alice",
-  "bio": "...",
-  "avatar": "https://...",
-  "updatedAt": "..."
+	"did": "did:syr:...",
+	"displayName": "Alice",
+	"bio": "...",
+	"avatar": "https://...",
+	"updatedAt": "..."
 }
 ```
 
@@ -145,11 +145,11 @@ Requirements:
 
 Providers MUST implement:
 
-| Endpoint | Purpose |
-|----------|---------|
-| /oauth/authorize | User authorization |
-| /oauth/token | Code → token exchange |
-| /oauth/userinfo | Identity claims |
+| Endpoint         | Purpose               |
+| ---------------- | --------------------- |
+| /oauth/authorize | User authorization    |
+| /oauth/token     | Code → token exchange |
+| /oauth/userinfo  | Identity claims       |
 
 ---
 
@@ -175,9 +175,9 @@ This guarantees **cross-provider portability**.
 
 ```json
 {
-  "sub": "did:syr:...",
-  "did": "did:syr:...",
-  "profile": "https://provider.example/profile"
+	"sub": "did:syr:...",
+	"did": "did:syr:...",
+	"profile": "https://provider.example/profile"
 }
 ```
 
@@ -237,7 +237,7 @@ Providers MUST NOT:
 Providers MUST treat:
 
 > root key signatures as the only authority
-for:
+> for:
 
 - registry updates
 - delegated key authorization (future)

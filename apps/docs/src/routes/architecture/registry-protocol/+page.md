@@ -72,10 +72,10 @@ Each DID maps to a **single latest hosting record**.
 
 ```json
 {
-  "did": "did:syr:...",
-  "provider": "https://provider.example",
-  "updatedAt": "ISO-8601 timestamp",
-  "signature": "multibase signature by root key"
+	"did": "did:syr:...",
+	"provider": "https://provider.example",
+	"updatedAt": "ISO-8601 timestamp",
+	"signature": "multibase signature by root key"
 }
 ```
 
@@ -87,9 +87,9 @@ The signed payload MUST be the UTF-8 JSON serialization of:
 
 ```json
 {
-  "did": "...",
-  "provider": "...",
-  "updatedAt": "..."
+	"did": "...",
+	"provider": "...",
+	"updatedAt": "..."
 }
 ```
 
@@ -113,19 +113,19 @@ GET /resolve/{did}
 
 ```json
 {
-  "did": "...",
-  "provider": "...",
-  "updatedAt": "...",
-  "signature": "..."
+	"did": "...",
+	"provider": "...",
+	"updatedAt": "...",
+	"signature": "..."
 }
 ```
 
 Errors:
 
-| Code | Meaning |
-|------|---------|
-| 404 | DID not found |
-| 410 | DID explicitly deactivated (future) |
+| Code | Meaning                             |
+| ---- | ----------------------------------- |
+| 404  | DID not found                       |
+| 410  | DID explicitly deactivated (future) |
 
 ---
 
@@ -139,10 +139,10 @@ POST /update
 
 ```json
 {
-  "did": "...",
-  "provider": "...",
-  "updatedAt": "...",
-  "signature": "..."
+	"did": "...",
+	"provider": "...",
+	"updatedAt": "...",
+	"signature": "..."
 }
 ```
 

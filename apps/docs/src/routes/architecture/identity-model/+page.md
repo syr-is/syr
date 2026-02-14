@@ -70,11 +70,11 @@ Institutions may **not**:
 
 Syr supports multiple assurance levels simultaneously:
 
-| Layer | Description |
-|-------|-------------|
-| Permissionless | Any root identity may exist |
-| Social | Institutions attest trust, role, or reputation |
-| Legal | Optional KYC/personhood credentials |
+| Layer          | Description                                    |
+| -------------- | ---------------------------------------------- |
+| Permissionless | Any root identity may exist                    |
+| Social         | Institutions attest trust, role, or reputation |
+| Legal          | Optional KYC/personhood credentials            |
 
 No higher layer replaces the **root identity**.
 
@@ -143,8 +143,8 @@ A provider is a service that hosts:
 
 Providers may be:
 
-1. **Self-hosted** by the user  
-2. **Community-hosted** by a trusted operator  
+1. **Self-hosted** by the user
+2. **Community-hosted** by a trusted operator
 
 Key rule:
 

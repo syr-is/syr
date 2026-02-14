@@ -100,24 +100,24 @@ A resolved document MUST contain:
 
 ```json
 {
-  "id": "did:syr:...",
-  "verificationMethod": [
-    {
-      "id": "#root",
-      "type": "Ed25519VerificationKey2020",
-      "controller": "did:syr:...",
-      "publicKeyMultibase": "z..."
-    }
-  ],
-  "authentication": ["#root"],
-  "assertionMethod": ["#root"],
-  "service": [
-    {
-      "id": "#provider",
-      "type": "SyrIdentityProvider",
-      "serviceEndpoint": "https://provider.example"
-    }
-  ]
+	"id": "did:syr:...",
+	"verificationMethod": [
+		{
+			"id": "#root",
+			"type": "Ed25519VerificationKey2020",
+			"controller": "did:syr:...",
+			"publicKeyMultibase": "z..."
+		}
+	],
+	"authentication": ["#root"],
+	"assertionMethod": ["#root"],
+	"service": [
+		{
+			"id": "#provider",
+			"type": "SyrIdentityProvider",
+			"serviceEndpoint": "https://provider.example"
+		}
+	]
 }
 ```
 
@@ -153,10 +153,10 @@ Registry operators:
 
 ```json
 {
-  "did": "did:syr:...",
-  "provider": "https://example.org",
-  "updatedAt": "...",
-  "signature": "..."
+	"did": "did:syr:...",
+	"provider": "https://example.org",
+	"updatedAt": "...",
+	"signature": "..."
 }
 ```
 

@@ -66,10 +66,10 @@ No provider or institution may create delegated keys **without root approval**.
 
 Capabilities:
 
-- registry updates  
-- delegation creation & revocation  
-- future recovery configuration  
-- signing high-authority attestations  
+- registry updates
+- delegation creation & revocation
+- future recovery configuration
+- signing high-authority attestations
 
 The root key SHOULD:
 
@@ -85,10 +85,10 @@ a **delegation signature** from the root key.
 
 Used for:
 
-- authentication to providers  
-- OAuth authorization flows  
-- signing routine actions  
-- session establishment  
+- authentication to providers
+- OAuth authorization flows
+- signing routine actions
+- session establishment
 
 ---
 
@@ -113,12 +113,12 @@ Delegation is represented as a **signed statement**:
 
 ```json
 {
-  "did": "did:syr:...",
-  "delegate": "<publicKeyMultibase>",
-  "scope": "device",
-  "createdAt": "ISO-8601 timestamp",
-  "expiresAt": "ISO-8601 timestamp or null",
-  "signature": "<signed by root key>"
+	"did": "did:syr:...",
+	"delegate": "<publicKeyMultibase>",
+	"scope": "device",
+	"createdAt": "ISO-8601 timestamp",
+	"expiresAt": "ISO-8601 timestamp or null",
+	"signature": "<signed by root key>"
 }
 ```
 
@@ -141,16 +141,16 @@ If any check fails → delegation is invalid.
 
 Allowed scopes:
 
-| Scope | Meaning |
-|-------|---------|
-| device | Full routine user actions |
+| Scope   | Meaning                                           |
+| ------- | ------------------------------------------------- |
+| device  | Full routine user actions                         |
 | session | Short-lived derived authority (future refinement) |
 
 Future versions MAY define:
 
-- institution-limited scopes  
-- OAuth-only scopes  
-- signing-restricted scopes  
+- institution-limited scopes
+- OAuth-only scopes
+- signing-restricted scopes
 
 ---
 
@@ -165,10 +165,10 @@ Example:
 
 ```json
 {
-  "did": "did:syr:...",
-  "revoke": "<delegate public key>",
-  "revokedAt": "ISO-8601 timestamp",
-  "signature": "<root signature>"
+	"did": "did:syr:...",
+	"revoke": "<delegate public key>",
+	"revokedAt": "ISO-8601 timestamp",
+	"signature": "<root signature>"
 }
 ```
 
@@ -253,11 +253,11 @@ Not included in v0.1.
 
 Planned improvements:
 
-- social recovery guardians  
-- threshold root keys  
-- automated rotation chains  
-- hardware-backed attestation  
-- encrypted delegation distribution  
+- social recovery guardians
+- threshold root keys
+- automated rotation chains
+- hardware-backed attestation
+- encrypted delegation distribution
 
 These are deferred to maintain **minimal implementability**.
 
