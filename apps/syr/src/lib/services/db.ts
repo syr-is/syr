@@ -116,13 +116,15 @@ class DatabaseService {
 			// Delegated keys table: stores device delegations
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS delegated_key SCHEMAFULL;
-				DEFINE FIELD IF NOT EXISTS did ON TABLE delegated_key TYPE string;
+				DEFINE FIELD IF NOT EXISTS did ON TABLE delegated_key TYPE string
+					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS public_key ON TABLE delegated_key TYPE string;
 				DEFINE FIELD IF NOT EXISTS scope ON TABLE delegated_key TYPE string DEFAULT "device";
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE delegated_key TYPE datetime;
 				DEFINE FIELD IF NOT EXISTS expires_at ON TABLE delegated_key TYPE option<datetime>;
 				DEFINE FIELD IF NOT EXISTS revoked_at ON TABLE delegated_key TYPE option<datetime>;
 				DEFINE FIELD IF NOT EXISTS signature ON TABLE delegated_key TYPE string;
+				DEFINE FIELD IF NOT EXISTS canonical_delegation ON TABLE delegated_key TYPE option<string>;
 				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
 			`);

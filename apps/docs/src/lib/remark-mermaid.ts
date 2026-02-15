@@ -1,4 +1,3 @@
-// @ts-nocheck — JSDoc references unified/mdast types; runtime only uses unist-util-visit.
 /**
  * Remark plugin that transforms ```mermaid code blocks into
  * <pre class="mermaid"> elements for client-side rendering by mermaid.js.
@@ -6,11 +5,12 @@
  * This avoids Shiki trying to syntax-highlight mermaid blocks and instead
  * outputs raw HTML that the mermaid library picks up and renders as SVG diagrams.
  */
+import type { Html, Root } from 'mdast';
+import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
 
-/** @type {import('unified').Plugin} */
-export function remarkMermaid() {
-	return (/** @type {import('mdast').Root} */ tree) => {
+export const remarkMermaid: Plugin<[], Root, Root> = function () {
+	return (tree: Root) => {
 		visit(tree, 'code', (node, index, parent) => {
 			if (node.lang !== 'mermaid' || index === undefined || !parent) return;
 
@@ -26,13 +26,11 @@ export function remarkMermaid() {
 				.replace(/\{/g, '&#123;')
 				.replace(/\}/g, '&#125;');
 
-			/** @type {import('mdast').Html} */
-			const htmlNode = {
+			const htmlNode: Html = {
 				type: 'html',
 				value: `<pre class="mermaid">\n${value}\n</pre>`
 			};
-
 			parent.children[index] = htmlNode;
 		});
 	};
-}
+};

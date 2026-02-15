@@ -35,8 +35,11 @@ export function parseDid(did: string): ParsedDid {
 
   for (let i = 0; i < ED25519_MULTICODEC_PREFIX.length; i++) {
     if (prefixedBytes[i] !== ED25519_MULTICODEC_PREFIX[i]) {
+      const hex =
+        prefixedBytes[0].toString(16).padStart(2, "0") +
+        prefixedBytes[1].toString(16).padStart(2, "0");
       throw new Error(
-        `Expected Ed25519 multicodec prefix (0xed01), got 0x${prefixedBytes[0].toString(16)}${prefixedBytes[1].toString(16)}.`,
+        `Expected Ed25519 multicodec prefix (0xed01), got 0x${hex}.`,
       );
     }
   }

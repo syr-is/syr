@@ -141,8 +141,6 @@ BaseEntitySchema.extend({
 
 Combined user + profile for authenticated contexts. Picks `id`, `username`, `role` from User and extends with `display_name` and `avatar_url` from Profile.
 
-> **Known issue:** This schema currently picks `did: true` from `UserSchema`, but `UserSchema` does not yet have a `did` field. This will be fixed in Phase 0 when `did` is added to `UserSchema`.
-
 ---
 
 ## Posts Domain (`posts.ts`)
@@ -222,7 +220,7 @@ BaseEntitySchema.extend({
 
 ### Upload Key Format
 
-```
+```text
 uploads/{owner_id}/[folder_path/]{table:id}
 ```
 
@@ -307,7 +305,7 @@ Full OIDC-compatible OAuth 2.0 schema set.
 
 ### OAuth Scopes
 
-```
+```text
 openid, profile, email,
 read:activities, write:activities,
 read:credentials, write:credentials,
@@ -324,7 +322,7 @@ Event system for cross-service communication.
 
 ### Event Types
 
-```
+```text
 post.created, post.updated, post.deleted,
 comment.created, comment.updated, comment.deleted,
 like.created, like.deleted,
@@ -349,7 +347,7 @@ Generic key-value storage using SurrealDB.
 
 ### KV ID Format
 
-```
+```text
 kv:{type}:{index}
 ```
 
@@ -398,7 +396,7 @@ Generic API response and query schemas.
 
 ### Error Codes
 
-```
+```text
 VALIDATION_ERROR, AUTHENTICATION_ERROR, AUTHORIZATION_ERROR,
 NOT_FOUND, CONFLICT, RATE_LIMIT_EXCEEDED,
 INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE,

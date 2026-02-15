@@ -41,6 +41,8 @@ export type DelegationScope = z.infer<typeof DelegationScopeSchema>;
  * Delegated Key Schema
  * Represents a device key delegated by the root identity.
  * The signature field contains the root key's signature over the delegation statement.
+ * canonical_delegation stores the exact string the client signed (RFC 8785 canonical form)
+ * so re-verification uses the same bytes and verify() succeeds.
  */
 export const DelegatedKeySchema = BaseEntitySchema.pick({
 	id: true,
@@ -51,7 +53,8 @@ export const DelegatedKeySchema = BaseEntitySchema.pick({
 	scope: DelegationScopeSchema.default('device'),
 	expires_at: TimestampSchema.optional(),
 	revoked_at: TimestampSchema.optional(),
-	signature: z.string().min(1) // multibase-encoded root signature
+	signature: z.string().min(1), // multibase-encoded root signature
+	canonical_delegation: z.string().min(1).optional() // exact signed string for re-verification
 });
 
 export type DelegatedKey = z.infer<typeof DelegatedKeySchema>;

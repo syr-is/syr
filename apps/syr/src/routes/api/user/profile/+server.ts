@@ -37,7 +37,23 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			const { payload, signature, devicePublicKey } = signedResult.data;
 
 			// Verify the full delegation chain and payload signature
-			await identityController.verifySignedMutation(payload, signature, devicePublicKey);
+			const { identity } = await identityController.verifySignedMutation(
+				payload,
+				signature,
+				devicePublicKey
+			);
+
+			// Ensure the signing identity belongs to the authenticated user (identity.user_id
+			// is the owner of the root identity; the verified delegation links to that identity).
+			const identityUserId = identity.user_id.toString();
+			if (identityUserId !== locals.user.id) {
+				throw error(403, {
+					code: 'FORBIDDEN',
+					message:
+						'The signing device key is not bound to your account. ' +
+						'Profile mutations must be signed by a key delegated to the authenticated user.'
+				});
+			}
 
 			// Validate the payload as a profile update
 			const data = ProfileUpdateSchema.parse(payload);

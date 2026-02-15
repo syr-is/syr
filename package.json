@@ -29,7 +29,8 @@
     "onlyBuiltDependencies": [
       "@syr-is/types",
       "@tailwindcss/oxide",
-      "esbuild"
+      "esbuild",
+      "sharp"
     ],
     "overrides": {
       "@smithy/types": "^4.11.0"

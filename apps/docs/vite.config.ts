@@ -1,7 +1,8 @@
 import { defaultTheme } from '@sveltepress/theme-default';
 import { sveltepress } from '@sveltepress/vite';
+import type { Plugin } from 'unified';
 import { defineConfig } from 'vite';
-import { remarkMermaid } from './src/lib/remark-mermaid.js';
+import { remarkMermaid } from './src/lib/remark-mermaid';
 
 const sidebarConfig = [
 	{
@@ -67,7 +68,7 @@ const config = defineConfig({
 					languages: ['svelte', 'sh', 'js', 'html', 'ts', 'md', 'css', 'scss', 'json', 'sql']
 				}
 			}),
-			remarkPlugins: [remarkMermaid],
+			remarkPlugins: [remarkMermaid as Plugin],
 			siteConfig: {
 				title: 'Syr',
 				description:

@@ -1,3 +1,4 @@
+import type { RecordId } from 'surrealdb';
 import { BaseRepository } from './base.repository';
 import {
 	IdentitySchema,
@@ -30,7 +31,7 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	/**
 	 * Find identity by user ID
 	 */
-	async findByUserId(userId: string | import('surrealdb').RecordId): Promise<Identity | null> {
+	async findByUserId(userId: string | RecordId): Promise<Identity | null> {
 		const result = await this.db.query<[Identity[]]>(
 			'SELECT * FROM identity WHERE user_id = $userId LIMIT 1',
 			{ userId }
@@ -93,7 +94,7 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 	/**
 	 * Revoke a delegated key
 	 */
-	async revoke(id: import('surrealdb').RecordId | string): Promise<DelegatedKey> {
+	async revoke(id: RecordId | string): Promise<DelegatedKey> {
 		return this.update(id, { revoked_at: new Date() } as Partial<DelegatedKey>);
 	}
 }

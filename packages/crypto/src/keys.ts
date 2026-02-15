@@ -1,28 +1,28 @@
 import * as ed from "@noble/ed25519";
 import type { Keypair } from "./types.js";
 
+type Sha512Async = (message: Uint8Array) => Promise<Uint8Array>;
+type EdWithSha512Hook = typeof ed & {
+  hashes?: { sha512Async?: Sha512Async };
+  etc?: { sha512Async?: Sha512Async };
+};
+
 // noble/ed25519 v2 requires a SHA-512 implementation.
 // Use the Web Crypto API (available in Node 18+ and all modern browsers).
-ed.etc.sha512Async = async (...messages: Uint8Array[]): Promise<Uint8Array> => {
-  const merged = concatBytes(...messages);
-  const buf = merged.buffer.slice(
-    merged.byteOffset,
-    merged.byteOffset + merged.byteLength,
+// Assign to whichever API the installed version exposes (hashes or etc).
+const sha512Async: Sha512Async = async (message) => {
+  const buf = message.buffer.slice(
+    message.byteOffset,
+    message.byteOffset + message.byteLength,
   ) as ArrayBuffer;
   const hash = await crypto.subtle.digest("SHA-512", buf);
   return new Uint8Array(hash);
 };
-
-function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  let totalLength = 0;
-  for (const arr of arrays) totalLength += arr.length;
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const arr of arrays) {
-    result.set(arr, offset);
-    offset += arr.length;
-  }
-  return result;
+const edMod = ed as EdWithSha512Hook;
+if (edMod.hashes) {
+  edMod.hashes.sha512Async = sha512Async;
+} else if (edMod.etc) {
+  edMod.etc.sha512Async = sha512Async;
 }
 
 /**
