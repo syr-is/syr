@@ -50,3 +50,18 @@ export type BaseEntity = z.infer<typeof BaseEntitySchema>;
 export const MetadataSchema = z.record(z.string(), z.any());
 
 export type Metadata = z.infer<typeof MetadataSchema>;
+
+/**
+ * DID Syr Schema
+ * Validates a did:syr identifier format.
+ * The method-specific identifier is a multibase base58btc-encoded Ed25519 public key.
+ */
+export const DidSyrSchema = z
+	.string()
+	.regex(
+		/^did:syr:z[1-9A-HJ-NP-Za-km-z]+$/,
+		'Must be a valid did:syr identifier (e.g., did:syr:z6Mkt9...)'
+	)
+	.describe('did:syr identifier');
+
+export type DidSyr = z.infer<typeof DidSyrSchema>;

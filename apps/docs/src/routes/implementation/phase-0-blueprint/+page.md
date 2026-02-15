@@ -63,13 +63,33 @@ apps/
 
 packages/
   types/            ← shared schemas
-  (future) crypto/  ← new: key + signing logic
-  (future) did/     ← new: DID + resolver helpers
+  crypto/           ← new: key + signing logic
+  did/              ← new: DID + resolver helpers
   (future) registry-client/ ← new later
+```
 
-apps/docs/src/routes/
-  architecture/     ← architecture specs (identity-model, did-method, etc.)
-  implementation/   ← implementation blueprints
+## System Context
+
+```mermaid
+flowchart TD
+    subgraph packages [New Packages]
+        crypto["packages/crypto
+        Ed25519, multibase, signing, JCS"]
+        did["packages/did
+        DID parsing, document building"]
+    end
+    subgraph existing [Existing]
+        types["packages/types
+        Zod schemas + identity types"]
+        syrApp["apps/syr
+        SvelteKit app"]
+    end
+
+    did --> crypto
+    did --> types
+    syrApp --> crypto
+    syrApp --> did
+    syrApp --> types
 ```
 
 ---
@@ -181,6 +201,27 @@ On first authenticated session:
    - browser secure storage (acceptable for Phase 0)
    - future: native secure enclave.
 
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant App as SvelteKit Server
+    participant DB as SurrealDB
+
+    U->>U: generateRootKeypair() [Ed25519]
+    U->>U: deriveDid(publicKey) -> did:syr:z6M...
+    U->>U: generateDeviceKeypair() [Ed25519]
+    U->>U: Sign delegation { did, delegate, scope, createdAt }
+    U->>U: Store root private key in IndexedDB
+    U->>U: Store device private key in IndexedDB
+    U->>App: POST /api/identity/init
+    Note right of U: { did, publicKey, devicePubKey, delegation }
+    App->>App: Verify delegation signature against publicKey
+    App->>DB: INSERT identity { did, public_key, user_id }
+    App->>DB: INSERT delegated_key { did, public_key, scope, signature }
+    App->>DB: UPDATE user SET did = ...
+    App-->>U: 200 OK { did }
+```
+
 ---
 
 ## 6.2 Signing profile mutations
@@ -193,6 +234,25 @@ Every mutation must:
 4. Server verifies before accepting.
 
 Unsigned writes must be rejected.
+
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant App as SvelteKit Server
+    participant DB as SurrealDB
+
+    U->>U: Prepare mutation payload
+    U->>U: canonicalize(payload) [JCS/RFC 8785]
+    U->>U: sign(canonical, devicePrivateKey)
+    U->>App: POST /api/user/profile
+    Note right of U: { payload, signature, devicePublicKey }
+    App->>DB: Lookup delegated_key by devicePublicKey
+    App->>App: Check delegation not revoked or expired
+    App->>App: Verify delegation signature (root signed device key)
+    App->>App: canonicalize(payload) and verify(canonical, signature, devicePublicKey)
+    App->>DB: Apply profile mutation
+    App-->>U: 200 OK
+```
 
 ---
 
@@ -210,6 +270,24 @@ Returns:
 - signed profile snapshot
 
 Never include private keys.
+
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant App as SvelteKit Server
+    participant DB as SurrealDB
+
+    U->>App: GET /api/identity/export
+    Note right of U: Requires valid session
+    App->>App: Verify session (JWT + session record)
+    App->>DB: Fetch identity by user_id
+    App->>DB: Fetch all delegated_keys for DID
+    App->>DB: Fetch profile for user_id
+    App->>App: Bundle as IdentityExportBundle
+    Note right of App: { did, publicKey, delegatedKeys[], profile, exportedAt }
+    App-->>U: 200 OK (portable identity bundle)
+    Note left of U: Private keys are NEVER included
+```
 
 ---
 

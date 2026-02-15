@@ -92,6 +92,21 @@ Resolver MUST:
    - embedded public key
    - registry-discovered services.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Resolver
+    participant Registry
+
+    Client->>Resolver: Resolve did:syr:z6Mkt9...
+    Resolver->>Resolver: Decode multibase -> Ed25519 public key
+    Resolver->>Registry: GET /resolve/did:syr:z6Mkt9...
+    Registry-->>Resolver: { provider: "https://...", signature: "..." }
+    Resolver->>Resolver: Verify signature with embedded public key
+    Resolver->>Resolver: Build DID Document
+    Resolver-->>Client: DID Document { id, verificationMethod, service }
+```
+
 ---
 
 ## 5. DID Document Structure

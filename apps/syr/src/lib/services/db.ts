@@ -84,6 +84,12 @@ class DatabaseService {
 				DEFINE INDEX IF NOT EXISTS unique_username ON TABLE user COLUMNS username UNIQUE;
 			`);
 
+			// Add optional DID field to user table
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS did ON TABLE user TYPE option<string>;
+				DEFINE INDEX IF NOT EXISTS idx_user_did ON TABLE user COLUMNS did UNIQUE;
+			`);
+
 			// Define index for profile lookup by user_id
 			await db.query(`
 				DEFINE INDEX IF NOT EXISTS profile_user_id ON TABLE profile COLUMNS user_id UNIQUE;
@@ -93,6 +99,32 @@ class DatabaseService {
 			await db.query(`
 				DEFINE INDEX IF NOT EXISTS session_token ON TABLE session COLUMNS token UNIQUE;
 				DEFINE INDEX IF NOT EXISTS session_user_id ON TABLE session COLUMNS user_id;
+			`);
+
+			// Identity table: stores root identity metadata
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS identity SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS did ON TABLE identity TYPE string
+					ASSERT string::starts_with($value, "did:syr:");
+				DEFINE FIELD IF NOT EXISTS public_key ON TABLE identity TYPE string;
+				DEFINE FIELD IF NOT EXISTS user_id ON TABLE identity TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_identity_did ON TABLE identity COLUMNS did UNIQUE;
+				DEFINE INDEX IF NOT EXISTS idx_identity_user ON TABLE identity COLUMNS user_id UNIQUE;
+			`);
+
+			// Delegated keys table: stores device delegations
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS delegated_key SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS did ON TABLE delegated_key TYPE string;
+				DEFINE FIELD IF NOT EXISTS public_key ON TABLE delegated_key TYPE string;
+				DEFINE FIELD IF NOT EXISTS scope ON TABLE delegated_key TYPE string DEFAULT "device";
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE delegated_key TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS expires_at ON TABLE delegated_key TYPE option<datetime>;
+				DEFINE FIELD IF NOT EXISTS revoked_at ON TABLE delegated_key TYPE option<datetime>;
+				DEFINE FIELD IF NOT EXISTS signature ON TABLE delegated_key TYPE string;
+				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
+				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
 			`);
 
 			console.log('✅ Database schema initialized');

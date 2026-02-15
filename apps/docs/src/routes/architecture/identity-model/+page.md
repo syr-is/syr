@@ -78,9 +78,44 @@ Syr supports multiple assurance levels simultaneously:
 
 No higher layer replaces the **root identity**.
 
+```mermaid
+flowchart BT
+    Permissionless["Permissionless Layer
+    Any root identity may exist"]
+    Social["Social Layer
+    Institutional attestations"]
+    Legal["Legal Layer
+    KYC / personhood"]
+
+    Permissionless --> Social --> Legal
+
+    RootIdentity["Root Identity (always present)"] -.->|"anchors all layers"| Permissionless
+```
+
 ---
 
 ## 3. Identity Components
+
+```mermaid
+flowchart TD
+    RootIdentity["Root Identity (Ed25519 keypair)"]
+    DID["DID (did:syr:z6M...)"]
+    DelegatedKeys["Delegated Device Keys"]
+    Profile["Profile (Digital Delegate)"]
+    Provider["Identity Provider (Hosting)"]
+    Registry["Registry (DID -> Provider)"]
+    Attestations["Attestations (future)"]
+    OAuth["OAuth Actions"]
+
+    RootIdentity -->|derives| DID
+    RootIdentity -->|authorizes| DelegatedKeys
+    RootIdentity -->|signs updates to| Registry
+    DelegatedKeys -->|sign actions on| Profile
+    Provider -->|hosts| Profile
+    Registry -->|resolves to| Provider
+    DID -->|used as sub in| OAuth
+    Attestations -->|issued to| RootIdentity
+```
 
 ### 3.1 Root Identity
 
@@ -239,6 +274,23 @@ Identity migration requires:
 2. Root key signs an updated **hosting record**.
 3. Registry updates provider resolution.
 4. Historical continuity remains verifiable.
+
+```mermaid
+sequenceDiagram
+    participant User as User (Root Key)
+    participant OldProvider as Old Provider
+    participant NewProvider as New Provider
+    participant Registry
+
+    User->>NewProvider: Set up account / import data
+    User->>User: Sign new hosting record
+    User->>Registry: POST /update { did, provider: new, signature }
+    Registry->>Registry: Verify signature with root key
+    Registry->>Registry: Update hosting record
+    Note over Registry: did:syr -> new provider
+    User->>OldProvider: (optional) Export remaining data
+    Note over User, NewProvider: DID unchanged, attestations intact
+```
 
 Migration **must not**:
 

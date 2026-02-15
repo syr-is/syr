@@ -35,3 +35,6 @@ export * from './folders.js';
 
 // KV (Key-Value) types
 export * from './kv.js';
+
+// Identity types
+export * from './identity.js';

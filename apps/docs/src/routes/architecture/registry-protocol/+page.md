@@ -158,6 +158,18 @@ Registry MUST:
 4. Ensure `updatedAt` is **strictly newer** than stored record.
 5. Replace existing record if valid.
 
+```mermaid
+flowchart TD
+    Receive["Receive POST /update"] --> ExtractKey["Extract public key from DID"]
+    ExtractKey --> Canonicalize["Reconstruct canonical payload (JCS)"]
+    Canonicalize --> VerifySig["Verify Ed25519 signature"]
+    VerifySig -->|invalid| Reject["REJECT 400"]
+    VerifySig -->|valid| CheckTimestamp["Check updatedAt > stored"]
+    CheckTimestamp -->|older or equal| RejectStale["REJECT 409"]
+    CheckTimestamp -->|newer| Store["Replace stored record"]
+    Store --> OK["200 OK"]
+```
+
 Reject if:
 
 - signature invalid
@@ -209,6 +221,29 @@ Identity migration occurs when:
 3. Client submits `POST /update`.
 4. Registry verifies and stores.
 5. Future `/resolve` calls return new provider.
+
+```mermaid
+sequenceDiagram
+    participant User as User (Root Key)
+    participant Client
+    participant Registry
+    participant Resolver as Any Resolver
+
+    User->>Client: Select new provider
+    Client->>Client: Build hosting record { did, provider: new, updatedAt }
+    Client->>Client: canonicalize(record) [JCS]
+    Client->>Client: sign(canonical, rootPrivateKey)
+    Client->>Registry: POST /update { did, provider, updatedAt, signature }
+    Registry->>Registry: Extract public key from DID
+    Registry->>Registry: Verify signature
+    Registry->>Registry: Check updatedAt > stored
+    Registry->>Registry: Store new record
+    Registry-->>Client: 200 OK
+
+    Note over Resolver: Later...
+    Resolver->>Registry: GET /resolve/did:syr:...
+    Registry-->>Resolver: { provider: "new", ... }
+```
 
 ---
 

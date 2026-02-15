@@ -59,6 +59,28 @@ No provider or institution may create delegated keys **without root approval**.
 
 ## 3. Key Types
 
+```mermaid
+flowchart TD
+    RootKey["Root Key (Ed25519)
+    Full identity authority"]
+    DeviceKey1["Device Key 1
+    Laptop"]
+    DeviceKey2["Device Key 2
+    Phone"]
+    DeviceKey3["Device Key 3
+    Tablet"]
+    SessionKey1["Session Key (optional)
+    Short-lived"]
+
+    RootKey -->|"delegates (signed)"| DeviceKey1
+    RootKey -->|"delegates (signed)"| DeviceKey2
+    RootKey -->|"delegates (signed)"| DeviceKey3
+    DeviceKey1 -.->|"derives (optional)"| SessionKey1
+    RootKey -->|"can revoke"| DeviceKey1
+    RootKey -->|"can revoke"| DeviceKey2
+    RootKey -->|"can revoke"| DeviceKey3
+```
+
 ### 3.1 Root Key
 
 **Algorithm:** Ed25519  
@@ -134,6 +156,19 @@ Providers and clients MUST:
 4. Ensure delegation not revoked.
 
 If any check fails → delegation is invalid.
+
+```mermaid
+flowchart TD
+    Start["Receive delegation"] --> VerifySig["Verify root signature"]
+    VerifySig -->|invalid| Reject["REJECT"]
+    VerifySig -->|valid| CheckDID["Confirm DID matches signer"]
+    CheckDID -->|mismatch| Reject
+    CheckDID -->|match| CheckExpiry["Check expiration"]
+    CheckExpiry -->|expired| Reject
+    CheckExpiry -->|valid| CheckRevoked["Check revocation status"]
+    CheckRevoked -->|revoked| Reject
+    CheckRevoked -->|active| Accept["ACCEPT delegation"]
+```
 
 ---
 

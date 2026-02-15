@@ -74,6 +74,20 @@ No:
 
 ## 3. Provider Discovery
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Registry
+    participant Provider
+
+    Client->>Registry: GET /resolve/did:syr:z6Mkt9...
+    Registry-->>Client: { provider: "https://provider.example" }
+    Client->>Provider: GET /.well-known/syr
+    Provider-->>Client: { did, endpoints: { profile, oauth_authorize, ... } }
+    Client->>Provider: GET /profile
+    Provider-->>Client: { did, displayName, bio, avatar, ... }
+```
+
 Given a resolved registry record:
 
 ```

@@ -71,6 +71,25 @@ The recovery key MUST:
 
 ### 3.2 Recovery statement format
 
+```mermaid
+sequenceDiagram
+    participant User as User (Recovery Key)
+    participant Provider
+    participant Registry
+
+    Note over User: Root key lost or compromised
+    User->>User: Generate new root keypair
+    User->>User: Sign recovery statement with recovery key
+    Note right of User: { did, newRoot, recoveredAt, signature }
+    User->>Provider: Submit recovery statement
+    Provider->>Provider: Verify recovery key signature
+    Provider->>Provider: Accept new root key
+    Provider->>Provider: Preserve old root in history
+    User->>Registry: Sign new hosting record with new root key
+    Registry->>Registry: Verify via key history chain
+    Note over User, Registry: DID unchanged, identity preserved
+```
+
 Root key replacement is expressed as:
 
 ```json
@@ -131,6 +150,16 @@ Systems MUST:
 ## 5. Key History Chain
 
 Each identity maintains a **verifiable chain** of root keys:
+
+```mermaid
+flowchart LR
+    Root0["root0 (original)"] -->|"rotation signed by root0"| Root1["root1"]
+    Root1 -->|"rotation signed by root1"| Root2["root2"]
+    Root2 -->|"..."| RootN["rootN (current)"]
+
+    Recovery["Recovery Key"] -.->|"can replace any root"| Root1
+    Recovery -.->|"can replace any root"| Root2
+```
 
 ```text
 root₀ → root₁ → root₂ → ...
