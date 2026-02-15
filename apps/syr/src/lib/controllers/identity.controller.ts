@@ -138,7 +138,9 @@ export class IdentityController {
 		}
 
 		try {
-			await userRepository.update(resolvedUserId, { did } as Parameters<typeof userRepository.update>[1]);
+			await userRepository.update(resolvedUserId, { did } as Parameters<
+				typeof userRepository.update
+			>[1]);
 		} catch (err) {
 			try {
 				await delegatedKeyRepository.delete(createdDelegatedKey.id);

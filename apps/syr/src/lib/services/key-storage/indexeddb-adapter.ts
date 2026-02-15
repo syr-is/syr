@@ -3,11 +3,7 @@
  * Stores private keys in plaintext. Use only in development; prefer Web Crypto adapter in production.
  */
 
-import {
-	generateRootKeypair,
-	generateDeviceKeypair,
-	sign as nobleSign
-} from '@syr-is/crypto';
+import { generateRootKeypair, generateDeviceKeypair, sign as nobleSign } from '@syr-is/crypto';
 import { type KeyRecord, KeyStorageAdapter, PRIVATE_REF } from './types.js';
 
 const DB_NAME = 'syr-identity';
@@ -61,13 +57,7 @@ function createRecord(
 export class IndexedDBKeyAdapter extends KeyStorageAdapter {
 	async generateRootKeypair(): Promise<KeyRecord> {
 		const pair = await generateRootKeypair();
-		return createRecord(
-			'root',
-			pair.publicKey,
-			'root',
-			new Date().toISOString(),
-			pair.privateKey
-		);
+		return createRecord('root', pair.publicKey, 'root', new Date().toISOString(), pair.privateKey);
 	}
 
 	async generateDeviceKeypair(): Promise<KeyRecord> {
@@ -140,9 +130,7 @@ export class IndexedDBKeyAdapter extends KeyStorageAdapter {
 				reject(req.error);
 			};
 		});
-		return rows.map((r) =>
-			createRecord(r.id, r.publicKey, r.type, r.createdAt, r.privateKey)
-		);
+		return rows.map((r) => createRecord(r.id, r.publicKey, r.type, r.createdAt, r.privateKey));
 	}
 
 	async getMeta(key: string): Promise<string | null> {

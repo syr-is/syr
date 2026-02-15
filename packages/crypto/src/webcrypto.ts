@@ -7,10 +7,10 @@ const ED25519_ALGO: AlgorithmIdentifier = { name: "Ed25519" };
 const ED25519_SIGN_ALGO: AlgorithmIdentifier = { name: "Ed25519" };
 
 export interface WebCryptoKeyPair {
-	/** Raw 32-byte Ed25519 public key for use in KeyRecord / DID. */
-	publicKey: Uint8Array;
-	/** Web Crypto private key; use signWithCryptoKey or exportPrivateKeyForStorage. */
-	privateKey: CryptoKey;
+  /** Raw 32-byte Ed25519 public key for use in KeyRecord / DID. */
+  publicKey: Uint8Array;
+  /** Web Crypto private key; use signWithCryptoKey or exportPrivateKeyForStorage. */
+  privateKey: CryptoKey;
 }
 
 /**
@@ -18,15 +18,13 @@ export interface WebCryptoKeyPair {
  * Private key is extractable so the adapter can export it for encrypted storage.
  */
 export async function generateEd25519KeyPairWebCrypto(): Promise<WebCryptoKeyPair> {
-	const pair = (await crypto.subtle.generateKey(
-		ED25519_ALGO,
-		true,
-		["sign"],
-	)) as CryptoKeyPair;
-	const publicKey = new Uint8Array(
-		await crypto.subtle.exportKey("raw", pair.publicKey!),
-	);
-	return { publicKey, privateKey: pair.privateKey! };
+  const pair = (await crypto.subtle.generateKey(ED25519_ALGO, true, [
+    "sign",
+  ])) as CryptoKeyPair;
+  const publicKey = new Uint8Array(
+    await crypto.subtle.exportKey("raw", pair.publicKey!),
+  );
+  return { publicKey, privateKey: pair.privateKey! };
 }
 
 /**
@@ -36,17 +34,17 @@ export async function generateEd25519KeyPairWebCrypto(): Promise<WebCryptoKeyPai
  * @returns The Ed25519 signature (64 bytes).
  */
 export async function signWithCryptoKey(
-	payload: Uint8Array | string,
-	privateKey: CryptoKey,
+  payload: Uint8Array | string,
+  privateKey: CryptoKey,
 ): Promise<Uint8Array> {
-	const data =
-		typeof payload === "string" ? new TextEncoder().encode(payload) : payload;
-	const sig = await crypto.subtle.sign(
-		ED25519_SIGN_ALGO,
-		privateKey,
-		data as BufferSource,
-	);
-	return new Uint8Array(sig);
+  const data =
+    typeof payload === "string" ? new TextEncoder().encode(payload) : payload;
+  const sig = await crypto.subtle.sign(
+    ED25519_SIGN_ALGO,
+    privateKey,
+    data as BufferSource,
+  );
+  return new Uint8Array(sig);
 }
 
 /**
@@ -54,9 +52,9 @@ export async function signWithCryptoKey(
  * Caller is responsible for encrypting and persisting the returned buffer.
  */
 export async function exportPrivateKeyForStorage(
-	privateKey: CryptoKey,
+  privateKey: CryptoKey,
 ): Promise<ArrayBuffer> {
-	return crypto.subtle.exportKey("pkcs8", privateKey);
+  return crypto.subtle.exportKey("pkcs8", privateKey);
 }
 
 /**
@@ -64,13 +62,9 @@ export async function exportPrivateKeyForStorage(
  * Key is imported as non-extractable for in-memory signing.
  */
 export async function importPrivateKeyFromStorage(
-	pkcs8: ArrayBuffer,
+  pkcs8: ArrayBuffer,
 ): Promise<CryptoKey> {
-	return crypto.subtle.importKey(
-		"pkcs8",
-		pkcs8,
-		{ name: "Ed25519" },
-		false,
-		["sign"],
-	);
+  return crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, [
+    "sign",
+  ]);
 }

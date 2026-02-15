@@ -7,7 +7,12 @@
  * VITE_KEY_STORAGE_ADAPTER: 'indexeddb' (plaintext, dev) or 'webcrypto' (encrypted).
  */
 
-import { deriveDid, encodeMultibase, canonicalize, ED25519_MULTICODEC_PREFIX } from '@syr-is/crypto';
+import {
+	deriveDid,
+	encodeMultibase,
+	canonicalize,
+	ED25519_MULTICODEC_PREFIX
+} from '@syr-is/crypto';
 import { getKeyStorageAdapter } from '$lib/services/key-storage/index.js';
 
 /** Lazy so this module can be loaded on server; adapter is used only in browser. */
