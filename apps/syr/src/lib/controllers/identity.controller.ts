@@ -67,6 +67,24 @@ export class IdentityController {
 		// Verify delegation signature
 		await this.verifyDelegationSignature(delegation, parsedDid.publicKey);
 
+		// Ensure the delegation statement refers to this identity. Otherwise we would store
+		// identity/delegated_key with request did while canonical_delegation would contain
+		// delegation.did, causing verifySignedMutation (which uses dk.did and dk.canonical_delegation)
+		// to have inconsistent data and signature verification failures.
+		if (delegation.did !== did) {
+			throw new Error('Delegation DID does not match the request DID.');
+		}
+
+		// Ensure the delegation authorizes this device key. Otherwise a tampered request could
+		// pair a valid delegation (for key B) with a different devicePublicKey (key A), storing
+		// key A as delegated while canonical_delegation contains delegation.delegate (key B), so
+		// verifySignedMutation would have inconsistent dk.public_key vs canonical_delegation.
+		const delegateBytes = decodePublicKey(delegation.delegate);
+		const devicePubKeyBytes = decodePublicKey(devicePublicKey);
+		if (!constantTimeEqual(delegateBytes, devicePubKeyBytes)) {
+			throw new Error('Delegation does not authorize the provided device key.');
+		}
+
 		// Canonical delegation string (exact bytes the client signed) for storage and re-verification
 		const canonicalDelegation = canonicalize({
 			did: delegation.did,
