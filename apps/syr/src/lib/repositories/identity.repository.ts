@@ -84,7 +84,7 @@ export class IdentityRepository extends BaseRepository<Identity> {
 				created_at = $delegationCreatedAt,
 				signature = $signature,
 				canonical_delegation = $canonicalDelegation,
-				expires_at = $expiresAt;
+				expires_at = $delegationExpiresAt;
 			UPDATE $userId SET did = $did;
 			COMMIT TRANSACTION;
 		`;

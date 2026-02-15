@@ -34,18 +34,46 @@ function concatBytes(...arrays: Uint8Array[]): Uint8Array {
 	return result;
 }
 
+const LOG_PREFIX = '[identity.client]';
+
 async function getCurrentDeviceKey() {
 	const adp = adapter();
 	const currentId = await adp.getMeta('currentDeviceKeyId');
 	if (currentId) {
 		const key = await adp.getKey(currentId);
 		if (key) return key;
+		console.warn(
+			`${LOG_PREFIX} Device key fallback: currentDeviceKeyId was set but key not found; will try legacy or first available key.`,
+			{ currentDeviceKeyId: currentId }
+		);
 	}
 	const legacy = await adp.getKey('device');
-	if (legacy) return legacy;
+	if (legacy) {
+		const all = await adp.getAllKeys();
+		const deviceKeys = all.filter((k) => k.type === 'device');
+		console.warn(`${LOG_PREFIX} Device key fallback: using legacy key id "device".`, {
+			attemptedCurrentDeviceKeyId: currentId ?? null,
+			selectedKeyId: legacy.id,
+			selectedKeyType: legacy.type,
+			availableDeviceKeyCount: deviceKeys.length,
+			availableDeviceKeyIds: deviceKeys.map((k) => k.id)
+		});
+		return legacy;
+	}
 	const all = await adp.getAllKeys();
 	const deviceKeys = all.filter((k) => k.type === 'device');
-	return deviceKeys.length > 0 ? deviceKeys[0]! : null;
+	if (deviceKeys.length > 0) {
+		const first = deviceKeys[0]!;
+		console.warn(`${LOG_PREFIX} Device key fallback: using first available device key.`, {
+			attemptedCurrentDeviceKeyId: currentId ?? null,
+			selectedKeyId: first.id,
+			selectedKeyType: first.type,
+			availableDeviceKeyCount: deviceKeys.length,
+			availableDeviceKeyIds: deviceKeys.map((k) => k.id)
+		});
+		return first;
+	}
+	return null;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -115,14 +143,60 @@ export async function createIdentity(): Promise<string> {
 		throw new Error(errorData?.message ?? `Identity initialization failed: ${response.status}`);
 	}
 
-	const result = await response.json();
+	let result: { data?: { did?: string } };
+	try {
+		result = await response.json();
+	} catch {
+		throw new Error('Invalid response from identity server: response body is not valid JSON.');
+	}
+	const confirmedDid =
+		result?.data?.did && typeof result.data.did === 'string' ? result.data.did : null;
+	if (!confirmedDid) {
+		throw new Error(
+			'Invalid response from identity server: missing or invalid identity data (did).'
+		);
+	}
 
-	await adp.storeKey(rootRecord);
-	deviceRecord.id = devicePubMultibase;
-	await adp.storeKey(deviceRecord);
-	await adp.setMeta('currentDeviceKeyId', devicePubMultibase);
+	const persistKeys = async (): Promise<void> => {
+		await adp.storeKey(rootRecord);
+		deviceRecord.id = devicePubMultibase;
+		await adp.storeKey(deviceRecord);
+		await adp.setMeta('currentDeviceKeyId', devicePubMultibase);
+	};
 
-	return result.data.did;
+	const maxAttempts = 2;
+	const backoffMs = 200;
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			await persistKeys();
+			return confirmedDid;
+		} catch (err) {
+			lastError = err;
+			if (attempt < maxAttempts) {
+				await new Promise((r) => setTimeout(r, backoffMs));
+			}
+		}
+	}
+
+	// Persistence failed; attempt server rollback so identity is not left active without local keys
+	try {
+		await fetch('/api/identity/rollback', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ did: confirmedDid })
+		});
+	} catch {
+		// Rollback endpoint may not exist or may fail; continue to throw actionable error
+	}
+	console.warn(
+		`${LOG_PREFIX} Local key persistence failed after ${maxAttempts} attempt(s):`,
+		lastError
+	);
+	throw new Error(
+		'Identity was created on the server but saving your keys locally failed. ' +
+			'Your account may be in an inconsistent state. Please try signing in again or contact support if the problem persists.'
+	);
 }
 
 /**

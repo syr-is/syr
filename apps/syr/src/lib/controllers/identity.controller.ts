@@ -1,6 +1,5 @@
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
-import { userRepository } from '$lib/repositories/user.repository';
 import {
 	verify,
 	canonicalize,
@@ -98,60 +97,20 @@ export class IdentityController {
 		const delegationCreatedAt = new Date(delegation.createdAt);
 		const delegationExpiresAt = delegation.expiresAt ? new Date(delegation.expiresAt) : undefined;
 
-		let createdIdentity: Identity;
-		let createdDelegatedKey: DelegatedKey;
-
 		try {
-			createdIdentity = await identityRepository.create({
+			await identityRepository.createIdentityWithDelegationAndUserUpdate({
 				did,
-				public_key: publicKey,
-				user_id: resolvedUserId,
-				created_at: now
-			} as Parameters<typeof identityRepository.create>[0]);
-		} catch (err) {
-			if (IdentityController.isUniqueConstraintError(err)) {
-				throw new Error('User already has an identity.');
-			}
-			throw err;
-		}
-
-		try {
-			createdDelegatedKey = await delegatedKeyRepository.create({
-				did,
-				public_key: devicePublicKey,
+				publicKey,
+				userId: resolvedUserId,
+				now,
+				devicePublicKey,
 				scope: delegation.scope,
-				created_at: delegationCreatedAt,
-				expires_at: delegationExpiresAt,
+				delegationCreatedAt,
+				delegationExpiresAt,
 				signature: delegation.signature,
-				canonical_delegation: canonicalDelegation
-			} as Parameters<typeof delegatedKeyRepository.create>[0]);
+				canonicalDelegation
+			});
 		} catch (err) {
-			try {
-				await identityRepository.delete(createdIdentity.id);
-			} catch (cleanupErr) {
-				console.error('Compensating delete failed (identity):', cleanupErr);
-			}
-			if (IdentityController.isUniqueConstraintError(err)) {
-				throw new Error('User already has an identity.');
-			}
-			throw err;
-		}
-
-		try {
-			await userRepository.update(resolvedUserId, { did } as Parameters<
-				typeof userRepository.update
-			>[1]);
-		} catch (err) {
-			try {
-				await delegatedKeyRepository.delete(createdDelegatedKey.id);
-			} catch (cleanupErr) {
-				console.error('Compensating delete failed (delegated_key):', cleanupErr);
-			}
-			try {
-				await identityRepository.delete(createdIdentity.id);
-			} catch (cleanupErr) {
-				console.error('Compensating delete failed (identity):', cleanupErr);
-			}
 			if (IdentityController.isUniqueConstraintError(err)) {
 				throw new Error('User already has an identity.');
 			}
