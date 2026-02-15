@@ -85,7 +85,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				});
 			}
 
-			if (err.message.includes('Invalid delegation') || err.message.includes('does not match')) {
+			if (
+				err.message.includes('Invalid delegation') ||
+				err.message.includes('does not match') ||
+				err.message.includes('does not authorize')
+			) {
 				throw error(400, {
 					code: 'VALIDATION_ERROR',
 					message: err.message

@@ -1,6 +1,6 @@
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
-import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
+import { userRepository } from '$lib/repositories/user.repository';
 import {
 	verify,
 	canonicalize,
@@ -94,45 +94,87 @@ export class IdentityController {
 			...(delegation.expiresAt ? { expiresAt: delegation.expiresAt } : {})
 		});
 
-		// Single transactional boundary: create identity, delegated_key, update user.
-		// No SurrealDB transaction API in use here; use compensating cleanup on failure.
 		const now = new Date();
-
-		const createdIdentity = await identityRepository.create({
-			did,
-			public_key: publicKey,
-			user_id: resolvedUserId,
-			created_at: now
-		} as Partial<Identity>);
-
 		const delegationCreatedAt = new Date(delegation.createdAt);
 		const delegationExpiresAt = delegation.expiresAt ? new Date(delegation.expiresAt) : undefined;
 
-		let createdDelegatedKey: DelegatedKey | null = null;
+		let createdIdentity: Identity;
+		let createdDelegatedKey: DelegatedKey;
+
+		try {
+			createdIdentity = await identityRepository.create({
+				did,
+				public_key: publicKey,
+				user_id: resolvedUserId,
+				created_at: now
+			} as Parameters<typeof identityRepository.create>[0]);
+		} catch (err) {
+			if (IdentityController.isUniqueConstraintError(err)) {
+				throw new Error('User already has an identity.');
+			}
+			throw err;
+		}
+
 		try {
 			createdDelegatedKey = await delegatedKeyRepository.create({
 				did,
 				public_key: devicePublicKey,
 				scope: delegation.scope,
 				created_at: delegationCreatedAt,
-				...(delegationExpiresAt !== undefined && { expires_at: delegationExpiresAt }),
+				expires_at: delegationExpiresAt,
 				signature: delegation.signature,
 				canonical_delegation: canonicalDelegation
-			} as Partial<DelegatedKey>);
+			} as Parameters<typeof delegatedKeyRepository.create>[0]);
 		} catch (err) {
-			await identityRepository.delete(createdIdentity.id);
+			try {
+				await identityRepository.delete(createdIdentity.id);
+			} catch (cleanupErr) {
+				console.error('Compensating delete failed (identity):', cleanupErr);
+			}
+			if (IdentityController.isUniqueConstraintError(err)) {
+				throw new Error('User already has an identity.');
+			}
 			throw err;
 		}
 
 		try {
-			await userRepository.update(resolvedUserId, { did } as Record<string, unknown>);
+			await userRepository.update(resolvedUserId, { did } as Parameters<typeof userRepository.update>[1]);
 		} catch (err) {
-			await delegatedKeyRepository.delete(createdDelegatedKey.id);
-			await identityRepository.delete(createdIdentity.id);
+			try {
+				await delegatedKeyRepository.delete(createdDelegatedKey.id);
+			} catch (cleanupErr) {
+				console.error('Compensating delete failed (delegated_key):', cleanupErr);
+			}
+			try {
+				await identityRepository.delete(createdIdentity.id);
+			} catch (cleanupErr) {
+				console.error('Compensating delete failed (identity):', cleanupErr);
+			}
+			if (IdentityController.isUniqueConstraintError(err)) {
+				throw new Error('User already has an identity.');
+			}
 			throw err;
 		}
 
 		return { did };
+	}
+
+	/**
+	 * Check if error is a SurrealDB unique constraint violation (e.g. concurrent identity creation).
+	 */
+	private static isUniqueConstraintError(error: unknown): boolean {
+		if (error && typeof error === 'object' && 'message' in error) {
+			const errorMessage = (error as { message: string }).message;
+			return (
+				errorMessage.includes('duplicate') ||
+				errorMessage.includes('unique') ||
+				errorMessage.includes('already exists')
+			);
+		}
+		if (error && typeof error === 'object' && 'code' in error) {
+			return (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION';
+		}
+		return false;
 	}
 
 	/**
@@ -200,18 +242,13 @@ export class IdentityController {
 		// This prevents an attacker with DB write access from inserting a malicious
 		// delegated_key and having it accepted without the root key's signature.
 		// Use the stored canonical delegation string (exact bytes the client signed)
-		// so verify() matches; reconstructing from dk.created_at.toISOString() can differ.
+		// so verify() matches; reconstructing from DB fields would be fragile.
 		const rootKeyClean = decodePublicKey(identity.public_key);
 
-		const canonicalDelegation =
-			dk.canonical_delegation ??
-			canonicalize({
-				did: dk.did,
-				delegate: dk.public_key,
-				scope: dk.scope,
-				createdAt: dk.created_at.toISOString(),
-				...(dk.expires_at ? { expiresAt: dk.expires_at.toISOString() } : {})
-			});
+		const canonicalDelegation = dk.canonical_delegation;
+		if (!canonicalDelegation) {
+			throw new Error('Delegation record is missing canonical statement.');
+		}
 		const delegationValid = await verify(
 			canonicalDelegation,
 			decodeMultibase(dk.signature),

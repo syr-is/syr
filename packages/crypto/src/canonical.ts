@@ -28,11 +28,11 @@ function jcsStringify(value: unknown): string {
   }
 
   if (typeof value === "number") {
-    if (!isFinite(value)) {
-      throw new Error("Infinity is not allowed in JCS");
-    }
     if (Number.isNaN(value)) {
       throw new Error("NaN is not allowed in JCS");
+    }
+    if (!isFinite(value)) {
+      throw new Error("Infinity is not allowed in JCS");
     }
     // ES6 number serialization per RFC 8785
     return JSON.stringify(value);

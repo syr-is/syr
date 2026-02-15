@@ -27,4 +27,12 @@ export {
   verifyRotationStatement,
 } from "./rotation.js";
 
+export {
+  generateEd25519KeyPairWebCrypto,
+  signWithCryptoKey,
+  exportPrivateKeyForStorage,
+  importPrivateKeyFromStorage,
+} from "./webcrypto.js";
+
 export type { Keypair, RotationStatement } from "./types.js";
+export type { WebCryptoKeyPair } from "./webcrypto.js";

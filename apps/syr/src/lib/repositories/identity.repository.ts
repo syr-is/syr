@@ -40,6 +40,68 @@ export class IdentityRepository extends BaseRepository<Identity> {
 		if (!record) return null;
 		return this.validate(record);
 	}
+
+	/**
+	 * Atomically create identity, delegated_key, and update user.did in a single transaction.
+	 * All three operations succeed or none are applied (no compensating cleanup needed).
+	 */
+	async createIdentityWithDelegationAndUserUpdate(params: {
+		did: string;
+		publicKey: string;
+		userId: RecordId;
+		now: Date;
+		devicePublicKey: string;
+		scope: string;
+		delegationCreatedAt: Date;
+		delegationExpiresAt: Date | undefined;
+		signature: string;
+		canonicalDelegation: string;
+	}): Promise<void> {
+		const {
+			did,
+			publicKey,
+			userId,
+			now,
+			devicePublicKey,
+			scope,
+			delegationCreatedAt,
+			delegationExpiresAt,
+			signature,
+			canonicalDelegation
+		} = params;
+
+		const query = `
+			BEGIN TRANSACTION;
+			CREATE identity SET
+				did = $did,
+				public_key = $publicKey,
+				user_id = $userId,
+				created_at = $now;
+			CREATE delegated_key SET
+				did = $did,
+				public_key = $devicePublicKey,
+				scope = $scope,
+				created_at = $delegationCreatedAt,
+				signature = $signature,
+				canonical_delegation = $canonicalDelegation,
+				expires_at = $expiresAt;
+			UPDATE $userId SET did = $did;
+			COMMIT TRANSACTION;
+		`;
+
+		await this.db.query(query, {
+			did,
+			publicKey,
+			userId,
+			now,
+			devicePublicKey,
+			scope,
+			delegationCreatedAt,
+			delegationExpiresAt: delegationExpiresAt ?? null,
+			signature,
+			canonicalDelegation
+		});
+	}
 }
 
 /**
