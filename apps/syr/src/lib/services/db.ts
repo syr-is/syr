@@ -86,7 +86,7 @@ class DatabaseService {
 
 			// Add optional DID field to user table
 			await db.query(`
-				DEFINE FIELD IF NOT EXISTS did ON TABLE user TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS did ON TABLE user TYPE option<string> ASSERT $value IS NONE OR string::starts_with($value, "did:syr:");
 				DEFINE INDEX IF NOT EXISTS idx_user_did ON TABLE user COLUMNS did UNIQUE;
 			`);
 

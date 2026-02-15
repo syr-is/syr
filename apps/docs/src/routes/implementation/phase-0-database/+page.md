@@ -1,5 +1,5 @@
 ---
-title: "Phase 0: Database Schema"
+title: 'Phase 0: Database Schema'
 ---
 
 # Phase 0: Database Schema
@@ -12,15 +12,15 @@ Phase 0 adds two new tables to SurrealDB and extends the existing `user` table w
 
 Before Phase 0, the database has these tables with indexes:
 
-| Table | Unique Indexes | Regular Indexes |
-| ----- | -------------- | --------------- |
-| `user` | `username` | -- |
-| `profile` | `user_id` | -- |
-| `session` | `token` | `user_id` |
-| `post` | -- | -- |
-| `upload` | -- | -- |
-| `folder` | -- | -- |
-| `kv` | -- | -- |
+| Table     | Unique Indexes | Regular Indexes |
+| --------- | -------------- | --------------- |
+| `user`    | `username`     | --              |
+| `profile` | `user_id`      | --              |
+| `session` | `token`        | `user_id`       |
+| `post`    | --             | --              |
+| `upload`  | --             | --              |
+| `folder`  | --             | --              |
+| `kv`      | --             | --              |
 
 ---
 
@@ -41,14 +41,15 @@ DEFINE INDEX idx_identity_did ON identity FIELDS did UNIQUE;
 DEFINE INDEX idx_identity_user ON identity FIELDS user_id UNIQUE;
 ```
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `did` | `string` | `did:syr:<multibase>` identifier |
-| `public_key` | `string` | Multibase-encoded Ed25519 public key |
-| `user_id` | `record<user>` | Reference to the owning user |
-| `created_at` | `datetime` | Identity creation timestamp |
+| Field        | Type           | Description                          |
+| ------------ | -------------- | ------------------------------------ |
+| `did`        | `string`       | `did:syr:<multibase>` identifier     |
+| `public_key` | `string`       | Multibase-encoded Ed25519 public key |
+| `user_id`    | `record<user>` | Reference to the owning user         |
+| `created_at` | `datetime`     | Identity creation timestamp          |
 
 **Constraints:**
+
 - `did` must start with `did:syr:`
 - `did` is globally unique
 - `user_id` is unique (one identity per user)
@@ -70,17 +71,18 @@ DEFINE INDEX idx_dk_pubkey ON delegated_key FIELDS public_key UNIQUE;
 DEFINE INDEX idx_dk_did ON delegated_key FIELDS did;
 ```
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `did` | `string` | Owning identity's DID |
-| `public_key` | `string` | Multibase-encoded device public key |
-| `scope` | `string` | Delegation scope (`device` in Phase 0) |
-| `created_at` | `datetime` | Delegation creation time |
-| `expires_at` | `option<datetime>` | Optional expiration |
-| `revoked_at` | `option<datetime>` | Set when revoked by root key |
-| `signature` | `string` | Root key signature over the delegation statement |
+| Field        | Type               | Description                                      |
+| ------------ | ------------------ | ------------------------------------------------ |
+| `did`        | `string`           | Owning identity's DID                            |
+| `public_key` | `string`           | Multibase-encoded device public key              |
+| `scope`      | `string`           | Delegation scope (`device` in Phase 0)           |
+| `created_at` | `datetime`         | Delegation creation time                         |
+| `expires_at` | `option<datetime>` | Optional expiration                              |
+| `revoked_at` | `option<datetime>` | Set when revoked by root key                     |
+| `signature`  | `string`           | Root key signature over the delegation statement |
 
 **Constraints:**
+
 - `public_key` is globally unique (one delegation per device key)
 - `did` is indexed for lookups
 

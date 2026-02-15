@@ -19,25 +19,22 @@ import { z } from 'zod';
  * Requires: Authenticated session
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
-	try {
-		// Require authentication
-		if (!locals.user) {
-			throw error(401, {
-				code: 'AUTHENTICATION_ERROR',
-				message: 'Authentication required'
-			});
-		}
+	// Require authentication (outside try so 401 is not swallowed by catch)
+	if (!locals.user) {
+		throw error(401, {
+			code: 'AUTHENTICATION_ERROR',
+			message: 'Authentication required'
+		});
+	}
 
+	try {
 		const body = await request.json();
 
 		// Validate request body
 		const validatedData = IdentityInitRequestSchema.parse(body);
 
 		// Initialize identity
-		const result = await identityController.initializeIdentity(
-			locals.user.id,
-			validatedData
-		);
+		const result = await identityController.initializeIdentity(locals.user.id, validatedData);
 
 		return json(
 			{
@@ -50,6 +47,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			{ status: 201 }
 		);
 	} catch (err) {
+		// Rethrow SvelteKit error() / redirect() — they don't extend Error
+		if (
+			err &&
+			typeof err === 'object' &&
+			'status' in err &&
+			typeof (err as { status: number }).status === 'number'
+		) {
+			throw err;
+		}
+		// JSON parse errors from request.json()
+		if (
+			err instanceof SyntaxError ||
+			(err && typeof err === 'object' && (err as Error).name === 'SyntaxError') ||
+			(err instanceof Error && /JSON|Unexpected token/i.test(err.message))
+		) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Malformed JSON body'
+			});
+		}
 		console.error('Identity init error:', err);
 
 		if (err instanceof z.ZodError) {
@@ -68,10 +85,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				});
 			}
 
-			if (
-				err.message.includes('Invalid delegation') ||
-				err.message.includes('does not match')
-			) {
+			if (err.message.includes('Invalid delegation') || err.message.includes('does not match')) {
 				throw error(400, {
 					code: 'VALIDATION_ERROR',
 					message: err.message

@@ -1,3 +1,4 @@
+// @ts-nocheck — JSDoc references unified/mdast types; runtime only uses unist-util-visit.
 /**
  * Remark plugin that transforms ```mermaid code blocks into
  * <pre class="mermaid"> elements for client-side rendering by mermaid.js.

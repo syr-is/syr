@@ -5,27 +5,26 @@
  */
 
 export {
-	generateRootKeypair,
-	generateDeviceKeypair,
-	sign,
-	verify
-} from './keys.js';
+  generateRootKeypair,
+  generateDeviceKeypair,
+  sign,
+  verify,
+  constantTimeEqual,
+} from "./keys.js";
 
 export {
-	encodeMultibase,
-	decodeMultibase,
-	deriveDid,
-	ED25519_MULTICODEC_PREFIX
-} from './encoding.js';
+  encodeMultibase,
+  decodeMultibase,
+  decodePublicKey,
+  deriveDid,
+  ED25519_MULTICODEC_PREFIX,
+} from "./encoding.js";
 
-export { canonicalize } from './canonical.js';
+export { canonicalize } from "./canonical.js";
 
 export {
-	createRotationStatement,
-	verifyRotationStatement
-} from './rotation.js';
+  createRotationStatement,
+  verifyRotationStatement,
+} from "./rotation.js";
 
-export type {
-	Keypair,
-	RotationStatement
-} from './types.js';
+export type { Keypair, RotationStatement } from "./types.js";

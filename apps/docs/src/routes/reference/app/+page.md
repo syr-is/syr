@@ -1,5 +1,5 @@
 ---
-title: "apps/syr Reference"
+title: 'apps/syr Reference'
 ---
 
 # apps/syr Reference
@@ -47,17 +47,17 @@ flowchart TD
 
 ## Technology Stack
 
-| Layer | Technology |
-| ----- | ---------- |
-| Frontend | Svelte 5 with runes, SvelteKit 2 |
-| Styling | Tailwind CSS 4, shadcn-svelte, tw-animate-css |
-| Forms | sveltekit-superforms + Zod v4 |
-| Rich text | Milkdown (Markdown editor) |
-| Database | SurrealDB (multi-model) |
-| Storage | SeaweedFS (S3-compatible via `@aws-sdk/client-s3`) |
-| Auth | JWT (`jsonwebtoken`) + Argon2id (`@node-rs/argon2`) |
-| Build | Vite 7 + Turborepo |
-| Types | `@syr-is/types` (workspace package) |
+| Layer     | Technology                                          |
+| --------- | --------------------------------------------------- |
+| Frontend  | Svelte 5 with runes, SvelteKit 2                    |
+| Styling   | Tailwind CSS 4, shadcn-svelte, tw-animate-css       |
+| Forms     | sveltekit-superforms + Zod v4                       |
+| Rich text | Milkdown (Markdown editor)                          |
+| Database  | SurrealDB (multi-model)                             |
+| Storage   | SeaweedFS (S3-compatible via `@aws-sdk/client-s3`)  |
+| Auth      | JWT (`jsonwebtoken`) + Argon2id (`@node-rs/argon2`) |
+| Build     | Vite 7 + Turborepo                                  |
+| Types     | `@syr-is/types` (workspace package)                 |
 
 ---
 
@@ -90,6 +90,7 @@ sequenceDiagram
 ### Password Hashing
 
 Uses Argon2id with OWASP-recommended settings:
+
 - Memory cost: 19456 KiB
 - Time cost: 2 iterations
 - Parallelism: 1
@@ -104,6 +105,7 @@ Uses Argon2id with OWASP-recommended settings:
 ### Security Headers
 
 Applied by `hooks.server.ts`:
+
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `X-XSS-Protection: 1; mode=block`
@@ -124,15 +126,15 @@ All data access goes through repositories that extend `BaseRepository<T>`.
 
 ### Concrete Repositories
 
-| Repository | Table | Key Features |
-| ---------- | ----- | ------------ |
-| `userRepository` | `user` | `findByUsername()`, `usernameExists()` |
-| `profileRepository` | `profile` | `findByUserId()` |
-| `sessionRepository` | `session` | `findByToken()`, `findByUserId()`, expiration checks |
-| `postRepository` | `post` | Post CRUD with author filtering |
-| `uploadRepository` | `upload` | Status management, S3 key tracking |
-| `folderRepository` | `folder` | Hierarchical queries, path resolution |
-| `kvRepository` | `kv` | Composite key (`kv:type:index`), TTL, atomic operations |
+| Repository          | Table     | Key Features                                            |
+| ------------------- | --------- | ------------------------------------------------------- |
+| `userRepository`    | `user`    | `findByUsername()`, `usernameExists()`                  |
+| `profileRepository` | `profile` | `findByUserId()`                                        |
+| `sessionRepository` | `session` | `findByToken()`, `findByUserId()`, expiration checks    |
+| `postRepository`    | `post`    | Post CRUD with author filtering                         |
+| `uploadRepository`  | `upload`  | Status management, S3 key tracking                      |
+| `folderRepository`  | `folder`  | Hierarchical queries, path resolution                   |
+| `kvRepository`      | `kv`      | Composite key (`kv:type:index`), TTL, atomic operations |
 
 ---
 
@@ -140,13 +142,13 @@ All data access goes through repositories that extend `BaseRepository<T>`.
 
 Controllers contain **business logic** and sit between API routes and repositories. They handle validation, authorization, and cross-cutting concerns.
 
-| Controller | Responsibilities |
-| ---------- | ---------------- |
-| `AuthController` | Register, login, logout, session creation, token validation |
-| `PostController` | Post CRUD, visibility enforcement, draft management |
+| Controller         | Responsibilities                                                   |
+| ------------------ | ------------------------------------------------------------------ |
+| `AuthController`   | Register, login, logout, session creation, token validation        |
+| `PostController`   | Post CRUD, visibility enforcement, draft management                |
 | `FolderController` | Folder CRUD, path resolution, breadcrumbs, public folder detection |
-| `UserController` | Profile updates |
-| `UploadController` | Upload lifecycle (initiate, complete, delete), S3 operations |
+| `UserController`   | Profile updates                                                    |
+| `UploadController` | Upload lifecycle (initiate, complete, delete), S3 operations       |
 
 ---
 
@@ -156,56 +158,56 @@ All API routes are under `src/routes/api/`.
 
 ### Authentication
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
+| Method | Path                 | Description                                            |
+| ------ | -------------------- | ------------------------------------------------------ |
 | `POST` | `/api/auth/register` | Register new user (username + password + display_name) |
-| `POST` | `/api/auth/login` | Login, returns JWT in cookie |
-| `POST` | `/api/auth/logout` | Clear session and cookie |
+| `POST` | `/api/auth/login`    | Login, returns JWT in cookie                           |
+| `POST` | `/api/auth/logout`   | Clear session and cookie                               |
 
 ### User Profile
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `GET` | `/api/user/profile` | Get current user's profile |
+| Method  | Path                | Description                                        |
+| ------- | ------------------- | -------------------------------------------------- |
+| `GET`   | `/api/user/profile` | Get current user's profile                         |
 | `PATCH` | `/api/user/profile` | Update profile (display_name, bio, avatar, banner) |
 
 ### Posts
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `GET` | `/api/posts` | List posts (paginated, filtered by author) |
-| `POST` | `/api/posts` | Create new post (blog or media) |
-| `GET` | `/api/posts/[id]` | Get single post |
-| `PATCH` | `/api/posts/[id]` | Update post |
-| `DELETE` | `/api/posts/[id]` | Delete post |
+| Method   | Path              | Description                                |
+| -------- | ----------------- | ------------------------------------------ |
+| `GET`    | `/api/posts`      | List posts (paginated, filtered by author) |
+| `POST`   | `/api/posts`      | Create new post (blog or media)            |
+| `GET`    | `/api/posts/[id]` | Get single post                            |
+| `PATCH`  | `/api/posts/[id]` | Update post                                |
+| `DELETE` | `/api/posts/[id]` | Delete post                                |
 
 ### Uploads
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `GET` | `/api/uploads` | List uploads (paginated, folder-filtered) |
-| `POST` | `/api/uploads` | Initiate upload (returns presigned URL) |
-| `GET` | `/api/uploads/[id]` | Get upload metadata |
-| `PATCH` | `/api/uploads/[id]` | Complete upload (status: completed) |
-| `DELETE` | `/api/uploads/[id]` | Delete upload and S3 object |
+| Method   | Path                | Description                               |
+| -------- | ------------------- | ----------------------------------------- |
+| `GET`    | `/api/uploads`      | List uploads (paginated, folder-filtered) |
+| `POST`   | `/api/uploads`      | Initiate upload (returns presigned URL)   |
+| `GET`    | `/api/uploads/[id]` | Get upload metadata                       |
+| `PATCH`  | `/api/uploads/[id]` | Complete upload (status: completed)       |
+| `DELETE` | `/api/uploads/[id]` | Delete upload and S3 object               |
 
 ### Folders
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `GET` | `/api/folders` | List folders (with optional parent_id) |
-| `POST` | `/api/folders` | Create folder |
-| `GET` | `/api/folders/[id]` | Get folder with path and breadcrumbs |
-| `PATCH` | `/api/folders/[id]` | Rename or move folder |
+| Method   | Path                | Description                               |
+| -------- | ------------------- | ----------------------------------------- |
+| `GET`    | `/api/folders`      | List folders (with optional parent_id)    |
+| `POST`   | `/api/folders`      | Create folder                             |
+| `GET`    | `/api/folders/[id]` | Get folder with path and breadcrumbs      |
+| `PATCH`  | `/api/folders/[id]` | Rename or move folder                     |
 | `DELETE` | `/api/folders/[id]` | Delete folder (optional: delete contents) |
 
 ### Sessions
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `GET` | `/api/session` | List sessions (paginated) |
-| `DELETE` | `/api/session/[id]` | Revoke specific session |
-| `POST` | `/api/session/invalidate-others` | Invalidate all sessions except current |
+| Method   | Path                             | Description                            |
+| -------- | -------------------------------- | -------------------------------------- |
+| `GET`    | `/api/session`                   | List sessions (paginated)              |
+| `DELETE` | `/api/session/[id]`              | Revoke specific session                |
+| `POST`   | `/api/session/invalidate-others` | Invalidate all sessions except current |
 
 ---
 
@@ -219,15 +221,15 @@ All API routes are under `src/routes/api/`.
 
 ### Current Tables
 
-| Table | Unique Indexes | Regular Indexes |
-| ----- | -------------- | --------------- |
-| `user` | `username` | -- |
-| `profile` | `user_id` | -- |
-| `session` | `token` | `user_id` |
-| `post` | -- | -- |
-| `upload` | -- | -- |
-| `folder` | -- | -- |
-| `kv` | -- | -- |
+| Table     | Unique Indexes | Regular Indexes |
+| --------- | -------------- | --------------- |
+| `user`    | `username`     | --              |
+| `profile` | `user_id`      | --              |
+| `session` | `token`        | `user_id`       |
+| `post`    | --             | --              |
+| `upload`  | --             | --              |
+| `folder`  | --             | --              |
+| `kv`      | --             | --              |
 
 ---
 
@@ -256,15 +258,15 @@ Svelte 5 runes-based store with `$state`:
 
 ```typescript
 class AuthStore {
-  user = $state<User | null>(null);
-  profile = $state<Profile | null>(null);
-  token = $state<string | null>(null);
-  loading = $state(false);
+	user = $state<User | null>(null);
+	profile = $state<Profile | null>(null);
+	token = $state<string | null>(null);
+	loading = $state(false);
 
-  get isAuthenticated(): boolean;
-  get authHeader(): string | null;
-  setAuth(user, profile, token): void;
-  logout(): void;
+	get isAuthenticated(): boolean;
+	get authHeader(): string | null;
+	setAuth(user, profile, token): void;
+	logout(): void;
 }
 ```
 
@@ -286,7 +288,7 @@ Simple counter-based reactivity signal for refreshing storage-usage components a
 
 ## Route Structure
 
-```
+```text
 src/routes/
   +page.svelte           # Redirect to login or posts
   login/                 # Public login page
@@ -341,14 +343,14 @@ The application uses **shadcn-svelte** (Svelte port of shadcn/ui) for its compon
 
 ### Custom Components (`src/lib/components/fragments/`)
 
-| Component | Purpose |
-| --------- | ------- |
-| `new-post.svelte` | Post creation form (blog/media) |
-| `post-preview.svelte` | Post card preview |
-| `media-upload-zone.svelte` | Drag-and-drop upload area |
-| `media-preview-modal.svelte` | Full-screen media viewer |
-| `file-card.svelte` / `file-table.svelte` | File listing views |
-| `folder-card.svelte` | Folder display |
-| `storage-usage.svelte` | Storage quota display |
-| `view-mode-toggle.svelte` | Grid/table view switcher |
-| Various dialogs | Create/delete/rename/move/share operations |
+| Component                                | Purpose                                    |
+| ---------------------------------------- | ------------------------------------------ |
+| `new-post.svelte`                        | Post creation form (blog/media)            |
+| `post-preview.svelte`                    | Post card preview                          |
+| `media-upload-zone.svelte`               | Drag-and-drop upload area                  |
+| `media-preview-modal.svelte`             | Full-screen media viewer                   |
+| `file-card.svelte` / `file-table.svelte` | File listing views                         |
+| `folder-card.svelte`                     | Folder display                             |
+| `storage-usage.svelte`                   | Storage quota display                      |
+| `view-mode-toggle.svelte`                | Grid/table view switcher                   |
+| Various dialogs                          | Create/delete/rename/move/share operations |

@@ -1,7 +1,11 @@
-import { sign, verify } from './keys.js';
-import { encodeMultibase, decodeMultibase } from './encoding.js';
-import { canonicalize } from './canonical.js';
-import type { RotationStatement } from './types.js';
+import { sign, verify } from "./keys.js";
+import {
+  encodeMultibase,
+  decodeMultibase,
+  ED25519_MULTICODEC_PREFIX,
+} from "./encoding.js";
+import { canonicalize } from "./canonical.js";
+import type { RotationStatement } from "./types.js";
 
 /**
  * Create a root key rotation statement.
@@ -17,28 +21,33 @@ import type { RotationStatement } from './types.js';
  * @returns The signed rotation statement.
  */
 export async function createRotationStatement(
-	did: string,
-	newPublicKey: Uint8Array,
-	currentPrivateKey: Uint8Array
+  did: string,
+  newPublicKey: Uint8Array,
+  currentPrivateKey: Uint8Array,
 ): Promise<RotationStatement> {
-	const newRoot = encodeMultibase(newPublicKey);
-	const rotatedAt = new Date().toISOString();
+  const prefixed = new Uint8Array(
+    ED25519_MULTICODEC_PREFIX.length + newPublicKey.length,
+  );
+  prefixed.set(ED25519_MULTICODEC_PREFIX);
+  prefixed.set(newPublicKey, ED25519_MULTICODEC_PREFIX.length);
+  const newRoot = encodeMultibase(prefixed);
+  const rotatedAt = new Date().toISOString();
 
-	const payload = canonicalize({
-		did,
-		newRoot,
-		rotatedAt
-	});
+  const payload = canonicalize({
+    did,
+    newRoot,
+    rotatedAt,
+  });
 
-	const signatureBytes = await sign(payload, currentPrivateKey);
-	const signature = encodeMultibase(signatureBytes);
+  const signatureBytes = await sign(payload, currentPrivateKey);
+  const signature = encodeMultibase(signatureBytes);
 
-	return {
-		did,
-		newRoot,
-		rotatedAt,
-		signature
-	};
+  return {
+    did,
+    newRoot,
+    rotatedAt,
+    signature,
+  };
 }
 
 /**
@@ -51,15 +60,15 @@ export async function createRotationStatement(
  * @returns True if the statement is valid.
  */
 export async function verifyRotationStatement(
-	statement: RotationStatement,
-	currentPublicKey: Uint8Array
+  statement: RotationStatement,
+  currentPublicKey: Uint8Array,
 ): Promise<boolean> {
-	const payload = canonicalize({
-		did: statement.did,
-		newRoot: statement.newRoot,
-		rotatedAt: statement.rotatedAt
-	});
+  const payload = canonicalize({
+    did: statement.did,
+    newRoot: statement.newRoot,
+    rotatedAt: statement.rotatedAt,
+  });
 
-	const signatureBytes = decodeMultibase(statement.signature);
-	return verify(payload, signatureBytes, currentPublicKey);
+  const signatureBytes = decodeMultibase(statement.signature);
+  return verify(payload, signatureBytes, currentPublicKey);
 }

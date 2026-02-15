@@ -70,7 +70,8 @@ const config = defineConfig({
 			remarkPlugins: [remarkMermaid],
 			siteConfig: {
 				title: 'Syr',
-				description: 'Self Yield Identity Representation -- portable, cryptographically rooted identity'
+				description:
+					'Self Yield Identity Representation -- portable, cryptographically rooted identity'
 			}
 		})
 	]

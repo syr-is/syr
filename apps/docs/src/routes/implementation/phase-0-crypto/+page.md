@@ -1,5 +1,5 @@
 ---
-title: "Phase 0: packages/crypto"
+title: 'Phase 0: packages/crypto'
 ---
 
 # Phase 0: packages/crypto
@@ -23,11 +23,11 @@ title: "Phase 0: packages/crypto"
 
 ## Dependency Rationale
 
-| Package | Purpose | Why this one |
-| ------- | ------- | ------------ |
-| `@noble/ed25519` | Ed25519 key generation, signing, verification | Audited, zero-dep, browser+Node, by Paul Miller |
-| `@scure/base` | Multibase encoding (base58btc) | Same author as noble, trusted, comprehensive base encoding |
-| `canonicalize` | RFC 8785 JSON Canonicalization Scheme | Spec-compliant JCS implementation |
+| Package          | Purpose                                       | Why this one                                               |
+| ---------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `@noble/ed25519` | Ed25519 key generation, signing, verification | Audited, zero-dep, browser+Node, by Paul Miller            |
+| `@scure/base`    | Multibase encoding (base58btc)                | Same author as noble, trusted, comprehensive base encoding |
+| `canonicalize`   | RFC 8785 JSON Canonicalization Scheme         | Spec-compliant JCS implementation                          |
 
 ---
 
@@ -37,14 +37,14 @@ title: "Phase 0: packages/crypto"
 
 ```typescript
 function generateRootKeypair(): Promise<{
-  publicKey: Uint8Array;
-  privateKey: Uint8Array;
-}>
+	publicKey: Uint8Array;
+	privateKey: Uint8Array;
+}>;
 
 function generateDeviceKeypair(): Promise<{
-  publicKey: Uint8Array;
-  privateKey: Uint8Array;
-}>
+	publicKey: Uint8Array;
+	privateKey: Uint8Array;
+}>;
 ```
 
 Both use Ed25519. Functionally identical but named differently for clarity of intent.
@@ -52,11 +52,12 @@ Both use Ed25519. Functionally identical but named differently for clarity of in
 ### DID Derivation
 
 ```typescript
-function deriveDid(publicKey: Uint8Array): string
+function deriveDid(publicKey: Uint8Array): string;
 // Returns: "did:syr:z6Mkt9..."
 ```
 
 Process:
+
 1. Take Ed25519 public key (32 bytes)
 2. Prepend multicodec prefix for Ed25519 public key (`0xed01`)
 3. Encode as base58btc multibase (prefix `z`)
@@ -65,26 +66,23 @@ Process:
 ### Multibase Encoding
 
 ```typescript
-function encodeMultibase(bytes: Uint8Array): string
+function encodeMultibase(bytes: Uint8Array): string;
 // Returns: "z6Mkt9..." (base58btc with 'z' prefix)
 
-function decodeMultibase(encoded: string): Uint8Array
+function decodeMultibase(encoded: string): Uint8Array;
 // Input: "z6Mkt9..." -> Uint8Array
 ```
 
 ### Signing and Verification
 
 ```typescript
-function sign(
-  payload: Uint8Array | string,
-  privateKey: Uint8Array
-): Promise<Uint8Array>
+function sign(payload: Uint8Array | string, privateKey: Uint8Array): Promise<Uint8Array>;
 
 function verify(
-  payload: Uint8Array | string,
-  signature: Uint8Array,
-  publicKey: Uint8Array
-): Promise<boolean>
+	payload: Uint8Array | string,
+	signature: Uint8Array,
+	publicKey: Uint8Array
+): Promise<boolean>;
 ```
 
 If payload is a string, it is encoded as UTF-8 before signing/verifying.
@@ -92,10 +90,11 @@ If payload is a string, it is encoded as UTF-8 before signing/verifying.
 ### Canonical Serialization
 
 ```typescript
-function canonicalize(obj: Record<string, unknown>): string
+function canonicalize(obj: Record<string, unknown>): string;
 ```
 
 Implements RFC 8785 JSON Canonicalization Scheme (JCS):
+
 - Lexicographically sorted object keys
 - Compact JSON (no insignificant whitespace)
 - UTF-8 encoding
@@ -110,15 +109,15 @@ Used for creating canonical signing payloads for delegation statements, rotation
 
 ```typescript
 function createRotationStatement(
-  did: string,
-  newPublicKey: Uint8Array,
-  currentPrivateKey: Uint8Array
-): Promise<RotationStatement>
+	did: string,
+	newPublicKey: Uint8Array,
+	currentPrivateKey: Uint8Array
+): Promise<RotationStatement>;
 
 function verifyRotationStatement(
-  statement: RotationStatement,
-  currentPublicKey: Uint8Array
-): Promise<boolean>
+	statement: RotationStatement,
+	currentPublicKey: Uint8Array
+): Promise<boolean>;
 ```
 
 These compile and can be tested but have no UI or API endpoint in Phase 0. They establish the architectural pattern for key rotation.

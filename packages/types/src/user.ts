@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { BaseEntitySchema, MetadataSchema, TimestampSchema, RecordIdSchema, DidSyrSchema } from './common.js';
+import {
+	BaseEntitySchema,
+	MetadataSchema,
+	TimestampSchema,
+	RecordIdSchema,
+	DidSyrSchema
+} from './common.js';
 
 /**
  * User Role Schema

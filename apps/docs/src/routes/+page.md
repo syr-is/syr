@@ -1,6 +1,6 @@
 ---
 title: Syr
-tagline: Self Yield Identity Representation -- portable, cryptographically rooted identity.
+tagline: Self Yield Identity Representation — portable, cryptographically rooted identity.
 actions:
   - label: What is Syr?
     type: primary

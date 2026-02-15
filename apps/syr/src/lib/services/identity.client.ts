@@ -21,7 +21,21 @@ import {
 const DB_NAME = 'syr-identity';
 const DB_VERSION = 1;
 const STORE_NAME = 'keys';
+const META_STORE_NAME = 'meta';
 
+/**
+ * In-memory shape of a key record stored in IndexedDB.
+ *
+ * SECURITY: privateKey is stored in plaintext. This is a known risk for Phase 0
+ * and must not be used in production without migration.
+ *
+ * TODO(migration): Replace plaintext privateKey with one of:
+ * - Non-extractable Web Crypto CryptoKey (store key handle / wrap in KEK), or
+ * - Envelope encryption: wrap privateKey with a user-derived encryption key
+ *   (e.g. from login secret or hardware-backed secret) before storing.
+ * Until then, treat IndexedDB key storage as development-only; document
+ * fallback behavior in storeKey/getKey/getAllKeys.
+ */
 interface StoredKey {
 	id: string;
 	privateKey: Uint8Array;
@@ -39,6 +53,9 @@ function openKeyStore(): Promise<IDBDatabase> {
 			if (!db.objectStoreNames.contains(STORE_NAME)) {
 				db.createObjectStore(STORE_NAME, { keyPath: 'id' });
 			}
+			if (!db.objectStoreNames.contains(META_STORE_NAME)) {
+				db.createObjectStore(META_STORE_NAME, { keyPath: 'key' });
+			}
 		};
 
 		request.onsuccess = () => resolve(request.result);
@@ -46,6 +63,7 @@ function openKeyStore(): Promise<IDBDatabase> {
 	});
 }
 
+/** Persists a key to IndexedDB. Planned migration: store wrapped/CryptoKey instead of plaintext privateKey; keep fallback for existing records. */
 async function storeKey(key: StoredKey): Promise<void> {
 	const db = await openKeyStore();
 	return new Promise((resolve, reject) => {
@@ -63,6 +81,7 @@ async function storeKey(key: StoredKey): Promise<void> {
 	});
 }
 
+/** Loads a key from IndexedDB. Planned migration: unwrap or use CryptoKey; fallback to plaintext StoredKey for legacy records. */
 async function getKey(id: string): Promise<StoredKey | null> {
 	const db = await openKeyStore();
 	return new Promise((resolve, reject) => {
@@ -78,6 +97,80 @@ async function getKey(id: string): Promise<StoredKey | null> {
 			reject(request.error);
 		};
 	});
+}
+
+/** Loads all keys from IndexedDB. Planned migration: same as getKey; fallback for legacy plaintext records. */
+async function getAllKeys(): Promise<StoredKey[]> {
+	const db = await openKeyStore();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(STORE_NAME, 'readonly');
+		const store = tx.objectStore(STORE_NAME);
+		const request = store.getAll();
+		request.onsuccess = () => {
+			db.close();
+			resolve(request.result ?? []);
+		};
+		request.onerror = () => {
+			db.close();
+			reject(request.error);
+		};
+	});
+}
+
+async function getMeta(key: string): Promise<string | null> {
+	const db = await openKeyStore();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(META_STORE_NAME, 'readonly');
+		const store = tx.objectStore(META_STORE_NAME);
+		const request = store.get(key);
+		request.onsuccess = () => {
+			db.close();
+			const row = request.result as { key: string; value: string } | undefined;
+			resolve(row?.value ?? null);
+		};
+		request.onerror = () => {
+			db.close();
+			reject(request.error);
+		};
+	});
+}
+
+async function setMeta(key: string, value: string): Promise<void> {
+	const db = await openKeyStore();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(META_STORE_NAME, 'readwrite');
+		const store = tx.objectStore(META_STORE_NAME);
+		store.put({ key, value });
+		tx.oncomplete = () => {
+			db.close();
+			resolve();
+		};
+		tx.onerror = () => {
+			db.close();
+			reject(tx.error);
+		};
+	});
+}
+
+/**
+ * Get the device key to use for signing on this device.
+ * Prefers the "current" device key id (set when creating identity or adding a device);
+ * falls back to legacy id 'device' or the first stored device key.
+ * Uses getKey/getAllKeys; migration to CryptoKey/envelope will apply when those are updated.
+ */
+async function getCurrentDeviceKey(): Promise<StoredKey | null> {
+	const currentId = await getMeta('currentDeviceKeyId');
+	if (currentId) {
+		const key = await getKey(currentId);
+		if (key) return key;
+	}
+	// Legacy: single device key stored with id 'device'
+	const legacy = await getKey('device');
+	if (legacy) return legacy;
+	// Multi-device: first device key by creation order
+	const all = await getAllKeys();
+	const deviceKeys = all.filter((k) => k.type === 'device');
+	return deviceKeys.length > 0 ? deviceKeys[0]! : null;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -102,8 +195,8 @@ export async function checkIdentityStatus(): Promise<{ hasIdentity: boolean; did
  * 2. Derive DID from root public key
  * 3. Generate device keypair (Ed25519)
  * 4. Create delegation statement signed by root key
- * 5. Store both private keys in IndexedDB
- * 6. POST to /api/identity/init
+ * 5. POST to /api/identity/init
+ * 6. On success, store both private keys in IndexedDB (avoids orphaned keys if server rejects)
  *
  * @returns The DID of the newly created identity
  */
@@ -135,23 +228,7 @@ export async function createIdentity(): Promise<string> {
 	const delegationSignature = await sign(canonicalDelegation, rootKeypair.privateKey);
 	const delegationSignatureMultibase = encodeMultibase(delegationSignature);
 
-	// 5. Store keys in IndexedDB
-	await storeKey({
-		id: 'root',
-		privateKey: rootKeypair.privateKey,
-		publicKey: rootKeypair.publicKey,
-		type: 'root',
-		createdAt
-	});
-	await storeKey({
-		id: 'device',
-		privateKey: deviceKeypair.privateKey,
-		publicKey: deviceKeypair.publicKey,
-		type: 'device',
-		createdAt
-	});
-
-	// 6. POST to server
+	// 5. POST to server (persist keys only after success to avoid orphaned keys)
 	const response = await fetch('/api/identity/init', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -171,12 +248,29 @@ export async function createIdentity(): Promise<string> {
 
 	if (!response.ok) {
 		const errorData = await response.json().catch(() => null);
-		throw new Error(
-			errorData?.message ?? `Identity initialization failed: ${response.status}`
-		);
+		throw new Error(errorData?.message ?? `Identity initialization failed: ${response.status}`);
 	}
 
 	const result = await response.json();
+
+	// 6. Persist keys only after server accepted identity (no orphaned keys on failure)
+	//    Planned migration: storeKey will persist wrapped/CryptoKey; until then plaintext (dev-only).
+	await storeKey({
+		id: 'root',
+		privateKey: rootKeypair.privateKey,
+		publicKey: rootKeypair.publicKey,
+		type: 'root',
+		createdAt
+	});
+	await storeKey({
+		id: devicePubMultibase,
+		privateKey: deviceKeypair.privateKey,
+		publicKey: deviceKeypair.publicKey,
+		type: 'device',
+		createdAt
+	});
+	await setMeta('currentDeviceKeyId', devicePubMultibase);
+
 	return result.data.did;
 }
 
@@ -189,7 +283,7 @@ export async function createIdentity(): Promise<string> {
 export async function signMutation(
 	payload: Record<string, unknown>
 ): Promise<{ signature: string; devicePublicKey: string }> {
-	const deviceKey = await getKey('device');
+	const deviceKey = await getCurrentDeviceKey();
 	if (!deviceKey) {
 		throw new Error('No device key found. Identity may not be initialized.');
 	}
@@ -197,9 +291,10 @@ export async function signMutation(
 	const canonicalPayload = canonicalize(payload);
 	const signatureBytes = await sign(canonicalPayload, deviceKey.privateKey);
 	const signature = encodeMultibase(signatureBytes);
-	const devicePublicKey = encodeMultibase(
-		concatBytes(ED25519_MULTICODEC_PREFIX, deviceKey.publicKey)
-	);
+	// Id is multibase when stored for multi-device; otherwise encode for legacy id 'device'
+	const devicePublicKey = deviceKey.id.startsWith('z')
+		? deviceKey.id
+		: encodeMultibase(concatBytes(ED25519_MULTICODEC_PREFIX, deviceKey.publicKey));
 
 	return { signature, devicePublicKey };
 }
@@ -214,9 +309,10 @@ export async function getLocalRootPublicKey(): Promise<Uint8Array | null> {
 
 /**
  * Get the locally stored device public key (if available).
+ * Returns the current device key used for signing.
  */
 export async function getLocalDevicePublicKey(): Promise<Uint8Array | null> {
-	const deviceKey = await getKey('device');
+	const deviceKey = await getCurrentDeviceKey();
 	return deviceKey?.publicKey ?? null;
 }
 

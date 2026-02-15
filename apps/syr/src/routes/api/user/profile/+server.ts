@@ -73,6 +73,15 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			data: result
 		});
 	} catch (err) {
+		// Rethrow SvelteKit error() / redirect() — they don't extend Error
+		if (
+			err &&
+			typeof err === 'object' &&
+			'status' in err &&
+			typeof (err as { status: number }).status === 'number'
+		) {
+			throw err;
+		}
 		console.error('Profile update error:', err);
 
 		// Handle Zod validation errors

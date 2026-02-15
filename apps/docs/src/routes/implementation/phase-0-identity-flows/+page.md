@@ -1,5 +1,5 @@
 ---
-title: "Phase 0: Identity Flows"
+title: 'Phase 0: Identity Flows'
 ---
 
 # Phase 0: Identity Flows
@@ -118,6 +118,7 @@ The server performs a **two-step verification**:
 2. **Payload verification:** The mutation payload was signed by the device key. The request `signature` is verified against the `devicePublicKey`.
 
 This ensures that:
+
 - The device key is legitimately delegated by the root identity
 - The specific mutation was authored by the holder of the device key
 - No one can forge mutations without possessing the device private key
@@ -214,6 +215,7 @@ sequenceDiagram
     NewDevice->>NewDevice: Create delegation for new device key
     NewDevice->>NewDevice: sign(delegation, rootPrivateKey)
     NewDevice->>App: POST /api/identity/delegate
+    Note right of App: endpoint planned — not implemented in Phase 0
     Note right of NewDevice: { did, devicePublicKey, delegation }
     App->>App: Verify delegation signature
     App->>DB: INSERT delegated_key

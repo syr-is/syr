@@ -64,7 +64,7 @@ export const DelegatedKeyCreateSchema = z.object({
 	did: DidSyrSchema,
 	public_key: z.string().min(1),
 	scope: DelegationScopeSchema.default('device'),
-	expires_at: z.string().datetime().optional(),
+	expires_at: TimestampSchema.optional(),
 	signature: z.string().min(1)
 });
 

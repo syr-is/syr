@@ -1,5 +1,5 @@
 ---
-title: "packages/types Reference"
+title: 'packages/types Reference'
 ---
 
 # packages/types Reference
@@ -38,12 +38,12 @@ flowchart TD
 
 The foundation of all entity schemas.
 
-| Schema | Type | Description |
-| ------ | ---- | ----------- |
-| `RecordIdSchema` | `RecordId` | SurrealDB record identifier instance |
-| `TimestampSchema` | `Date` | JavaScript Date object validation |
+| Schema             | Type                             | Description                             |
+| ------------------ | -------------------------------- | --------------------------------------- |
+| `RecordIdSchema`   | `RecordId`                       | SurrealDB record identifier instance    |
+| `TimestampSchema`  | `Date`                           | JavaScript Date object validation       |
 | `BaseEntitySchema` | `{ id, created_at, updated_at }` | Common fields for all database entities |
-| `MetadataSchema` | `Record<string, any>` | Generic metadata key-value object |
+| `MetadataSchema`   | `Record<string, any>`            | Generic metadata key-value object       |
 
 **Design decision:** SurrealDB returns `RecordId` objects natively. Rather than converting to strings at the database layer, schemas validate the native type. Conversion to strings happens at the API boundary via codecs.
 
@@ -53,25 +53,25 @@ The foundation of all entity schemas.
 
 Zod v4 codecs provide **bi-directional transformations** between network representations and internal types. Each codec defines a `decode` (network -> internal) and `encode` (internal -> network) function.
 
-| Codec | Input | Output | Purpose |
-| ----- | ----- | ------ | ------- |
-| `stringToRecordId` | `string` (`"table:id"`) | `RecordId` | Convert API strings to SurrealDB IDs |
-| `isoDatetimeToDate` | ISO 8601 string | `Date` | Convert API timestamps to Date objects |
-| `hexToBytes` | hex string | `Uint8Array` | Binary data encoding |
-| `stringToNumber` | string | `number` | Query parameter parsing |
-| `stringToInt` | string | integer | Integer query parameters |
-| `stringToBoolean` | `"true"` / `"false"` | `boolean` | Boolean query parameters |
-| `json(schema)` | JSON string | `T` | Generic JSON parse/stringify with validation |
-| `epochSecondsToDate` | Unix timestamp (s) | `Date` | Epoch conversion |
-| `epochMillisToDate` | Unix timestamp (ms) | `Date` | Epoch conversion |
-| `uriComponent` | encoded URI | decoded URI | URI encoding/decoding |
-| `nullToUndefined` | `null` | `undefined` | Nullability conversion |
+| Codec                | Input                   | Output       | Purpose                                      |
+| -------------------- | ----------------------- | ------------ | -------------------------------------------- |
+| `stringToRecordId`   | `string` (`"table:id"`) | `RecordId`   | Convert API strings to SurrealDB IDs         |
+| `isoDatetimeToDate`  | ISO 8601 string         | `Date`       | Convert API timestamps to Date objects       |
+| `hexToBytes`         | hex string              | `Uint8Array` | Binary data encoding                         |
+| `stringToNumber`     | string                  | `number`     | Query parameter parsing                      |
+| `stringToInt`        | string                  | integer      | Integer query parameters                     |
+| `stringToBoolean`    | `"true"` / `"false"`    | `boolean`    | Boolean query parameters                     |
+| `json(schema)`       | JSON string             | `T`          | Generic JSON parse/stringify with validation |
+| `epochSecondsToDate` | Unix timestamp (s)      | `Date`       | Epoch conversion                             |
+| `epochMillisToDate`  | Unix timestamp (ms)     | `Date`       | Epoch conversion                             |
+| `uriComponent`       | encoded URI             | decoded URI  | URI encoding/decoding                        |
+| `nullToUndefined`    | `null`                  | `undefined`  | Nullability conversion                       |
 
 **Usage pattern:**
 
 ```typescript
 // Decode: API string -> internal type
-const recordId = stringToRecordId.decode("user:abc123");
+const recordId = stringToRecordId.decode('user:abc123');
 
 // Encode: internal type -> API string
 const str = stringToRecordId.encode(recordId);
@@ -87,10 +87,14 @@ Core identity and authentication schemas.
 
 ```typescript
 BaseEntitySchema.extend({
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/),
-  password_hash: z.string(),
-  role: z.enum(['ADMIN', 'USER']).default('USER')
-})
+	username: z
+		.string()
+		.min(3)
+		.max(30)
+		.regex(/^[a-zA-Z0-9_-]+$/),
+	password_hash: z.string(),
+	role: z.enum(['ADMIN', 'USER']).default('USER')
+});
 ```
 
 **Design decision:** No email field. Syr is designed for digital sovereignty -- username and DID are the only identity anchors. No email is required for registration.
@@ -99,13 +103,13 @@ BaseEntitySchema.extend({
 
 ```typescript
 BaseEntitySchema.extend({
-  user_id: RecordIdSchema,
-  display_name: z.string().min(1).max(100),
-  bio: z.string().max(500).optional(),
-  avatar_url: z.url().optional(),
-  banner_url: z.url().optional(),
-  metadata: MetadataSchema.optional()
-})
+	user_id: RecordIdSchema,
+	display_name: z.string().min(1).max(100),
+	bio: z.string().max(500).optional(),
+	avatar_url: z.url().optional(),
+	banner_url: z.url().optional(),
+	metadata: MetadataSchema.optional()
+});
 ```
 
 ### SessionSchema
@@ -125,13 +129,13 @@ BaseEntitySchema.extend({
 
 ### Form/API Schemas
 
-| Schema | Purpose |
-| ------ | ------- |
+| Schema                        | Purpose                                                              |
+| ----------------------------- | -------------------------------------------------------------------- |
 | `UserRegistrationInputSchema` | Backend registration validation (username + password + display_name) |
-| `UserRegistrationSchema` | Frontend form validation (adds `confirmPassword` + refine) |
-| `UserLoginSchema` | Login request validation |
-| `ProfileUpdateSchema` | Partial profile update (all fields optional) |
-| `ProfileCreateSchema` | Minimal profile creation (user_id + display_name) |
+| `UserRegistrationSchema`      | Frontend form validation (adds `confirmPassword` + refine)           |
+| `UserLoginSchema`             | Login request validation                                             |
+| `ProfileUpdateSchema`         | Partial profile update (all fields optional)                         |
+| `ProfileCreateSchema`         | Minimal profile creation (user_id + display_name)                    |
 
 ### AuthenticatedUserSchema
 
@@ -147,40 +151,41 @@ Content creation schemas with type discrimination.
 
 ### Post Types
 
-| Type | Content Type | Description |
-| ---- | ------------ | ----------- |
-| `blog` | `markdown` or `html` | Text-based posts with rich content |
-| `media` | n/a | Media-focused posts (images, video, audio) |
+| Type    | Content Type         | Description                                |
+| ------- | -------------------- | ------------------------------------------ |
+| `blog`  | `markdown` or `html` | Text-based posts with rich content         |
+| `media` | n/a                  | Media-focused posts (images, video, audio) |
 
 ### PostSchema
 
 ```typescript
 BaseEntitySchema.extend({
-  type: z.enum(['blog', 'media']),
-  content_type: z.enum(['markdown', 'html']).optional(),
-  title: z.string().optional(),
-  description: z.string().max(280).optional(),
-  content: z.string().optional(),
-  media_urls: z.array(z.string()).optional(),
-  display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
-  visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
-  status: z.enum(['draft', 'completed']).default('draft'),
-  author_id: RecordIdSchema
-})
+	type: z.enum(['blog', 'media']),
+	content_type: z.enum(['markdown', 'html']).optional(),
+	title: z.string().optional(),
+	description: z.string().max(280).optional(),
+	content: z.string().optional(),
+	media_urls: z.array(z.string()).optional(),
+	display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
+	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
+	status: z.enum(['draft', 'completed']).default('draft'),
+	author_id: RecordIdSchema
+});
 ```
 
 **Refinements:**
+
 - Blog posts MUST have `content_type` set.
 - Media posts MUST NOT have `content_type` set.
 - These are enforced via `superRefine` validators.
 
 ### Media Display Modes
 
-| Mode | Description |
-| ---- | ----------- |
+| Mode       | Description                     |
+| ---------- | ------------------------------- |
 | `carousel` | Embla-based horizontal carousel |
-| `masonry` | CSS masonry grid layout |
-| `gallery` | Uniform grid with preview modal |
+| `masonry`  | CSS masonry grid layout         |
+| `gallery`  | Uniform grid with preview modal |
 
 ---
 
@@ -192,21 +197,25 @@ File upload schemas with status-dependent validation.
 
 ```typescript
 BaseEntitySchema.extend({
-  key: UploadKeySchema.optional(),
-  owner_id: RecordIdSchema,
-  folder_id: RecordIdSchema.nullable().optional(),
-  filename: z.string().min(1),
-  mime_type: z.string().min(1),
-  size: z.number().int().nonnegative(),
-  sha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
-  url: z.url().optional(),
-  status: z.enum(['pending', 'uploading', 'completed', 'failed', 'cancelled']).default('pending'),
-  is_public: z.boolean().default(false),
-  metadata: MetadataSchema.optional()
-})
+	key: UploadKeySchema.optional(),
+	owner_id: RecordIdSchema,
+	folder_id: RecordIdSchema.nullable().optional(),
+	filename: z.string().min(1),
+	mime_type: z.string().min(1),
+	size: z.number().int().nonnegative(),
+	sha256: z
+		.string()
+		.regex(/^[a-f0-9]{64}$/i)
+		.optional(),
+	url: z.url().optional(),
+	status: z.enum(['pending', 'uploading', 'completed', 'failed', 'cancelled']).default('pending'),
+	is_public: z.boolean().default(false),
+	metadata: MetadataSchema.optional()
+});
 ```
 
 **Status-dependent validation:**
+
 - `pending` uploads do not require `key` or `url`.
 - `completed` uploads MUST have both `key` and `url`.
 - Enforced via `.refine()`.
@@ -218,6 +227,7 @@ uploads/{owner_id}/[folder_path/]{table:id}
 ```
 
 Examples:
+
 - `uploads/user:abc/upload:xyz` (root level)
 - `uploads/user:abc/public/images/upload:xyz` (nested in public folder)
 - `uploads/user:abc/public/post_assets/post:123/upload:xyz` (post asset)
@@ -232,10 +242,14 @@ Hierarchical file organization.
 
 ```typescript
 BaseEntitySchema.extend({
-  name: z.string().min(1).max(255).regex(/^[^/\\*?"<>|]+$/),
-  owner_id: RecordIdSchema,
-  parent_id: RecordIdSchema.nullable().optional()
-})
+	name: z
+		.string()
+		.min(1)
+		.max(255)
+		.regex(/^[^/\\*?"<>|]+$/),
+	owner_id: RecordIdSchema,
+	parent_id: RecordIdSchema.nullable().optional()
+});
 ```
 
 **Special folder:** The folder named `public` (case-insensitive) marks files as publicly accessible without signed URLs. All subfolders of a `public` folder inherit this behavior.
@@ -250,23 +264,23 @@ Federation schemas for ActivityPub protocol support.
 
 ### Core Schemas
 
-| Schema | Description |
-| ------ | ----------- |
-| `ActorSchema` | ActivityPub actor (Person, Service, Application, Group, Organization) |
-| `ActivitySchema` | Activities (Create, Update, Delete, Follow, Accept, Reject, Like, Announce, Undo, Block) |
-| `ObjectSchema` | Content objects (Note, Article, Image, Video, Document, Page) |
-| `CollectionSchema` | AP Collection / OrderedCollection |
-| `CollectionPageSchema` | Paginated collection pages |
-| `WebFingerResourceSchema` | RFC 7033 WebFinger resource discovery |
+| Schema                    | Description                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `ActorSchema`             | ActivityPub actor (Person, Service, Application, Group, Organization)                    |
+| `ActivitySchema`          | Activities (Create, Update, Delete, Follow, Accept, Reject, Like, Announce, Undo, Block) |
+| `ObjectSchema`            | Content objects (Note, Article, Image, Video, Document, Page)                            |
+| `CollectionSchema`        | AP Collection / OrderedCollection                                                        |
+| `CollectionPageSchema`    | Paginated collection pages                                                               |
+| `WebFingerResourceSchema` | RFC 7033 WebFinger resource discovery                                                    |
 
 ### Database Schemas
 
-| Schema | Description |
-| ------ | ----------- |
-| `DBActorSchema` | Internal actor representation with user_id, keypair, URLs |
-| `FollowerSchema` | Follower relationship with status (pending/accepted/rejected) |
-| `FollowingSchema` | Following relationship with status |
-| `StoredActivitySchema` | Internal activity storage |
+| Schema                 | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `DBActorSchema`        | Internal actor representation with user_id, keypair, URLs     |
+| `FollowerSchema`       | Follower relationship with status (pending/accepted/rejected) |
+| `FollowingSchema`      | Following relationship with status                            |
+| `StoredActivitySchema` | Internal activity storage                                     |
 
 ---
 
@@ -278,18 +292,18 @@ Full OIDC-compatible OAuth 2.0 schema set.
 
 ### Schema Summary
 
-| Schema | Purpose |
-| ------ | ------- |
-| `OAuthClientSchema` | Registered OAuth 2.0 clients |
-| `OAuthClientRegistrationSchema` | Client registration request |
-| `OAuthAuthorizationCodeSchema` | Authorization code lifecycle |
-| `OAuthAccessTokenSchema` | Access token with scopes and revocation |
-| `OAuthRefreshTokenSchema` | Refresh token lifecycle |
+| Schema                            | Purpose                                    |
+| --------------------------------- | ------------------------------------------ |
+| `OAuthClientSchema`               | Registered OAuth 2.0 clients               |
+| `OAuthClientRegistrationSchema`   | Client registration request                |
+| `OAuthAuthorizationCodeSchema`    | Authorization code lifecycle               |
+| `OAuthAccessTokenSchema`          | Access token with scopes and revocation    |
+| `OAuthRefreshTokenSchema`         | Refresh token lifecycle                    |
 | `OAuthAuthorizationRequestSchema` | Authorization endpoint request (with PKCE) |
-| `OAuthTokenRequestSchema` | Token endpoint request |
-| `OAuthTokenResponseSchema` | Token endpoint response |
-| `OAuthUserInfoResponseSchema` | OpenID Connect UserInfo response |
-| `OAuthErrorResponseSchema` | Standardized error responses |
+| `OAuthTokenRequestSchema`         | Token endpoint request                     |
+| `OAuthTokenResponseSchema`        | Token endpoint response                    |
+| `OAuthUserInfoResponseSchema`     | OpenID Connect UserInfo response           |
+| `OAuthErrorResponseSchema`        | Standardized error responses               |
 
 ### OAuth Scopes
 
@@ -320,11 +334,11 @@ share.created, user.updated, content.viewed
 
 ### Event Data Schemas
 
-| Schema | Fields |
-| ------ | ------ |
-| `PostEventDataSchema` | post_id, content, title, url, media, tags, visibility |
-| `CommentEventDataSchema` | comment_id, post_id, parent_comment_id, content |
-| `InteractionEventDataSchema` | target_id, target_type, target_url |
+| Schema                       | Fields                                                            |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `PostEventDataSchema`        | post_id, content, title, url, media, tags, visibility             |
+| `CommentEventDataSchema`     | comment_id, post_id, parent_comment_id, content                   |
+| `InteractionEventDataSchema` | target_id, target_type, target_url                                |
 | `ContentViewEventDataSchema` | content_id, content_type, duration_seconds, completion_percentage |
 
 ---
@@ -346,14 +360,15 @@ kv:{type}:{index}
 
 ```typescript
 BaseEntitySchema.extend({
-  id: KvRecordIdSchema,
-  kv_type: z.string(),
-  value: z.unknown(),
-  expires_at: TimestampSchema.optional()
-})
+	id: KvRecordIdSchema,
+	kv_type: z.string(),
+	value: z.unknown(),
+	expires_at: TimestampSchema.optional()
+});
 ```
 
 **Features:**
+
 - TTL support via `expires_at`
 - Automatic expiration cleanup
 - Atomic increment operations
@@ -361,11 +376,11 @@ BaseEntitySchema.extend({
 
 ### Helper Functions
 
-| Function | Purpose |
-| -------- | ------- |
-| `parseKvId(kvId)` | Extract type and index from KV ID string |
-| `createKvId(type, index)` | Build validated KV ID string |
-| `createKvRecordId(type, index)` | Build SurrealDB RecordId for KV entry |
+| Function                        | Purpose                                  |
+| ------------------------------- | ---------------------------------------- |
+| `parseKvId(kvId)`               | Extract type and index from KV ID string |
+| `createKvId(type, index)`       | Build validated KV ID string             |
+| `createKvRecordId(type, index)` | Build SurrealDB RecordId for KV entry    |
 
 ---
 
@@ -375,11 +390,11 @@ Generic API response and query schemas.
 
 ### Response Schemas
 
-| Schema | Purpose |
-| ------ | ------- |
-| `APIResponseSchema<T>` | Generic `{ status, data?, error?, meta? }` |
-| `PaginatedResponseSchema<T>` | `{ status, data[], pagination, meta? }` |
-| `APIErrorSchema` | Structured error with code, message, field_errors |
+| Schema                       | Purpose                                           |
+| ---------------------------- | ------------------------------------------------- |
+| `APIResponseSchema<T>`       | Generic `{ status, data?, error?, meta? }`        |
+| `PaginatedResponseSchema<T>` | `{ status, data[], pagination, meta? }`           |
+| `APIErrorSchema`             | Structured error with code, message, field_errors |
 
 ### Error Codes
 
@@ -393,10 +408,10 @@ TOKEN_EXPIRED, INVALID_TOKEN, INSUFFICIENT_PERMISSIONS
 
 ### Query Schemas
 
-| Schema | Purpose |
-| ------ | ------- |
-| `PaginationSchema` | `{ limit, offset, total?, has_more? }` |
-| `QueryOptionsSchema` | `{ limit, offset, sort?, search?, filters? }` |
-| `QueryParamsSchema` | URL param parsing with transform to `QueryOptions` |
-| `SortSchema` | `{ field, order: 'asc' \| 'desc' }` |
-| `BatchOperationRequestSchema` | Batch create/update/delete operations |
+| Schema                        | Purpose                                            |
+| ----------------------------- | -------------------------------------------------- |
+| `PaginationSchema`            | `{ limit, offset, total?, has_more? }`             |
+| `QueryOptionsSchema`          | `{ limit, offset, sort?, search?, filters? }`      |
+| `QueryParamsSchema`           | URL param parsing with transform to `QueryOptions` |
+| `SortSchema`                  | `{ field, order: 'asc' \| 'desc' }`                |
+| `BatchOperationRequestSchema` | Batch create/update/delete operations              |

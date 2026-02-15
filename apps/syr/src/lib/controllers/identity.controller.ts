@@ -1,7 +1,14 @@
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
-import { verify, canonicalize, decodeMultibase, deriveDid } from '@syr-is/crypto';
+import {
+	verify,
+	canonicalize,
+	decodeMultibase,
+	deriveDid,
+	constantTimeEqual,
+	ED25519_MULTICODEC_PREFIX
+} from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
@@ -13,6 +20,28 @@ import type {
 } from '@syr-is/types';
 
 type UserIdInput = RecordId | string;
+
+/**
+ * Strip Ed25519 multicodec prefix (0xed 0x01) from multibase-decoded bytes.
+ * Accepts 34 bytes (2-byte prefix + 32-byte key) or 32 raw bytes; returns 32-byte public key.
+ * @throws If length is not 34 (with correct prefix) or 32.
+ */
+function stripMulticodecPrefix(bytes: Uint8Array): Uint8Array {
+	let raw: Uint8Array = bytes;
+	if (
+		bytes.length === 34 &&
+		bytes[0] === ED25519_MULTICODEC_PREFIX[0] &&
+		bytes[1] === ED25519_MULTICODEC_PREFIX[1]
+	) {
+		raw = bytes.slice(2);
+	}
+	if (raw.length !== 32) {
+		throw new Error(
+			`Invalid public key length: expected 32 bytes (Ed25519), got ${raw.length} after decoding.`
+		);
+	}
+	return raw;
+}
 
 /**
  * Identity Controller
@@ -43,23 +72,9 @@ export class IdentityController {
 		}
 
 		// Verify the public key in the request matches the DID
-		const requestPubKeyBytes = decodeMultibase(publicKey);
-		// Strip multicodec prefix if present
-		let cleanPubKeyBytes = requestPubKeyBytes;
-		if (
-			requestPubKeyBytes.length === 34 &&
-			requestPubKeyBytes[0] === 0xed &&
-			requestPubKeyBytes[1] === 0x01
-		) {
-			cleanPubKeyBytes = requestPubKeyBytes.slice(2);
-		}
-		if (cleanPubKeyBytes.length !== 32) {
-			throw new Error('Invalid public key length.');
-		}
-		for (let i = 0; i < 32; i++) {
-			if (cleanPubKeyBytes[i] !== parsedDid.publicKey[i]) {
-				throw new Error('Provided public key does not match DID.');
-			}
+		const requestPubKeyBytes = stripMulticodecPrefix(decodeMultibase(publicKey));
+		if (!constantTimeEqual(requestPubKeyBytes, parsedDid.publicKey)) {
+			throw new Error('Provided public key does not match DID.');
 		}
 
 		// Resolve userId to RecordId if string
@@ -74,26 +89,38 @@ export class IdentityController {
 		// Verify delegation signature
 		await this.verifyDelegationSignature(delegation, parsedDid.publicKey);
 
-		// Store identity
+		// Single transactional boundary: create identity, delegated_key, update user.
+		// No SurrealDB transaction API in use here; use compensating cleanup on failure.
 		const now = new Date();
-		await identityRepository.create({
+
+		const createdIdentity = await identityRepository.create({
 			did,
 			public_key: publicKey,
 			user_id: resolvedUserId,
 			created_at: now
 		} as Partial<Identity>);
 
-		// Store delegated key
-		await delegatedKeyRepository.create({
-			did,
-			public_key: devicePublicKey,
-			scope: delegation.scope,
-			created_at: now,
-			signature: delegation.signature
-		} as Partial<DelegatedKey>);
+		let createdDelegatedKey: DelegatedKey | null = null;
+		try {
+			createdDelegatedKey = await delegatedKeyRepository.create({
+				did,
+				public_key: devicePublicKey,
+				scope: delegation.scope,
+				created_at: now,
+				signature: delegation.signature
+			} as Partial<DelegatedKey>);
+		} catch (err) {
+			await identityRepository.delete(createdIdentity.id);
+			throw err;
+		}
 
-		// Update user with DID
-		await userRepository.update(resolvedUserId, { did } as Record<string, unknown>);
+		try {
+			await userRepository.update(resolvedUserId, { did } as Record<string, unknown>);
+		} catch (err) {
+			await delegatedKeyRepository.delete(createdDelegatedKey.id);
+			await identityRepository.delete(createdIdentity.id);
+			throw err;
+		}
 
 		return { did };
 	}
@@ -159,33 +186,30 @@ export class IdentityController {
 			throw new Error('Identity not found for delegated key.');
 		}
 
-		// Verify the delegation signature against the root key
-		const rootPubKeyBytes = decodeMultibase(identity.public_key);
-		let rootKeyClean = rootPubKeyBytes;
-		if (
-			rootPubKeyBytes.length === 34 &&
-			rootPubKeyBytes[0] === 0xed &&
-			rootPubKeyBytes[1] === 0x01
-		) {
-			rootKeyClean = rootPubKeyBytes.slice(2);
-		}
+		// Re-verify the delegation signature on every mutation.
+		// This prevents an attacker with DB write access from inserting a malicious
+		// delegated_key and having it accepted without the root key's signature.
+		const rootKeyClean = stripMulticodecPrefix(decodeMultibase(identity.public_key));
 
-		const delegationSignatureBytes = decodeMultibase(dk.signature);
-		// We need to reconstruct the delegation statement
-		// In a production system we would store the full delegation statement,
-		// but for now we verify the payload signature against the device key
-		// The delegation was already verified at identity init time.
+		const delegationStatement = {
+			did: dk.did,
+			delegate: dk.public_key,
+			scope: dk.scope,
+			createdAt: dk.created_at.toISOString(),
+			...(dk.expires_at ? { expiresAt: dk.expires_at.toISOString() } : {})
+		};
+		const canonicalDelegation = canonicalize(delegationStatement);
+		const delegationValid = await verify(
+			canonicalDelegation,
+			decodeMultibase(dk.signature),
+			rootKeyClean
+		);
+		if (!delegationValid) {
+			throw new Error('Delegation signature invalid. Device key is not authorized by root.');
+		}
 
 		// Verify the payload signature with the device key
-		const devicePubKeyBytes = decodeMultibase(devicePublicKey);
-		let deviceKeyClean = devicePubKeyBytes;
-		if (
-			devicePubKeyBytes.length === 34 &&
-			devicePubKeyBytes[0] === 0xed &&
-			devicePubKeyBytes[1] === 0x01
-		) {
-			deviceKeyClean = devicePubKeyBytes.slice(2);
-		}
+		const deviceKeyClean = stripMulticodecPrefix(decodeMultibase(devicePublicKey));
 
 		const canonicalPayload = canonicalize(payload);
 		const sigBytes = decodeMultibase(signature);

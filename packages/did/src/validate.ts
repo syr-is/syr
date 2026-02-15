@@ -1,4 +1,4 @@
-import { parseDid } from './parse.js';
+import { parseDid } from "./parse.js";
 
 /**
  * Check if a string is a valid did:syr identifier.
@@ -10,10 +10,10 @@ import { parseDid } from './parse.js';
  * @returns True if the string is a valid did:syr identifier.
  */
 export function isValidSyrDid(did: string): boolean {
-	try {
-		parseDid(did);
-		return true;
-	} catch {
-		return false;
-	}
+  try {
+    parseDid(did);
+    return true;
+  } catch {
+    return false;
+  }
 }

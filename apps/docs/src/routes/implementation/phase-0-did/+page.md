@@ -1,5 +1,5 @@
 ---
-title: "Phase 0: packages/did"
+title: 'Phase 0: packages/did'
 ---
 
 # Phase 0: packages/did
@@ -26,15 +26,16 @@ title: "Phase 0: packages/did"
 
 ```typescript
 interface ParsedDid {
-  method: 'syr';
-  id: string;            // multibase-encoded public key
-  publicKey: Uint8Array;  // decoded Ed25519 public key
+	method: 'syr';
+	id: string; // multibase-encoded public key
+	publicKey: Uint8Array; // decoded Ed25519 public key
 }
 
-function parseDid(did: string): ParsedDid
+function parseDid(did: string): ParsedDid;
 ```
 
 Parsing steps:
+
 1. Validate format: `did:syr:<multibase>`
 2. Extract method-specific identifier
 3. Decode multibase to obtain public key bytes
@@ -42,6 +43,7 @@ Parsing steps:
 5. Return structured result
 
 Throws if:
+
 - Format is invalid
 - Multibase decoding fails
 - Public key is not 32 bytes (Ed25519)
@@ -49,7 +51,7 @@ Throws if:
 ### DID Validation
 
 ```typescript
-function isValidSyrDid(did: string): boolean
+function isValidSyrDid(did: string): boolean;
 ```
 
 Returns `true` if the DID is syntactically valid and the embedded public key can be decoded. Does not perform resolution.
@@ -58,38 +60,42 @@ Returns `true` if the DID is syntactically valid and the embedded public key can
 
 ```typescript
 interface DidDocument {
-  id: string;
-  verificationMethod: VerificationMethod[];
-  authentication: string[];
-  assertionMethod: string[];
-  service?: ServiceEndpoint[];
+	id: string;
+	verificationMethod: VerificationMethod[];
+	authentication: string[];
+	assertionMethod: string[];
+	service?: ServiceEndpoint[];
 }
 
 function buildDidDocument(input: {
-  did: string;
-  publicKeyMultibase: string;
-  serviceEndpoint?: string;
-}): DidDocument
+	did: string;
+	publicKeyMultibase: string;
+	serviceEndpoint?: string;
+}): DidDocument;
 ```
 
 Produces a DID Document conforming to the [did:syr specification](/architecture/did-method):
 
 ```json
 {
-  "id": "did:syr:z6Mkt9...",
-  "verificationMethod": [{
-    "id": "#root",
-    "type": "Ed25519VerificationKey2020",
-    "controller": "did:syr:z6Mkt9...",
-    "publicKeyMultibase": "z6Mkt9..."
-  }],
-  "authentication": ["#root"],
-  "assertionMethod": ["#root"],
-  "service": [{
-    "id": "#provider",
-    "type": "SyrIdentityProvider",
-    "serviceEndpoint": "https://provider.example"
-  }]
+	"id": "did:syr:z6Mkt9...",
+	"verificationMethod": [
+		{
+			"id": "#root",
+			"type": "Ed25519VerificationKey2020",
+			"controller": "did:syr:z6Mkt9...",
+			"publicKeyMultibase": "z6Mkt9..."
+		}
+	],
+	"authentication": ["#root"],
+	"assertionMethod": ["#root"],
+	"service": [
+		{
+			"id": "#provider",
+			"type": "SyrIdentityProvider",
+			"serviceEndpoint": "https://provider.example"
+		}
+	]
 }
 ```
 

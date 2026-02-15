@@ -1,5 +1,10 @@
 import { BaseRepository } from './base.repository';
-import { IdentitySchema, DelegatedKeySchema, type Identity, type DelegatedKey } from '@syr-is/types';
+import {
+	IdentitySchema,
+	DelegatedKeySchema,
+	type Identity,
+	type DelegatedKey
+} from '@syr-is/types';
 
 /**
  * Identity Repository
@@ -72,7 +77,7 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 	/**
 	 * Find all active (non-revoked, non-expired) delegated keys for a DID
 	 */
-	async findActivByDid(did: string): Promise<DelegatedKey[]> {
+	async findActiveByDid(did: string): Promise<DelegatedKey[]> {
 		const result = await this.db.query<[DelegatedKey[]]>(
 			`SELECT * FROM delegated_key 
 			 WHERE did = $did 

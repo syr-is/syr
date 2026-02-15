@@ -1,4 +1,4 @@
-import type { DidDocument } from './types.js';
+import type { DidDocument } from "./types.js";
 
 /**
  * Build a DID Document for a did:syr identity.
@@ -12,35 +12,36 @@ import type { DidDocument } from './types.js';
  * @returns A DID Document.
  */
 export function buildDidDocument(input: {
-	did: string;
-	publicKeyMultibase: string;
-	serviceEndpoint?: string;
+  did: string;
+  publicKeyMultibase: string;
+  serviceEndpoint?: string;
 }): DidDocument {
-	const { did, publicKeyMultibase, serviceEndpoint } = input;
+  const { did, publicKeyMultibase, serviceEndpoint } = input;
 
-	const doc: DidDocument = {
-		id: did,
-		verificationMethod: [
-			{
-				id: '#root',
-				type: 'Ed25519VerificationKey2020',
-				controller: did,
-				publicKeyMultibase
-			}
-		],
-		authentication: ['#root'],
-		assertionMethod: ['#root']
-	};
+  const doc: DidDocument = {
+    "@context": "https://www.w3.org/ns/did/v1",
+    id: did,
+    verificationMethod: [
+      {
+        id: "#root",
+        type: "Ed25519VerificationKey2020",
+        controller: did,
+        publicKeyMultibase,
+      },
+    ],
+    authentication: ["#root"],
+    assertionMethod: ["#root"],
+  };
 
-	if (serviceEndpoint) {
-		doc.service = [
-			{
-				id: '#provider',
-				type: 'SyrIdentityProvider',
-				serviceEndpoint
-			}
-		];
-	}
+  if (serviceEndpoint) {
+    doc.service = [
+      {
+        id: "#provider",
+        type: "SyrIdentityProvider",
+        serviceEndpoint,
+      },
+    ];
+  }
 
-	return doc;
+  return doc;
 }

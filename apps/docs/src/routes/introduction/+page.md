@@ -62,7 +62,7 @@ Every Syr identity starts with a **locally generated Ed25519 keypair**. The priv
 
 Syr uses the `did:syr` method. The DID is deterministically derived from the root public key:
 
-```
+```text
 did:syr:z6Mkt9...abc
 ```
 
@@ -85,7 +85,7 @@ Providers host your identity state but never own your identity. You can migrate 
 
 The registry maps DIDs to their current provider endpoints:
 
-```
+```text
 did:syr:z6Mkt... → https://provider.example
 ```
 
@@ -116,12 +116,12 @@ Social features, federation (ActivityPub), attestations, and moderation are buil
 
 ## Implementation Phases
 
-| Phase | Focus | Status |
-| ----- | ----- | ------ |
+| Phase       | Focus                              | Status      |
+| ----------- | ---------------------------------- | ----------- |
 | **Phase 0** | Local-first cryptographic identity | In progress |
-| Phase 1 | Registry + Provider portability | Planned |
-| Phase 2 | OAuth + Institutional trust | Planned |
-| Phase 3 | Federation + Social features | Planned |
+| Phase 1     | Registry + Provider portability    | Planned     |
+| Phase 2     | OAuth + Institutional trust        | Planned     |
+| Phase 3     | Federation + Social features       | Planned     |
 
 ---
 
