@@ -41,10 +41,12 @@ export interface JWTPayload {
 
 /**
  * Generate JWT access token
+ * @param payload - Token payload (userId, sessionId)
+ * @param expiresIn - Optional override for token expiry (e.g. '3600s', '1h')
  */
-export function generateAccessToken(payload: JWTPayload): string {
+export function generateAccessToken(payload: JWTPayload, expiresIn?: string): string {
 	return jwt.sign(payload, jwtConfig.secret, {
-		expiresIn: jwtConfig.expiresIn,
+		expiresIn: expiresIn ?? jwtConfig.expiresIn,
 		issuer: 'syr',
 		audience: 'syr-api'
 	} as SignOptions);

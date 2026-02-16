@@ -403,7 +403,7 @@
 </svelte:head>
 
 {#if data.user}
-	<div class="space-y-6 p-8">
+	<div class="space-y-6 p-4 sm:p-6 lg:p-8">
 		<!-- Page Header -->
 		<div class="flex items-start justify-between gap-4">
 			<div class="space-y-1">
@@ -413,7 +413,7 @@
 		</div>
 
 		<!-- Breadcrumb Navigation -->
-		<nav class="flex items-center gap-1 text-sm">
+		<nav class="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto text-sm">
 			<Button
 				variant="ghost"
 				size="sm"
@@ -623,7 +623,7 @@
 	/>
 {:else}
 	<!-- Not Logged In View -->
-	<div class="flex h-full items-center justify-center p-8">
+	<div class="flex h-full items-center justify-center p-4 sm:p-6">
 		<Card.Root class="max-w-md">
 			<Card.Header>
 				<Card.Title>Sign in required</Card.Title>

@@ -275,7 +275,7 @@
 </svelte:head>
 
 {#if data.user}
-	<div class="space-y-6 p-8">
+	<div class="space-y-6 p-4 sm:p-6 lg:p-8">
 		<!-- Page Header -->
 		<div class="space-y-1">
 			<h1 class="text-3xl font-bold tracking-tight">Posts</h1>
@@ -283,8 +283,8 @@
 		</div>
 
 		<!-- Controls Row -->
-		<div class="flex items-center justify-between gap-4">
-			<div class="flex items-center gap-2">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<div class="flex flex-wrap items-center gap-2">
 				<Select.Root type="single" bind:value={sortField}>
 					<Select.Trigger class="w-[140px]">
 						{getSortFieldLabel(sortField)}
@@ -444,7 +444,7 @@
 	</div>
 {:else}
 	<!-- Not Logged In View -->
-	<div class="flex h-full items-center justify-center p-8">
+	<div class="flex h-full items-center justify-center p-4 sm:p-6">
 		<Card.Root class="max-w-md">
 			<Card.Header>
 				<Card.Title>Sign in required</Card.Title>

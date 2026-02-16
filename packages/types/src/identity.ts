@@ -13,7 +13,9 @@ export const IdentitySchema = BaseEntitySchema.pick({
 }).extend({
 	did: DidSyrSchema,
 	public_key: z.string().min(1), // multibase-encoded Ed25519 public key
-	user_id: RecordIdSchema
+	encrypted_private_key: z.string().optional(), // encrypted private key for server-managed keys
+	user_id: RecordIdSchema,
+	tenant_id: RecordIdSchema.optional() // optional tenant scoping
 });
 
 export type Identity = z.infer<typeof IdentitySchema>;
@@ -109,6 +111,7 @@ export type RotationStatement = z.infer<typeof RotationStatementSchema>;
 export const IdentityExportBundleSchema = z.object({
 	did: DidSyrSchema,
 	publicKey: z.string().min(1), // multibase-encoded root public key
+	didDocument: z.record(z.string(), z.unknown()),
 	delegatedKeys: z.array(
 		z.object({
 			publicKey: z.string().min(1),
@@ -150,6 +153,25 @@ export const IdentityInitRequestSchema = z.object({
 });
 
 export type IdentityInitRequest = z.infer<typeof IdentityInitRequestSchema>;
+
+/**
+ * Identity Delegate Request Schema
+ * For the POST /api/identity/delegate endpoint (add device to existing identity).
+ */
+export const IdentityDelegateRequestSchema = z.object({
+	did: DidSyrSchema,
+	devicePublicKey: z.string().min(1),
+	delegation: z.object({
+		did: DidSyrSchema,
+		delegate: z.string().min(1),
+		scope: DelegationScopeSchema,
+		createdAt: z.string().datetime(),
+		expiresAt: z.string().datetime().optional(),
+		signature: z.string().min(1)
+	})
+});
+
+export type IdentityDelegateRequest = z.infer<typeof IdentityDelegateRequestSchema>;
 
 /**
  * Signed Mutation Request Schema

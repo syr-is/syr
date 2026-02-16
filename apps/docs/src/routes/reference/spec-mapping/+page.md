@@ -18,20 +18,20 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Identity Model Specification
 
-| Requirement                       | Status      | Details                                                                                                    |
-| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Root keypair generation (Ed25519) | **Missing** | Phase 0 target. `packages/crypto` to be created.                                                           |
-| DID derivation (`did:syr`)        | **Stubbed** | `generateDID()` is commented out in `auth.controller.ts:42`. Uses `did:web`, needs migration to `did:syr`. |
-| Identity independent of hosting   | **Missing** | Currently identity is server-bound (username + password).                                                  |
-| Profile mutations signed          | **Missing** | Currently simple auth-gated writes. Phase 0 target.                                                        |
-| Identity exportable               | **Missing** | Phase 0 target. `GET /api/identity/export` to be created.                                                  |
-| Delegated device keys             | **Missing** | Phase 0 target. `delegated_key` table to be created.                                                       |
-| Provider hosting                  | **Partial** | App serves profiles and APIs but no `.well-known/syr` discovery endpoint.                                  |
-| Registry resolution               | **Missing** | Phase 1 target. Registry server not yet built.                                                             |
-| OAuth with DID as `sub`           | **Missing** | OAuth schemas defined in `packages/types/oauth.ts` but no OAuth server. Phase 2 target.                    |
-| Attestations                      | **Missing** | Future phase. No attestation types or logic.                                                               |
-| Layered identity assurance        | **Partial** | Permissionless layer exists (any user can register). Social and legal layers missing.                      |
-| Migration model                   | **Missing** | Phase 1 target. Requires registry + provider export/import.                                                |
+| Requirement                       | Status      | Details                                                                                                        |
+| --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| Root keypair generation (Ed25519) | **Missing** | Phase 0 target. `packages/crypto` to be created.                                                               |
+| DID derivation (`did:syr`)        | **Stubbed** | `generateDID()` is commented out in `auth.controller.ts:42`. Uses `did:web`, needs migration to `did:syr`.     |
+| Identity independent of hosting   | **Missing** | Currently identity is server-bound (username + password).                                                      |
+| Profile mutations signed          | **Missing** | Currently simple auth-gated writes. Phase 0 target.                                                            |
+| Identity exportable               | **Missing** | Phase 0 target. `GET /api/identity/export` to be created.                                                      |
+| Delegated device keys             | **Missing** | Phase 0 target. `delegated_key` table to be created.                                                           |
+| Provider hosting                  | **Partial** | App serves profiles and APIs but no `.well-known/syr` discovery endpoint.                                      |
+| Registry resolution               | **Missing** | Phase 1 target. Registry server not yet built.                                                                 |
+| OAuth with DID as `sub`           | **Missing** | Replaced by identity-based login. OAuth schemas in `packages/types/oauth.ts` to be refactored. Phase 2 target. |
+| Attestations                      | **Missing** | Future phase. No attestation types or logic.                                                                   |
+| Layered identity assurance        | **Partial** | Permissionless layer exists (any user can register). Social and legal layers missing.                          |
+| Migration model                   | **Missing** | Phase 1 target. Requires registry + provider export/import.                                                    |
 
 ---
 
@@ -47,7 +47,7 @@ This page maps each requirement from the architecture specifications to the curr
 | Service endpoint in DID Document               | **Missing** | Depends on registry (Phase 1).                                |
 | Registry update authorization (root signature) | **Missing** | Phase 1 target.                                               |
 | Migration semantics (DID unchanged)            | **Missing** | Phase 1 target.                                               |
-| OAuth binding (`sub` = DID)                    | **Missing** | Phase 2 target.                                               |
+| Identity-based auth binding (`sub` = DID)      | **Missing** | Replaced by identity-based login. Phase 2 target.             |
 
 ---
 
@@ -56,7 +56,7 @@ This page maps each requirement from the architecture specifications to the curr
 | Requirement                              | Status      | Details                                                                              |
 | ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
 | Ed25519 root key generation              | **Missing** | Phase 0 target.                                                                      |
-| Root key stored locally, never on server | **Missing** | Phase 0: IndexedDB in browser.                                                       |
+| Root key stored locally, never on server | **Missing** | Phase 0 target: server-managed keys (self-hosted model). Export on demand.           |
 | Delegated device keys                    | **Missing** | Phase 0 target.                                                                      |
 | Delegation statement (root-signed)       | **Missing** | Phase 0 target. Schema: `{ did, delegate, scope, createdAt, expiresAt?, signature }` |
 | Delegation verification                  | **Missing** | Phase 0 target. Server must verify root signature.                                   |
@@ -86,8 +86,8 @@ This page maps each requirement from the architecture specifications to the curr
 | ------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
 | `GET /.well-known/syr` discovery                 | **Missing**     | Phase 1 target.                                                      |
 | `GET /profile` public endpoint                   | **Partial**     | Profile data exists in DB. No public DID-addressed profile endpoint. |
-| OAuth endpoints (`/oauth/authorize`, etc.)       | **Missing**     | Phase 2 target. OAuth schemas defined.                               |
-| `sub` = DID in OAuth tokens                      | **Missing**     | Phase 2 target.                                                      |
+| OAuth endpoints (`/oauth/authorize`, etc.)       | **Missing**     | Replaced by identity-based auth endpoints. Phase 2 target.           |
+| `sub` = DID in auth tokens                       | **Missing**     | Phase 2 target.                                                      |
 | `GET /export` endpoint                           | **Missing**     | Phase 0 target. `GET /api/identity/export`.                          |
 | Export authentication (root/delegated key proof) | **Missing**     | Phase 0 target.                                                      |
 | TLS requirement                                  | **Implemented** | App runs behind HTTPS in production.                                 |
@@ -134,15 +134,15 @@ This page maps each requirement from the architecture specifications to the curr
 ```mermaid
 flowchart LR
     Phase0["Phase 0: Identity Correctness"] --> Phase1["Phase 1: Registry + Portability"]
-    Phase1 --> Phase2["Phase 2: OAuth + Trust"]
-    Phase2 --> Phase3["Phase 3: Federation"]
+    Phase1 --> Phase2["Phase 2: Identity-Based Auth + VCs"]
+    Phase2 --> Phase3["Phase 3: Federation + Multi-Tenancy"]
 
-    Phase0 --- P0Items["Root keypair, DID, device keys,
-    signed mutations, export"]
+    Phase0 --- P0Items["Server-managed root keypair, DID,
+    device keys, signed mutations, export"]
     Phase1 --- P1Items["Registry server, provider discovery,
     migration, .well-known/syr"]
-    Phase2 --- P2Items["OAuth provider, DID as sub,
-    institutional attestations"]
-    Phase3 --- P3Items["ActivityPub federation,
-    social features, moderation"]
+    Phase2 --- P2Items["Identity-based login, DID as sub,
+    identity-linked credentials"]
+    Phase3 --- P3Items["SYR-to-SYR ActivityPub federation,
+    multi-tenant isolation"]
 ```

@@ -26,9 +26,10 @@ export const remarkMermaid: Plugin<[], Root, Root> = function () {
 				.replace(/\{/g, '&#123;')
 				.replace(/\}/g, '&#125;');
 
+			// Wrapper enables horizontal scroll on narrow viewports (mobile)
 			const htmlNode: Html = {
 				type: 'html',
-				value: `<pre class="mermaid">\n${value}\n</pre>`
+				value: `<div style="overflow-x: auto; margin: 1rem 0"><pre class="mermaid">\n${value}\n</pre></div>`
 			};
 			parent.children[index] = htmlNode;
 		});

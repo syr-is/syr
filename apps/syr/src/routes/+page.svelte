@@ -272,10 +272,10 @@
 </script>
 
 {#if data.user}
-	<div class="flex gap-4 space-y-8 p-8">
-		<div class="w-[calc(100%-24rem)] space-y-6">
+	<div class="flex flex-col gap-4 space-y-6 p-4 sm:p-6 lg:flex-row lg:space-y-8 lg:p-8">
+		<div class="min-w-0 flex-1 space-y-6 lg:w-[calc(100%-24rem)]">
 			<!-- Controls Row -->
-			<div class="flex items-center justify-between gap-4">
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<div class="flex items-center gap-2">
 					<Select.Root type="single" bind:value={sortField}>
 						<Select.Trigger class="w-[140px]">
@@ -435,7 +435,7 @@
 			{/if}
 		</div>
 		<!-- Discord-style Profile Card -->
-		<Card.Root class="w-96 overflow-hidden">
+		<Card.Root class="w-full shrink-0 overflow-hidden lg:w-96">
 			<!-- Banner -->
 			{#if data.user.profile?.banner_url}
 				<div class="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
@@ -495,7 +495,7 @@
 	</div>
 {:else}
 	<!-- Logged Out View -->
-	<div class="mt-4 space-y-4 text-center">
+	<div class="mt-4 space-y-4 p-4 text-center sm:p-6">
 		<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
 			Welcome to <span class="text-primary">SYR</span>
 		</h1>

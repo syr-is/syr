@@ -6,7 +6,7 @@ title: What is Syr?
 
 **Syr** stands for **Self Yield Identity Representation**.
 
-It is a system that lets you generate, host, and control your own cryptographic identity. Your keys live on your device. Your identity is derived from those keys. You choose where your data is hosted, and you can move it at any time without losing who you are.
+It is a self-hosted multi-tenant self-sovereign identity manager. Your SYR instance generates, stores, and manages your cryptographic identity — including your posts and thoughts, which are a first-class part of who you are. You can federate with other SYR instances to view each other's activity, and you can export your keys on demand if you want to take them elsewhere.
 
 ---
 
@@ -25,15 +25,17 @@ This is not ownership. It is tenancy.
 
 ## The Syr Approach
 
-Syr inverts the model:
+Syr inverts the model with a self-hosted identity manager:
 
-1. **You generate a root keypair** (Ed25519) on your own device.
+1. **Your SYR instance generates a root keypair** (Ed25519) and manages it server-side.
 2. **Your identity is derived** from your public key as a DID (`did:syr:z6Mkt...`).
-3. **You choose a provider** to host your profile, posts, and assets, or you self-host.
-4. **You can migrate** to a different provider at any time. Your DID never changes.
-5. **Everything you do is signed** by your keys, making your actions cryptographically attributable to you.
+3. **Your instance hosts** your profile, posts, credentials, and assets.
+4. **You can export your keys** at any time. This is an explicit, user-initiated action — not the default.
+5. **You can migrate** to a different SYR instance. Your DID never changes.
+6. **Your posts are part of your identity** — what you think and share is integral to who you are.
+7. **You federate** with other SYR instances via ActivityPub to view each other's activity.
 
-No platform owns you. No server holds your root key. If a provider disappears, you export your identity bundle and set up somewhere else.
+No platform owns you. If your instance disappears, you export your identity bundle and set up somewhere else.
 
 ---
 
@@ -41,13 +43,15 @@ No platform owns you. No server holds your root key. If a provider disappears, y
 
 ```mermaid
 flowchart TD
-    UserDevice["User Device"] -->|generates| RootKey["Root Keypair (Ed25519)"]
+    Operator["Instance Operator"] -->|hosts| SYR["SYR Instance"]
+    SYR -->|generates| RootKey["Root Keypair (Ed25519)"]
     RootKey -->|derives| DID["did:syr:z6Mkt..."]
     DID -->|registered at| Registry["Registry"]
-    Registry -->|resolves to| Provider["Provider Service"]
-    Provider -->|hosts| ProfileData["Profile, Posts, Assets"]
-    RootKey -->|delegates to| DeviceKey["Device Key"]
-    DeviceKey -->|signs| Mutations["Profile Mutations"]
+    Registry -->|resolves to| SYR
+    SYR -->|manages| ProfileData["Profile, Posts, Credentials"]
+    SYR -->|federates via| AP["ActivityPub"]
+    AP <-->|SYR-to-SYR| OtherSYR["Other SYR Instances"]
+    SYR -->|tenant isolation| Tenants["Tenant A | Tenant B | ..."]
 ```
 
 ---
@@ -56,7 +60,13 @@ flowchart TD
 
 ### Root Identity
 
-Every Syr identity starts with a **locally generated Ed25519 keypair**. The private key never leaves the user's control. The public key is encoded as a multibase string and embedded in the DID identifier. This keypair is the ultimate trust anchor for everything: hosting decisions, delegated keys, signed actions, and migrations.
+Every Syr identity starts with an **Ed25519 keypair generated server-side** by the SYR instance. The private key is stored securely on the server, encrypted at rest. The public key is encoded as a multibase string and embedded in the DID identifier. This keypair is the ultimate trust anchor for everything: hosting decisions, delegated keys, signed actions, and migrations.
+
+Users can **explicitly export their keys** if they want to manage them elsewhere or offload them to their own device — but this is an opt-in action, not the default.
+
+### Posts as Identity
+
+In SYR, your posts and thoughts are an integral part of your identity. What you create and share defines who you are, and this content travels with your identity when you migrate between instances. Posts are federated across SYR instances via ActivityPub.
 
 ### Decentralized Identifier (DID)
 
@@ -72,14 +82,13 @@ Because the DID is derived from the key itself, no external authority is needed 
 
 The root key is sacred and used rarely. For daily operations (signing posts, authenticating sessions), Syr creates **delegated device keys**. Each device generates its own keypair, which is then authorized by the root key via a signed delegation statement. Delegated keys can be revoked at any time without affecting the root identity.
 
+### Multi-Tenancy
+
+A single SYR instance can manage identities for **multiple organizations or groups (tenants)**, each with isolated identity pools. An instance operator creates tenants and assigns identity management to them. Tenants cannot see or interact with each other's identity data.
+
 ### Providers
 
-A provider is a server that hosts your profile data, APIs, and storage. Providers can be:
-
-- **Self-hosted** by the user
-- **Community-hosted** by a trusted operator
-
-Providers host your identity state but never own your identity. You can migrate between providers without changing your DID.
+A provider is a SYR instance that hosts your profile data, APIs, and storage. In SYR's model, the primary mode is **self-hosted** — you or your organization run a SYR instance. Providers host your identity state but never own your identity. You can migrate between providers without changing your DID.
 
 ### Registry
 
@@ -91,26 +100,32 @@ did:syr:z6Mkt... → https://provider.example
 
 Only the root key can update this mapping. Registry operators cannot impersonate identities or forge migrations.
 
-### Signed Mutations
+### Verifiable Credentials
 
-Every profile mutation (updating your bio, creating a post) is signed by a delegated device key. The server verifies the delegation chain before accepting any write. Unsigned writes are rejected.
+VCs in SYR are **credentials that others issue to you**, linked to your identity — things like memberships, roles, KYC verifications, or qualifications. They enrich your identity with attestations from trusted parties. In the future, platforms may require specific VCs to join, and SYR will support exchanging credentials to meet those requirements.
+
+### Identity-Based Login
+
+Third-party platforms can authenticate users through their SYR instance. Instead of generic OAuth, a user enters their instance name and username (or DID), which is resolved via the registry to locate their SYR instance and authenticate them.
 
 ### Identity Export
 
-At any time, you can export your identity as a portable bundle containing your DID, public keys, delegated keys, and a signed profile snapshot. This bundle can be verified offline and imported to a new provider.
+At any time, you can export your identity as a portable bundle containing your DID, public keys, delegated keys, credentials, and a signed profile snapshot. This bundle can be verified offline and imported to a new provider.
 
 ---
 
 ## What Syr is Not
 
-Syr is **not** a social network, a blockchain, or a federation protocol. It is an **identity layer** that other applications can build on. It provides:
+Syr is **not** a blockchain or a centralized identity platform. It is a **self-hosted identity manager** that provides:
 
-- Cryptographic identity generation and management
-- Provider-portable hosting
-- Signed, attributable actions
-- Export and import of identity state
-
-Social features, federation (ActivityPub), attestations, and moderation are built on top of this foundation in later phases.
+- Cryptographic identity generation and management (server-side)
+- Posts as a first-class part of identity
+- SYR-to-SYR federation via ActivityPub
+- Provider-portable identity with DID stability
+- Verifiable credentials linked to identity
+- Identity-based login for third-party platforms
+- Multi-tenant isolation for organizations
+- Explicit key export and offloading
 
 ---
 
@@ -120,8 +135,8 @@ Social features, federation (ActivityPub), attestations, and moderation are buil
 | ----------- | ---------------------------------- | ----------- |
 | **Phase 0** | Local-first cryptographic identity | In progress |
 | Phase 1     | Registry + Provider portability    | Planned     |
-| Phase 2     | OAuth + Institutional trust        | Planned     |
-| Phase 3     | Federation + Social features       | Planned     |
+| Phase 2     | Identity-Based Auth + VCs          | Planned     |
+| Phase 3     | Federation + Multi-Tenancy         | Planned     |
 
 ---
 

@@ -1,21 +1,18 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { userController } from '$lib/controllers/user.controller';
-import { identityController } from '$lib/controllers/identity.controller';
-import { ProfileUpdateSchema, SignedMutationSchema } from '@syr-is/types';
+import { ProfileUpdateSchema } from '@syr-is/types';
 import { z } from 'zod';
 
 /**
  * PATCH /api/user/profile
  *
- * Update the user's profile. Supports two modes:
+ * Update the user's profile. Requires an authenticated session.
+ * Profile mutations are authorized by the user's active session — no
+ * client-side cryptographic signing is required.
  *
- * 1. **Signed mutation** (if user has identity): Request body is a SignedMutation
- *    with { payload, signature, devicePublicKey }. The server verifies the
- *    delegation chain and payload signature before applying the mutation.
- *
- * 2. **Unsigned mutation** (backward compat, if user has no identity): Request body
- *    is a plain ProfileUpdate object. Standard auth-gated write.
+ * Server-side signing of profile mutations will be added when key
+ * generation moves server-side (Phase C).
  */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
@@ -29,56 +26,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	try {
 		const body = await request.json();
 
-		// Check if this is a signed mutation
-		const signedResult = SignedMutationSchema.safeParse(body);
-
-		if (signedResult.success) {
-			// Signed mutation path: verify delegation chain + signature
-			const { payload, signature, devicePublicKey } = signedResult.data;
-
-			// Verify the full delegation chain and payload signature
-			const { identity } = await identityController.verifySignedMutation(
-				payload,
-				signature,
-				devicePublicKey
-			);
-
-			// Ensure the signing identity belongs to the authenticated user (identity.user_id
-			// is the owner of the root identity; the verified delegation links to that identity).
-			const identityUserId = identity.user_id.toString();
-			if (identityUserId !== locals.user.id) {
-				throw error(403, {
-					code: 'FORBIDDEN',
-					message:
-						'The signing device key is not bound to your account. ' +
-						'Profile mutations must be signed by a key delegated to the authenticated user.'
-				});
-			}
-
-			// Validate the payload as a profile update
-			const data = ProfileUpdateSchema.parse(payload);
-
-			// Apply the mutation
-			const result = await userController.updateProfile(locals.user.id, data);
-
-			return json({
-				status: 'success',
-				data: result
-			});
-		}
-
-		// Unsigned mutation path: only allowed if user has no identity
-		const hasIdentity = await identityController.hasIdentity(locals.user.id);
-		if (hasIdentity) {
-			throw error(400, {
-				code: 'SIGNATURE_REQUIRED',
-				message:
-					'Profile mutations must be signed with a delegated device key. ' +
-					'Your identity requires cryptographic signatures for all mutations.'
-			});
-		}
-
-		// Parse and validate request body (unsigned, backward-compatible)
+		// Parse and validate request body
 		const data = ProfileUpdateSchema.parse(body);
 
 		// Update profile
@@ -114,18 +62,6 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				throw error(404, {
 					code: 'NOT_FOUND',
 					message: 'Profile not found'
-				});
-			}
-
-			if (
-				err.message.includes('Device key') ||
-				err.message.includes('delegation') ||
-				err.message.includes('signature') ||
-				err.message.includes('Identity not found')
-			) {
-				throw error(403, {
-					code: 'FORBIDDEN',
-					message: err.message
 				});
 			}
 		}

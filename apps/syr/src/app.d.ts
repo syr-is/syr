@@ -11,6 +11,7 @@ declare global {
 			user?: {
 				id: string;
 				username: string;
+				did?: string;
 				role: 'ADMIN' | 'USER';
 				sessionId: string;
 				created_at: Date;

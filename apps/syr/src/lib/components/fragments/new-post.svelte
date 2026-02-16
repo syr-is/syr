@@ -494,7 +494,7 @@
 	>
 		+ New Post
 	</Dialog.Trigger>
-	<Dialog.Content class="flex max-h-[90vh] max-w-3xl flex-col">
+	<Dialog.Content class="flex max-h-[90vh] max-w-[95vw] flex-col sm:max-w-3xl">
 		<Dialog.Header class="shrink-0">
 			<div class="flex items-center justify-between">
 				<div>
@@ -586,7 +586,7 @@
 
 				{#if $formData.type === 'blog'}
 					<!-- Blog-specific fields -->
-					<div class="grid grid-cols-2 gap-4">
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<Form.ElementField {form} name="content_type">
 							{#snippet children({ value: _value, errors })}
 								<Label>Content Type</Label>
@@ -634,7 +634,7 @@
 								<div
 									id="post-editor"
 									use:mountCrepe
-									class="max-h-[400px] min-h-[300px] w-full overflow-y-auto rounded-md border border-input p-4"
+									class="max-h-[400px] min-h-[200px] w-full overflow-y-auto rounded-md border border-input p-4 sm:min-h-[300px]"
 								></div>
 								<p class="text-xs text-muted-foreground">
 									Images uploaded here are stored publicly for embedding in your post.
@@ -661,7 +661,7 @@
 					</Form.ElementField>
 				{:else}
 					<!-- Media-specific fields -->
-					<div class="grid grid-cols-2 gap-4">
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<Form.ElementField {form} name="display_mode">
 							{#snippet children({ value: _value, errors })}
 								<Label>Default Display Mode</Label>

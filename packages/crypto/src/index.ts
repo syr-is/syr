@@ -35,4 +35,4 @@ export {
 } from "./webcrypto.js";
 
 export type { Keypair, RotationStatement } from "./types.js";
-export type { WebCryptoKeyPair } from "./webcrypto.js";
+export * from "./utils.js";

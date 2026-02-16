@@ -11,7 +11,7 @@ the active state of a root identity, including:
 
 - profile data
 - public metadata
-- OAuth endpoints
+- identity-based auth endpoints
 - delegated signing context (future)
 - migration export/import
 
@@ -34,7 +34,7 @@ Providers:
 
 - host identity state
 - serve APIs
-- participate in OAuth
+- participate in identity-based authentication
 
 Providers MUST NOT:
 
@@ -60,7 +60,7 @@ v0.1 defines only:
 
 - public metadata endpoint
 - profile retrieval
-- OAuth endpoints (minimal)
+- identity-based auth endpoints (minimal)
 - export endpoint for migration
 
 No:
@@ -334,8 +334,8 @@ These are intentionally excluded from v0.1.
 
 ## 10. Versioning
 
-**Version:** v0.1  
-**Status:** Draft  
+**Version:** v0.1
+**Status:** Draft
 **Scope:** Minimum provider interface required to support:
 
 - DID resolution

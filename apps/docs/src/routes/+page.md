@@ -1,6 +1,6 @@
 ---
 title: Syr
-tagline: Self Yield Identity Representation — portable, cryptographically rooted identity.
+tagline: Self Yield Identity Representation — sovereign identity on decentralized social infrastructure.
 actions:
   - label: What is Syr?
     type: primary

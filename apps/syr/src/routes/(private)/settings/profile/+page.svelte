@@ -37,6 +37,7 @@
 				toast.success('Profile updated successfully');
 				await invalidateAll();
 			} catch (_error) {
+				console.error('Failed to update profile:', _error);
 				toast.error('An unexpected error occurred');
 			} finally {
 				loading = false;
@@ -54,7 +55,7 @@
 </script>
 
 {#if data.user}
-	<div class="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
+	<div class="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2">
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Profile Information</Card.Title>

@@ -37,11 +37,9 @@ const ConfigSchema = z.object({
 	// Comma-separated origins for S3 bucket CORS (defaults to CORS_ORIGIN)
 	S3_CORS_ORIGINS: z.string().optional(),
 
-	// OAuth
-	OAUTH_ISSUER: z.url().optional(),
-	OAUTH_AUTH_CODE_EXPIRES_IN: z.coerce.number().default(600),
-	OAUTH_ACCESS_TOKEN_EXPIRES_IN: z.coerce.number().default(3600),
-	OAUTH_REFRESH_TOKEN_EXPIRES_IN: z.coerce.number().default(2592000),
+	// Identity Auth
+	IDENTITY_AUTH_CHALLENGE_EXPIRES_IN: z.coerce.number().default(600),
+	IDENTITY_AUTH_TOKEN_EXPIRES_IN: z.coerce.number().default(3600),
 
 	// Security
 	RATE_LIMIT_WINDOW: z.coerce.number().default(900000),
@@ -121,11 +119,9 @@ export const s3 = {
 	corsOrigins: s3CorsOrigins()
 } as const;
 
-export const oauth = {
-	issuer: config.OAUTH_ISSUER ?? config.PUBLIC_URL,
-	authCodeExpiresIn: config.OAUTH_AUTH_CODE_EXPIRES_IN,
-	accessTokenExpiresIn: config.OAUTH_ACCESS_TOKEN_EXPIRES_IN,
-	refreshTokenExpiresIn: config.OAUTH_REFRESH_TOKEN_EXPIRES_IN
+export const identityAuth = {
+	challengeExpiresIn: config.IDENTITY_AUTH_CHALLENGE_EXPIRES_IN,
+	tokenExpiresIn: config.IDENTITY_AUTH_TOKEN_EXPIRES_IN
 } as const;
 
 export const security = {

@@ -474,7 +474,7 @@
 	}
 </script>
 
-<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-8">
+<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -489,8 +489,8 @@
 	</Button>
 	<Card.Root class="flex min-h-0 flex-1 flex-col">
 		<Card.Header class="shrink-0">
-			<div class="flex items-start justify-between">
-				<div class="flex items-center gap-3">
+			<div class="flex flex-wrap items-start justify-between gap-4">
+				<div class="flex flex-wrap items-center gap-3">
 					<div>
 						<Card.Title>Edit Post</Card.Title>
 						<Card.Description>
@@ -508,7 +508,7 @@
 						</Badge>
 					{/if}
 				</div>
-				<div class="flex gap-2">
+				<div class="flex flex-wrap gap-2">
 					<Tooltip.Root>
 						<Tooltip.Trigger>
 							{#snippet child({ props })}

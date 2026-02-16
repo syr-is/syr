@@ -3,6 +3,7 @@
 
 	const items = [
 		{ title: 'Profile', href: '/settings/profile' },
+		{ title: 'Identity', href: '/settings/identity' },
 		{ title: 'Sessions', href: '/settings/sessions' }
 	];
 

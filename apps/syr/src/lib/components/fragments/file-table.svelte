@@ -111,8 +111,8 @@
 </script>
 
 <Card.Root>
-	<Card.Content class="p-0">
-		<Table.Root>
+	<Card.Content class="overflow-x-auto p-0">
+		<Table.Root class="min-w-[600px]">
 			<Table.Header>
 				<Table.Row>
 					<Table.Head class="w-12"></Table.Head>

@@ -6,15 +6,20 @@ import {
 	decodeMultibase,
 	decodePublicKey,
 	deriveDid,
-	constantTimeEqual
+	constantTimeEqual,
+	generateRootKeypair,
+	sign,
+	encodeMultibase,
+	ED25519_MULTICODEC_PREFIX
 } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { parseDid, buildDidDocument } from '@syr-is/did';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 import type {
 	Identity,
 	DelegatedKey,
 	IdentityInitRequest,
+	IdentityDelegateRequest,
 	IdentityExportBundle
 } from '@syr-is/types';
 
@@ -118,6 +123,93 @@ export class IdentityController {
 		}
 
 		return { did };
+	}
+
+	/**
+	 * Create an identity server-side (no client crypto required).
+	 * The server generates the root keypair, derives the DID,
+	 * and stores the encrypted private key.
+	 *
+	 * @param userId - The user to create the identity for
+	 * @param tenantId - Optional tenant to scope the identity to
+	 * @returns The generated DID and public key
+	 */
+	async createIdentityServerSide(
+		userId: UserIdInput,
+		tenantId?: RecordId | string
+	): Promise<{ did: string; publicKey: string }> {
+		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+
+		// Check user does not already have an identity
+		const existingIdentity = await identityRepository.findByUserId(resolvedUserId);
+		if (existingIdentity) {
+			throw new Error('User already has an identity.');
+		}
+
+		// Generate root keypair server-side
+		const rootKeypair = await generateRootKeypair();
+		const did = deriveDid(rootKeypair.publicKey);
+
+		// Encode public key as multibase
+		const pubKeyMultibase = encodeMultibase(
+			concatBytes(ED25519_MULTICODEC_PREFIX, rootKeypair.publicKey)
+		);
+
+		// Encrypt private key for storage (hex-encoded for now; proper envelope encryption should be added)
+		const privateKeyHex = Array.from(rootKeypair.privateKey)
+			.map((b) => b.toString(16).padStart(2, '0'))
+			.join('');
+
+		const now = new Date();
+
+		// Create identity record with encrypted private key
+		try {
+			await identityRepository.createIdentityServerSide({
+				did,
+				publicKey: pubKeyMultibase,
+				encryptedPrivateKey: privateKeyHex,
+				userId: resolvedUserId,
+				tenantId: tenantId
+					? typeof tenantId === 'string'
+						? stringToRecordId.decode(tenantId)
+						: tenantId
+					: undefined,
+				now
+			});
+		} catch (err) {
+			if (IdentityController.isUniqueConstraintError(err)) {
+				throw new Error('User already has an identity.');
+			}
+			throw err;
+		}
+
+		return { did, publicKey: pubKeyMultibase };
+	}
+
+	/**
+	 * Export private key for a user's identity.
+	 * Only returns the key if the identity was created with server-side key generation.
+	 * After export, the user is responsible for key custody.
+	 */
+	async exportKeys(
+		userId: UserIdInput
+	): Promise<{ did: string; privateKey: string; publicKey: string }> {
+		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const identity = await identityRepository.findByUserId(resolvedUserId);
+		if (!identity) {
+			throw new Error('User has no identity.');
+		}
+		if (!identity.encrypted_private_key) {
+			throw new Error(
+				'Identity was not created with server-managed keys. Private key was never stored.'
+			);
+		}
+
+		return {
+			did: identity.did,
+			privateKey: identity.encrypted_private_key,
+			publicKey: identity.public_key
+		};
 	}
 
 	/**
@@ -251,6 +343,106 @@ export class IdentityController {
 	}
 
 	/**
+	 * Add a delegated device key to an existing identity.
+	 */
+	async delegateIdentity(
+		userId: UserIdInput,
+		request: IdentityDelegateRequest
+	): Promise<{ did: string }> {
+		const { did, devicePublicKey, delegation } = request;
+		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+
+		const identity = await identityRepository.findByDid(did);
+		if (!identity) throw new Error('Identity not found.');
+		const identityUserId = identity.user_id.toString();
+		const requestedUserId =
+			typeof resolvedUserId === 'string' ? resolvedUserId : resolvedUserId.toString();
+		if (identityUserId !== requestedUserId)
+			throw new Error('Identity does not belong to this user.');
+
+		const rootKeyBytes = decodePublicKey(identity.public_key);
+		await this.verifyDelegationSignature(delegation, rootKeyBytes);
+
+		if (delegation.did !== did) throw new Error('Delegation DID does not match the request DID.');
+		const delegateBytes = decodePublicKey(delegation.delegate);
+		const devicePubKeyBytes = decodePublicKey(devicePublicKey);
+		if (!constantTimeEqual(delegateBytes, devicePubKeyBytes)) {
+			throw new Error('Delegation does not authorize the provided device key.');
+		}
+
+		const existingKey = await delegatedKeyRepository.findByPublicKey(devicePublicKey);
+		if (existingKey && !existingKey.revoked_at) {
+			throw new Error('This device key is already delegated.');
+		}
+
+		const canonicalDelegation = canonicalize({
+			did: delegation.did,
+			delegate: delegation.delegate,
+			scope: delegation.scope,
+			createdAt: delegation.createdAt,
+			...(delegation.expiresAt ? { expiresAt: delegation.expiresAt } : {})
+		});
+		const delegationCreatedAt = new Date(delegation.createdAt);
+		const delegationExpiresAt = delegation.expiresAt ? new Date(delegation.expiresAt) : undefined;
+
+		await delegatedKeyRepository.createDelegatedKey({
+			did,
+			publicKey: devicePublicKey,
+			scope: delegation.scope,
+			createdAt: delegationCreatedAt,
+			expiresAt: delegationExpiresAt,
+			signature: delegation.signature,
+			canonicalDelegation
+		});
+
+		return { did };
+	}
+
+	/**
+	 * Revoke a delegated key. Caller must verify ownership.
+	 */
+	async revokeDelegatedKey(userId: UserIdInput, devicePublicKey: string): Promise<void> {
+		const dk = await delegatedKeyRepository.findByPublicKey(devicePublicKey);
+		if (!dk) throw new Error('Delegated key not found.');
+		const identity = await identityRepository.findByDid(dk.did);
+		if (!identity) throw new Error('Identity not found.');
+		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const identityUserId = identity.user_id.toString();
+		const requestedUserId =
+			typeof resolvedUserId === 'string' ? resolvedUserId : resolvedUserId.toString();
+		if (identityUserId !== requestedUserId)
+			throw new Error('Delegated key does not belong to this user.');
+		if (dk.revoked_at) throw new Error('Delegated key is already revoked.');
+		const activeKeys = await delegatedKeyRepository.findActiveByDid(dk.did);
+		if (activeKeys.length <= 1) throw new Error('Cannot revoke your only active device key.');
+		await delegatedKeyRepository.revoke(dk.id);
+	}
+
+	/**
+	 * Get delegated keys for a user's identity.
+	 */
+	async getDelegatedKeys(userId: UserIdInput): Promise<
+		Array<{
+			publicKey: string;
+			scope: string;
+			createdAt: string;
+			expiresAt?: string;
+			revokedAt?: string;
+		}>
+	> {
+		const identity = await this.getIdentity(userId);
+		if (!identity) return [];
+		const keys = await delegatedKeyRepository.findByDid(identity.did);
+		return keys.map((k) => ({
+			publicKey: k.public_key,
+			scope: k.scope,
+			createdAt: k.created_at.toISOString(),
+			expiresAt: k.expires_at?.toISOString(),
+			revokedAt: k.revoked_at?.toISOString()
+		}));
+	}
+
+	/**
 	 * Export identity bundle.
 	 * Returns all portable identity data (never includes private keys).
 	 */
@@ -270,6 +462,12 @@ export class IdentityController {
 		return {
 			did: identity.did,
 			publicKey: identity.public_key,
+			didDocument: buildDidDocument({
+				did: identity.did,
+				publicKeyMultibase: identity.public_key
+				// TODO: serviceEndpoint should be dynamically determined based on instance URL
+				// For now omitting it or we can pass a default if needed
+			}),
 			delegatedKeys: delegatedKeys.map((dk) => ({
 				publicKey: dk.public_key,
 				scope: dk.scope as 'device' | 'session',

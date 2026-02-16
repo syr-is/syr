@@ -221,6 +221,85 @@ export async function signMutation(
 }
 
 /**
+ * Add this device as a delegated key to the existing identity.
+ * Requires: root key in IndexedDB, user has identity on server.
+ */
+export async function addDeviceKey(): Promise<string> {
+	const adp = adapter();
+	const rootKey = await adp.getKey('root');
+	if (!rootKey) {
+		throw new Error('Root key not found. Import or create identity on a device that has the root key.');
+	}
+
+	const { hasIdentity, did } = await checkIdentityStatus();
+	if (!hasIdentity || !did) {
+		throw new Error('No identity on server. Create identity first.');
+	}
+
+	const deviceRecord = await adp.generateDeviceKeypair();
+	const devicePubMultibase = encodeMultibase(
+		concatBytes(ED25519_MULTICODEC_PREFIX, deviceRecord.publicKey)
+	);
+
+	const createdAt = new Date().toISOString();
+	const delegationStatement = {
+		did,
+		delegate: devicePubMultibase,
+		scope: 'device' as const,
+		createdAt
+	};
+	const canonicalDelegation = canonicalize(delegationStatement);
+	const delegationSignature = await rootKey.sign(canonicalDelegation);
+	const delegationSignatureMultibase = encodeMultibase(delegationSignature);
+
+	const response = await fetch('/api/identity/delegate', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			did,
+			devicePublicKey: devicePubMultibase,
+			delegation: {
+				did,
+				delegate: devicePubMultibase,
+				scope: 'device',
+				createdAt,
+				signature: delegationSignatureMultibase
+			}
+		})
+	});
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => null);
+		throw new Error(errorData?.message ?? `Add device failed: ${response.status}`);
+	}
+
+	deviceRecord.id = devicePubMultibase;
+	await adp.storeKey(deviceRecord);
+	await adp.setMeta('currentDeviceKeyId', devicePubMultibase);
+
+	return did;
+}
+
+/**
+ * Check if root key is available locally (can add this device).
+ */
+export async function hasRootKeyLocally(): Promise<boolean> {
+	const rootKey = await adapter().getKey('root');
+	return rootKey != null;
+}
+
+/**
+ * Get the current device's public key as multibase (for comparing with delegated keys list).
+ */
+export async function getCurrentDevicePublicKeyMultibase(): Promise<string | null> {
+	const deviceKey = await getCurrentDeviceKey();
+	if (!deviceKey) return null;
+	return deviceKey.id.startsWith('z')
+		? deviceKey.id
+		: encodeMultibase(concatBytes(ED25519_MULTICODEC_PREFIX, deviceKey.publicKey));
+}
+
+/**
  * Get the locally stored root public key (if available).
  */
 export async function getLocalRootPublicKey(): Promise<Uint8Array | null> {

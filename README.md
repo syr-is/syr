@@ -4,7 +4,7 @@
 [![Build](https://github.com/syr-is/syr/actions/workflows/build.yml/badge.svg)](https://github.com/syr-is/syr/actions/workflows/build.yml)
 [![Docker](https://github.com/syr-is/syr/actions/workflows/docker.yml/badge.svg)](https://github.com/syr-is/syr/actions/workflows/docker.yml)
 
-A SvelteKit application built with a pnpm workspace monorepo structure, powered by Turborepo for efficient task orchestration and caching.
+A self-hosted multi-tenant self-sovereign identity manager built with SvelteKit. Manages cryptographic identities, posts, and federated activity across SYR instances. Powered by a pnpm workspace monorepo with Turborepo for efficient task orchestration and caching.
 
 ## Project Structure
 
@@ -109,14 +109,12 @@ The workspace is configured with:
    ```
 
    This starts:
-
    - **SYR App** at [http://localhost:5173](http://localhost:5173)
    - **SurrealDB** at http://localhost:8000
    - **Surrealist** (DB GUI) at [http://localhost:8091](http://localhost:8091)
    - **SeaweedFS S3** at http://localhost:8333
 
    The `--watch` flag enables:
-
    - Hot module reloading for source code changes
    - Automatic rebuild when dependencies change
    - Types package synchronization
@@ -254,4 +252,5 @@ The repository includes `.cursor/mcp.json` with both MCP servers pre-configured.
 - **File Storage**: SeaweedFS (S3-compatible)
 - **Type System**: Zod v4
 - **Password Hashing**: Argon2id
-- **Protocols**: ActivityPub, W3C VC 2.0, OAuth 2.0
+- **Protocols**: ActivityPub, W3C VC 2.0, Identity-Based Auth
+- **Identity**: Self-Sovereign Identity, did:syr DID Method, Ed25519

@@ -42,6 +42,31 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	}
 
 	/**
+	 * Find all identities belonging to a tenant
+	 */
+	async findByTenant(tenantId: string | RecordId): Promise<Identity[]> {
+		const result = await this.db.query<[Identity[]]>(
+			'SELECT * FROM identity WHERE tenant_id = $tenantId ORDER BY created_at DESC',
+			{ tenantId }
+		);
+		const records = result[0] ?? [];
+		return records.map((r) => this.validate(r));
+	}
+
+	/**
+	 * Find identity by DID within a specific tenant scope
+	 */
+	async findByDidAndTenant(did: string, tenantId: string | RecordId): Promise<Identity | null> {
+		const result = await this.db.query<[Identity[]]>(
+			'SELECT * FROM identity WHERE did = $did AND tenant_id = $tenantId LIMIT 1',
+			{ did, tenantId }
+		);
+		const record = result[0]?.[0];
+		if (!record) return null;
+		return this.validate(record);
+	}
+
+	/**
 	 * Atomically create identity, delegated_key, and update user.did in a single transaction.
 	 * All three operations succeed or none are applied (no compensating cleanup needed).
 	 */
@@ -70,36 +95,128 @@ export class IdentityRepository extends BaseRepository<Identity> {
 			canonicalDelegation
 		} = params;
 
-		const query = `
-			BEGIN TRANSACTION;
-			CREATE identity SET
-				did = $did,
-				public_key = $publicKey,
-				user_id = $userId,
-				created_at = $now;
-			CREATE delegated_key SET
-				did = $did,
-				public_key = $devicePublicKey,
-				scope = $scope,
-				created_at = $delegationCreatedAt,
-				signature = $signature,
-				canonical_delegation = $canonicalDelegation,
-				expires_at = $delegationExpiresAt;
-			UPDATE $userId SET did = $did;
-			COMMIT TRANSACTION;
-		`;
+		// Execute as separate queries in sequence rather than a transaction
+		// SurrealDB's transaction support can be finicky with mixed CREATE/UPDATE operations
+		try {
+			// Create identity record
+			console.log('[identity.repository] Creating identity record...', { did, userId });
+			const identityResult = await this.db.query(
+				`CREATE identity SET
+					did = $did,
+					public_key = $publicKey,
+					user_id = $userId,
+					created_at = $now;`,
+				{
+					did,
+					publicKey,
+					userId,
+					now
+				}
+			);
+			console.log('[identity.repository] Identity created:', identityResult);
 
-		await this.db.query(query, {
+			// Create delegated_key record
+			// For optional datetime fields, SurrealDB expects NONE, not null
+			console.log('[identity.repository] Creating delegated_key record...');
+			const delegatedKeyQuery = delegationExpiresAt
+				? `CREATE delegated_key SET
+					did = $did,
+					public_key = $devicePublicKey,
+					scope = $scope,
+					created_at = $delegationCreatedAt,
+					signature = $signature,
+					canonical_delegation = $canonicalDelegation,
+					expires_at = $delegationExpiresAt;`
+				: `CREATE delegated_key SET
+					did = $did,
+					public_key = $devicePublicKey,
+					scope = $scope,
+					created_at = $delegationCreatedAt,
+					signature = $signature,
+					canonical_delegation = $canonicalDelegation;`;
+
+			const delegatedKeyParams: Record<string, unknown> = {
+				did,
+				devicePublicKey,
+				scope,
+				delegationCreatedAt,
+				signature,
+				canonicalDelegation
+			};
+			if (delegationExpiresAt) {
+				delegatedKeyParams.delegationExpiresAt = delegationExpiresAt;
+			}
+
+			const delegatedKeyResult = await this.db.query(delegatedKeyQuery, delegatedKeyParams);
+			console.log('[identity.repository] Delegated key created:', delegatedKeyResult);
+
+			// Update user with DID
+			console.log('[identity.repository] Updating user with DID...');
+			const userUpdateResult = await this.db.query(`UPDATE $userId SET did = $did;`, {
+				userId,
+				did
+			});
+			console.log('[identity.repository] User updated:', userUpdateResult);
+		} catch (error) {
+			console.error('[identity.repository] Error during identity creation:', error);
+			// If any operation fails, attempt rollback
+			// Note: This is not a true atomic transaction, but provides best-effort cleanup
+			try {
+				await this.db.query(`DELETE identity WHERE did = $did;`, { did });
+				await this.db.query(`DELETE delegated_key WHERE did = $did;`, { did });
+				await this.db.query(`UPDATE $userId UNSET did;`, { userId });
+			} catch (rollbackError) {
+				console.error('[identity.repository] Rollback failed:', rollbackError);
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Create an identity with server-generated keys.
+	 * Stores the encrypted private key.
+	 */
+	async createIdentityServerSide(params: {
+		did: string;
+		publicKey: string;
+		encryptedPrivateKey: string;
+		userId: RecordId;
+		tenantId?: RecordId;
+		now: Date;
+	}): Promise<void> {
+		const { did, publicKey, encryptedPrivateKey, userId, tenantId, now } = params;
+
+		console.log('[identity.repository] Creating identity record (server-side)...', { did, userId });
+
+		let query = `CREATE identity SET
+			did = $did,
+			public_key = $publicKey,
+			encrypted_private_key = $encryptedPrivateKey,
+			user_id = $userId,
+			created_at = $now`;
+
+		const queryParams: Record<string, unknown> = {
 			did,
 			publicKey,
+			encryptedPrivateKey,
 			userId,
-			now,
-			devicePublicKey,
-			scope,
-			delegationCreatedAt,
-			delegationExpiresAt: delegationExpiresAt ?? null,
-			signature,
-			canonicalDelegation
+			now
+		};
+
+		if (tenantId) {
+			query += `, tenant_id = $tenantId;`;
+			queryParams.tenantId = tenantId;
+		} else {
+			query += `;`;
+		}
+
+		// Create identity record
+		await this.db.query(query, queryParams);
+
+		// Update user with DID
+		await this.db.query(`UPDATE $userId SET did = $did;`, {
+			userId,
+			did
 		});
 	}
 }
@@ -142,15 +259,52 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 	 */
 	async findActiveByDid(did: string): Promise<DelegatedKey[]> {
 		const result = await this.db.query<[DelegatedKey[]]>(
-			`SELECT * FROM delegated_key 
-			 WHERE did = $did 
-			   AND revoked_at IS NONE 
+			`SELECT * FROM delegated_key
+			 WHERE did = $did
+			   AND revoked_at IS NONE
 			   AND (expires_at IS NONE OR expires_at > time::now())
 			 ORDER BY created_at DESC`,
 			{ did }
 		);
 		const records = result[0] ?? [];
 		return records.map((r) => this.validate(r));
+	}
+
+	/**
+	 * Create a delegated key (for add-device flow).
+	 */
+	async createDelegatedKey(params: {
+		did: string;
+		publicKey: string;
+		scope: string;
+		createdAt: Date;
+		expiresAt?: Date;
+		signature: string;
+		canonicalDelegation: string;
+	}): Promise<DelegatedKey> {
+		const { did, publicKey, scope, createdAt, expiresAt, signature, canonicalDelegation } = params;
+
+		const expiresClause = expiresAt ? ', expires_at = $expiresAt' : '';
+		const query = `CREATE delegated_key SET
+			did = $did,
+			public_key = $publicKey,
+			scope = $scope,
+			created_at = $createdAt,
+			signature = $signature,
+			canonical_delegation = $canonicalDelegation${expiresClause};`;
+
+		const result = await this.db.query<[DelegatedKey[]]>(query, {
+			did,
+			publicKey,
+			scope,
+			createdAt,
+			signature,
+			canonicalDelegation,
+			...(expiresAt ? { expiresAt } : {})
+		});
+		const record = result[0]?.[0];
+		if (!record) throw new Error('Failed to create delegated key.');
+		return this.validate(record);
 	}
 
 	/**

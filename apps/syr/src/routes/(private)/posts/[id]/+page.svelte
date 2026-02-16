@@ -162,7 +162,7 @@
 	}
 </script>
 
-<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-8">
+<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -177,13 +177,13 @@
 	</Button>
 	<Card.Root class="flex min-h-0 flex-1 flex-col">
 		<Card.Header class="shrink-0">
-			<div class="flex items-start justify-between gap-4">
-				<div class="flex-1 space-y-2">
-					<div class="flex items-center gap-2">
-						<Card.Title class="text-3xl">
+			<div class="flex flex-wrap items-start justify-between gap-4">
+				<div class="min-w-0 flex-1 space-y-2">
+					<div class="flex flex-wrap items-center gap-2">
+						<Card.Title class="text-2xl sm:text-3xl">
 							{data.post.title || 'Untitled Post'}
 						</Card.Title>
-						<div class="flex gap-2">
+						<div class="flex flex-wrap gap-2">
 							{#if isDraft}
 								<Badge variant="outline" class="border-warning text-warning gap-1 text-xs">
 									<FilePen class="h-3 w-3" />
@@ -215,7 +215,7 @@
 				{#if data.user}
 					{@const isOwner = data.post.author_id === data.user.id}
 					{#if isOwner}
-						<div class="flex gap-2">
+						<div class="flex flex-wrap gap-2">
 							{#if isDraft}
 								<Button
 									variant="default"

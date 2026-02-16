@@ -107,6 +107,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS did ON TABLE identity TYPE string
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS public_key ON TABLE identity TYPE string;
+				DEFINE FIELD IF NOT EXISTS encrypted_private_key ON TABLE identity TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS user_id ON TABLE identity TYPE record<user>;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_identity_did ON TABLE identity COLUMNS did UNIQUE;
@@ -127,6 +128,23 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS canonical_delegation ON TABLE delegated_key TYPE option<string>;
 				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
+			`);
+
+			// Tenant table: multi-tenancy support
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS tenant SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS name ON TABLE tenant TYPE string;
+				DEFINE FIELD IF NOT EXISTS slug ON TABLE tenant TYPE string;
+				DEFINE FIELD IF NOT EXISTS settings ON TABLE tenant FLEXIBLE TYPE object DEFAULT {};
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE tenant TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE tenant TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_tenant_slug ON TABLE tenant COLUMNS slug UNIQUE;
+			`);
+
+			// Add optional tenant_id to identity table for tenant-scoped identity pools
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS tenant_id ON TABLE identity TYPE option<record<tenant>>;
+				DEFINE INDEX IF NOT EXISTS idx_identity_tenant ON TABLE identity COLUMNS tenant_id;
 			`);
 
 			console.log('✅ Database schema initialized');

@@ -13,8 +13,9 @@ that can:
 - be hosted by self or community providers
 - migrate between providers without changing identity
 - participate in institutions and obtain attestations
-- act across external services via OAuth
+- act across external services via identity-based login
 - remain traceable to a single root individual
+- include posts and thoughts as a first-class part of identity
 
 This document defines the **minimum viable identity architecture** for Syr.
 
@@ -24,13 +25,13 @@ This document defines the **minimum viable identity architecture** for Syr.
 
 ### 2.1 Self-sovereign root identity
 
-- Every identity begins with a **locally generated root keypair**.
-- The **private key never leaves user control**.
-- No institution or provider may generate or seize the root identity.
+- Every identity begins with a **server-generated root keypair** managed by the SYR instance.
+- The **private key is stored server-side**, encrypted at rest. Users can explicitly export/offload keys on demand.
+- No external institution may seize the root identity.
 - The root identity is the **ultimate trust anchor** for:
   - hosting
   - attestations
-  - OAuth actions
+  - identity-based auth actions
   - migration
 
 ---
@@ -55,7 +56,7 @@ Institutions may:
 - host user profiles
 - approve memberships
 - issue attestations
-- provide OAuth infrastructure
+- provide identity-based authentication infrastructure
 - perform optional KYC or personhood verification
 
 Institutions may **not**:
@@ -330,8 +331,8 @@ In one coherent model.
 
 ## 9. Versioning
 
-**Version:** v0.1  
-**Status:** Draft  
+**Version:** v0.1
+**Status:** Draft
 **Scope:** Minimal viable identity architecture for implementation in the Syr repository.
 
 Future revisions will expand:

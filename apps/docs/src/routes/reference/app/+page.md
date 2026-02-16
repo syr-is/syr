@@ -4,7 +4,7 @@ title: 'apps/syr Reference'
 
 # apps/syr Reference
 
-`@syr-is/syr` is the main SvelteKit application for the Syr platform. It provides user registration, authentication, profile management, posts, file uploads, and folder organization.
+`@syr-is/syr` is the main SvelteKit application for the Syr platform. It provides self-sovereign identity management, post management, authentication, profile management, file uploads, and folder organization.
 
 **Package:** `@syr-is/syr`
 **Location:** `apps/syr/`
