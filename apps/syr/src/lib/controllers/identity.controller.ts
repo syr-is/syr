@@ -8,8 +8,8 @@ import {
 	deriveDid,
 	constantTimeEqual,
 	generateRootKeypair,
-	sign,
 	encodeMultibase,
+	concatBytes,
 	ED25519_MULTICODEC_PREFIX
 } from '@syr-is/crypto';
 import { parseDid, buildDidDocument } from '@syr-is/did';
@@ -467,7 +467,7 @@ export class IdentityController {
 				publicKeyMultibase: identity.public_key
 				// TODO: serviceEndpoint should be dynamically determined based on instance URL
 				// For now omitting it or we can pass a default if needed
-			}),
+			}) as unknown as Record<string, unknown>,
 			delegatedKeys: delegatedKeys.map((dk) => ({
 				publicKey: dk.public_key,
 				scope: dk.scope as 'device' | 'session',

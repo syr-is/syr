@@ -99,14 +99,15 @@
 		<Card.Header>
 			<Card.Title>Identity</Card.Title>
 			<Card.Description>
-				Manage your cryptographic identity, export for backup, add devices, and revoke delegated keys.
+				Manage your cryptographic identity, export for backup, add devices, and revoke delegated
+				keys.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			{#if data.hasIdentity}
 				<div class="space-y-2">
 					<p class="text-sm font-medium">Your DID</p>
-					<p class="font-mono text-sm text-muted-foreground break-all">{data.did}</p>
+					<p class="font-mono text-sm break-all text-muted-foreground">{data.did}</p>
 				</div>
 
 				<div class="flex flex-wrap gap-2">
@@ -145,8 +146,7 @@
 									class="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
 								>
 									<div class="flex flex-col gap-0.5">
-										<span class="font-mono" title={key.publicKey}
-											>{truncateKey(key.publicKey)}</span
+										<span class="font-mono" title={key.publicKey}>{truncateKey(key.publicKey)}</span
 										>
 										<span class="text-muted-foreground">
 											{key.revokedAt ? 'Revoked' : 'Active'}

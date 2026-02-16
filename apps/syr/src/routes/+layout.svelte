@@ -39,7 +39,9 @@
 			} catch (error) {
 				console.error('[layout] Identity check/creation failed:', error);
 				toast.error(
-					error instanceof Error ? error.message : 'Failed to initialize identity. Please try again.'
+					error instanceof Error
+						? error.message
+						: 'Failed to initialize identity. Please try again.'
 				);
 			} finally {
 				identityChecked = true;

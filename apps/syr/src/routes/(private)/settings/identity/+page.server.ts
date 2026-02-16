@@ -11,7 +11,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const hasIdentity = await identityController.hasIdentity(locals.user.id);
 	const identity = hasIdentity ? await identityController.getIdentity(locals.user.id) : null;
-	const delegatedKeys = hasIdentity ? await identityController.getDelegatedKeys(locals.user.id) : [];
+	const delegatedKeys = hasIdentity
+		? await identityController.getDelegatedKeys(locals.user.id)
+		: [];
 
 	return {
 		hasIdentity,

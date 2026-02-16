@@ -20,19 +20,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	try {
 		// Check identity records
-		const identityRecords = await db.query(
+		const identityRecords = await db.query<[Record<string, unknown>[]]>(
 			'SELECT * FROM identity WHERE user_id = $userId',
-			{ userId: locals.user.id }
+			{
+				userId: locals.user.id
+			}
 		);
 
 		// Check delegated_key records
-		const delegatedKeyRecords = await db.query(
+		const delegatedKeyRecords = await db.query<[Record<string, unknown>[]]>(
 			'SELECT * FROM delegated_key WHERE did IN (SELECT VALUE did FROM identity WHERE user_id = $userId)',
 			{ userId: locals.user.id }
 		);
 
 		// Check user record
-		const userRecords = await db.query('SELECT * FROM $userId', { userId: locals.user.id });
+		const userRecords = await db.query<[Record<string, unknown>[]]>('SELECT * FROM $userId', {
+			userId: locals.user.id
+		});
 
 		return json({
 			status: 'success',
@@ -70,7 +74,9 @@ export const DELETE: RequestHandler = async ({ locals }) => {
 
 	try {
 		// Get the user's DID if it exists
-		const userRecords = await db.query('SELECT did FROM $userId', { userId: locals.user.id });
+		const userRecords = await db.query<[{ did?: string }[]]>('SELECT did FROM $userId', {
+			userId: locals.user.id
+		});
 		const userDid = userRecords[0]?.[0]?.did;
 
 		// Delete identity records for this user

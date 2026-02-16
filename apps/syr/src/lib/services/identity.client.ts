@@ -228,7 +228,9 @@ export async function addDeviceKey(): Promise<string> {
 	const adp = adapter();
 	const rootKey = await adp.getKey('root');
 	if (!rootKey) {
-		throw new Error('Root key not found. Import or create identity on a device that has the root key.');
+		throw new Error(
+			'Root key not found. Import or create identity on a device that has the root key.'
+		);
 	}
 
 	const { hasIdentity, did } = await checkIdentityStatus();
