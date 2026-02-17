@@ -2,12 +2,14 @@
 
 ## Vision and Principles
 
-The Self-Yield Representation (SYR) Project aims to shift control back to people by creating a decentralized social infrastructure where:
+The Self-Yield Representation (SYR) Project creates **sovereign identity on decentralized social infrastructure** where:
 
-- **Identity is portable**: Users own their digital presence and can move it across services
+- **Identity is self-sovereign**: Users own cryptographic root identities managed by their SYR instance, exportable on demand
+- **Posts are identity**: What you think and share is integral to who you are — posts travel with your identity
 - **Communities define norms**: Cultural context travels with content, not algorithmic scores
 - **Accountability is human**: Judgment rooted in human context, not engagement metrics
 - **Discovery is organic**: People find each other through human connections, not feeds
+- **Multi-tenancy is native**: A single instance can manage isolated identity pools for multiple organizations
 
 ## System Overview
 
@@ -21,78 +23,101 @@ graph TB
     subgraph "Application Layer"
         API[SvelteKit Backend<br/>API Routes]
         Auth[Authentication<br/>JWT + Sessions]
-        AP[ActivityPub Server<br/>Federation Protocol]
-        VC[VC Issuer/Verifier<br/>W3C VC 2.0]
-        OAuth[OAuth 2.0 Provider<br/>Service Integration]
+        IDM[Identity Manager<br/>Key Generation + DID]
+        AP[ActivityPub Server<br/>SYR-to-SYR Federation]
+        VC[Credential Store<br/>Identity-Linked VCs]
+        IDA[Identity-Based Auth<br/>Cross-Instance Login]
+        TM[Tenant Manager<br/>Multi-Tenant Isolation]
     end
 
     subgraph "Data Layer"
         Types[Shared Types<br/>@syr-is/types<br/>Zod Schemas]
+        Crypto[Crypto Package<br/>@syr-is/crypto<br/>Ed25519]
         DB[(SurrealDB<br/>Multi-model Database)]
+        S3[(SeaweedFS<br/>S3 Storage)]
     end
 
     subgraph "External"
-        Fedi[Federated Servers<br/>Mastodon, etc.]
-        Services[Third-party Services<br/>Event Publishers]
+        SYR2[Other SYR Instances<br/>Federation]
+        Services[Third-party Services<br/>Identity-Based Login]
+        Registry[DID Registry<br/>did:syr Resolution]
     end
 
     Web --> API
     SDK --> API
     API --> Auth
+    API --> IDM
     API --> AP
     API --> VC
-    API --> OAuth
+    API --> IDA
+    API --> TM
 
     Auth --> DB
+    IDM --> DB
+    IDM --> Crypto
     AP --> DB
     VC --> DB
-    OAuth --> DB
+    IDA --> Registry
 
     API --> Types
     SDK --> Types
 
-    AP <--> Fedi
-    Services --> SDK
-    Services --> OAuth
+    AP <--> SYR2
+    Services --> IDA
 
     style Types fill:#e1f5ff
+    style Crypto fill:#e1f5ff
     style DB fill:#ffe1f5
+    style S3 fill:#d4edda
 ```
 
-## DID Method: did:web
+## DID Method: did:syr
 
-SYR uses **did:web** exclusively for decentralized identifiers:
+SYR uses the **did:syr** method for decentralized identifiers:
 
-- **DNS-Based**: DIDs resolve via HTTPS to a domain you control
+- **Key-Anchored**: DIDs are derived from the root identity's Ed25519 public key
 - **No Blockchain**: No dependency on blockchain infrastructure
-- **Self-Sovereign**: Users control their DID by controlling their domain
-- **Simple Resolution**: `did:web:example.com` → `https://example.com/.well-known/did.json`
-- **Path Support**: `did:web:example.com:users:alice` → `https://example.com/users/alice/did.json`
+- **Self-Sovereign**: Users control their identity through their cryptographic root key
+- **Registry-Resolved**: `did:syr:<multibase-encoded-pubkey>` resolves via the SYR registry to find the user's current provider/instance
+- **Portable**: Identity can migrate between SYR instances without changing the DID
 
-**Why did:web?**
+**Why did:syr?**
 
-- Fully sovereign (you control your DNS)
+- Fully sovereign (rooted in cryptographic keys you control)
 - No centralized registries or blockchain fees
-- Works with existing web infrastructure
-- Easy to migrate (just move your domain)
-- No PLC or blockchain dependency
+- Provider-portable — move between instances without losing identity
+- Compatible with the SYR key hierarchy (root keys, delegated device keys, recovery keys)
 
 ## Core Components
 
-### 1. User Identity System
+### 1. Identity System
+
+The identity system is the core of SYR. Keys are **generated and managed server-side** by the SYR instance. Users can explicitly export/offload their keys, but this is not the default behavior.
 
 ```mermaid
 erDiagram
+    TENANT ||--o{ USER : "contains"
     USER ||--o| PROFILE : has
-    USER ||--o| ACTOR : "represents as"
-    USER ||--o{ CREDENTIAL : owns
+    USER ||--o| IDENTITY : "has root identity"
+    IDENTITY ||--o{ DELEGATED_KEY : "delegates to"
     USER ||--o{ SESSION : has
+    USER ||--o{ CREDENTIAL : "holds"
+
+    TENANT {
+        string id PK
+        string name
+        string slug UK
+        json settings
+        datetime created_at
+    }
 
     USER {
         string id PK
+        string tenant_id FK
         string username UK
-        string email UK
         string password_hash
+        string did
+        string role
         datetime created_at
         datetime updated_at
     }
@@ -107,16 +132,23 @@ erDiagram
         json metadata
     }
 
-    ACTOR {
+    IDENTITY {
         string id PK
         string user_id FK
-        string actor_type
-        string inbox_url
-        string outbox_url
-        string followers_url
-        string following_url
+        string did UK
+        string root_public_key
+        datetime created_at
+    }
+
+    DELEGATED_KEY {
+        string id PK
+        string identity_id FK
         string public_key
-        string private_key
+        string scope
+        string delegation_signature
+        datetime created_at
+        datetime expires_at
+        datetime revoked_at
     }
 
     SESSION {
@@ -124,16 +156,19 @@ erDiagram
         string user_id FK
         string token
         datetime expires_at
+        datetime last_active
     }
 ```
 
-### 2. ActivityPub Federation
+### 2. ActivityPub Federation (SYR-to-SYR)
+
+Federation enables users on different SYR instances to view each other's activity. Posts are part of identity — sharing them across instances is a core function.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant SYR
-    participant RemoteServer
+    participant SYR as SYR Instance A
+    participant RemoteServer as SYR Instance B
     participant Follower
 
     User->>SYR: Create Post
@@ -148,7 +183,7 @@ sequenceDiagram
         RemoteServer->>Follower: Deliver to User
     end
 
-    Note over SYR,RemoteServer: Federation enables<br/>cross-platform reach
+    Note over SYR,RemoteServer: SYR-to-SYR federation<br/>for viewing activity
 ```
 
 ### 3. ActivityPub Data Model
@@ -199,37 +234,39 @@ erDiagram
     }
 ```
 
-### 4. Verifiable Credentials Flow
+### 4. Verifiable Credentials
+
+VCs in SYR are **credentials that others issue to you**, linked to your identity. They represent attestations like memberships, roles, KYC verifications, or qualifications that enrich your identity. VC exchange for platforms with specific credential requirements to join is planned for a future phase.
 
 ```mermaid
 sequenceDiagram
+    participant Issuer as External Issuer
+    participant SYR as SYR Instance
     participant User
-    participant SYR as SYR Platform<br/>(Issuer)
-    participant Service as Third-party Service
-    participant Verifier
+    participant Platform as Platform with VC Requirements
 
-    User->>SYR: Perform Action<br/>(post, engage)
-    Service->>SYR: Submit Proof via SDK<br/>(event + signature)
-    SYR->>SYR: Validate Proof
-    SYR->>SYR: Issue VC<br/>(W3C VC 2.0 format)
-    SYR->>User: Store VC in wallet
+    Issuer->>SYR: Issue Credential<br/>(W3C VC 2.0 format)
+    SYR->>SYR: Validate + Store VC
+    SYR->>User: Credential linked<br/>to identity
 
-    Note over User,Verifier: Later, proving credibility
+    Note over User,Platform: Later, joining a platform
 
-    User->>Verifier: Present VP<br/>(Verifiable Presentation)
-    Verifier->>SYR: Verify Credential<br/>(check signature + status)
-    SYR->>Verifier: Validation Result
-    Verifier->>User: Grant Access/Trust
+    User->>Platform: Request to join
+    Platform->>User: Requires specific VC
+    User->>SYR: Select credential
+    SYR->>SYR: Build Verifiable Presentation
+    SYR->>Platform: Present VP
+    Platform->>SYR: Verify credential<br/>(check signature + status)
+    Platform->>User: Access granted
 ```
 
 ### 5. Verifiable Credentials Data Model
 
 ```mermaid
 erDiagram
-    USER ||--o{ CREDENTIAL : "is subject of"
+    USER ||--o{ CREDENTIAL : "holds"
     CREDENTIAL }o--|| ISSUER : "issued by"
     CREDENTIAL ||--o{ PROOF : "proven by"
-    CREDENTIAL ||--o{ PRESENTATION : "included in"
 
     CREDENTIAL {
         string id PK
@@ -252,14 +289,6 @@ erDiagram
         string proof_purpose
     }
 
-    PRESENTATION {
-        string id PK
-        string holder_did
-        array verifiable_credentials
-        json proof
-        datetime created_at
-    }
-
     ISSUER {
         string did PK
         string name
@@ -268,64 +297,52 @@ erDiagram
     }
 ```
 
-### 6. OAuth 2.0 Integration Flow
+### 6. Identity-Based Login Flow
+
+Third-party platforms authenticate users through their SYR instance. Instead of generic OAuth, users enter their instance name and username (or DID), which is resolved via the registry to locate their SYR instance.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Service as Third-party Service
-    participant SYR as SYR OAuth Provider
-    participant SDK as SYR SDK
+    participant Platform as Third-party Platform
+    participant Registry as DID Registry
+    participant SYR as User's SYR Instance
 
-    Service->>SYR: Register OAuth Client<br/>(get client_id + secret)
+    User->>Platform: Enter instance + username<br/>or DID
+    Platform->>Registry: Resolve DID<br/>(did:syr → instance URL)
+    Registry->>Platform: Instance endpoint
 
-    User->>Service: Initiate Login
-    Service->>SYR: Redirect to /oauth/authorize
-    SYR->>User: Show Consent Screen
-    User->>SYR: Approve Access
-    SYR->>Service: Redirect with auth_code
-    Service->>SYR: Exchange code for token<br/>POST /oauth/token
-    SYR->>Service: Return access_token
+    Platform->>SYR: Request auth challenge
+    SYR->>User: Prompt for login<br/>(password for hosted keys)
+    User->>SYR: Authenticate
+    SYR->>SYR: Verify credentials
+    SYR->>Platform: Issue identity token
+    Platform->>Platform: Establish session
+    Platform->>User: Authenticated
 
-    Note over Service,SDK: Service can now interact
-
-    Service->>SDK: Initialize with token
-    SDK->>SYR: POST /api/events/emit<br/>(user actions)
-    SYR->>SYR: Generate Digital Proof
-    SYR->>SYR: Issue VC (optional)
+    Note over User,SYR: Future: signing challenge<br/>for offloaded keys
 ```
 
-### 7. OAuth Data Model
+### 7. Identity-Based Auth Data Model
 
 ```mermaid
 erDiagram
-    OAUTH_CLIENT ||--o{ AUTHORIZATION_CODE : generates
-    OAUTH_CLIENT ||--o{ ACCESS_TOKEN : issues
-    USER ||--o{ AUTHORIZATION_CODE : authorizes
-    USER ||--o{ ACCESS_TOKEN : owns
+    AUTH_CLIENT ||--o{ AUTH_TOKEN : issues
+    USER ||--o{ AUTH_TOKEN : owns
 
-    OAUTH_CLIENT {
+    AUTH_CLIENT {
         string client_id PK
-        string client_secret
+        string instance_url
         string name
-        array redirect_uris
         array scopes
         datetime created_at
     }
 
-    AUTHORIZATION_CODE {
-        string code PK
-        string client_id FK
-        string user_id FK
-        string redirect_uri
-        array scopes
-        datetime expires_at
-    }
-
-    ACCESS_TOKEN {
+    AUTH_TOKEN {
         string token PK
         string client_id FK
         string user_id FK
+        string did
         array scopes
         datetime expires_at
         datetime created_at
@@ -358,10 +375,11 @@ graph LR
         SeaweedFS[(SeaweedFS<br/>S3 Storage)]
     end
 
-    subgraph "Protocols"
+    subgraph "Protocols & Standards"
         AP_Proto[ActivityPub]
         VC_Proto[W3C VC 2.0]
-        OAuth_Proto[OAuth 2.0]
+        DID_Proto[did:syr Method]
+        SSI[Self-Sovereign Identity]
     end
 
     subgraph "Build Tools"
@@ -382,7 +400,7 @@ graph LR
     SK_API --> SeaweedFS
     SK_API --> AP_Proto
     SK_API --> VC_Proto
-    SK_API --> OAuth_Proto
+    SK_API --> DID_Proto
 
     SvelteKit --> Vite
     pnpm --> Turbo
@@ -390,13 +408,15 @@ graph LR
 
 ## Authentication & Authorization Flow
 
+SYR uses username/password authentication for users with server-hosted keys. Sessions are managed via JWT tokens.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Unauthenticated
 
     Unauthenticated --> Registering: Register
     Registering --> Unauthenticated: Cancel
-    Registering --> Authenticated: Success
+    Registering --> Authenticated: Success<br/>(identity created server-side)
 
     Unauthenticated --> LoggingIn: Login
     LoggingIn --> Unauthenticated: Failure
@@ -411,6 +431,8 @@ stateDiagram-v2
     note right of Authenticated
         JWT token stored
         Session validated
+        Identity operations signed
+        server-side with hosted keys
     end note
 ```
 
@@ -427,23 +449,24 @@ flowchart TB
     Validate -->|Valid| Auth{Check Auth}
 
     Auth -->|Unauthorized| Error401[Return 401 Error]
-    Auth -->|Authorized| Business[Business Logic]
+    Auth -->|Authorized| Tenant{Check Tenant<br/>Scope}
+
+    Tenant -->|Wrong Tenant| Error403[Return 403 Error]
+    Tenant -->|Valid| Business[Business Logic]
 
     Business --> DB[SurrealDB Query]
     DB --> Transform[Transform Data]
     Transform --> Response[Return Response]
 
     Business -.->|If federated| Federation[ActivityPub Delivery]
-    Business -.->|If credential| VCIssue[Issue VC]
+    Business -.->|If signed| Sign[Server-Side Signing<br/>with Hosted Keys]
 
     Federation --> Queue[Delivery Queue]
-    Queue --> Remote[Remote Servers]
-
-    VCIssue --> Sign[Sign with DID]
-    Sign --> Store[Store Credential]
+    Queue --> Remote[Other SYR Instances]
 
     style Validate fill:#fff3cd
     style Auth fill:#fff3cd
+    style Tenant fill:#fff3cd
     style Business fill:#d1ecf1
 ```
 
@@ -459,17 +482,19 @@ graph TD
     D -->|No| C
     D -->|Yes| E{User Exists?}
     E -->|No| C
-    E -->|Yes| F{Permissions OK?}
+    E -->|Yes| F{Tenant Scope OK?}
     F -->|No| G[Return 403]
-    F -->|Yes| H[Process Request]
+    F -->|Yes| H{Permissions OK?}
+    H -->|No| G
+    H -->|Yes| I[Process Request]
 ```
 
 ### 2. Federation Security
 
 ```mermaid
 sequenceDiagram
-    participant Remote
-    participant SYR
+    participant Remote as Remote SYR Instance
+    participant SYR as Local SYR Instance
     participant Verifier
     participant DB
 
@@ -514,6 +539,13 @@ SYR uses Argon2id, the winner of the Password Hashing Competition, for password 
 - OWASP recommended
 - Native Rust bindings for Node.js (@node-rs/argon2) - extremely fast
 
+### 4. Key Management Security
+
+- **Server-hosted keys**: Root identity keys are generated and stored server-side, encrypted at rest
+- **No default export**: Keys remain on the SYR instance unless the user explicitly requests export
+- **Audit trail**: All key operations (generation, delegation, export, revocation) are logged
+- **Delegated keys**: Device-specific keys can be delegated from the root key for multi-device access
+
 ## Package Architecture
 
 ```mermaid
@@ -521,15 +553,18 @@ graph TB
     subgraph "Monorepo Structure"
         subgraph "apps/"
             App[syr<br/>Main SvelteKit App]
+            Docs[docs<br/>Documentation Site]
         end
 
         subgraph "packages/"
             Types[types<br/>@syr-is/types<br/>Zod Schemas]
+            Crypto[crypto<br/>@syr-is/crypto<br/>Ed25519 Operations]
             SDK[syr-sdk<br/>@syr-is/sdk<br/>Integration Library]
         end
     end
 
     App --> Types
+    App --> Crypto
     SDK --> Types
 
     subgraph "External Consumers"
@@ -547,19 +582,19 @@ graph TB
         Web[SYR Web<br/>SvelteKit Container]
         DB[(SurrealDB<br/>Container)]
         S3[(SeaweedFS<br/>S3-compatible Storage)]
-        MCP[MCP Servers<br/>Tooling]
     end
 
     subgraph "External"
-        Users[Users]
-        Federation[Federated Servers]
+        Users[Instance Users]
+        Federation[Other SYR Instances]
+        ThirdParty[Third-party Platforms<br/>Identity-Based Login]
     end
 
     Users --> Web
     Federation --> Web
+    ThirdParty --> Web
     Web --> DB
     Web --> S3
-    Web --> MCP
 
     style DB fill:#ffe1f5
     style S3 fill:#d4edda
@@ -574,22 +609,28 @@ sequenceDiagram
     participant Dev as Developer
     participant Service as Service App
     participant SDK as @syr-is/sdk
-    participant SYR as SYR Platform
+    participant SYR as SYR Instance
 
-    Dev->>SYR: Register OAuth Client
-    SYR->>Dev: client_id + client_secret
+    Dev->>SYR: Register as auth client
+    SYR->>Dev: client_id
 
     Dev->>Service: Install @syr-is/sdk
     Dev->>Service: Initialize SyrClient
+
+    Note over Service: User wants to log in
+
+    Service->>SDK: client.auth.login(did)
+    SDK->>SYR: Resolve DID + request auth
+    SYR->>SYR: Authenticate user
+    SYR->>SDK: Identity token
+    SDK->>Service: User authenticated
 
     Note over Service: User performs action
 
     Service->>SDK: client.events.emit()
     SDK->>SDK: Validate with Zod
     SDK->>SYR: POST /api/events
-    SYR->>SYR: Generate Proof
-    SYR->>SDK: Success
-    SDK->>Service: Event recorded
+    SYR->>SDK: Event recorded
 ```
 
 ## Future Considerations
@@ -608,26 +649,24 @@ graph LR
     style D fill:#d4edda
 ```
 
-### Federation Network Effect
+### Federation Network
 
 ```mermaid
 graph TD
-    SYR[SYR Instance]
-    M1[Mastodon Instance]
-    M2[Pixelfed Instance]
-    P1[Pleroma Instance]
-    SYR2[Another SYR Instance]
+    SYR1[SYR Instance A]
+    SYR2[SYR Instance B]
+    SYR3[SYR Instance C]
+    SYR4[SYR Instance D]
 
-    SYR <--> M1
-    SYR <--> M2
-    SYR <--> P1
-    SYR <--> SYR2
-    M1 <--> M2
-    M1 <--> P1
-    SYR2 <--> M2
+    SYR1 <--> SYR2
+    SYR1 <--> SYR3
+    SYR2 <--> SYR4
+    SYR3 <--> SYR4
 
-    style SYR fill:#0d6efd,color:#fff
+    style SYR1 fill:#0d6efd,color:#fff
     style SYR2 fill:#0d6efd,color:#fff
+    style SYR3 fill:#0d6efd,color:#fff
+    style SYR4 fill:#0d6efd,color:#fff
 ```
 
 ## Implementation Phases
@@ -639,24 +678,30 @@ gantt
     section Foundation
     Architecture Doc           :done, arch, 2025-01-01, 1d
     Types Package             :active, types, after arch, 2d
-    Docker Setup              :docker, after types, 2d
+    Crypto Package            :crypto, after types, 2d
+    Docker Setup              :docker, after crypto, 2d
 
-    section Core Features
+    section Core Identity
     SurrealDB Integration     :db, after docker, 2d
     User Auth System          :auth, after db, 3d
-    Profile System            :profile, after auth, 3d
+    Identity Manager          :idm, after auth, 4d
+    Profile System            :profile, after idm, 3d
 
     section Federation
     ActivityPub Foundation    :ap, after profile, 5d
-    Federation Logic          :fed, after ap, 4d
+    SYR-to-SYR Federation    :fed, after ap, 4d
 
     section Credentials
-    VC Data Model            :vc, after profile, 4d
-    Proof Storage            :proof, after vc, 3d
+    VC Storage Model         :vc, after profile, 4d
+    VC Presentation          :vp, after vc, 3d
 
-    section Integration
-    OAuth Provider           :oauth, after auth, 4d
-    Integration SDK          :sdk, after oauth, 3d
+    section Identity-Based Auth
+    Auth Protocol            :ida, after auth, 4d
+    SDK Integration          :sdk, after ida, 3d
+
+    section Multi-Tenancy
+    Tenant Model             :tenant, after db, 3d
+    Tenant Isolation         :iso, after tenant, 4d
 
     section UI
     shadcn-svelte Setup      :ui, after auth, 2d
@@ -665,32 +710,29 @@ gantt
 
 ## Glossary
 
-- **ActivityPub**: W3C standard for decentralized social networking
+- **Self-Sovereign Identity (SSI)**: Identity model where the individual controls their own identity without relying on a central authority
 - **DID**: Decentralized Identifier - a portable, cryptographically verifiable identifier
-- **did:web**: DNS-based DID method (e.g., `did:web:example.com`) - no blockchain required
-- **VC**: Verifiable Credential - a tamper-evident credential in W3C format
-- **VP**: Verifiable Presentation - a collection of VCs shared for verification
+- **did:syr**: SYR's DID method — key-anchored, registry-resolved, provider-portable
+- **Root Key**: Ed25519 keypair that anchors a user's identity — managed server-side, exportable on demand
+- **Delegated Key**: Device-specific key authorized by the root key for multi-device access
+- **VC**: Verifiable Credential - a credential others issue to you, linked to your identity (W3C VC 2.0 format)
+- **VP**: Verifiable Presentation - a collection of VCs shared for verification when joining platforms
+- **Identity-Based Login**: Authentication where users enter their SYR instance + username/DID to log into third-party platforms
+- **Multi-Tenancy**: A single SYR instance managing isolated identity pools for multiple organizations
+- **ActivityPub**: W3C standard for decentralized social networking — used for SYR-to-SYR federation
 - **HTTP Signatures**: Authentication mechanism for ActivityPub federation
 - **WebFinger**: Protocol for discovering information about people/resources
-- **OAuth 2.0**: Industry-standard protocol for authorization
 - **SurrealDB**: Multi-model database supporting document, graph, and relational models
 - **SeaweedFS**: Distributed S3-compatible object storage for files, images, and media
 - **Zod**: TypeScript-first schema validation library (v4)
-- **MCP**: Model Context Protocol - enables AI tools to interact with development environment
-- **SurrealMCP**: Official SurrealDB MCP server for database access from AI tools
-- **Svelte MCP**: Official Svelte MCP server for component and route management
 
 ## References
 
+- [W3C Decentralized Identifiers (DIDs)](https://www.w3.org/TR/did-core/)
+- [W3C Verifiable Credentials Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
 - [ActivityPub Specification](https://www.w3.org/TR/activitypub/)
 - [WebFinger RFC 7033](https://datatracker.ietf.org/doc/html/rfc7033)
-- [W3C Verifiable Credentials Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
-- [W3C Decentralized Identifiers (DIDs)](https://www.w3.org/TR/did-core/)
-- [OAuth 2.0 RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749)
 - [SurrealDB Documentation](https://surrealdb.com/docs)
-- [SurrealMCP](https://surrealdb.com/mcp)
-- [Svelte MCP](https://svelte.dev/docs/mcp/overview)
 - [SeaweedFS Documentation](https://github.com/seaweedfs/seaweedfs)
 - [Zod v4 Documentation](https://zod.dev)
-- [Zod Codecs](https://zod.dev/codecs)
 - [SYR Vision](https://www.syr.is/)

@@ -15,8 +15,8 @@ export * from './user.js';
 // ActivityPub types
 export * from './activitypub.js';
 
-// OAuth types
-export * from './oauth.js';
+// Identity-Based Auth types (replaces OAuth)
+export * from './identity-auth.js';
 
 // Event types
 export * from './events.js';
@@ -35,3 +35,12 @@ export * from './folders.js';
 
 // KV (Key-Value) types
 export * from './kv.js';
+
+// Identity types
+export * from './identity.js';
+
+// Tenant types
+export * from './tenant.js';
+
+// Registry (DID hosting record) types
+export * from './registry.js';

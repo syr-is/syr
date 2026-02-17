@@ -41,3 +41,6 @@ s3/data/
 logs/
 
 *.tsbuildinfo
+
+.svelte-kit
+.pnpm-store

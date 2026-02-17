@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { BaseEntitySchema, MetadataSchema, TimestampSchema, RecordIdSchema } from './common.js';
+import {
+	BaseEntitySchema,
+	MetadataSchema,
+	TimestampSchema,
+	RecordIdSchema,
+	DidSyrSchema
+} from './common.js';
 
 /**
  * User Role Schema
@@ -23,6 +29,7 @@ export const UserSchema = BaseEntitySchema.extend({
 			'Username can only contain letters, numbers, underscores, and hyphens'
 		),
 	password_hash: z.string(),
+	did: DidSyrSchema.optional(), // Optional for backward compat; set during identity creation
 	role: UserRoleSchema.default('USER') // Instance-level role for access control
 });
 

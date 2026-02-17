@@ -83,7 +83,7 @@ The SYR platform runs with three main services:
 
 Development watch mode provides:
 
-- **Hot Module Reload**: Changes to `apps/syr/src/**` sync instantly
+- **Hot Module Reload**: Changes to `apps/syr/app/src/**` sync instantly
 - **Types Sync**: Changes to `packages/types/src/**` sync automatically
 - **Auto Rebuild**: Dependency changes trigger container rebuild
 

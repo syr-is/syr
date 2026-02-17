@@ -1,0 +1,7 @@
+@import '@syr-is/ui/styles';
+
+/* Registry client layout: full-height constrained viewport */
+html,
+body {
+	@apply h-full overflow-hidden;
+}

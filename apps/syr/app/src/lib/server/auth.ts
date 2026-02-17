@@ -1,0 +1,82 @@
+import jwt, { type SignOptions } from 'jsonwebtoken';
+import { hash, verify } from '@node-rs/argon2';
+import { jwt as jwtConfig } from '$lib/config';
+
+/**
+ * Argon2id configuration
+ * OWASP recommended settings
+ */
+const ARGON2_OPTIONS = {
+	memoryCost: 65536, // 64 MiB
+	timeCost: 3, // 3 iterations
+	parallelism: 4 // 4 threads
+};
+
+/**
+ * Hash a password using Argon2id
+ */
+export async function hashPassword(password: string): Promise<string> {
+	return hash(password, ARGON2_OPTIONS);
+}
+
+/**
+ * Verify a password against its hash
+ */
+export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+	try {
+		return await verify(hash, password, ARGON2_OPTIONS);
+	} catch (error) {
+		console.error('Password verification error:', error);
+		return false;
+	}
+}
+
+/**
+ * JWT Payload
+ */
+export interface JWTPayload {
+	userId: string;
+	sessionId: string;
+}
+
+/**
+ * Generate JWT access token
+ * @param payload - Token payload (userId, sessionId)
+ * @param expiresIn - Optional override for token expiry (e.g. '3600s', '1h')
+ */
+export function generateAccessToken(payload: JWTPayload, expiresIn?: string): string {
+	return jwt.sign(payload, jwtConfig.secret, {
+		expiresIn: expiresIn ?? jwtConfig.expiresIn,
+		issuer: 'syr',
+		audience: 'syr-api'
+	} as SignOptions);
+}
+
+/**
+ * Verify and decode JWT token
+ */
+export function verifyAccessToken(token: string): JWTPayload | null {
+	try {
+		const decoded = jwt.verify(token, jwtConfig.secret, {
+			issuer: 'syr',
+			audience: 'syr-api'
+		}) as JWTPayload;
+		return decoded;
+	} catch (error) {
+		console.error('JWT verification error:', error);
+		return null;
+	}
+}
+
+/**
+ * Extract user ID from JWT token in request
+ */
+export function getUserIdFromToken(authHeader: string | null): string | null {
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		return null;
+	}
+
+	const token = authHeader.substring(7);
+	const payload = verifyAccessToken(token);
+	return payload?.userId ?? null;
+}

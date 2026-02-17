@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseEntitySchema } from './common.js';
+import { BaseEntitySchema, RecordIdSchema } from './common.js';
 
 /**
  * ActivityPub Actor Types
@@ -218,7 +218,7 @@ export type WebFingerResource = z.infer<typeof WebFingerResourceSchema>;
  * Internal representation of actors in SurrealDB
  */
 export const DBActorSchema = BaseEntitySchema.extend({
-	user_id: z.uuid(),
+	user_id: RecordIdSchema,
 	actor_type: ActorTypeSchema,
 	inbox_url: z.url(),
 	outbox_url: z.url(),
@@ -234,8 +234,8 @@ export type DBActor = z.infer<typeof DBActorSchema>;
  * Follower Relationship Schema
  */
 export const FollowerSchema = BaseEntitySchema.extend({
-	actor_id: z.uuid(),
-	follower_actor_id: z.uuid(),
+	actor_id: RecordIdSchema,
+	follower_actor_id: RecordIdSchema,
 	follower_actor_url: z.url(),
 	status: z.enum(['pending', 'accepted', 'rejected'])
 });
@@ -246,8 +246,8 @@ export type Follower = z.infer<typeof FollowerSchema>;
  * Following Relationship Schema
  */
 export const FollowingSchema = BaseEntitySchema.extend({
-	actor_id: z.uuid(),
-	following_actor_id: z.uuid(),
+	actor_id: RecordIdSchema,
+	following_actor_id: RecordIdSchema,
 	following_actor_url: z.url(),
 	status: z.enum(['pending', 'accepted', 'rejected'])
 });
@@ -263,7 +263,7 @@ export const StoredActivitySchema = BaseEntitySchema.pick({
 	created_at: true
 }).extend({
 	activity_id: z.url(),
-	actor_id: z.uuid(),
+	actor_id: RecordIdSchema,
 	type: ActivityTypeSchema,
 	object: z.record(z.string(), z.any()),
 	published: z.iso.datetime(),
