@@ -36,4 +36,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@syr-is/ui
       - run: pnpm build
