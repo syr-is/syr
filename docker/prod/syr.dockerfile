@@ -33,8 +33,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build the syr app and its dependencies
-RUN pnpm --filter @syr-is/syr build
+# Build the syr app and its dependencies (e.g. @syr-is/ui dist)
+RUN pnpm --filter "@syr-is/syr..." build
 
 # Prune dev dependencies - keep only production dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
