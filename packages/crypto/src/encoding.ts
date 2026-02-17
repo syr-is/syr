@@ -61,6 +61,32 @@ export function decodePublicKey(encoded: string): Uint8Array {
 }
 
 /**
+ * Decode a multibase-encoded Ed25519 private key to 32 raw bytes.
+ * Strips the multicodec prefix (0xed 0x01) if present.
+ *
+ * @param encoded - Multibase string (e.g. from identity storage).
+ * @returns 32-byte Ed25519 private key.
+ * @throws If decoding fails or the result is not 32 bytes.
+ */
+export function decodePrivateKey(encoded: string): Uint8Array {
+  const bytes = decodeMultibase(encoded);
+  let raw: Uint8Array = bytes;
+  if (
+    bytes.length === 34 &&
+    bytes[0] === ED25519_MULTICODEC_PREFIX[0] &&
+    bytes[1] === ED25519_MULTICODEC_PREFIX[1]
+  ) {
+    raw = bytes.slice(2);
+  }
+  if (raw.length !== 32) {
+    throw new Error(
+      `Invalid private key length: expected 32 bytes (Ed25519), got ${raw.length} after decoding.`,
+    );
+  }
+  return raw;
+}
+
+/**
  * Derive a did:syr identifier from an Ed25519 public key.
  *
  * Process:

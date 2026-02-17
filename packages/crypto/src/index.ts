@@ -16,6 +16,7 @@ export {
   encodeMultibase,
   decodeMultibase,
   decodePublicKey,
+  decodePrivateKey,
   deriveDid,
   ED25519_MULTICODEC_PREFIX,
 } from "./encoding.js";

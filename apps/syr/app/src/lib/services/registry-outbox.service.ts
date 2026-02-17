@@ -1,11 +1,5 @@
 import { OutboxService } from '$lib/services/outbox.service';
-import {
-	sign,
-	canonicalize,
-	encodeMultibase,
-	decodeMultibase,
-	ED25519_MULTICODEC_PREFIX
-} from '@syr-is/crypto';
+import { sign, canonicalize, encodeMultibase, decodePrivateKey } from '@syr-is/crypto';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { registryRepository } from '$lib/repositories/registry.repository';
 import type { OutboxEntry } from '$lib/repositories/outbox.repository';
@@ -51,14 +45,7 @@ class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 			throw new Error(`Cannot sign: no private key found for ${did}`);
 		}
 
-		// Decode private key from multibase (strip multicodec prefix)
-		const privateKeyBytes = decodeMultibase(identity.private_key);
-		const rawPrivateKey =
-			privateKeyBytes.length === 34 &&
-			privateKeyBytes[0] === ED25519_MULTICODEC_PREFIX[0] &&
-			privateKeyBytes[1] === ED25519_MULTICODEC_PREFIX[1]
-				? privateKeyBytes.slice(2)
-				: privateKeyBytes;
+		const rawPrivateKey = decodePrivateKey(identity.private_key);
 
 		// Build the canonical payload
 		const updatedAt = new Date().toISOString();
@@ -97,14 +84,7 @@ class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 			throw new Error(`Cannot sign: no private key found for ${did}`);
 		}
 
-		// Decode private key from multibase (strip multicodec prefix)
-		const privateKeyBytes = decodeMultibase(identity.private_key);
-		const rawPrivateKey =
-			privateKeyBytes.length === 34 &&
-			privateKeyBytes[0] === ED25519_MULTICODEC_PREFIX[0] &&
-			privateKeyBytes[1] === ED25519_MULTICODEC_PREFIX[1]
-				? privateKeyBytes.slice(2)
-				: privateKeyBytes;
+		const rawPrivateKey = decodePrivateKey(identity.private_key);
 
 		// Build the canonical payload
 		const deletedAt = new Date().toISOString();
