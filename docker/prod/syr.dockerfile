@@ -26,8 +26,13 @@ RUN pnpm install --frozen-lockfile
 # ---- Builder Stage ----
 FROM base AS builder
 
-# Copy dependencies from deps stage (pnpm hoists to root, workspace symlinks in node_modules)
+# Copy dependencies from deps stage (root store + per-package node_modules with .bin)
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/syr/app/node_modules ./apps/syr/app/node_modules
+COPY --from=deps /app/packages/crypto/node_modules ./packages/crypto/node_modules
+COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
+COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
+COPY --from=deps /app/packages/did/node_modules ./packages/did/node_modules
 
 # Copy application source (required for build; packages/ui source needed to produce dist)
 COPY apps/syr ./apps/syr
