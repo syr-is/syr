@@ -44,9 +44,12 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
-	// Current folder state - initialize from server data
-	let currentFolderId = $state<string | null>(data.initialFolderId ?? null);
+	// Current folder state - sync from server data when it changes
+	let currentFolderId = $state<string | null>(null);
 	let breadcrumbs = $state<Array<{ id: string; name: string }>>([]);
+	$effect(() => {
+		currentFolderId = data.initialFolderId ?? null;
+	});
 
 	// Show toast if path was invalid
 	$effect(() => {

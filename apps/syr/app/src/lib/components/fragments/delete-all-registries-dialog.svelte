@@ -38,8 +38,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Remove from all registries</Dialog.Title>
 			<Dialog.Description>
-				Delete your identity from ALL registries? This cannot be undone. Deletion requests will be queued
-				for each registry.
+				Delete your identity from ALL registries? This cannot be undone. Deletion requests will be
+				queued for each registry.
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>

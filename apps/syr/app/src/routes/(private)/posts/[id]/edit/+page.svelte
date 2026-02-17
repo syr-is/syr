@@ -49,10 +49,13 @@
 	let typeSwitchDialogOpen = $state(false);
 	let typeSwitchTarget = $state<'blog' | 'media' | null>(null);
 
-	// Media post state
-	let mediaUrls = $state<string[]>(data.post.media_urls ?? []);
-	// Mime type map: pre-populated from server for existing URLs, updated during upload
-	let mediaMimeTypes = $state<Record<string, string>>(data.mediaUrlMimeTypes ?? {});
+	// Media post state — sync from server data when it changes
+	let mediaUrls = $state<string[]>([]);
+	let mediaMimeTypes = $state<Record<string, string>>({});
+	$effect(() => {
+		mediaUrls = data.post.media_urls ?? [];
+		mediaMimeTypes = data.mediaUrlMimeTypes ?? {};
+	});
 	let uploadingCount = $state(0);
 	const uploading = $derived(uploadingCount > 0);
 

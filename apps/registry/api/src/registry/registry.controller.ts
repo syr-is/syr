@@ -14,7 +14,10 @@ export class RegistryController {
 	 * Returns the latest hosting record for a DID.
 	 */
 	@Get('resolve/:did')
-	@ApiOperation({ summary: 'Resolve DID', description: 'Returns the latest hosting record for a DID.' })
+	@ApiOperation({
+		summary: 'Resolve DID',
+		description: 'Returns the latest hosting record for a DID.'
+	})
 	@ApiParam({ name: 'did', example: 'did:syr:z6Mk...' })
 	@ApiResponse({ status: 200, description: 'Hosting record found' })
 	@ApiResponse({ status: 400, description: 'Invalid DID format' })
@@ -47,7 +50,7 @@ export class RegistryController {
 	@ApiOperation({
 		summary: 'Update hosting record',
 		description:
-			'Submit a signed hosting record to register or update a DID\'s provider. Signature is verified against the public key embedded in the DID.'
+			"Submit a signed hosting record to register or update a DID's provider. Signature is verified against the public key embedded in the DID."
 	})
 	@ApiBody({ type: UpdateRecordDto })
 	@ApiResponse({ status: 200, description: 'Record updated successfully' })
@@ -85,7 +88,7 @@ export class RegistryController {
 	@ApiOperation({
 		summary: 'Delete hosting record',
 		description:
-			'Submit a signed deletion request to remove a DID\'s hosting record. Signature is verified against the public key embedded in the DID.'
+			"Submit a signed deletion request to remove a DID's hosting record. Signature is verified against the public key embedded in the DID."
 	})
 	@ApiBody({ type: DeleteRecordDto })
 	@ApiResponse({ status: 200, description: 'Record deleted successfully' })

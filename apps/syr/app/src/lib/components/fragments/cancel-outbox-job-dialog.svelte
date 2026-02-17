@@ -44,9 +44,7 @@
 	<Dialog.Content class="max-w-sm">
 		<Dialog.Header>
 			<Dialog.Title>Cancel sync job</Dialog.Title>
-			<Dialog.Description>
-				Cancel this outbox job? The sync will not be retried.
-			</Dialog.Description>
+			<Dialog.Description>Cancel this outbox job? The sync will not be retried.</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)} disabled={cancelling}>Keep</Button>

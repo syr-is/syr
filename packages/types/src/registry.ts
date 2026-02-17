@@ -24,9 +24,7 @@ export const UpdateRecordSchema = z
 		did: didSyr.describe('DID to register or update'),
 		provider: z.string().url().describe('Hosting provider URL'),
 		updatedAt: isoTimestamp.describe('ISO-8601 timestamp'),
-		signature: signature.describe(
-			'Ed25519 signature over canonical { did, provider, updatedAt }'
-		)
+		signature: signature.describe('Ed25519 signature over canonical { did, provider, updatedAt }')
 	})
 	.meta({ id: 'UpdateRecord' });
 

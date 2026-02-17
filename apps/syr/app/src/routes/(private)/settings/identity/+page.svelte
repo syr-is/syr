@@ -362,10 +362,7 @@
 	onSuccess={invalidateAll}
 />
 
-<DeleteAllRegistriesDialog
-	bind:open={deleteAllRegistriesDialogOpen}
-	onSuccess={invalidateAll}
-/>
+<DeleteAllRegistriesDialog bind:open={deleteAllRegistriesDialogOpen} onSuccess={invalidateAll} />
 
 <RevokeKeyDialog
 	bind:open={revokeKeyDialogOpen}

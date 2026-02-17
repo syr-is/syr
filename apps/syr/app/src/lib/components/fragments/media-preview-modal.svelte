@@ -38,7 +38,7 @@
 		onOpenShareDialog?: (upload: Upload) => void;
 	} = $props();
 
-	let currentIndex = $state(initialIndex);
+	let currentIndex = $state(0);
 	let albumArtUrl = $state<string | null>(null);
 
 	// URL resolution state for 'file' kind items (need signed URLs)

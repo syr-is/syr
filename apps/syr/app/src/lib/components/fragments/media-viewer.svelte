@@ -15,7 +15,10 @@
 	let { mediaUrls, mediaUrlMimeTypes = {}, defaultMode = 'masonry' }: Props = $props();
 
 	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
-	let currentMode: ViewMode = $state(defaultMode as ViewMode);
+	let currentMode = $state<ViewMode>('masonry');
+	$effect(() => {
+		currentMode = defaultMode as ViewMode;
+	});
 
 	// Gallery preview modal state
 	let previewOpen = $state(false);

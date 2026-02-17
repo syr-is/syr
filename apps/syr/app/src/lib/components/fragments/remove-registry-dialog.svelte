@@ -21,10 +21,9 @@
 
 		removing = true;
 		try {
-			const res = await fetch(
-				`/api/identity/registries/${encodeURIComponent(registry.id)}`,
-				{ method: 'DELETE' }
-			);
+			const res = await fetch(`/api/identity/registries/${encodeURIComponent(registry.id)}`, {
+				method: 'DELETE'
+			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
 				throw new Error(err?.message ?? 'Failed to remove registry');
@@ -45,8 +44,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Remove registry</Dialog.Title>
 			<Dialog.Description>
-				Remove your identity from {registry?.registryUrl ?? 'this registry'}? A deletion request will be
-				queued and sent to the registry.
+				Remove your identity from {registry?.registryUrl ?? 'this registry'}? A deletion request
+				will be queued and sent to the registry.
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>

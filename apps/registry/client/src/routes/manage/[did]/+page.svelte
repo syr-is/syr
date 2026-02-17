@@ -81,11 +81,7 @@ Content-Type: application/json
 						</code>
 					</div>
 				</div>
-				<a
-					href={wellKnownUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-				>
+				<a href={wellKnownUrl} target="_blank" rel="noopener noreferrer">
 					<Button variant="outline" size="sm">
 						<ExternalLink class="mr-1.5 size-4" />
 						View DID Document

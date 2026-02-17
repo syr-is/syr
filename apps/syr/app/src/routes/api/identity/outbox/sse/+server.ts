@@ -21,9 +21,7 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 
 			const send = (event: string, data: unknown) => {
 				try {
-					controller.enqueue(
-						encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-					);
+					controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
 				} catch {
 					// Client disconnected
 				}

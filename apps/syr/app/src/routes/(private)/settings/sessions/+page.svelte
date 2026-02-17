@@ -28,15 +28,20 @@
 		is_current: boolean;
 	};
 
-	const sizes = data.sizes ?? [5, 10, 20];
-	let page = $state(data.page ?? 1);
-	let size = $state(data.size ?? 10);
+	const sizes = $derived(data.sizes ?? [5, 10, 20]);
+	let page = $state(1);
+	let size = $state(10);
+	let pageSizeValue = $state('10');
+
+	$effect(() => {
+		page = data.page ?? 1;
+		size = data.size ?? 10;
+		pageSizeValue = String(data.size ?? 10);
+	});
 
 	let rows = $state<SessionRow[]>([]);
 	let total = $state(0);
 	let loading = $state(false);
-
-	let pageSizeValue = $state(String(data.size ?? 10));
 	$effect(() => {
 		const n = parseInt(pageSizeValue, 10);
 		if ([5, 10, 20].includes(n) && n !== size) size = n;

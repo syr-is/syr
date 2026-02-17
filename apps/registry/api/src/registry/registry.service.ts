@@ -70,12 +70,12 @@ export class RegistryService {
 		const updatedAtDate = new Date(dto.updatedAt);
 		const db = this.dbService.getDb();
 		if (existing) {
-			await db.query(
+			const result = await db.query(
 				`UPDATE hosting_record SET
           provider = $provider,
           updated_at = $updatedAt,
           signature = $signature
-        WHERE did = $did`,
+        WHERE did = $did AND updated_at < $updatedAt`,
 				{
 					did: dto.did,
 					provider: dto.provider,
@@ -83,6 +83,12 @@ export class RegistryService {
 					signature: dto.signature
 				}
 			);
+			const updated = result[0] ?? [];
+			if (!Array.isArray(updated) || updated.length === 0) {
+				throw new Error(
+					'Stale update: record was modified by a concurrent request; updatedAt must be strictly newer'
+				);
+			}
 		} else {
 			await db.query(
 				`CREATE hosting_record SET
