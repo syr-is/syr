@@ -36,6 +36,7 @@
 		"vite": "^7.1.7"
 	},
 	"dependencies": {
+		"@lucide/svelte": "^0.564.0",
 		"@syr-is/ui": "workspace:*",
 		"svelte-sonner": "^1.0.5"
 	}

@@ -31,6 +31,5 @@
 	{...restProps}
 >
 	<PanelLeftIcon />
-	LOL
 	<span class="sr-only">Toggle Sidebar</span>
 </Button>

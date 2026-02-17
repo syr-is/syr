@@ -66,6 +66,8 @@ export class RegistryService {
 		}
 
 		// 6. Upsert the hosting record
+		// SurrealDB datetime field expects a Date; DTO provides ISO string
+		const updatedAtDate = new Date(dto.updatedAt);
 		const db = this.dbService.getDb();
 		if (existing) {
 			await db.query(
@@ -77,7 +79,7 @@ export class RegistryService {
 				{
 					did: dto.did,
 					provider: dto.provider,
-					updatedAt: dto.updatedAt,
+					updatedAt: updatedAtDate,
 					signature: dto.signature
 				}
 			);
@@ -91,7 +93,7 @@ export class RegistryService {
 				{
 					did: dto.did,
 					provider: dto.provider,
-					updatedAt: dto.updatedAt,
+					updatedAt: updatedAtDate,
 					signature: dto.signature
 				}
 			);

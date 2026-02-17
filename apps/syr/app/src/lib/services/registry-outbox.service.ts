@@ -68,8 +68,9 @@ class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 		const signatureBytes = await sign(canonicalPayload, rawPrivateKey);
 		const signature = encodeMultibase(signatureBytes);
 
-		// Send to registry
-		const res = await fetch(`${registryUrl}/update`, {
+		// Send to registry (API is at /api/v1/)
+		const base = registryUrl.replace(/\/$/, '');
+		const res = await fetch(`${base}/api/v1/update`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ did, provider, updatedAt, signature })
@@ -113,8 +114,9 @@ class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 		const signatureBytes = await sign(canonicalPayload, rawPrivateKey);
 		const signature = encodeMultibase(signatureBytes);
 
-		// Send to registry
-		const res = await fetch(`${registryUrl}/delete`, {
+		// Send to registry (API is at /api/v1/)
+		const base = registryUrl.replace(/\/$/, '');
+		const res = await fetch(`${base}/api/v1/delete`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ did, deletedAt, signature })

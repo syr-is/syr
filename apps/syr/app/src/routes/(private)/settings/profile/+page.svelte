@@ -47,11 +47,16 @@
 
 	const { form: formData, enhance } = form;
 
-	// Initialize form with current user data
-	$formData.display_name = data.user?.profile?.display_name || '';
-	$formData.bio = data.user?.profile?.bio || '';
-	$formData.avatar_url = data.user?.profile?.avatar_url || '';
-	$formData.banner_url = data.user?.profile?.banner_url || '';
+	// Sync form with current user data when data changes
+	$effect(() => {
+		const user = data.user?.profile;
+		if (user) {
+			$formData.display_name = user.display_name || '';
+			$formData.bio = user.bio || '';
+			$formData.avatar_url = user.avatar_url || '';
+			$formData.banner_url = user.banner_url || '';
+		}
+	});
 </script>
 
 {#if data.user}

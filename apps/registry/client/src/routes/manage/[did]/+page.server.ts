@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 
-const API_BASE = process.env.PUBLIC_REGISTRY_API_URL || 'http://localhost:3100';
+// Relative /api/v1 — proxied via Vite (dev) or reverse proxy (production)
+const API_BASE = '';
 
 export interface HostingRecord {
 	did: string;
@@ -9,13 +10,13 @@ export interface HostingRecord {
 	signature: string;
 }
 
-export async function load({ params }) {
+export async function load({ params, fetch }) {
 	const did = params.did;
 	if (!did?.startsWith('did:syr:')) {
 		throw error(400, 'DID must start with did:syr:');
 	}
 
-	const res = await fetch(`${API_BASE}/resolve/${encodeURIComponent(did)}`);
+	const res = await fetch(`${API_BASE}/api/v1/resolve/${encodeURIComponent(did)}`);
 
 	if (res.status === 404) {
 		return { did, record: null };
@@ -30,6 +31,6 @@ export async function load({ params }) {
 	return {
 		did,
 		record,
-		apiBase: API_BASE
+		apiBase: '/api/v1'
 	};
 }

@@ -36,7 +36,7 @@ class RegistryRepository {
 	 * Remove a registry for an identity.
 	 */
 	async removeRegistry(id: RecordId): Promise<void> {
-		await this.db.query('DELETE $id', { id });
+		await this.db.query('DELETE FROM identity_registry WHERE id = $id', { id });
 	}
 
 	/**

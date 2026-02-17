@@ -1,58 +1,34 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import * as Card from '@syr-is/ui/card';
 	import { buttonVariants } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
 
+	import RemoveRegistryDialog from '$lib/components/fragments/remove-registry-dialog.svelte';
+	import DeleteAllRegistriesDialog from '$lib/components/fragments/delete-all-registries-dialog.svelte';
+	import RevokeKeyDialog from '$lib/components/fragments/revoke-key-dialog.svelte';
+	import ExportKeyDialog from '$lib/components/fragments/export-key-dialog.svelte';
+	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
+
 	let { data }: { data: PageData } = $props();
 	let exportLoading = $state(false);
-	let keyExportLoading = $state(false);
-	let revokingKey = $state<string | null>(null);
 	let newRegistryUrl = $state('');
 	let addingRegistry = $state(false);
-	let removingRegistry = $state<string | null>(null);
 	let retryingJob = $state<string | null>(null);
-	let cancellingJob = $state<string | null>(null);
-	let deletingAll = $state(false);
 
-	async function exportPrivateKey() {
-		if (!data.hasIdentity) return;
-		if (
-			!confirm(
-				'⚠️ WARNING: You are about to download your ROOT PRIVATE KEY.\n\n' +
-					'• Anyone with this key can fully impersonate your identity.\n' +
-					'• Store it in a secure, offline location.\n' +
-					'• After export, YOU are responsible for key custody.\n\n' +
-					'Do you understand and wish to proceed?'
-			)
-		)
-			return;
+	let removeRegistryDialogOpen = $state(false);
+	let registryToRemove = $state<{ id: string; registryUrl: string } | null>(null);
+	let deleteAllRegistriesDialogOpen = $state(false);
+	let revokeKeyDialogOpen = $state(false);
+	let keyToRevoke = $state<string | null>(null);
+	let cancelJobDialogOpen = $state(false);
+	let jobToCancel = $state<string | null>(null);
+	let exportKeyDialogOpen = $state(false);
 
-		keyExportLoading = true;
-		try {
-			const res = await fetch('/api/identity/export-keys', { method: 'POST' });
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Key export failed');
-			}
-			const result = await res.json();
-			const blob = new Blob([JSON.stringify(result.data, null, 2)], {
-				type: 'application/json'
-			});
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `private-key-${timestamp}.json`;
-			a.click();
-			URL.revokeObjectURL(url);
-			toast.success('Private key exported — store it securely!');
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Key export failed');
-		} finally {
-			keyExportLoading = false;
-		}
+	function openExportKeyDialog() {
+		exportKeyDialogOpen = true;
 	}
 
 	async function exportIdentity() {
@@ -83,28 +59,9 @@
 		}
 	}
 
-	async function revokeKey(publicKey: string) {
-		if (!confirm('Revoke this device key? This device will no longer be able to sign mutations.')) {
-			return;
-		}
-		revokingKey = publicKey;
-		try {
-			const res = await fetch('/api/identity/delegate/revoke', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ devicePublicKey: publicKey })
-			});
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Revoke failed');
-			}
-			toast.success('Device key revoked');
-			await invalidateAll();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Revoke failed');
-		} finally {
-			revokingKey = null;
-		}
+	function openRevokeKeyDialog(publicKey: string) {
+		keyToRevoke = publicKey;
+		revokeKeyDialogOpen = true;
 	}
 
 	async function addRegistry() {
@@ -130,46 +87,13 @@
 		}
 	}
 
-	async function removeRegistry(registryId: string) {
-		if (!confirm('Remove this registry listing?')) return;
-		removingRegistry = registryId;
-		try {
-			// Extract the id part after 'identity_registry:'
-			const idPart = registryId.includes(':')
-				? registryId.split(':').slice(1).join(':')
-				: registryId;
-			const res = await fetch(`/api/identity/registries/${encodeURIComponent(idPart)}`, {
-				method: 'DELETE'
-			});
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Failed to remove registry');
-			}
-			toast.success('Registry removal queued');
-			await invalidateAll();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to remove registry');
-		} finally {
-			removingRegistry = null;
-		}
+	function openRemoveRegistryDialog(reg: { id: string; registryUrl: string }) {
+		registryToRemove = { id: reg.id, registryUrl: reg.registryUrl };
+		removeRegistryDialogOpen = true;
 	}
 
-	async function deleteAllRegistries() {
-		if (!confirm('Delete your identity from ALL registries? This cannot be undone.')) return;
-		deletingAll = true;
-		try {
-			const res = await fetch('/api/identity/registries/delete-all', { method: 'POST' });
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Failed');
-			}
-			toast.success('Deletion from all registries queued');
-			await invalidateAll();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed');
-		} finally {
-			deletingAll = false;
-		}
+	function openDeleteAllRegistriesDialog() {
+		deleteAllRegistriesDialogOpen = true;
 	}
 
 	async function retryJob(jobId: string) {
@@ -192,25 +116,9 @@
 		}
 	}
 
-	async function cancelJob(jobId: string) {
-		if (!confirm('Cancel this outbox job?')) return;
-		cancellingJob = jobId;
-		try {
-			const idPart = jobId.includes(':') ? jobId.split(':').slice(1).join(':') : jobId;
-			const res = await fetch(`/api/identity/outbox/${encodeURIComponent(idPart)}/cancel`, {
-				method: 'POST'
-			});
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Cancel failed');
-			}
-			toast.success('Job cancelled');
-			await invalidateAll();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Cancel failed');
-		} finally {
-			cancellingJob = null;
-		}
+	function openCancelJobDialog(job: { id: string }) {
+		jobToCancel = job.id;
+		cancelJobDialogOpen = true;
 	}
 
 	function truncateKey(pubKey: string): string {
@@ -235,6 +143,23 @@
 				return '';
 		}
 	}
+
+	// SSE: subscribe to outbox updates when on this page with identity
+	onMount(() => {
+		if (!data.hasIdentity) return;
+
+		const es = new EventSource('/api/identity/outbox/sse', { withCredentials: true });
+
+		es.addEventListener('outbox', () => {
+			invalidateAll();
+		});
+
+		es.onerror = () => {
+			es.close();
+		};
+
+		return () => es.close();
+	});
 </script>
 
 <div class="space-y-6">
@@ -266,14 +191,10 @@
 					</button>
 					<button
 						class={buttonVariants({ variant: 'destructive' })}
-						onclick={exportPrivateKey}
-						disabled={keyExportLoading}
+						onclick={openExportKeyDialog}
+						disabled={exportKeyDialogOpen}
 					>
-						{#if keyExportLoading}
-							Exporting key...
-						{:else}
-							Export private key
-						{/if}
+						Export private key
 					</button>
 				</div>
 
@@ -295,10 +216,10 @@
 									{#if !key.revokedAt}
 										<button
 											class={buttonVariants({ variant: 'destructive', size: 'sm' })}
-											onclick={() => revokeKey(key.publicKey)}
-											disabled={revokingKey === key.publicKey}
+											onclick={() => openRevokeKeyDialog(key.publicKey)}
+											disabled={revokeKeyDialogOpen && keyToRevoke === key.publicKey}
 										>
-											{revokingKey === key.publicKey ? 'Revoking...' : 'Revoke'}
+											Revoke
 										</button>
 									{/if}
 								</li>
@@ -360,10 +281,10 @@
 								</div>
 								<button
 									class={buttonVariants({ variant: 'destructive', size: 'sm' })}
-									onclick={() => removeRegistry(reg.id)}
-									disabled={removingRegistry === reg.id}
+									onclick={() => openRemoveRegistryDialog(reg)}
+									disabled={removeRegistryDialogOpen && registryToRemove?.id === reg.id}
 								>
-									{removingRegistry === reg.id ? 'Removing...' : 'Remove'}
+									Remove
 								</button>
 							</li>
 						{/each}
@@ -375,10 +296,10 @@
 				{#if data.registries?.length}
 					<button
 						class={buttonVariants({ variant: 'destructive', size: 'sm' })}
-						onclick={deleteAllRegistries}
-						disabled={deletingAll}
+						onclick={openDeleteAllRegistriesDialog}
+						disabled={deleteAllRegistriesDialogOpen}
 					>
-						{deletingAll ? 'Deleting...' : 'Remove from all registries'}
+						Remove from all registries
 					</button>
 				{/if}
 			</Card.Content>
@@ -416,10 +337,10 @@
 										</button>
 										<button
 											class={buttonVariants({ variant: 'destructive', size: 'sm' })}
-											onclick={() => cancelJob(job.id)}
-											disabled={cancellingJob === job.id}
+											onclick={() => openCancelJobDialog(job)}
+											disabled={cancelJobDialogOpen && jobToCancel === job.id}
 										>
-											{cancellingJob === job.id ? 'Cancelling...' : 'Cancel'}
+											Cancel
 										</button>
 									</div>
 								</div>
@@ -434,3 +355,32 @@
 		{/if}
 	{/if}
 </div>
+
+<RemoveRegistryDialog
+	bind:open={removeRegistryDialogOpen}
+	registry={registryToRemove}
+	onSuccess={invalidateAll}
+/>
+
+<DeleteAllRegistriesDialog
+	bind:open={deleteAllRegistriesDialogOpen}
+	onSuccess={invalidateAll}
+/>
+
+<RevokeKeyDialog
+	bind:open={revokeKeyDialogOpen}
+	publicKey={keyToRevoke}
+	onSuccess={invalidateAll}
+/>
+
+<ExportKeyDialog
+	bind:open={exportKeyDialogOpen}
+	hasIdentity={data.hasIdentity}
+	onSuccess={invalidateAll}
+/>
+
+<CancelOutboxJobDialog
+	bind:open={cancelJobDialogOpen}
+	jobId={jobToCancel}
+	onSuccess={invalidateAll}
+/>

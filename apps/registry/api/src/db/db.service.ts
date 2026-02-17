@@ -35,7 +35,7 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS did ON TABLE hosting_record TYPE string
         ASSERT string::starts_with($value, "did:syr:");
       DEFINE FIELD IF NOT EXISTS provider ON TABLE hosting_record TYPE string;
-      DEFINE FIELD IF NOT EXISTS updated_at ON TABLE hosting_record TYPE string;
+      DEFINE FIELD IF NOT EXISTS updated_at ON TABLE hosting_record TYPE datetime;
       DEFINE FIELD IF NOT EXISTS signature ON TABLE hosting_record TYPE string;
       DEFINE FIELD IF NOT EXISTS created_at ON TABLE hosting_record TYPE datetime DEFAULT time::now();
       DEFINE INDEX IF NOT EXISTS idx_hosting_did ON TABLE hosting_record COLUMNS did UNIQUE;

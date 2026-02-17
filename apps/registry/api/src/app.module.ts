@@ -1,10 +1,16 @@
 import { Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { DbService } from './db/db.service';
 import { RegistryController } from './registry/registry.controller';
 import { RegistryService } from './registry/registry.service';
 
 @Module({
-	providers: [DbService, RegistryService],
+	providers: [
+		{ provide: APP_PIPE, useClass: ZodValidationPipe },
+		DbService,
+		RegistryService
+	],
 	controllers: [RegistryController]
 })
 export class AppModule implements OnModuleInit, OnModuleDestroy {

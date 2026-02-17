@@ -1,6 +1,8 @@
 @import "tailwindcss";
-
 @import "tw-animate-css";
+
+/* Scan UI component output for Tailwind classes */
+@source "../dist";
 
 @custom-variant dark (&:is(.dark *));
 

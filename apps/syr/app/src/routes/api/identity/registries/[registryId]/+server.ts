@@ -13,7 +13,11 @@ import { stringToRecordId } from '@syr-is/types';
 export const DELETE: RequestHandler = async ({ locals, params }) => {
 	if (!locals.user) throw error(401, 'Authentication required');
 
-	const registryId = stringToRecordId.decode(`identity_registry:${params.registryId}`);
+	// Accept full "identity_registry:xyz" or just "xyz" for backwards compat
+	const idStr = decodeURIComponent(params.registryId);
+	const registryId = idStr.includes(':')
+		? stringToRecordId.decode(idStr)
+		: stringToRecordId.decode(`identity_registry:${idStr}`);
 	const registry = await registryRepository.findById(registryId);
 
 	if (!registry) throw error(404, 'Registry not found');

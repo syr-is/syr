@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
+	import { Button } from '@syr-is/ui/button';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
 
 	let { data } = $props();
 	const did = $derived(data.did);
@@ -18,6 +20,10 @@ Content-Type: application/json
 		if (s.length <= len) return s;
 		return s.slice(0, len / 2) + '…' + s.slice(-len / 2);
 	}
+
+	const wellKnownUrl = $derived(
+		record ? `${record.provider.replace(/\/$/, '')}/.well-known/did/${encodeURIComponent(did)}` : ''
+	);
 </script>
 
 <div class="container mx-auto max-w-2xl px-4 py-8">
@@ -75,6 +81,16 @@ Content-Type: application/json
 						</code>
 					</div>
 				</div>
+				<a
+					href={wellKnownUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					<Button variant="outline" size="sm">
+						<ExternalLink class="mr-1.5 size-4" />
+						View DID Document
+					</Button>
+				</a>
 			</CardContent>
 		</Card>
 

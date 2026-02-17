@@ -41,3 +41,6 @@ export * from './identity.js';
 
 // Tenant types
 export * from './tenant.js';
+
+// Registry (DID hosting record) types
+export * from './registry.js';

@@ -1,6 +1,4 @@
-export class UpdateRecordDto {
-	did: string;
-	provider: string;
-	updatedAt: string;
-	signature: string;
-}
+import { createZodDto } from 'nestjs-zod';
+import { UpdateRecordSchema } from '@syr-is/types';
+
+export class UpdateRecordDto extends createZodDto(UpdateRecordSchema) {}
