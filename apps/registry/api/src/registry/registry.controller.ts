@@ -9,6 +9,25 @@ import { DeleteRecordDto } from './dto/delete-record.dto';
 export class RegistryController {
 	constructor(private readonly registryService: RegistryService) {}
 
+	/** Detect SurrealDB unique constraint violation (e.g. concurrent first registration). */
+	private static isUniqueConstraintError(error: unknown): boolean {
+		if (error && typeof error === 'object') {
+			if ('code' in error && (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION') {
+				return true;
+			}
+			if ('message' in error) {
+				const msg = String((error as { message: string }).message).toLowerCase();
+				return (
+					msg.includes('unique') ||
+					msg.includes('duplicate') ||
+					msg.includes('already exists') ||
+					msg.includes('constraint')
+				);
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * GET /resolve/:did
 	 * Returns the latest hosting record for a DID.
@@ -55,7 +74,7 @@ export class RegistryController {
 	@ApiBody({ type: UpdateRecordDto })
 	@ApiResponse({ status: 200, description: 'Record updated successfully' })
 	@ApiResponse({ status: 400, description: 'Invalid DID or missing fields' })
-	@ApiResponse({ status: 409, description: 'Stale update (older timestamp)' })
+	@ApiResponse({ status: 409, description: 'Stale update or concurrent registration' })
 	async update(@Body() dto: UpdateRecordDto) {
 		try {
 			const result = await this.registryService.update(dto);
@@ -68,8 +87,22 @@ export class RegistryController {
 			if (message.includes('signature')) {
 				throw new HttpException({ code: 'INVALID_SIGNATURE', message }, HttpStatus.BAD_REQUEST);
 			}
-			if (message.includes('stale') || message.includes('older')) {
+			if (
+				message.includes('stale') ||
+				message.includes('older') ||
+				message.includes('concurrent')
+			) {
 				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
+			}
+			if (RegistryController.isUniqueConstraintError(err)) {
+				throw new HttpException(
+					{
+						code: 'CONFLICT',
+						message:
+							'DID already registered by concurrent request; retry with a fresh resolve for updates'
+					},
+					HttpStatus.CONFLICT
+				);
 			}
 
 			throw new HttpException(

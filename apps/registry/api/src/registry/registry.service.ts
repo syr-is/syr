@@ -90,19 +90,35 @@ export class RegistryService {
 				);
 			}
 		} else {
-			await db.query(
-				`CREATE hosting_record SET
+			try {
+				await db.query(
+					`CREATE hosting_record SET
           did = $did,
           provider = $provider,
           updated_at = $updatedAt,
           signature = $signature`,
-				{
-					did: dto.did,
-					provider: dto.provider,
-					updatedAt: updatedAtDate,
-					signature: dto.signature
+					{
+						did: dto.did,
+						provider: dto.provider,
+						updatedAt: updatedAtDate,
+						signature: dto.signature
+					}
+				);
+			} catch (createErr) {
+				// Concurrent first registration: another request created the record between our resolve() and CREATE
+				const msg = createErr instanceof Error ? createErr.message : String(createErr);
+				if (
+					msg.toLowerCase().includes('unique') ||
+					msg.toLowerCase().includes('duplicate') ||
+					msg.toLowerCase().includes('constraint') ||
+					(createErr as { code?: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION'
+				) {
+					throw new Error(
+						'Concurrent registration: DID was registered by another request; retry with resolve for updates'
+					);
 				}
-			);
+				throw createErr;
+			}
 		}
 
 		return {
