@@ -44,7 +44,8 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
-	// Current folder state - sync from server data when it changes
+	// Current folder state - sync from server data; writable for user navigation (setFolder, etc.)
+	// eslint-disable-next-line svelte/prefer-writable-derived -- need writable for folder navigation
 	let currentFolderId = $state<string | null>(null);
 	let breadcrumbs = $state<Array<{ id: string; name: string }>>([]);
 	$effect(() => {

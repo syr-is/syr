@@ -15,6 +15,8 @@
 	let { mediaUrls, mediaUrlMimeTypes = {}, defaultMode = 'masonry' }: Props = $props();
 
 	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
+	// Writable for bind:mode; $derived would be read-only — init in effect to avoid capturing defaultMode
+	// eslint-disable-next-line svelte/prefer-writable-derived -- need writable for bind:mode
 	let currentMode = $state<ViewMode>('masonry');
 	$effect(() => {
 		currentMode = defaultMode as ViewMode;

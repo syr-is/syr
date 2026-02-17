@@ -202,14 +202,25 @@ export class IdentityRepository extends BaseRepository<Identity> {
 			query += `;`;
 		}
 
-		// Create identity record
-		await this.db.query(query, queryParams);
+		try {
+			// Create identity record
+			await this.db.query(query, queryParams);
 
-		// Update user with DID
-		await this.db.query(`UPDATE $userId SET did = $did;`, {
-			userId,
-			did
-		});
+			// Update user with DID
+			await this.db.query(`UPDATE $userId SET did = $did;`, {
+				userId,
+				did
+			});
+		} catch (error) {
+			console.error('[identity.repository] Error during server-side identity creation:', error);
+			// Rollback: remove identity if user update failed (identity exists but user.did unset)
+			try {
+				await this.db.query(`DELETE identity WHERE did = $did;`, { did });
+			} catch (rollbackError) {
+				console.error('[identity.repository] Rollback failed:', rollbackError);
+			}
+			throw error;
+		}
 	}
 }
 
