@@ -24,22 +24,25 @@ COPY packages/did/package.json ./packages/did/
 RUN pnpm install --frozen-lockfile
 
 # ---- Builder Stage ----
-FROM base AS builder
+FROM deps AS builder
 
-# Copy dependencies from deps stage (root store + per-package node_modules with .bin)
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/syr/app/node_modules ./apps/syr/app/node_modules
-COPY --from=deps /app/packages/crypto/node_modules ./packages/crypto/node_modules
-COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
-COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
-COPY --from=deps /app/packages/did/node_modules ./packages/did/node_modules
-
-# Copy application source (required for build; packages/ui source needed to produce dist)
+# Copy application source (overlays on top of deps, preserving node_modules)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build the syr app and its dependencies (e.g. @syr-is/ui dist)
-RUN pnpm --filter "@syr-is/syr..." build
+# Build workspace dependency packages (produces dist/ in each)
+RUN pnpm --filter "@syr-is/syr..." --filter "!@syr-is/syr" build
+
+# Fix @syr-is/ui resolution: pnpm routes it through the virtual store (due to
+# peerDependencies) where only package.json exists — no dist/ or src/.
+# Replace with a direct symlink to the source package so the app can resolve
+# both dist/ exports (components) and src/ exports (styles).
+RUN target="apps/syr/app/node_modules/@syr-is/ui" && \
+    rm "$target" && \
+    ln -s ../../../../../packages/ui "$target"
+
+# Build the syr app
+RUN pnpm --filter "@syr-is/syr" build
 
 # Prune dev dependencies - keep only production dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
