@@ -7,6 +7,8 @@
     "dev": "turbo dev",
     "dev:syr": "pnpm --filter @syr-is/syr dev",
     "dev:docs": "pnpm --filter @syr-is/docs dev",
+    "dev:registry-api": "pnpm --filter @syr-is/registry-api start:dev",
+    "dev:registry-client": "pnpm --filter @syr-is/registry-client dev",
     "dev:types": "pnpm --filter @syr-is/types dev",
     "build": "turbo build",
     "preview": "turbo preview",

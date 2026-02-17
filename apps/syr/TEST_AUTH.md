@@ -11,7 +11,7 @@ docker-compose up
 2. Start SvelteKit app:
 
 ```bash
-cd apps/syr
+cd apps/syr/app
 pnpm dev
 ```
 

@@ -1,6 +1,6 @@
 # S3 / SeaweedFS setup
 
-The **apps/syr** application ensures the S3 bucket and CORS rules exist on startup. You do not need to run manual `aws s3api` commands if the app is configured with the correct environment variables.
+The **apps/syr/app** application ensures the S3 bucket and CORS rules exist on startup. You do not need to run manual `aws s3api` commands if the app is configured with the correct environment variables.
 
 ## Required environment variables
 

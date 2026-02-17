@@ -23,7 +23,13 @@ A self-hosted multi-tenant self-sovereign identity manager built with SvelteKit.
 ├── .cursor/
 │   └── mcp.json              # MCP server configuration (SurrealMCP + Svelte MCP)
 ├── apps/
-│   └── syr/                # SvelteKit application (frontend + backend)
+│   ├── docs/
+│   │   └── app/            # Documentation site (SveltePress)
+│   ├── registry/
+│   │   ├── api/           # Registry REST API (NestJS)
+│   │   └── client/        # Registry UI (Svelte + @syr-is/ui)
+│   └── syr/
+│       └── app/           # SvelteKit application (frontend + backend)
 ├── packages/
 │   └── types/              # Shared Zod schemas and types (@syr-is/types)
 ├── db/

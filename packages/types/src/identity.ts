@@ -13,7 +13,7 @@ export const IdentitySchema = BaseEntitySchema.pick({
 }).extend({
 	did: DidSyrSchema,
 	public_key: z.string().min(1), // multibase-encoded Ed25519 public key
-	encrypted_private_key: z.string().optional(), // encrypted private key for server-managed keys
+	private_key: z.string().optional(), // multibase-encoded private key for server-managed keys
 	user_id: RecordIdSchema,
 	tenant_id: RecordIdSchema.optional() // optional tenant scoping
 });

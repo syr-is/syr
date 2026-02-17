@@ -54,11 +54,11 @@ The setup uses Docker Compose's `watch` feature for intelligent file synchroniza
 
 ### Hot Reload (sync action)
 These files/directories trigger immediate sync without rebuilding:
-- `apps/syr/src/` - Application source code
-- `apps/syr/static/` - Static assets
-- `apps/syr/svelte.config.js` - Svelte configuration
-- `apps/syr/vite.config.ts` - Vite configuration
-- `apps/syr/tsconfig.json` - TypeScript configuration
+- `apps/syr/app/src/` - Application source code
+- `apps/syr/app/static/` - Static assets
+- `apps/syr/app/svelte.config.js` - Svelte configuration
+- `apps/syr/app/vite.config.ts` - Vite configuration
+- `apps/syr/app/tsconfig.json` - TypeScript configuration
 
 ### Container Rebuild (rebuild action)
 These files trigger a full container rebuild when changed:
@@ -66,7 +66,7 @@ These files trigger a full container rebuild when changed:
 - `pnpm-lock.yaml` - Workspace lock file
 - `pnpm-workspace.yaml` - Workspace configuration
 - `turbo.json` - Turborepo pipeline configuration
-- `apps/syr/package.json` - App-specific dependencies
+- `apps/syr/app/package.json` - App-specific dependencies
 
 ## Using Docker without docker-compose
 

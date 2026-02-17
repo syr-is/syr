@@ -1,0 +1,39 @@
+{
+	"name": "@syr-is/registry-api",
+	"version": "0.0.1",
+	"description": "SYR DID Registry API — REST-only, signature-verified hosting record directory",
+	"private": true,
+	"license": "MIT",
+	"scripts": {
+		"build": "nest build",
+		"start": "nest start",
+		"start:dev": "nest start --watch",
+		"start:prod": "node dist/main",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"check": "tsc --noEmit",
+		"lint": "prettier --check . && eslint ."
+	},
+	"dependencies": {
+		"@nestjs/common": "^11.0.1",
+		"@nestjs/core": "^11.0.1",
+		"@nestjs/platform-express": "^11.0.1",
+		"@syr-is/crypto": "workspace:*",
+		"@syr-is/did": "workspace:*",
+		"reflect-metadata": "^0.2.2",
+		"rxjs": "^7.8.1",
+		"surrealdb": "^1.2.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.36.0",
+		"@nestjs/cli": "^11.0.0",
+		"@nestjs/schematics": "^11.0.0",
+		"@types/express": "^5.0.0",
+		"@types/node": "^22.10.7",
+		"typescript": "^5.7.3",
+		"eslint": "^9.36.0",
+		"eslint-config-prettier": "^10.1.8",
+		"prettier": "^3.6.2",
+		"typescript-eslint": "^8.44.1"
+	}
+}
