@@ -9,9 +9,12 @@ RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
 # Copy workspace configuration
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 
-# Copy app and packages package.json
+# Copy app and packages package.json for dependency resolution
 COPY apps/syr/app/package.json ./apps/syr/app/
 COPY packages/types/package.json ./packages/types/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/crypto/package.json ./packages/crypto/
+COPY packages/did/package.json ./packages/did/
 
 # Install dependencies from workspace root
 RUN pnpm install --frozen-lockfile

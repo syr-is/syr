@@ -21,6 +21,9 @@ importers:
       '@syr-is/types':
         specifier: workspace:*
         version: link:packages/types
+      '@syr-is/ui':
+        specifier: workspace:*
+        version: file:packages/ui(@internationalized/date@3.10.0)(@sveltejs/kit@2.51.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.51.0)(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)))(svelte@5.51.0)(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)))(@types/json-schema@7.0.15)(svelte@5.51.0)(typescript@5.9.3)
     devDependencies:
       turbo:
         specifier: ^2.5.8
