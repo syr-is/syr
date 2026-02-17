@@ -20,7 +20,7 @@ COPY packages/crypto/package.json ./packages/crypto/
 COPY packages/did/package.json ./packages/did/
 
 # Install all dependencies (including devDependencies for build)
-# onlyBuiltDependencies ensures @syr-is/ui is built during install
+# packages/ui dist is produced in the builder stage by pnpm build
 RUN pnpm install --frozen-lockfile
 
 # ---- Builder Stage ----
@@ -57,11 +57,10 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 sveltekit
 
-# Copy built application and production dependencies
+# Copy built application and production dependencies (pruned package.json has prod deps only)
 COPY --from=builder --chown=sveltekit:nodejs /app/pruned/package.json ./
 COPY --from=builder --chown=sveltekit:nodejs /app/pruned/node_modules ./node_modules
 COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/app/build ./build
-COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/app/package.json ./package.json
 
 # Switch to non-root user
 USER sveltekit

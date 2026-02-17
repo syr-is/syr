@@ -31,7 +31,6 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@syr-is/types",
-      "@syr-is/ui",
       "@tailwindcss/oxide",
       "esbuild",
       "sharp"
