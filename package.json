@@ -22,7 +22,8 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
-    "@syr-is/types": "workspace:*"
+    "@syr-is/types": "workspace:*",
+    "@syr-is/ui": "workspace:*"
   },
   "devDependencies": {
     "turbo": "^2.5.8"
@@ -30,6 +31,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@syr-is/types",
+      "@syr-is/ui",
       "@tailwindcss/oxide",
       "esbuild",
       "sharp"

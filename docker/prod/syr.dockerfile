@@ -13,30 +13,31 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 FROM base AS deps
 
 # Copy app and packages package.json for dependency resolution
-COPY apps/syr/package.json ./apps/syr/
+COPY apps/syr/app/package.json ./apps/syr/app/
 COPY packages/types/package.json ./packages/types/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/crypto/package.json ./packages/crypto/
+COPY packages/did/package.json ./packages/did/
 
 # Install all dependencies (including devDependencies for build)
+# onlyBuiltDependencies ensures @syr-is/ui is built during install
 RUN pnpm install --frozen-lockfile
 
 # ---- Builder Stage ----
 FROM base AS builder
 
-# Copy dependencies from deps stage
+# Copy dependencies from deps stage (pnpm hoists to root, workspace symlinks in node_modules)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/syr/node_modules ./apps/syr/node_modules
-COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
 
-# Copy application source
+# Copy application source (required for build; packages/ui source needed to produce dist)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build the application with Turborepo
-# Note: Build uses default config values, override at runtime with environment variables
-RUN pnpm build
+# Build the syr app and its dependencies
+RUN pnpm --filter @syr-is/syr build
 
 # Prune dev dependencies - keep only production dependencies
-RUN pnpm --filter syr --prod deploy pruned
+RUN pnpm --filter @syr-is/syr --prod deploy pruned
 
 # ---- Production Stage ----
 FROM node:20-alpine AS production
@@ -59,8 +60,8 @@ RUN addgroup --system --gid 1001 nodejs \
 # Copy built application and production dependencies
 COPY --from=builder --chown=sveltekit:nodejs /app/pruned/package.json ./
 COPY --from=builder --chown=sveltekit:nodejs /app/pruned/node_modules ./node_modules
-COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/build ./build
-COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/package.json ./package.json
+COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/app/build ./build
+COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/app/package.json ./package.json
 
 # Switch to non-root user
 USER sveltekit
