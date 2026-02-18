@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
 
 	return {
 		plugins: [tailwindcss(), sveltekit()],
+		ssr: {
+			noExternal: ['@syr-is/ui']
+		},
 		resolve: {
 			alias: {
 				// Tailwind plugin uses enhanced-resolve which doesn't fully respect package.json exports.
