@@ -3,9 +3,11 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import {
 	UploadCreateSchema,
-	UploadUpdateSchema,
 	QueryParamsSchema,
-	QueryOptionsSchema
+	QueryOptionsSchema,
+	recordIdFromDidAndLocal,
+	extractDid,
+	extractLocalId
 } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
@@ -62,12 +64,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		folder_id: folderId
 	});
 
+	// Serialize uploads with did/local_id for composite-ID URLs
+	const serializedData = data.map((u) => ({
+		...u,
+		did: extractDid(u.id),
+		local_id: extractLocalId(u.id)
+	}));
+
 	// Get breadcrumbs if viewing a folder
 	const breadcrumbs = folderId ? await folderController.getBreadcrumbs(folderId) : [];
 
 	return json({
 		status: 'success',
-		data,
+		data: serializedData,
 		breadcrumbs,
 		pagination: {
 			limit,
@@ -144,8 +153,19 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 	try {
 		const body = await request.json();
-		const data = UploadUpdateSchema.parse(body);
-		const result = await uploadController.completeUpload(data.id);
+		const {
+			did,
+			local_id,
+			status: _status
+		} = z
+			.object({
+				did: z.string().min(1),
+				local_id: z.string().min(1),
+				status: z.enum(['completed'])
+			})
+			.parse(body);
+		const uploadRecordId = recordIdFromDidAndLocal('upload', did, local_id);
+		const result = await uploadController.completeUpload(uploadRecordId);
 		return json({
 			status: 'success',
 			data: result,

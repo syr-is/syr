@@ -31,7 +31,11 @@
 			if (response.ok) {
 				const result = await response.json();
 				const pinnedIds: string[] = result.data?.post_ids || [];
-				isPinned = pinnedIds.includes(data.post.id);
+				const postId =
+					data.post.did && data.post.local_id
+						? `${data.post.did}/${data.post.local_id}`
+						: data.post.id;
+				isPinned = pinnedIds.includes(postId);
 			}
 		} catch {
 			// Ignore errors
@@ -47,7 +51,10 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					post_id: data.post.id,
+					post_id:
+						data.post.did && data.post.local_id
+							? `${data.post.did}/${data.post.local_id}`
+							: data.post.id,
 					action: isPinned ? 'unpin' : 'pin'
 				})
 			});
@@ -66,12 +73,16 @@
 		}
 	}
 
+	function postApiUrl(): string {
+		return `/api/posts/${data.post.did}/${data.post.local_id}`;
+	}
+
 	async function handlePublish() {
 		if (publishLoading) return;
 
 		publishLoading = true;
 		try {
-			const response = await fetch(`/api/posts/${data.post.id}`, {
+			const response = await fetch(postApiUrl(), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -99,7 +110,7 @@
 
 		publishLoading = true;
 		try {
-			const response = await fetch(`/api/posts/${data.post.id}`, {
+			const response = await fetch(postApiUrl(), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -156,9 +167,8 @@
 		return typeof result === 'string' ? result : '';
 	}
 
-	// Get post ID as string for navigation (already serialized as string)
-	function getPostIdString(): string {
-		return data.post.id;
+	function postPageUrl(): string {
+		return `/posts/${data.post.did}/${data.post.local_id}`;
 	}
 </script>
 
@@ -275,7 +285,7 @@
 								size="sm"
 								onclick={() => {
 									// eslint-disable-next-line svelte/no-navigation-without-resolve
-									goto(`/posts/${getPostIdString()}/edit`);
+									goto(`${postPageUrl()}/edit`);
 								}}
 							>
 								<Pencil class="mr-2 h-4 w-4" />

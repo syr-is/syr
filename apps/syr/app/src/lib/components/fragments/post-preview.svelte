@@ -19,7 +19,7 @@
 		ChevronLeft,
 		ChevronRight
 	} from 'lucide-svelte';
-	import type { Post } from '@syr-is/types';
+	import { getPostId, type Post } from '@syr-is/types';
 
 	interface Props {
 		post: Post;
@@ -85,7 +85,8 @@
 
 		pinLoading = true;
 		try {
-			const postId = typeof post.id === 'string' ? post.id : post.id.toString();
+			// Use canonical format (did/localId) - API serializes did and local_id
+			const postId = getPostId(post);
 			await onPinToggle(postId, isPinned);
 		} finally {
 			pinLoading = false;

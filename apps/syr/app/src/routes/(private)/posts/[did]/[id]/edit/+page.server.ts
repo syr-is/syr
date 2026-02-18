@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { postController } from '$lib/controllers/post.controller';
 import { userRepository } from '$lib/repositories/user.repository';
 import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
-import { stringToRecordId } from '@syr-is/types';
+import { recordIdFromDidAndLocal, extractDid, extractLocalId } from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	// Get post by ID
-	const post = await postController.getPost(stringToRecordId.decode(params.id));
+	const post = await postController.getPost(recordIdFromDidAndLocal('post', params.did, params.id));
 	if (!post) {
 		throw error(404, {
 			code: 'NOT_FOUND',
@@ -42,6 +42,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const serializedPost = {
 		...post,
 		id: post.id.toString(),
+		did: extractDid(post.id),
+		local_id: extractLocalId(post.id),
 		author_id: post.author_id.toString(),
 		created_at: post.created_at.toISOString(),
 		updated_at: post.updated_at.toISOString()

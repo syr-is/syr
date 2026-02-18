@@ -14,7 +14,11 @@ describe("canonicalize", () => {
   });
 
   it("is deterministic across calls", () => {
-    const obj = { did: "did:syr:z6Mk", provider: "https://example.com", updatedAt: "2025-01-01T00:00:00Z" };
+    const obj = {
+      did: "did:syr:z6Mk",
+      provider: "https://example.com",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
     const a = canonicalize(obj);
     const b = canonicalize(obj);
     expect(a).toBe(b);

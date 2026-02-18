@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
 import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
+import { extractDid, extractLocalId } from '@syr-is/types';
 
 /**
  * GET /api/posts/pinned
@@ -35,10 +36,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const mediaUrlMimeTypes =
 		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
 
+	const serializedPosts = pinnedPosts.map((post) => ({
+		...post,
+		id: post.id.toString(),
+		did: extractDid(post.id),
+		local_id: extractLocalId(post.id),
+		author_id: post.author_id.toString()
+	}));
+
 	return json({
 		status: 'success',
 		data: {
-			posts: pinnedPosts,
+			posts: serializedPosts,
 			post_ids: pinnedPostIds,
 			mediaUrlMimeTypes
 		},

@@ -13,7 +13,7 @@
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
 
 	let { data }: { data: PageData } = $props();
-	let exportLoading = $state(false);
+	let exportIdentityDialogOpen = $state(false);
 	let newRegistryUrl = $state('');
 	let addingRegistry = $state(false);
 	let retryingJob = $state<string | null>(null);
@@ -25,38 +25,9 @@
 	let keyToRevoke = $state<string | null>(null);
 	let cancelJobDialogOpen = $state(false);
 	let jobToCancel = $state<string | null>(null);
-	let exportKeyDialogOpen = $state(false);
 
-	function openExportKeyDialog() {
-		exportKeyDialogOpen = true;
-	}
-
-	async function exportIdentity() {
-		if (!data.hasIdentity) return;
-		exportLoading = true;
-		try {
-			const res = await fetch('/api/identity/export');
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err?.message ?? 'Export failed');
-			}
-			const bundle = await res.json();
-			const blob = new Blob([JSON.stringify(bundle.data, null, 2)], {
-				type: 'application/json'
-			});
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `identity-export-${timestamp}.json`;
-			a.click();
-			URL.revokeObjectURL(url);
-			toast.success('Identity exported successfully');
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Export failed');
-		} finally {
-			exportLoading = false;
-		}
+	function openExportIdentityDialog() {
+		exportIdentityDialogOpen = true;
 	}
 
 	function openRevokeKeyDialog(publicKey: string) {
@@ -180,21 +151,10 @@
 				<div class="flex flex-wrap gap-2">
 					<button
 						class={buttonVariants({ variant: 'default' })}
-						onclick={exportIdentity}
-						disabled={exportLoading}
+						onclick={openExportIdentityDialog}
+						disabled={exportIdentityDialogOpen}
 					>
-						{#if exportLoading}
-							Exporting...
-						{:else}
-							Export identity
-						{/if}
-					</button>
-					<button
-						class={buttonVariants({ variant: 'destructive' })}
-						onclick={openExportKeyDialog}
-						disabled={exportKeyDialogOpen}
-					>
-						Export private key
+						Export identity
 					</button>
 				</div>
 
@@ -371,7 +331,7 @@
 />
 
 <ExportKeyDialog
-	bind:open={exportKeyDialogOpen}
+	bind:open={exportIdentityDialogOpen}
 	hasIdentity={data.hasIdentity}
 	onSuccess={invalidateAll}
 />

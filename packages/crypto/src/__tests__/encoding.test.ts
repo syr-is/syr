@@ -24,7 +24,9 @@ describe("encodeMultibase / decodeMultibase", () => {
   });
 
   it("throws on wrong prefix", () => {
-    expect(() => decodeMultibase("m" + "AAAA")).toThrow("Unsupported multibase prefix");
+    expect(() => decodeMultibase("m" + "AAAA")).toThrow(
+      "Unsupported multibase prefix",
+    );
   });
 });
 
@@ -88,6 +90,8 @@ describe("decodePrivateKey", () => {
   it("throws for wrong length", () => {
     const short = new Uint8Array(10);
     const encoded = encodeMultibase(short);
-    expect(() => decodePrivateKey(encoded)).toThrow("Invalid private key length");
+    expect(() => decodePrivateKey(encoded)).toThrow(
+      "Invalid private key length",
+    );
   });
 });

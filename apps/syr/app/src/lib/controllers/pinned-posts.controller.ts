@@ -1,6 +1,7 @@
 import { kvService } from '$lib/services/kv';
 import { postRepository } from '$lib/repositories/post.repository';
 import type { Post, User } from '@syr-is/types';
+import { extractDid, extractLocalId, recordIdFromDidAndLocal } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
 /**
@@ -52,9 +53,14 @@ export class PinnedPostsController {
 
 		// Fetch all posts in parallel
 		const posts = await Promise.all(
-			postIds.map(async (id) => {
+			postIds.map(async (idStr) => {
 				try {
-					return await postRepository.findById(id);
+					const slashIdx = idStr.lastIndexOf('/');
+					if (slashIdx === -1) return null;
+					const did = idStr.substring(0, slashIdx);
+					const localId = idStr.substring(slashIdx + 1);
+					const recordId = recordIdFromDidAndLocal('post', did, localId);
+					return await postRepository.findById(recordId);
 				} catch {
 					return null;
 				}
@@ -66,7 +72,7 @@ export class PinnedPostsController {
 
 		// Clean up any orphaned post IDs
 		if (validPosts.length !== postIds.length) {
-			const validIds = validPosts.map((p) => p.id.toString());
+			const validIds = validPosts.map((p) => `${extractDid(p.id)}/${extractLocalId(p.id)}`);
 			await this.savePinnedPostIds(userId, validIds);
 		}
 
@@ -92,6 +98,35 @@ export class PinnedPostsController {
 	}
 
 	/**
+	 * Parse post_id string to RecordId.
+	 * Accepts: "did:syr:.../localId" (canonical) or RecordId.toString() (SurrealDB object format).
+	 */
+	private parsePostId(postId: RecordId | string): RecordId {
+		if (typeof postId !== 'string') return postId;
+		// Canonical format: did/localId
+		const slashIdx = postId.lastIndexOf('/');
+		if (slashIdx !== -1) {
+			const did = postId.substring(0, slashIdx);
+			const localId = postId.substring(slashIdx + 1);
+			return recordIdFromDidAndLocal('post', did, localId);
+		}
+		// SurrealDB RecordId.toString() format: post:{ "created_by": s"did:...", "id": s"ulid" }
+		const createdByMatch = postId.match(/"created_by":\s*s"([^"]+)"/);
+		const idMatch = postId.match(/"id":\s*s"([^"]+)"/);
+		if (createdByMatch && idMatch) {
+			return recordIdFromDidAndLocal('post', createdByMatch[1], idMatch[1]);
+		}
+		throw new Error(`Invalid post_id format: ${postId.slice(0, 80)}...`);
+	}
+
+	/**
+	 * Normalize post_id to canonical "did/localId" format for storage.
+	 */
+	private toCanonicalPostId(recordId: RecordId): string {
+		return `${extractDid(recordId)}/${extractLocalId(recordId)}`;
+	}
+
+	/**
 	 * Pin a post (appends to end of pinned list)
 	 * @returns The updated list of pinned post IDs
 	 * @throws Error if max pinned posts reached or post already pinned
@@ -100,10 +135,11 @@ export class PinnedPostsController {
 		user: User,
 		postId: RecordId | string
 	): Promise<{ success: boolean; post_ids: string[]; message?: string }> {
-		const postIdStr = typeof postId === 'string' ? postId : postId.toString();
+		const recordId = this.parsePostId(postId);
+		const postIdStr = this.toCanonicalPostId(recordId);
 
 		// Verify post exists and belongs to user
-		const post = await postRepository.findById(postId);
+		const post = await postRepository.findById(recordId);
 		if (!post) {
 			return { success: false, post_ids: [], message: 'Post not found' };
 		}
@@ -142,7 +178,8 @@ export class PinnedPostsController {
 		user: User,
 		postId: RecordId | string
 	): Promise<{ success: boolean; post_ids: string[]; message?: string }> {
-		const postIdStr = typeof postId === 'string' ? postId : postId.toString();
+		const recordId = this.parsePostId(postId);
+		const postIdStr = this.toCanonicalPostId(recordId);
 		const currentPinned = await this.getPinnedPostIds(user.id);
 
 		// Check if pinned

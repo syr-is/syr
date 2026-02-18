@@ -173,23 +173,23 @@ All API routes are under `src/routes/api/`.
 
 ### Posts
 
-| Method   | Path              | Description                                |
-| -------- | ----------------- | ------------------------------------------ |
-| `GET`    | `/api/posts`      | List posts (paginated, filtered by author) |
-| `POST`   | `/api/posts`      | Create new post (blog or media)            |
-| `GET`    | `/api/posts/[id]` | Get single post                            |
-| `PATCH`  | `/api/posts/[id]` | Update post                                |
-| `DELETE` | `/api/posts/[id]` | Delete post                                |
+| Method   | Path                    | Description                                |
+| -------- | ----------------------- | ------------------------------------------ |
+| `GET`    | `/api/posts`            | List posts (paginated, filtered by author) |
+| `POST`   | `/api/posts`            | Create new post (blog or media)            |
+| `GET`    | `/api/posts/[did]/[id]` | Get single post (DID + ULID)               |
+| `PATCH`  | `/api/posts/[did]/[id]` | Update post                                |
+| `DELETE` | `/api/posts/[did]/[id]` | Delete post                                |
 
 ### Uploads
 
-| Method   | Path                | Description                               |
-| -------- | ------------------- | ----------------------------------------- |
-| `GET`    | `/api/uploads`      | List uploads (paginated, folder-filtered) |
-| `POST`   | `/api/uploads`      | Initiate upload (returns presigned URL)   |
-| `GET`    | `/api/uploads/[id]` | Get upload metadata                       |
-| `PATCH`  | `/api/uploads/[id]` | Complete upload (status: completed)       |
-| `DELETE` | `/api/uploads/[id]` | Delete upload and S3 object               |
+| Method   | Path                      | Description                               |
+| -------- | ------------------------- | ----------------------------------------- |
+| `GET`    | `/api/uploads`            | List uploads (paginated, folder-filtered) |
+| `POST`   | `/api/uploads`            | Initiate upload (returns presigned URL)   |
+| `GET`    | `/api/uploads/[did]/[id]` | Get upload metadata (DID + ULID)          |
+| `PATCH`  | `/api/uploads/[did]/[id]` | Complete upload (status: completed)       |
+| `DELETE` | `/api/uploads/[did]/[id]` | Delete upload and S3 object               |
 
 ### Folders
 
@@ -221,15 +221,15 @@ All API routes are under `src/routes/api/`.
 
 ### Current Tables
 
-| Table     | Unique Indexes | Regular Indexes |
-| --------- | -------------- | --------------- |
-| `user`    | `username`     | --              |
-| `profile` | `user_id`      | --              |
-| `session` | `token`        | `user_id`       |
-| `post`    | --             | --              |
-| `upload`  | --             | --              |
-| `folder`  | --             | --              |
-| `kv`      | --             | --              |
+| Table     | Record ID Format                          | Unique Indexes | Regular Indexes |
+| --------- | ----------------------------------------- | -------------- | --------------- |
+| `user`    | Simple (`user:id`)                        | `username`     | --              |
+| `profile` | Simple (`profile:id`)                     | `user_id`      | --              |
+| `session` | Simple (`session:id`)                     | `token`        | `user_id`       |
+| `post`    | Composite `{ created_by: DID, id: ULID }` | --             | --              |
+| `upload`  | Composite `{ created_by: DID, id: ULID }` | --             | --              |
+| `folder`  | Simple (`folder:id`)                      | --             | --              |
+| `kv`      | Composite (`kv:type:index`)               | --             | --              |
 
 ---
 
@@ -245,8 +245,9 @@ All API routes are under `src/routes/api/`.
   3. Server generates presigned PUT URL
   4. Client uploads directly to S3
   5. Client confirms via `PATCH /api/uploads/[id]` (status: `completed`)
-- Key format: `uploads/{owner_id}/[folder_path/]{record_id}`
+- Key format: `uploads/{did}/[folder_path/]{ulid}` (DID-namespaced, aligned with composite record IDs)
 - Public access: Files in `public` folder hierarchy are served without signed URLs
+- S3 config: SeaweedFS `s3_config.json` must allow anonymous read for `Read:syr/uploads/did:syr:*/public/*`
 
 ---
 

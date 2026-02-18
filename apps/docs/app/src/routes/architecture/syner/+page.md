@@ -24,13 +24,13 @@ Once Syner is fully operational, Syner-managed identity becomes the **canonical 
 
 ## 3. Target Platforms
 
-| Platform | Keystore                         | Background Process | Communication       |
-| -------- | -------------------------------- | ------------------ | -------------------- |
-| macOS    | Keychain Services                | Supported          | SSE + deep links     |
-| Windows  | DPAPI / Credential Manager       | Supported          | SSE + deep links     |
-| Linux    | libsecret (GNOME Keyring / KDE)  | Supported          | SSE + deep links     |
-| Android  | Android Keystore                 | Supported          | SSE + deep links     |
-| iOS      | Keychain Services                | Limited            | Deep links (primary) |
+| Platform | Keystore                        | Background Process | Communication        |
+| -------- | ------------------------------- | ------------------ | -------------------- |
+| macOS    | Keychain Services               | Supported          | SSE + deep links     |
+| Windows  | DPAPI / Credential Manager      | Supported          | SSE + deep links     |
+| Linux    | libsecret (GNOME Keyring / KDE) | Supported          | SSE + deep links     |
+| Android  | Android Keystore                | Supported          | SSE + deep links     |
+| iOS      | Keychain Services               | Limited            | Deep links (primary) |
 
 ---
 
@@ -66,6 +66,7 @@ flowchart TD
 **Svelte UI**: The user-facing interface within Syner. Displays signing requests, pairing status, identity details, and settings. Built with Svelte 5 and shared UI components from `@syr-is/ui`.
 
 **Rust Core**: The Tauri backend. Handles:
+
 - Key generation and storage via platform-native keystore bindings
 - Ed25519 signing using `ed25519-dalek` or equivalent
 - SSE client for receiving signing requests
@@ -73,6 +74,7 @@ flowchart TD
 - Multibase encoding/decoding
 
 **Platform Keystore**: Abstraction over platform-specific secure storage:
+
 - **macOS/iOS**: `security-framework` crate binding to Keychain Services
 - **Windows**: `windows-rs` binding to DPAPI
 - **Linux**: `secret-service` crate binding to libsecret
@@ -97,6 +99,7 @@ On first launch, Syner generates an Ed25519 keypair:
 ### 5.2 Key Storage
 
 Private keys are stored using the strongest available mechanism on each platform:
+
 - Hardware-backed storage where available (Secure Enclave on Apple, StrongBox on Android)
 - Software-backed secure storage as fallback
 
@@ -105,6 +108,7 @@ Keys are labeled with `syr:root:<did>` for the root key and `syr:device:<did>:<d
 ### 5.3 Key Export
 
 Users can export their identity from Syner:
+
 - Export produces the same `IdentityExportBundle` format used by the SYR web app
 - Private key export requires explicit user confirmation and biometric/PIN verification
 - Exported bundle can be imported on another Syner instance or back to server-managed mode
@@ -158,6 +162,7 @@ syr://sign?request_id=abc123&instance=https://my.syr.is&payload_hash=sha256hex
 ```
 
 Deep link flow:
+
 1. SYR web app generates a signing request and stores it server-side
 2. Web app opens `syr://sign?...` deep link
 3. OS routes to Syner
@@ -196,20 +201,20 @@ Deep link flow:
 
 ```json
 {
-  "request_id": "uuid",
-  "signature": "z...(multibase-encoded Ed25519 signature)",
-  "signed_at": "ISO-8601"
+	"request_id": "uuid",
+	"signature": "z...(multibase-encoded Ed25519 signature)",
+	"signed_at": "ISO-8601"
 }
 ```
 
 ### 7.3 Request Types
 
-| Type              | Description                                     | Payload                                |
-| ----------------- | ----------------------------------------------- | -------------------------------------- |
-| `registry_update` | Update DID-to-provider mapping in registry      | `{ did, provider, updatedAt }`         |
-| `delegation`      | Delegate authority to a device key              | `{ did, delegate, scope, createdAt }`  |
-| `post_sign`       | Sign a post or content mutation                 | `{ did, action, contentHash, ... }`    |
-| `rotation`        | Rotate root key                                 | `{ did, newRoot, rotatedAt }`          |
+| Type              | Description                                | Payload                               |
+| ----------------- | ------------------------------------------ | ------------------------------------- |
+| `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updatedAt }`        |
+| `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, createdAt }` |
+| `post_sign`       | Sign a post or content mutation            | `{ did, action, contentHash, ... }`   |
+| `rotation`        | Rotate root key                            | `{ did, newRoot, rotatedAt }`         |
 
 ---
 
@@ -241,6 +246,7 @@ sequenceDiagram
 ### 8.2 Pairing Data
 
 **Stored on SYR instance:**
+
 - Device public key
 - Device name/info (OS, model)
 - Pairing timestamp
@@ -248,6 +254,7 @@ sequenceDiagram
 - Device JWT for authentication
 
 **Stored on Syner:**
+
 - Instance URL
 - Device JWT
 - User DID
@@ -284,6 +291,7 @@ sequenceDiagram
 ### 9.3 Identity Backup
 
 Syner supports encrypted backup of the root key:
+
 - Export as encrypted file (passphrase-protected)
 - Platform backup integration (iCloud Keychain, Google Backup)
 - Future: social recovery guardians
@@ -294,13 +302,13 @@ Syner supports encrypted backup of the root key:
 
 ### 10.1 Threat Model
 
-| Threat                      | Mitigation                                                       |
-| --------------------------- | ---------------------------------------------------------------- |
-| SYR instance compromise     | Private key never on server. Attacker cannot forge signatures.   |
-| Network interception        | TLS for all communication. Payload integrity via SHA-256 hashes. |
-| Syner device theft          | Platform keystore requires biometric/PIN to access keys.         |
-| Replay attacks              | Nonce in signing requests. Strictly increasing timestamps.       |
-| Deep link hijacking         | Payload hash verification. Syner verifies instance URL.          |
+| Threat                  | Mitigation                                                       |
+| ----------------------- | ---------------------------------------------------------------- |
+| SYR instance compromise | Private key never on server. Attacker cannot forge signatures.   |
+| Network interception    | TLS for all communication. Payload integrity via SHA-256 hashes. |
+| Syner device theft      | Platform keystore requires biometric/PIN to access keys.         |
+| Replay attacks          | Nonce in signing requests. Strictly increasing timestamps.       |
+| Deep link hijacking     | Payload hash verification. Syner verifies instance URL.          |
 
 ### 10.2 Trust Boundaries
 

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { parseDid } from "../parse.js";
-import { deriveDid, generateRootKeypair } from "@syr-is/crypto";
+import {
+  deriveDid,
+  encodeMultibase,
+  generateRootKeypair,
+} from "@syr-is/crypto";
 
 describe("parseDid", () => {
   it("correctly parses a valid did:syr identifier", async () => {
@@ -16,7 +20,9 @@ describe("parseDid", () => {
   });
 
   it("rejects did:web identifiers", () => {
-    expect(() => parseDid("did:web:example.com")).toThrow("Invalid did:syr format");
+    expect(() => parseDid("did:web:example.com")).toThrow(
+      "Invalid did:syr format",
+    );
   });
 
   it("rejects did:syr without z prefix", () => {
@@ -36,8 +42,6 @@ describe("parseDid", () => {
   });
 
   it("rejects multibase with wrong multicodec prefix", () => {
-    const { encodeMultibase } = require("@syr-is/crypto") as typeof import("@syr-is/crypto");
-    // 34 bytes with wrong prefix (0x0000 instead of 0xed01)
     const wrongPrefix = new Uint8Array(34);
     wrongPrefix[0] = 0x00;
     wrongPrefix[1] = 0x00;

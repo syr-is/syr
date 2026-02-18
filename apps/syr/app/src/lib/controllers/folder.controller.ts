@@ -1,6 +1,7 @@
 import { ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import type { Folder, FolderCreate, FolderUpdate } from '@syr-is/types';
 import { stringToRecordId } from '@syr-is/types';
+import { identityRepository } from '$lib/repositories/identity.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { s3Service } from '$lib/services/s3';
@@ -48,11 +49,13 @@ export class FolderController {
 
 	/**
 	 * Build the S3 prefix for a folder based on its path
-	 * Format: uploads/{user_id}/[folder_path/]
+	 * Format: uploads/{did}/[folder_path/]
 	 */
 	private async buildS3Prefix(ownerId: RecordId, folderId: RecordId): Promise<string> {
+		const identity = await identityRepository.findByUserId(ownerId);
+		const did = identity?.did ?? ownerId.toString();
 		const folderPath = await folderRepository.getFullPath(folderId);
-		let prefix = `uploads/${ownerId.toString()}`;
+		let prefix = `uploads/${did}`;
 		if (folderPath.length > 0) {
 			prefix += '/' + folderPath.join('/');
 		}

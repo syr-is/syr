@@ -60,7 +60,7 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 		}
 
 		const result = await response.json();
-		const { signedUrl, finalUrl, uploadId } = result.data;
+		const { signedUrl, finalUrl, uploadDid, uploadLocalId } = result.data;
 
 		// Step 2: Upload file to S3 using the signed URL
 		const uploadResponse = await fetch(signedUrl, {
@@ -81,7 +81,7 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ id: uploadId, status: 'completed' })
+			body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
 		});
 
 		if (!completeResponse.ok) {
@@ -100,7 +100,7 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 
 /**
  * Handle file upload for post assets
- * Files are stored in: uploads/{user_id}/posts/{post_id}/public/
+ * Files are stored in: uploads/{did}/posts/{post_ulid}/public/
  * Folder hierarchy on uploads page: posts/{post_id}/public/{upload_id}
  * These files are publicly accessible
  */

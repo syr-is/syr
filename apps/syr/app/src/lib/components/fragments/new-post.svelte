@@ -34,6 +34,8 @@
 	let dialogOpen = $state(false);
 	let loading = $state(false);
 	let draftPostId = $state<string | null>(null);
+	let draftDid = $state<string | null>(null);
+	let draftLocalId = $state<string | null>(null);
 
 	// Media post state
 	let mediaUrls = $state<string[]>([]);
@@ -80,8 +82,8 @@
 			loading = true;
 			try {
 				// If we have a draft, update it; otherwise create new
-				const method = draftPostId ? 'PATCH' : 'POST';
-				const endpoint = draftPostId ? `/api/posts/${draftPostId}` : '/api/posts';
+				const method = draftDid ? 'PATCH' : 'POST';
+				const endpoint = draftDid ? `/api/posts/${draftDid}/${draftLocalId}` : '/api/posts';
 
 				const response = await fetch(endpoint, {
 					method,
@@ -134,6 +136,8 @@
 		mediaUrls = [];
 		mediaMimeTypes = {};
 		draftPostId = null;
+		draftDid = null;
+		draftLocalId = null;
 		draftCreatePromise = null;
 	}
 
@@ -197,10 +201,10 @@
 				}
 
 				const result = await response.json();
-				const postId = result.data?.id;
-				if (postId) {
-					draftPostId = typeof postId === 'string' ? postId : postId.toString();
-					// Notify parent that a draft was created so it can refresh the UI
+				if (result.data?.did && result.data?.local_id) {
+					draftDid = result.data.did;
+					draftLocalId = result.data.local_id;
+					draftPostId = `${draftDid}/${draftLocalId}`;
 					onDraftCreated?.();
 					return draftPostId;
 				}
@@ -246,9 +250,9 @@
 
 		loading = true;
 		try {
-			if (draftPostId) {
+			if (draftDid) {
 				// Update existing draft
-				const response = await fetch(`/api/posts/${draftPostId}`, {
+				const response = await fetch(`/api/posts/${draftDid}/${draftLocalId}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -283,8 +287,8 @@
 
 		loading = true;
 		try {
-			if (draftPostId) {
-				const response = await fetch(`/api/posts/${draftPostId}`, {
+			if (draftDid) {
+				const response = await fetch(`/api/posts/${draftDid}/${draftLocalId}`, {
 					method: 'DELETE'
 				});
 
@@ -483,6 +487,8 @@
 	$effect(() => {
 		if (!dialogOpen && draftPostId) {
 			draftPostId = null;
+			draftDid = null;
+			draftLocalId = null;
 			resetForm();
 		}
 	});

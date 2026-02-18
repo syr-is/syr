@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
-	import type { Upload } from '@syr-is/types';
+	import type { UploadWithCompositeId } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, TriangleAlert, Trash2 } from 'lucide-svelte';
 	import { storageEvents } from '$lib/stores/storage-events.svelte';
@@ -11,7 +11,7 @@
 		open = $bindable(false),
 		onSuccess
 	}: {
-		upload?: Upload | null;
+		upload?: UploadWithCompositeId | null;
 		open?: boolean;
 		onSuccess?: () => void;
 	} = $props();
@@ -23,8 +23,11 @@
 
 		deleting = true;
 		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
+			const uploadUrl =
+				upload.did && upload.local_id
+					? `/api/uploads/${upload.did}/${upload.local_id}`
+					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}`;
+			const response = await fetch(uploadUrl, {
 				method: 'DELETE'
 			});
 

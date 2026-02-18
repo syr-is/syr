@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { QueryOptions, Upload, UploadCreate, User } from '@syr-is/types';
-import { stringToRecordId } from '@syr-is/types';
+import { stringToRecordId, extractLocalId, extractDid } from '@syr-is/types';
 import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
@@ -26,14 +26,14 @@ function hexToBase64(hex: string): string {
 export class UploadController {
 	/**
 	 * Build the storage key for an upload based on folder hierarchy
-	 * Format: uploads/{user_id}/[folder_path/]{record_id}
+	 * Format: uploads/{did}/[folder_path/]{ulid}
 	 */
 	private async buildStorageKey(
-		userId: string,
-		recordId: string,
+		did: string,
+		localId: string,
 		folderId: RecordId | null
 	): Promise<{ key: string; isPublic: boolean }> {
-		let path = `uploads/${userId}`;
+		let path = `uploads/${did}`;
 		let isPublic = false;
 
 		if (folderId) {
@@ -47,7 +47,7 @@ export class UploadController {
 		}
 
 		return {
-			key: `${path}/${recordId}`,
+			key: `${path}/${localId}`,
 			isPublic
 		};
 	}
@@ -61,6 +61,10 @@ export class UploadController {
 	}
 
 	async getPutUrl(user: User, upload: UploadCreate) {
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to upload files');
+		}
+		const did = user.did;
 		const userId = user.id.toString();
 		const now = new Date();
 
@@ -84,8 +88,8 @@ export class UploadController {
 			}
 		}
 
-		// Create initial upload record
-		let uploadRecord = await uploadRepository.create({
+		// Create initial upload record with composite ID
+		let uploadRecord = await uploadRepository.createWithCompositeId(did, {
 			filename: upload.filename,
 			mime_type: upload.mime_type,
 			size: upload.size,
@@ -94,14 +98,14 @@ export class UploadController {
 			owner_id: user.id,
 			folder_id: folderId,
 			status: 'pending',
-			is_public: false, // Will be updated after we determine the path
+			is_public: false,
 			created_at: now,
 			updated_at: now
 		});
 
 		// Build storage key based on folder hierarchy
-		const recordId = uploadRecord.id.toString();
-		const { key, isPublic } = await this.buildStorageKey(userId, recordId, folderId);
+		const localId = extractLocalId(uploadRecord.id);
+		const { key, isPublic } = await this.buildStorageKey(did, localId, folderId);
 		const finalUrl = this.buildUrl(key);
 
 		// Update record with key, url, and public status
@@ -130,17 +134,22 @@ export class UploadController {
 			signedUrl,
 			finalUrl,
 			uploadId: uploadRecord.id.toString(),
+			uploadDid: extractDid(uploadRecord.id),
+			uploadLocalId: extractLocalId(uploadRecord.id),
 			isPublic
 		};
 	}
 
 	/**
 	 * Get a signed PUT URL for uploading to a post's assets folder
-	 * Path: uploads/{user_id}/posts/{post_id}/public/{record_id}
-	 * Folder hierarchy: posts → {post_id} → public
+	 * Path: uploads/{did}/posts/{post_local_id}/public/{upload_local_id}
+	 * Folder hierarchy: posts → {post_local_id} → public
 	 */
-	async getPostAssetPutUrl(user: User, postId: string, upload: UploadCreate) {
-		const userId = user.id.toString();
+	async getPostAssetPutUrl(user: User, postLocalId: string, upload: UploadCreate) {
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to upload files');
+		}
+		const did = user.did;
 		const now = new Date();
 
 		// Check storage limit before allowing upload
@@ -149,13 +158,13 @@ export class UploadController {
 			throw new Error(storageCheck.message || 'Storage limit exceeded');
 		}
 
-		// Get or create the post assets folder hierarchy: posts/{post_id}/public
+		// Get or create the post assets folder hierarchy: posts/{post_local_id}/public
 		const postsFolder = await folderRepository.findOrCreate(user.id, 'posts', null);
-		const postFolder = await folderRepository.findOrCreate(user.id, postId, postsFolder.id);
+		const postFolder = await folderRepository.findOrCreate(user.id, postLocalId, postsFolder.id);
 		const publicFolder = await folderRepository.findOrCreate(user.id, 'public', postFolder.id);
 
-		// Create initial upload record
-		let uploadRecord = await uploadRepository.create({
+		// Create initial upload record with composite ID
+		let uploadRecord = await uploadRepository.createWithCompositeId(did, {
 			filename: upload.filename,
 			mime_type: upload.mime_type,
 			size: upload.size,
@@ -164,14 +173,14 @@ export class UploadController {
 			owner_id: user.id,
 			folder_id: publicFolder.id,
 			status: 'pending',
-			is_public: true, // Post assets are always public (in public folder)
+			is_public: true,
 			created_at: now,
 			updated_at: now
 		});
 
-		// Build storage key: uploads/{user_id}/posts/{post_id}/public/{record_id}
-		const recordId = uploadRecord.id.toString();
-		const key = `uploads/${userId}/posts/${postId}/public/${recordId}`;
+		// Build storage key: uploads/{did}/posts/{post_local_id}/public/{upload_local_id}
+		const uploadLocalId = extractLocalId(uploadRecord.id);
+		const key = `uploads/${did}/posts/${postLocalId}/public/${uploadLocalId}`;
 		const finalUrl = this.buildUrl(key);
 
 		// Update record with key and url
@@ -199,6 +208,8 @@ export class UploadController {
 			signedUrl,
 			finalUrl,
 			uploadId: uploadRecord.id.toString(),
+			uploadDid: extractDid(uploadRecord.id),
+			uploadLocalId: extractLocalId(uploadRecord.id),
 			isPublic: true
 		};
 	}
@@ -387,7 +398,7 @@ export class UploadController {
 	 * This performs a copy + delete operation in S3
 	 */
 	async moveUpload(
-		uploadId: string,
+		uploadId: RecordId | string,
 		userId: RecordId,
 		newFolderId: string | null
 	): Promise<Upload> {
@@ -418,10 +429,10 @@ export class UploadController {
 		// Determine if the new location is public
 		const isPublic = newFolder ? await folderRepository.isInPublicHierarchy(newFolder) : false;
 
-		// Build new key
-		const recordId = upload.id.toString();
-		const userIdStr = userId.toString();
-		const { key: newKey } = await this.buildStorageKey(userIdStr, recordId, newFolder);
+		// Build new key using DID from the composite record ID
+		const localId = extractLocalId(upload.id);
+		const uploadDid = extractDid(upload.id);
+		const { key: newKey } = await this.buildStorageKey(uploadDid, localId, newFolder);
 
 		// Skip if the key hasn't changed
 		if (oldKey === newKey) {
@@ -474,7 +485,11 @@ export class UploadController {
 	 * @param newFilename New filename
 	 * @returns Updated upload
 	 */
-	async renameUpload(uploadId: string, userId: RecordId, newFilename: string): Promise<Upload> {
+	async renameUpload(
+		uploadId: RecordId | string,
+		userId: RecordId,
+		newFilename: string
+	): Promise<Upload> {
 		const upload = await uploadRepository.findById(uploadId);
 		if (!upload) {
 			throw new Error('Upload not found');

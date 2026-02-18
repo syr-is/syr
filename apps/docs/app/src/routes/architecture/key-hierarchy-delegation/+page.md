@@ -327,14 +327,14 @@ These are deferred to maintain **minimal implementability**.
 
 ### Future: Syner-managed keys + delegated signing
 
-| Phase                   | Capability                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Syner key generation    | Root key generated on device, stored in platform-native keystore              |
-| SSE signing bridge      | SYR pushes signing requests to Syner via SSE, Syner returns signatures        |
-| Key transfer            | Server-managed to Syner-managed via encrypted QR code transfer                |
-| Client-side signing     | Delegated device keys sign mutations locally via Syner                        |
-| Multi-device delegation | Root key (in Syner) authorizes per-device keys                                |
-| Recovery                | Social recovery guardians, threshold keys, encrypted backup                   |
+| Phase                   | Capability                                                             |
+| ----------------------- | ---------------------------------------------------------------------- |
+| Syner key generation    | Root key generated on device, stored in platform-native keystore       |
+| SSE signing bridge      | SYR pushes signing requests to Syner via SSE, Syner returns signatures |
+| Key transfer            | Server-managed to Syner-managed via encrypted QR code transfer         |
+| Client-side signing     | Delegated device keys sign mutations locally via Syner                 |
+| Multi-device delegation | Root key (in Syner) authorizes per-device keys                         |
+| Recovery                | Social recovery guardians, threshold keys, encrypted backup            |
 
 The transition is **opt-in** — server-custody remains available for users who prefer managed keys. See the [Syner Specification](/architecture/syner) and [Syner Integration](/architecture/syner-integration) docs for implementation details.
 

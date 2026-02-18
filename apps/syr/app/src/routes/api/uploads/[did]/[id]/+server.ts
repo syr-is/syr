@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
-import { stringToRecordId } from '@syr-is/types';
+import { recordIdFromDidAndLocal } from '@syr-is/types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	try {
-		const uploadId = stringToRecordId.decode(params.id);
+		const uploadId = recordIdFromDidAndLocal('upload', params.did, params.id);
 		const upload = await uploadController.getUpload(uploadId);
 
 		if (!upload) {
@@ -106,16 +106,17 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		const body = await request.json();
 		const data = UpdateUploadSchema.parse(body);
 
+		const uploadRecordId = recordIdFromDidAndLocal('upload', params.did, params.id);
 		let upload;
 
 		// Handle move operation if folder_id is provided
 		if (data.folder_id !== undefined) {
-			upload = await uploadController.moveUpload(params.id, user.id, data.folder_id);
+			upload = await uploadController.moveUpload(uploadRecordId, user.id, data.folder_id);
 		}
 
 		// Handle rename operation if filename is provided
 		if (data.filename !== undefined) {
-			upload = await uploadController.renameUpload(params.id, user.id, data.filename);
+			upload = await uploadController.renameUpload(uploadRecordId, user.id, data.filename);
 		}
 
 		return json({
@@ -177,7 +178,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	}
 
 	try {
-		const uploadId = stringToRecordId.decode(params.id);
+		const uploadId = recordIdFromDidAndLocal('upload', params.did, params.id);
 
 		// Verify upload exists and user owns it
 		const existingUpload = await uploadController.getUpload(uploadId);

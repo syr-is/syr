@@ -4,7 +4,10 @@ import type { RecordId } from 'surrealdb';
 
 export class PostController {
 	async createPost(user: User, post: PostCreate) {
-		const newPost = await postRepository.create({
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to create posts');
+		}
+		const newPost = await postRepository.createWithCompositeId(user.did, {
 			...post,
 			author_id: user.id,
 			created_at: new Date(),

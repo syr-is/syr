@@ -19,24 +19,26 @@ The following API endpoints must be implemented on the SYR web application to su
 Registers a Syner device with the SYR instance.
 
 Request:
+
 ```json
 {
-  "pairing_code": "ABC123",
-  "device_public_key": "z6Mk...(multibase Ed25519)",
-  "device_info": {
-    "name": "Alice's MacBook",
-    "os": "macos",
-    "model": "MacBook Pro"
-  }
+	"pairing_code": "ABC123",
+	"device_public_key": "z6Mk...(multibase Ed25519)",
+	"device_info": {
+		"name": "Alice's MacBook",
+		"os": "macos",
+		"model": "MacBook Pro"
+	}
 }
 ```
 
 Response:
+
 ```json
 {
-  "device_token": "jwt...",
-  "instance_url": "https://my.syr.is",
-  "user_did": "did:syr:z6Mk..."
+	"device_token": "jwt...",
+	"instance_url": "https://my.syr.is",
+	"user_did": "did:syr:z6Mk..."
 }
 ```
 
@@ -72,14 +74,15 @@ data: {"timestamp": "..."}
 Fetch a specific signing request by ID. Used by the deep link fallback flow.
 
 Response:
+
 ```json
 {
-  "id": "uuid",
-  "type": "delegation",
-  "payload": {"did": "...", "delegate": "...", "scope": "device", "createdAt": "..."},
-  "payload_hash": "sha256hex",
-  "created_at": "...",
-  "expires_at": "..."
+	"id": "uuid",
+	"type": "delegation",
+	"payload": { "did": "...", "delegate": "...", "scope": "device", "createdAt": "..." },
+	"payload_hash": "sha256hex",
+	"created_at": "...",
+	"expires_at": "..."
 }
 ```
 
@@ -94,18 +97,20 @@ Submit a signature for a pending signing request.
 Authentication: Device JWT.
 
 Request:
+
 ```json
 {
-  "signature": "z...(multibase-encoded Ed25519 signature)",
-  "signed_at": "ISO-8601"
+	"signature": "z...(multibase-encoded Ed25519 signature)",
+	"signed_at": "ISO-8601"
 }
 ```
 
 Response:
+
 ```json
 {
-  "status": "accepted",
-  "request_id": "uuid"
+	"status": "accepted",
+	"request_id": "uuid"
 }
 ```
 
@@ -122,11 +127,12 @@ Generates a one-time pairing code for device enrollment.
 Authentication: User session (standard SYR auth).
 
 Response:
+
 ```json
 {
-  "code": "ABC123",
-  "qr_data": "syr://pair?code=ABC123&instance=https://my.syr.is",
-  "expires_at": "ISO-8601"
+	"code": "ABC123",
+	"qr_data": "syr://pair?code=ABC123&instance=https://my.syr.is",
+	"expires_at": "ISO-8601"
 }
 ```
 
@@ -193,6 +199,7 @@ stateDiagram-v2
 ```
 
 Syner maintains the SSE connection with:
+
 - Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s, max 30s)
 - Server-side ping every 30 seconds to keep the connection alive
 - Connection state displayed in Syner UI
@@ -215,10 +222,10 @@ stateDiagram-v2
 
 Custom URL scheme: `syr://`
 
-| Action | URL Pattern | Description |
-| ------ | ----------- | ----------- |
-| Pair   | `syr://pair?code={code}&instance={url}` | Initiate device pairing |
-| Sign   | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}` | Open a signing request |
+| Action | URL Pattern                                                     | Description             |
+| ------ | --------------------------------------------------------------- | ----------------------- |
+| Pair   | `syr://pair?code={code}&instance={url}`                         | Initiate device pairing |
+| Sign   | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}` | Open a signing request  |
 
 ---
 
@@ -245,6 +252,7 @@ sequenceDiagram
 ```
 
 The encrypted key bundle uses:
+
 - X25519 key exchange (Syner's device key + ephemeral SYR key)
 - ChaCha20-Poly1305 encryption
 - One-time use, expires after 5 minutes
@@ -294,13 +302,13 @@ sequenceDiagram
 
 ## 6. Error Handling
 
-| Error | Syner Behavior | SYR Behavior |
-| ----- | -------------- | ------------ |
-| SSE disconnected | Reconnect with backoff. Show "offline" indicator. | Queue signing requests. Fall back to deep links. |
-| Signing request expired | Discard. Show "expired" in history. | Return error to the originating action. User can retry. |
-| Invalid payload hash | Reject request. Alert user. | Log security event. |
-| Device unpaired | Clear instance config. Show pairing screen. | Remove device from active list. Revoke device JWT. |
-| Keystore unavailable | Show error. Cannot sign. | Fall back to server-managed keys if available. |
+| Error                   | Syner Behavior                                    | SYR Behavior                                            |
+| ----------------------- | ------------------------------------------------- | ------------------------------------------------------- |
+| SSE disconnected        | Reconnect with backoff. Show "offline" indicator. | Queue signing requests. Fall back to deep links.        |
+| Signing request expired | Discard. Show "expired" in history.               | Return error to the originating action. User can retry. |
+| Invalid payload hash    | Reject request. Alert user.                       | Log security event.                                     |
+| Device unpaired         | Clear instance config. Show pairing screen.       | Remove device from active list. Revoke device JWT.      |
+| Keystore unavailable    | Show error. Cannot sign.                          | Fall back to server-managed keys if available.          |
 
 ---
 
@@ -311,37 +319,37 @@ The following types should be added to `@syr-is/types` when implementing Syner s
 ```typescript
 // Paired device record
 interface PairedDevice {
-  id: RecordId;
-  user_id: RecordId;
-  device_public_key: string;
-  device_name: string;
-  device_os: 'macos' | 'windows' | 'linux' | 'android' | 'ios';
-  device_model?: string;
-  paired_at: Date;
-  last_active: Date;
-  is_active: boolean;
+	id: RecordId;
+	user_id: RecordId;
+	device_public_key: string;
+	device_name: string;
+	device_os: 'macos' | 'windows' | 'linux' | 'android' | 'ios';
+	device_model?: string;
+	paired_at: Date;
+	last_active: Date;
+	is_active: boolean;
 }
 
 // Signing request
 interface SigningRequest {
-  id: RecordId;
-  user_id: RecordId;
-  device_id?: RecordId;
-  request_type: 'registry_update' | 'delegation' | 'post_sign' | 'rotation';
-  payload: Record<string, unknown>;
-  payload_hash: string;
-  status: 'pending' | 'signed' | 'expired' | 'cancelled';
-  signature?: string;
-  created_at: Date;
-  expires_at: Date;
-  signed_at?: Date;
+	id: RecordId;
+	user_id: RecordId;
+	device_id?: RecordId;
+	request_type: 'registry_update' | 'delegation' | 'post_sign' | 'rotation';
+	payload: Record<string, unknown>;
+	payload_hash: string;
+	status: 'pending' | 'signed' | 'expired' | 'cancelled';
+	signature?: string;
+	created_at: Date;
+	expires_at: Date;
+	signed_at?: Date;
 }
 
 // SSE event types
 type SynerEvent =
-  | { type: 'connected'; device_id: string; instance: string }
-  | { type: 'signing_request'; data: SigningRequest }
-  | { type: 'ping'; timestamp: string };
+	| { type: 'connected'; device_id: string; instance: string }
+	| { type: 'signing_request'; data: SigningRequest }
+	| { type: 'ping'; timestamp: string };
 ```
 
 ---

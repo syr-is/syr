@@ -59,7 +59,7 @@
 				}
 
 				const result = await response.json();
-				const { signedUrl, uploadId } = result.data;
+				const { signedUrl, uploadDid, uploadLocalId } = result.data;
 
 				// Upload to S3
 				uploadProgress = `Uploading ${file.name} to storage...`;
@@ -78,7 +78,7 @@
 				const completeResponse = await fetch('/api/uploads', {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ id: uploadId, status: 'completed' })
+					body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
 				});
 
 				if (!completeResponse.ok) {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RecordId } from 'surrealdb';
+import { ulid } from 'ulid';
 
 /**
  * Zod Codecs
@@ -156,3 +157,65 @@ export const nullToUndefined = z.codec(z.null(), z.undefined(), {
 	decode: () => undefined,
 	encode: () => null
 });
+
+// ---------------------------------------------------------------------------
+// Composite Record IDs (DID-based ownership)
+// ---------------------------------------------------------------------------
+
+interface CompositeId {
+	created_by: string;
+	id: string;
+}
+
+/**
+ * Create a RecordId with an embedded DID owner and optional ULID.
+ * Format: `table:{ created_by: "did:syr:...", id: "<ulid>" }`
+ */
+export function createOwnedRecordId(table: string, did: string, localId?: string): RecordId {
+	return new RecordId(table, { created_by: did, id: localId ?? ulid() });
+}
+
+/**
+ * Reconstruct a composite RecordId from a full DID and a local ID.
+ * Used in route handlers to rebuild the key from URL params.
+ */
+export function recordIdFromDidAndLocal(table: string, did: string, localId: string): RecordId {
+	return new RecordId(table, { created_by: did, id: localId });
+}
+
+/**
+ * Extract the ULID portion from a composite RecordId.
+ */
+export function extractLocalId(recordId: RecordId): string {
+	return (recordId.id as unknown as CompositeId).id;
+}
+
+/**
+ * Extract the full DID string from a composite RecordId.
+ */
+export function extractDid(recordId: RecordId): string {
+	return (recordId.id as unknown as CompositeId).created_by;
+}
+
+/**
+ * Build a URL path segment from a composite RecordId.
+ * Returns `${did}/${localId}`.
+ */
+export function buildResourceUrl(prefix: string, recordId: RecordId): string {
+	return `${prefix}/${extractDid(recordId)}/${extractLocalId(recordId)}`;
+}
+
+/**
+ * Get canonical post ID for URLs and API calls.
+ * Uses did/local_id when present (API serialized), otherwise extracts from RecordId.
+ */
+export function getPostId(post: {
+	id: RecordId | string;
+	did?: string;
+	local_id?: string;
+}): string {
+	if (post.did && post.local_id) return `${post.did}/${post.local_id}`;
+	return typeof post.id === 'string' ? post.id : post.id.toString();
+}
+
+export { ulid } from 'ulid';

@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
-import { stringToRecordId } from '@syr-is/types';
+import { recordIdFromDidAndLocal } from '@syr-is/types';
 
 const ShareUrlSchema = z.object({
 	// Expiry in seconds - default 1 hour, max 7 days
@@ -32,7 +32,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	try {
-		const uploadId = stringToRecordId.decode(params.id);
+		const uploadId = recordIdFromDidAndLocal('upload', params.did, params.id);
 		const upload = await uploadController.getUpload(uploadId);
 
 		if (!upload) {

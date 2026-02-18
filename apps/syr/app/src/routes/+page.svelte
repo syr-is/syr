@@ -7,7 +7,7 @@
 	import { Badge } from '@syr-is/ui/badge';
 	import NewPost from '$lib/components/fragments/new-post.svelte';
 	import PostPreview from '$lib/components/fragments/post-preview.svelte';
-	import type { Post } from '@syr-is/types';
+	import { getPostId, type Post } from '@syr-is/types';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { Pin } from 'lucide-svelte';
@@ -250,9 +250,10 @@
 
 	// Handle post click - navigate to viewing page
 	function handlePostClick(post: Post) {
-		const postId = typeof post.id === 'string' ? post.id : post.id.toString();
+		const did = post.did ?? '';
+		const localId = post.local_id ?? '';
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto(`/posts/${postId}`);
+		goto(`/posts/${did}/${localId}`);
 	}
 
 	// Calculate total pages
@@ -409,7 +410,7 @@
 				<div class="space-y-3">
 					<h2 class="text-lg font-semibold">All Posts</h2>
 					<div class="grid gap-4 md:grid-cols-2">
-						{#each posts as post (post.id.toString())}
+						{#each posts as post (getPostId(post))}
 							<button
 								type="button"
 								class="w-full text-left"
@@ -423,7 +424,7 @@
 							>
 								<PostPreview
 									{post}
-									isPinned={isPostPinned(post.id.toString())}
+									isPinned={isPostPinned(getPostId(post))}
 									onPinToggle={handlePinToggle}
 									showPinButton={true}
 									{mediaUrlMimeTypes}

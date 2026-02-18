@@ -3,7 +3,7 @@
     {
       "name": "anonymous",
       "actions": [
-        "Read:syr/uploads/user:*/public/*"
+        "Read:syr/uploads/did:syr:*/public/*"
       ]
     },
     {

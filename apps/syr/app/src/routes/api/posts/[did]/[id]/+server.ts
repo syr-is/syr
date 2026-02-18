@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { postController } from '$lib/controllers/post.controller';
-import { stringToRecordId, PostUpdateSchema } from '@syr-is/types';
+import { recordIdFromDidAndLocal, PostUpdateSchema } from '@syr-is/types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	try {
-		const postId = stringToRecordId.decode(params.id);
+		const postId = recordIdFromDidAndLocal('post', params.did, params.id);
 		const post = await postController.getPost(postId);
 
 		if (!post) {
@@ -73,7 +73,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	try {
-		const postId = stringToRecordId.decode(params.id);
+		const postId = recordIdFromDidAndLocal('post', params.did, params.id);
 
 		// Verify post exists and user owns it
 		const existingPost = await postController.getPost(postId);
@@ -180,8 +180,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	}
 
 	try {
-		// Convert string ID to RecordId
-		const postId = stringToRecordId.decode(params.id);
+		const postId = recordIdFromDidAndLocal('post', params.did, params.id);
 
 		// Verify post exists and user owns it
 		const existingPost = await postController.getPost(postId);

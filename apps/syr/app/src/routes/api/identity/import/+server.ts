@@ -1,18 +1,21 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { unzipSync, strFromU8 } from 'fflate';
-import { verify, canonicalize, decodePublicKey } from '@syr-is/crypto';
-import { parseDid, buildDidDocument } from '@syr-is/did';
+import { decodePublicKey } from '@syr-is/crypto';
+import { importPrivateKeyFromEncryptedPem } from '@syr-is/crypto/pem';
+import { parseDid } from '@syr-is/did';
 import {
 	IdentityExportManifestSchema,
 	IdentityExportBundleSchema,
-	ExportedPostSchema
+	ExportedPostSchema,
+	stringToRecordId
 } from '@syr-is/types';
 import { z } from 'zod';
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { postRepository } from '$lib/repositories/post.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
+import { kvService } from '$lib/services/kv';
 import { s3Service } from '$lib/services/s3';
 import { s3 as s3Config } from '$lib/config';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
@@ -44,6 +47,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const formData = await request.formData();
 	const file = formData.get('bundle');
+	const passphrase = String(formData.get('passphrase') ?? '').trim();
 
 	if (!file || !(file instanceof File)) {
 		throw error(400, {
@@ -72,12 +76,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const manifest = IdentityExportManifestSchema.parse(
 		JSON.parse(strFromU8(files['manifest.json']))
 	);
-	const identity = IdentityExportBundleSchema.parse(
-		JSON.parse(strFromU8(files['identity.json']))
-	);
-	const posts = z
-		.array(ExportedPostSchema)
-		.parse(JSON.parse(strFromU8(files['posts.json'])));
+	const identity = IdentityExportBundleSchema.parse(JSON.parse(strFromU8(files['identity.json'])));
+	const posts = z.array(ExportedPostSchema).parse(JSON.parse(strFromU8(files['posts.json'])));
 
 	if (manifest.did !== identity.did) {
 		throw error(400, {
@@ -106,12 +106,56 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	const did = identity.did;
+	const uploadedS3Keys: string[] = [];
+
 	try {
-		const identityRecord = await identityRepository.create({
-			did: identity.did,
+		// Read private key from separate file (keeps identity.json spec-compliant)
+		// New format: private_key.pem (PKCS#8 encrypted). Legacy: private_key.json.
+		let privateKey: string | undefined;
+		const privateKeyPem = files['private_key.pem'];
+		if (privateKeyPem) {
+			try {
+				if (!passphrase || passphrase.length < 8) {
+					throw error(400, {
+						code: 'PASSPHRASE_REQUIRED',
+						message:
+							'This bundle contains an encrypted private key. Provide the passphrase you set during export.'
+					});
+				}
+				const pemStr = strFromU8(privateKeyPem);
+				privateKey = importPrivateKeyFromEncryptedPem(pemStr, passphrase);
+			} catch (err) {
+				if (err && typeof err === 'object' && 'status' in err) throw err;
+				throw error(400, {
+					code: 'INVALID_PASSPHRASE',
+					message: 'Wrong passphrase or invalid private_key.pem.'
+				});
+			}
+		} else {
+			// Legacy: unencrypted private_key.json (deprecated)
+			const privateKeyPayload = files['private_key.json'];
+			if (privateKeyPayload) {
+				try {
+					const keysData = z
+						.object({ privateKey: z.string(), did: z.string() })
+						.parse(JSON.parse(strFromU8(privateKeyPayload)));
+					if (keysData.did === did) {
+						privateKey = keysData.privateKey;
+					}
+				} catch {
+					// Ignore malformed private_key.json
+				}
+			}
+		}
+		await identityRepository.create({
+			did,
 			public_key: identity.publicKey,
-			user_id: userId,
-			created_at: new Date()
+			user_id: stringToRecordId.decode(userId),
+			created_at: new Date(),
+			...(typeof privateKey === 'string' && privateKey.length > 0
+				? { private_key: privateKey }
+				: {})
 		});
 
 		await profileRepository.createByUserId(userId);
@@ -124,7 +168,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		for (const dk of identity.delegatedKeys) {
 			await delegatedKeyRepository.create({
-				did: identity.did,
+				did,
 				public_key: dk.publicKey,
 				scope: dk.scope,
 				signature: dk.signature,
@@ -137,6 +181,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let postsImported = 0;
 		let assetsImported = 0;
 
+		// Track which zip_paths we've already imported (from posts)
+		const importedZipPaths = new Set<string>();
+
 		for (const post of posts) {
 			const mediaUrls: string[] = [];
 
@@ -145,7 +192,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					const assetData = files[asset.zip_path];
 					if (!assetData) continue;
 
-					const s3Key = `uploads/${identityRecord.id}/${asset.zip_path.replace(/^assets\//, '')}`;
+					// Use DID-based S3 key: uploads/{did}/{path}
+					const s3Key = `uploads/${did}/${asset.zip_path.replace(/^assets\//, '')}`;
 
 					try {
 						await s3Service.client.send(
@@ -156,12 +204,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 								ContentType: asset.mime_type
 							})
 						);
+						uploadedS3Keys.push(s3Key);
 
 						const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
 
-						const upload = await uploadRepository.create({
+						// Recreate upload with explicit composite ID preserving the original local_id
+						await uploadRepository.createWithExplicitId(did, asset.local_id, {
 							key: s3Key,
-							owner_id: userId,
+							owner_id: stringToRecordId.decode(userId),
 							filename: asset.filename,
 							mime_type: asset.mime_type,
 							size: asset.size,
@@ -175,13 +225,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 						mediaUrls.push(url);
 						assetsImported++;
+						importedZipPaths.add(asset.zip_path);
 					} catch {
 						// Skip assets that fail to upload
 					}
 				}
 			}
 
-			await postRepository.create({
+			// Recreate post with explicit composite ID preserving the original local_id
+			await postRepository.createWithExplicitId(did, post.local_id, {
 				type: post.type,
 				content_type: post.content_type,
 				title: post.title,
@@ -191,7 +243,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				display_mode: post.display_mode,
 				visibility: post.visibility,
 				status: post.status,
-				author_id: userId,
+				author_id: stringToRecordId.decode(userId),
 				created_at: new Date(post.created_at),
 				updated_at: new Date()
 			});
@@ -199,16 +251,108 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			postsImported++;
 		}
 
+		// Import standalone assets from assets.json (not referenced in any post)
+		const assetsPayload = files['assets.json'];
+		if (assetsPayload) {
+			try {
+				const parsed = z
+					.object({
+						assets: z.array(
+							z.object({
+								zip_path: z.string(),
+								local_id: z.string(),
+								filename: z.string(),
+								mime_type: z.string(),
+								size: z.number(),
+								sha256: z.string().optional()
+							})
+						)
+					})
+					.parse(JSON.parse(strFromU8(assetsPayload)));
+				for (const asset of parsed.assets) {
+					if (importedZipPaths.has(asset.zip_path)) continue;
+					const assetData = files[asset.zip_path];
+					if (!assetData) continue;
+
+					const s3Key = `uploads/${did}/${asset.zip_path.replace(/^assets\//, '')}`;
+					try {
+						await s3Service.client.send(
+							new PutObjectCommand({
+								Bucket: s3Config.bucket,
+								Key: s3Key,
+								Body: assetData,
+								ContentType: asset.mime_type
+							})
+						);
+						uploadedS3Keys.push(s3Key);
+						const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
+						await uploadRepository.createWithExplicitId(did, asset.local_id, {
+							key: s3Key,
+							owner_id: stringToRecordId.decode(userId),
+							filename: asset.filename,
+							mime_type: asset.mime_type,
+							size: asset.size,
+							sha256: asset.sha256,
+							url,
+							status: 'completed',
+							is_public: true,
+							created_at: new Date(),
+							updated_at: new Date()
+						});
+						assetsImported++;
+						importedZipPaths.add(asset.zip_path);
+					} catch {
+						// Skip assets that fail to upload
+					}
+				}
+			} catch {
+				// Ignore malformed assets.json
+			}
+		}
+
+		// Restore pinned posts if present in bundle
+		let pinnedRestored = 0;
+		const pinnedPayload = files['pinned_posts.json'];
+		if (pinnedPayload) {
+			try {
+				const parsed = z
+					.object({ post_ids: z.array(z.string()) })
+					.parse(JSON.parse(strFromU8(pinnedPayload)));
+				if (parsed.post_ids.length > 0) {
+					// Filter to IDs that exist in our imported posts (same did/local_id)
+					const importedIds = new Set(posts.map((p) => `${did}/${p.local_id}`));
+					const validPinned = parsed.post_ids.filter((id) => importedIds.has(id));
+					if (validPinned.length > 0) {
+						const index = String(userId);
+						await kvService.set('pinned_posts', index, { post_ids: validPinned });
+						pinnedRestored = validPinned.length;
+					}
+				}
+			} catch {
+				// Ignore malformed pinned_posts.json
+			}
+		}
+
 		return json({
 			status: 'success',
 			data: {
-				did: identity.did,
+				did,
 				postsImported,
-				assetsImported
+				assetsImported,
+				pinnedRestored
 			}
 		});
 	} catch (err) {
 		console.error('Identity import error:', err);
+		// Clean up uploaded S3 objects on failure
+		const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+		for (const key of uploadedS3Keys) {
+			try {
+				await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
+			} catch {
+				// Best-effort cleanup
+			}
+		}
 		throw error(500, {
 			code: 'IMPORT_FAILED',
 			message: 'Identity import failed. The operation may have partially completed.'

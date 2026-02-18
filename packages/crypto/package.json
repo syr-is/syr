@@ -9,6 +9,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./pem": {
+      "node": {
+        "types": "./dist/pem.d.ts",
+        "import": "./dist/pem.js",
+        "default": "./dist/pem.js"
+      },
+      "default": {
+        "types": "./dist/pem.browser.d.ts",
+        "import": "./dist/pem.browser.js",
+        "default": "./dist/pem.browser.js"
+      }
     }
   },
   "files": [
@@ -31,6 +43,7 @@
     "canonicalize": "^2.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "@eslint/js": "^9.36.0",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^10.1.8",

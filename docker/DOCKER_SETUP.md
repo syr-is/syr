@@ -93,7 +93,7 @@ Data is stored in local directories (bind mounts) for easy inspection:
 
 - `db/data/`: SurrealDB RocksDB files
 - `s3/data/`: SeaweedFS object storage
-- `s3/s3_config.json`: S3 credentials configuration
+- `s3/s3_config.json`: S3 credentials and anonymous read policy (`Read:syr/uploads/did:syr:*/public/*` for public files)
 
 **Benefits of bind mounts:**
 

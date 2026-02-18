@@ -32,7 +32,7 @@ Syr inverts the model with a self-hosted identity manager:
 3. **Your instance hosts** your profile, posts, credentials, and assets.
 4. **You can export your keys** at any time. This is an explicit, user-initiated action — not the default.
 5. **You can migrate** to a different SYR instance. Your DID never changes.
-6. **Your posts are part of your identity** — what you think and share is integral to who you are.
+6. **Your posts are part of your identity** — what you think and share is integral to who you are. User data (posts, uploads) carries cryptographic ownership via DID-embedded record IDs.
 7. **You federate** with other SYR instances via ActivityPub to view each other's activity.
 
 No platform owns you. If your instance disappears, you export your identity bundle and set up somewhere else.
@@ -133,15 +133,15 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 
 ## Implementation Phases
 
-| Phase         | Focus                                | Status      |
-| ------------- | ------------------------------------ | ----------- |
-| **Phase 0**   | Cryptographic identity correctness   | In progress |
-| **Phase 0.5** | Testing & hardening                  | In progress |
-| Phase 1       | Registry & provider portability      | Planned     |
-| Phase 2       | Verifiable credentials & enhanced auth | Planned   |
-| Phase 3       | Federation & Syner native app        | Planned     |
-| Phase 4       | Backend migration & observability    | Planned     |
-| Phase 5       | Production hardening                 | Planned     |
+| Phase         | Focus                                  | Status      |
+| ------------- | -------------------------------------- | ----------- |
+| **Phase 0**   | Cryptographic identity correctness     | In progress |
+| **Phase 0.5** | Testing & hardening                    | In progress |
+| Phase 1       | Registry & provider portability        | Planned     |
+| Phase 2       | Verifiable credentials & enhanced auth | Planned     |
+| Phase 3       | Federation & Syner native app          | Planned     |
+| Phase 4       | Backend migration & observability      | Planned     |
+| Phase 5       | Production hardening                   | Planned     |
 
 See the full [Roadmap](/roadmap) for details on each phase.
 

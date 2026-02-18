@@ -3,10 +3,7 @@ import type { RequestHandler } from './$types';
 import { IdentityAuthTokenRequestSchema } from '@syr-is/types';
 import { identityAuth } from '$lib/config';
 import { generateAccessToken } from '$lib/server/auth';
-import {
-	findChallengeByCode,
-	deletePendingChallenge
-} from '$lib/server/identity-auth-store';
+import { findChallengeByCode, deletePendingChallenge } from '$lib/server/identity-auth-store';
 
 /**
  * POST /api/auth/identity-login/token

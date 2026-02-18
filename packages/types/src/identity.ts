@@ -106,11 +106,12 @@ export type RotationStatement = z.infer<typeof RotationStatementSchema>;
 /**
  * Identity Export Bundle Schema
  * Portable identity data that can be exported and verified offline.
- * Never includes private keys.
+ * privateKey is optional; included for full migration bundles when server-managed.
  */
 export const IdentityExportBundleSchema = z.object({
 	did: DidSyrSchema,
 	publicKey: z.string().min(1), // multibase-encoded root public key
+	privateKey: z.string().min(1).optional(), // multibase-encoded root private key (full export only)
 	didDocument: z.record(z.string(), z.unknown()),
 	delegatedKeys: z.array(
 		z.object({
@@ -202,8 +203,11 @@ export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema
 /**
  * Exported Post Schema
  * A post in the portable export format (no RecordId, uses string IDs).
+ * `local_id` is the ULID portion of the composite record ID, preserved
+ * so the same composite key can be recreated on import.
  */
 export const ExportedPostSchema = z.object({
+	local_id: z.string().min(1),
 	type: z.enum(['blog', 'media']),
 	content_type: z.enum(['markdown', 'html']).optional(),
 	title: z.string().optional(),
@@ -217,6 +221,7 @@ export const ExportedPostSchema = z.object({
 	assets: z
 		.array(
 			z.object({
+				local_id: z.string().min(1),
 				filename: z.string(),
 				mime_type: z.string(),
 				size: z.number().int().nonnegative(),

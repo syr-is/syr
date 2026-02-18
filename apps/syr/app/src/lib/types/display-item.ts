@@ -1,4 +1,4 @@
-import type { Upload, Folder } from '@syr-is/types';
+import type { UploadWithCompositeId, Folder } from '@syr-is/types';
 import { getMediaType, type MediaType } from '$lib/utils/media';
 
 /**
@@ -17,7 +17,7 @@ export type DisplayItem =
 			isPublic: boolean;
 			status: string;
 			createdAt: Date;
-			data: Upload;
+			data: UploadWithCompositeId;
 	  }
 	| { kind: 'media-url'; id: string; url: string; mimeType?: string };
 
@@ -37,7 +37,10 @@ export function urlsToDisplayItems(
 }
 
 /** Convert uploads and folders into DisplayItems (folders first) */
-export function uploadsToDisplayItems(folders: Folder[], uploads: Upload[]): DisplayItem[] {
+export function uploadsToDisplayItems(
+	folders: Folder[],
+	uploads: UploadWithCompositeId[]
+): DisplayItem[] {
 	const folderItems: DisplayItem[] = folders.map((f) => ({
 		kind: 'folder' as const,
 		id: typeof f.id === 'string' ? f.id : f.id.toString(),
@@ -117,7 +120,11 @@ export async function resolveItemUrl(
 	if (item.kind === 'media-url') return { url: item.url, isPublic: true };
 	// kind === 'file' — fetch a signed download URL via the API
 	try {
-		const response = await fetch(`/api/uploads/${item.id}`);
+		const uploadUrl =
+			item.data.did && item.data.local_id
+				? `/api/uploads/${item.data.did}/${item.data.local_id}`
+				: `/api/uploads/${item.id}`;
+		const response = await fetch(uploadUrl);
 		if (!response.ok) return null;
 		const result = await response.json();
 		const url = result.data?.downloadUrl;

@@ -93,6 +93,8 @@ SYR uses the **did:syr** method for decentralized identifiers:
 
 The identity system is the core of SYR. In the current phase, keys are **generated and managed server-side** by the SYR instance as a transitionary convenience. Users can explicitly export/offload their keys via the export-bundle endpoint. Once **Syner** (the native companion app) is available, Syner-managed identity becomes the canonical self-custody method, with server-managed keys remaining available for users who prefer managed hosting.
 
+SurrealDB's native composite record IDs extend the identity model into the data layer. The `post` and `upload` tables use composite keys `{ created_by: DID, id: ULID }`, embedding the creator's DID in every record. This yields global uniqueness, portable identity (records survive migration with original IDs), direct ownership proof, and zero-conflict import/export across instances.
+
 ```mermaid
 erDiagram
     TENANT ||--o{ USER : "contains"
@@ -726,7 +728,7 @@ gantt
 - **ActivityPub**: W3C standard for decentralized social networking — used for SYR-to-SYR federation
 - **HTTP Signatures**: Authentication mechanism for ActivityPub federation
 - **WebFinger**: Protocol for discovering information about people/resources
-- **SurrealDB**: Multi-model database supporting document, graph, and relational models
+- **SurrealDB**: Multi-model database supporting document, graph, and relational models; native composite/object record IDs enable DID-anchored keys for `post` and `upload` tables
 - **SeaweedFS**: Distributed S3-compatible object storage for files, images, and media
 - **Zod**: TypeScript-first schema validation library (v4)
 

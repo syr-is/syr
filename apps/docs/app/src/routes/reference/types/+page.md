@@ -49,6 +49,35 @@ The foundation of all entity schemas.
 
 ---
 
+## Composite Record IDs
+
+SurrealDB natively supports object-based record IDs. For owned user content, we embed the creator's DID into every post and upload record ID:
+
+**Format:** `table:{ created_by: "did:syr:z6Mk...", id: "01JMXYZ..." }`
+
+| Rationale              | Description                                                     |
+| ---------------------- | --------------------------------------------------------------- |
+| Global uniqueness      | DID (Ed25519-derived) + ULID = universally unique composite key |
+| Portable identity      | On import, records can be recreated with their original IDs     |
+| Direct ownership proof | The record ID itself encodes who created it                     |
+| Zero-conflict import   | Enables import/export across instances without ID collisions    |
+
+**Tables using composite IDs:** `post`, `upload`
+
+**Tables using simple IDs:** `user`, `session`, `identity`, `folder`, `delegated_key`
+
+**Helper functions** (in `@syr-is/types` or app layer):
+
+| Function                    | Purpose                                              |
+| --------------------------- | ---------------------------------------------------- |
+| `createOwnedRecordId()`     | Create composite ID: `{ created_by: did, id: ulid }` |
+| `recordIdFromDidAndLocal()` | Build RecordId from DID + local ULID                 |
+| `extractDid()`              | Extract `created_by` from composite RecordId         |
+| `extractLocalId()`          | Extract `id` (ULID) from composite RecordId          |
+| `buildResourceUrl()`        | Build URL path e.g. `/posts/{did}/{ulid}`            |
+
+---
+
 ## Codecs (`codecs.ts`)
 
 Zod v4 codecs provide **bi-directional transformations** between network representations and internal types. Each codec defines a `decode` (network -> internal) and `encode` (internal -> network) function.
@@ -221,14 +250,15 @@ BaseEntitySchema.extend({
 ### Upload Key Format
 
 ```text
-uploads/{owner_id}/[folder_path/]{table:id}
+uploads/{did}/[folder_path/]{ulid}
 ```
+
+S3 object paths are namespaced by the owner's DID, aligning with composite record IDs.
 
 Examples:
 
-- `uploads/user:abc/upload:xyz` (root level)
-- `uploads/user:abc/public/images/upload:xyz` (nested in public folder)
-- `uploads/user:abc/public/post_assets/post:123/upload:xyz` (post asset)
+- `uploads/did:syr:z6Mk.../01JMXYZ...` (root level)
+- `uploads/did:syr:z6Mk.../public/images/01JMXYZ...` (nested in public folder)
 
 ---
 

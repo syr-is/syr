@@ -7,7 +7,10 @@ import {
 	QueryParamsSchema,
 	QueryOptionsSchema,
 	PostCreateSchema,
-	PostUpdateSchema
+	PostUpdateSchema,
+	recordIdFromDidAndLocal,
+	extractDid,
+	extractLocalId
 } from '@syr-is/types';
 import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
 
@@ -64,9 +67,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const mediaUrlMimeTypes =
 		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
 
+	const serializedData = data.map((post) => ({
+		...post,
+		id: post.id.toString(),
+		did: extractDid(post.id),
+		local_id: extractLocalId(post.id),
+		author_id: post.author_id.toString()
+	}));
+
 	return json({
 		status: 'success',
-		data,
+		data: serializedData,
 		mediaUrlMimeTypes,
 		pagination: {
 			limit,
@@ -94,6 +105,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	if (!user.did) {
+		throw error(400, {
+			code: 'IDENTITY_REQUIRED',
+			message: 'You must create an identity before creating posts'
+		});
+	}
+
 	try {
 		const body = await request.json();
 		const data = PostCreateSchema.parse(body);
@@ -102,7 +120,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json(
 			{
 				status: 'success',
-				data: result,
+				data: {
+					...result,
+					id: result.id.toString(),
+					did: extractDid(result.id),
+					local_id: extractLocalId(result.id),
+					author_id: result.author_id.toString()
+				},
 				meta: {
 					timestamp: new Date().toISOString()
 				}
@@ -154,10 +178,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		// Convert string ID to RecordId if needed
-		if (body.id && typeof body.id === 'string') {
-			const { stringToRecordId } = await import('@syr-is/types');
-			body.id = stringToRecordId.decode(body.id);
+		// Convert DID + local_id to composite RecordId
+		if (body.did && body.local_id) {
+			body.id = recordIdFromDidAndLocal('post', body.did, body.local_id);
+			delete body.did;
+			delete body.local_id;
 		}
 		const data = PostUpdateSchema.parse(body);
 

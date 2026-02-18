@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { createRotationStatement, verifyRotationStatement } from "../rotation.js";
+import {
+  createRotationStatement,
+  verifyRotationStatement,
+} from "../rotation.js";
 import { generateRootKeypair, generateDeviceKeypair } from "../keys.js";
 import { deriveDid } from "../encoding.js";
 

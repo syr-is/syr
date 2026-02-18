@@ -73,7 +73,11 @@
 			if (response.ok) {
 				const result = await response.json();
 				const pinnedIds: string[] = result.data?.post_ids || [];
-				isPinned = pinnedIds.includes(data.post.id);
+				const postId =
+					data.post.did && data.post.local_id
+						? `${data.post.did}/${data.post.local_id}`
+						: data.post.id;
+				isPinned = pinnedIds.includes(postId);
 			}
 		} catch {
 			// Ignore errors
@@ -89,7 +93,10 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					post_id: data.post.id,
+					post_id:
+						data.post.did && data.post.local_id
+							? `${data.post.did}/${data.post.local_id}`
+							: data.post.id,
 					action: isPinned ? 'unpin' : 'pin'
 				})
 			});
@@ -167,7 +174,7 @@
 
 		publishLoading = true;
 		try {
-			const response = await fetch(`/api/posts/${data.post.id}`, {
+			const response = await fetch(`/api/posts/${data.post.did}/${data.post.local_id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -184,7 +191,7 @@
 			toast.success('Post published successfully!');
 			await invalidateAll();
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			goto(`/posts/${data.post.id}`);
+			goto(`/posts/${data.post.did}/${data.post.local_id}`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to publish post');
 		} finally {
@@ -217,7 +224,7 @@
 
 		publishLoading = true;
 		try {
-			const response = await fetch(`/api/posts/${data.post.id}`, {
+			const response = await fetch(`/api/posts/${data.post.did}/${data.post.local_id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -234,7 +241,7 @@
 			toast.success('Post moved back to drafts');
 			await invalidateAll();
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			goto(`/posts/${data.post.id}`);
+			goto(`/posts/${data.post.did}/${data.post.local_id}`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to unpublish post');
 		} finally {
@@ -271,7 +278,7 @@
 
 			loading = true;
 			try {
-				const response = await fetch(`/api/posts/${data.post.id}`, {
+				const response = await fetch(`/api/posts/${data.post.did}/${data.post.local_id}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(buildPatchBody())
@@ -484,7 +491,7 @@
 		class="mb-4 shrink-0 self-start"
 		onclick={() => {
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			goto(`/posts/${data.post.id}`);
+			goto(`/posts/${data.post.did}/${data.post.local_id}`);
 		}}
 	>
 		<ArrowLeft class="mr-2 h-4 w-4" />

@@ -2,6 +2,22 @@
 
 The **apps/syr/app** application ensures the S3 bucket and CORS rules exist on startup. You do not need to run manual `aws s3api` commands if the app is configured with the correct environment variables.
 
+## Storage path structure (DID-based)
+
+Uploads use DID-namespaced S3 keys:
+
+- **Root / folder uploads**: `uploads/{did}/[folder_path/]{ulid}`
+- **Public files** (e.g. in a `public` folder): `uploads/{did}/.../public/{ulid}`
+- **Post assets**: `uploads/{did}/posts/{post_ulid}/public/{upload_ulid}`
+
+The `s3_config.json` anonymous identity must allow read access for public paths:
+
+```json
+"Read:syr/uploads/did:syr:*/public/*"
+```
+
+This permits unauthenticated access to files under any DID's `public` subtree (post assets, public folder uploads).
+
 ## Required environment variables
 
 Set these (e.g. in `.env` or your deployment config) so the app can create the bucket and apply CORS:

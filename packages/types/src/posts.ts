@@ -76,7 +76,11 @@ const PostObjectSchema = BaseEntitySchema.extend({
 	display_mode: MediaDisplayModeSchema.optional(),
 	visibility: PostBlogVisibilityTypeSchema.default('public'),
 	status: PostStatusSchema.default('draft'),
-	author_id: RecordIdSchema
+	author_id: RecordIdSchema,
+	/** DID from composite record ID (present when serialized for API) */
+	did: z.string().optional(),
+	/** Local ID/ULID from composite record ID (present when serialized for API) */
+	local_id: z.string().optional()
 });
 
 export const PostSchema = PostObjectSchema.superRefine(refinePostType);
