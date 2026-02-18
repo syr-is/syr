@@ -184,3 +184,58 @@ export const SignedMutationSchema = z.object({
 });
 
 export type SignedMutation = z.infer<typeof SignedMutationSchema>;
+
+/**
+ * Identity Full Export Manifest Schema
+ * Metadata about a full identity export zip.
+ */
+export const IdentityExportManifestSchema = z.object({
+	version: z.literal(1),
+	did: DidSyrSchema,
+	exportedAt: z.string().datetime(),
+	postCount: z.number().int().nonnegative(),
+	assetCount: z.number().int().nonnegative()
+});
+
+export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema>;
+
+/**
+ * Exported Post Schema
+ * A post in the portable export format (no RecordId, uses string IDs).
+ */
+export const ExportedPostSchema = z.object({
+	type: z.enum(['blog', 'media']),
+	content_type: z.enum(['markdown', 'html']).optional(),
+	title: z.string().optional(),
+	description: z.string().max(280).optional(),
+	content: z.string().optional(),
+	media_urls: z.array(z.string()).optional(),
+	display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
+	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
+	status: z.enum(['draft', 'completed']).default('draft'),
+	created_at: z.string().datetime(),
+	assets: z
+		.array(
+			z.object({
+				filename: z.string(),
+				mime_type: z.string(),
+				size: z.number().int().nonnegative(),
+				sha256: z.string().optional(),
+				/** Path within the zip's assets/ directory */
+				zip_path: z.string()
+			})
+		)
+		.optional()
+});
+
+export type ExportedPost = z.infer<typeof ExportedPostSchema>;
+
+/**
+ * Identity Import Request Schema
+ * Validated during import to verify the zip contents are well-formed.
+ */
+export const IdentityImportRequestSchema = z.object({
+	manifest: IdentityExportManifestSchema,
+	identity: IdentityExportBundleSchema,
+	posts: z.array(ExportedPostSchema)
+});

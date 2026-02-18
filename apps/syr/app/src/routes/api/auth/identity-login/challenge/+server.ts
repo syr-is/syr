@@ -4,7 +4,7 @@ import { identityRepository } from '$lib/repositories/identity.repository';
 import { userRepository } from '$lib/repositories/user.repository';
 import { IdentityAuthChallengeRequestSchema } from '@syr-is/types';
 import { identityAuth, config } from '$lib/config';
-import { pendingChallenges, cleanupExpiredChallenges } from '$lib/server/identity-auth-store';
+import { setPendingChallenge } from '$lib/server/identity-auth-store';
 
 /**
  * POST /api/auth/identity-login/challenge
@@ -18,7 +18,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = IdentityAuthChallengeRequestSchema.parse(body);
 
-		// Resolve the DID to a local identity
 		const identity = await identityRepository.findByDid(data.did);
 		if (!identity) {
 			return json(
@@ -30,7 +29,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Get the user
 		const user = await userRepository.findById(identity.user_id);
 		if (!user) {
 			return json(
@@ -42,11 +40,9 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Generate challenge ID
 		const challengeId = crypto.randomUUID();
 
-		// Store the pending challenge
-		pendingChallenges.set(challengeId, {
+		await setPendingChallenge(challengeId, {
 			did: data.did,
 			origin: data.origin,
 			scopes: data.scopes,
@@ -55,9 +51,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			user_id: user.id.toString(),
 			created_at: Date.now()
 		});
-
-		// Clean up expired challenges periodically
-		cleanupExpiredChallenges();
 
 		const consentUrl = `${config.PUBLIC_URL}/auth/consent?challenge=${challengeId}`;
 

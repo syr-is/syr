@@ -45,6 +45,7 @@ No platform owns you. If your instance disappears, you export your identity bund
 flowchart TD
     Operator["Instance Operator"] -->|hosts| SYR["SYR Instance"]
     SYR -->|generates| RootKey["Root Keypair (Ed25519)"]
+    SynerApp["Syner Native App"] -.->|"self-custody keys (future)"| RootKey
     RootKey -->|derives| DID["did:syr:z6Mkt..."]
     DID -->|registered at| Registry["Registry"]
     Registry -->|resolves to| SYR
@@ -52,6 +53,7 @@ flowchart TD
     SYR -->|federates via| AP["ActivityPub"]
     AP <-->|SYR-to-SYR| OtherSYR["Other SYR Instances"]
     SYR -->|tenant isolation| Tenants["Tenant A | Tenant B | ..."]
+    SYR <-->|"SSE signing bridge"| SynerApp
 ```
 
 ---
@@ -60,9 +62,9 @@ flowchart TD
 
 ### Root Identity
 
-Every Syr identity starts with an **Ed25519 keypair generated server-side** by the SYR instance. The private key is stored securely on the server, encrypted at rest. The public key is encoded as a multibase string and embedded in the DID identifier. This keypair is the ultimate trust anchor for everything: hosting decisions, delegated keys, signed actions, and migrations.
+Every Syr identity starts with an **Ed25519 keypair**. In the current phase, keys are **generated server-side** by the SYR instance and stored encrypted at rest. The public key is encoded as a multibase string and embedded in the DID identifier. This keypair is the ultimate trust anchor for everything: hosting decisions, delegated keys, signed actions, and migrations.
 
-Users can **explicitly export their keys** if they want to manage them elsewhere or offload them to their own device — but this is an opt-in action, not the default.
+Users can **export their full identity** (keys, posts, assets) as a portable zip bundle. In the future, **Syner** — a cross-platform native companion app — will enable users to generate and manage their root keys on their own devices using platform-native secure keystores, making Syner-managed identity the canonical self-custody method.
 
 ### Posts as Identity
 
@@ -131,12 +133,17 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 
 ## Implementation Phases
 
-| Phase       | Focus                              | Status      |
-| ----------- | ---------------------------------- | ----------- |
-| **Phase 0** | Local-first cryptographic identity | In progress |
-| Phase 1     | Registry + Provider portability    | Planned     |
-| Phase 2     | Identity-Based Auth + VCs          | Planned     |
-| Phase 3     | Federation + Multi-Tenancy         | Planned     |
+| Phase         | Focus                                | Status      |
+| ------------- | ------------------------------------ | ----------- |
+| **Phase 0**   | Cryptographic identity correctness   | In progress |
+| **Phase 0.5** | Testing & hardening                  | In progress |
+| Phase 1       | Registry & provider portability      | Planned     |
+| Phase 2       | Verifiable credentials & enhanced auth | Planned   |
+| Phase 3       | Federation & Syner native app        | Planned     |
+| Phase 4       | Backend migration & observability    | Planned     |
+| Phase 5       | Production hardening                 | Planned     |
+
+See the full [Roadmap](/roadmap) for details on each phase.
 
 ---
 
@@ -144,4 +151,6 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 
 - Read the [Identity Model specification](/architecture/identity-model) for the full technical design.
 - See the [Phase 0 Blueprint](/implementation/phase-0-blueprint) for implementation details.
+- See the [Syner Specification](/architecture/syner) for the native companion app design.
+- Check the [Roadmap](/roadmap) for the full implementation timeline.
 - Browse the [Reference](/reference/types) section for current codebase documentation.

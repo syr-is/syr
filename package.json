@@ -15,7 +15,8 @@
     "format": "turbo format",
     "format:check": "turbo format:check",
     "lint": "turbo lint",
-    "check": "turbo check"
+    "check": "turbo check",
+    "test": "turbo test"
   },
   "keywords": [],
   "author": "",

@@ -17,6 +17,7 @@ The Self-Yield Representation (SYR) Project creates **sovereign identity on dece
 graph TB
     subgraph "Client Layer"
         Web[Web Application<br/>SvelteKit + shadcn-svelte]
+        Syner[Syner Native App<br/>Tauri v2]
         SDK[Integration SDK<br/>@syr-is/sdk]
     end
 
@@ -24,6 +25,7 @@ graph TB
         API[SvelteKit Backend<br/>API Routes]
         Auth[Authentication<br/>JWT + Sessions]
         IDM[Identity Manager<br/>Key Generation + DID]
+        SSEBridge[SSE Signing Bridge<br/>Syner Communication]
         AP[ActivityPub Server<br/>SYR-to-SYR Federation]
         VC[Credential Store<br/>Identity-Linked VCs]
         IDA[Identity-Based Auth<br/>Cross-Instance Login]
@@ -44,9 +46,11 @@ graph TB
     end
 
     Web --> API
+    Syner <-->|"SSE + HTTP"| SSEBridge
     SDK --> API
     API --> Auth
     API --> IDM
+    API --> SSEBridge
     API --> AP
     API --> VC
     API --> IDA
@@ -64,11 +68,6 @@ graph TB
 
     AP <--> SYR2
     Services --> IDA
-
-    style Types fill:#e1f5ff
-    style Crypto fill:#e1f5ff
-    style DB fill:#ffe1f5
-    style S3 fill:#d4edda
 ```
 
 ## DID Method: did:syr
@@ -92,7 +91,7 @@ SYR uses the **did:syr** method for decentralized identifiers:
 
 ### 1. Identity System
 
-The identity system is the core of SYR. Keys are **generated and managed server-side** by the SYR instance. Users can explicitly export/offload their keys, but this is not the default behavior.
+The identity system is the core of SYR. In the current phase, keys are **generated and managed server-side** by the SYR instance as a transitionary convenience. Users can explicitly export/offload their keys via the export-bundle endpoint. Once **Syner** (the native companion app) is available, Syner-managed identity becomes the canonical self-custody method, with server-managed keys remaining available for users who prefer managed hosting.
 
 ```mermaid
 erDiagram
@@ -541,10 +540,11 @@ SYR uses Argon2id, the winner of the Password Hashing Competition, for password 
 
 ### 4. Key Management Security
 
-- **Server-hosted keys**: Root identity keys are generated and stored server-side, encrypted at rest
-- **No default export**: Keys remain on the SYR instance unless the user explicitly requests export
-- **Audit trail**: All key operations (generation, delegation, export, revocation) are logged
-- **Delegated keys**: Device-specific keys can be delegated from the root key for multi-device access
+- **Server-hosted keys (transitionary)**: Root identity keys are generated and stored server-side, encrypted at rest. This is a convenience for users who are not yet ready for self-custody.
+- **Syner-managed keys (canonical, future)**: When Syner is available, keys are generated and stored in platform-native secure keystores (Keychain, DPAPI, libsecret, Android Keystore). The server never sees the private key.
+- **Export-bundle**: Users can export their full identity (keys, posts, assets) as a portable zip for migration.
+- **Audit trail**: All key operations (generation, delegation, export, revocation) are logged.
+- **Delegated keys**: Device-specific keys can be delegated from the root key for multi-device access.
 
 ## Package Architecture
 
@@ -553,18 +553,28 @@ graph TB
     subgraph "Monorepo Structure"
         subgraph "apps/"
             App[syr<br/>Main SvelteKit App]
+            RegistryApp[registry<br/>NestJS Registry API]
             Docs[docs<br/>Documentation Site]
+            SynerApp[syner<br/>Tauri v2 Native App<br/>Future]
         end
 
         subgraph "packages/"
             Types[types<br/>@syr-is/types<br/>Zod Schemas]
             Crypto[crypto<br/>@syr-is/crypto<br/>Ed25519 Operations]
+            DID[did<br/>@syr-is/did<br/>DID Method]
+            Resolver[resolver<br/>@syr-is/resolver<br/>DID Resolution]
             SDK[syr-sdk<br/>@syr-is/sdk<br/>Integration Library]
         end
     end
 
     App --> Types
     App --> Crypto
+    App --> DID
+    RegistryApp --> Crypto
+    SynerApp --> Crypto
+    SynerApp --> Types
+    Resolver --> Crypto
+    Resolver --> DID
     SDK --> Types
 
     subgraph "External Consumers"
@@ -639,14 +649,8 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    A[Current: Single Server] --> B[Phase 2: Load Balanced]
-    B --> C[Phase 3: Microservices]
-    C --> D[Phase 4: Edge Computing]
-
-    style A fill:#d1ecf1
-    style B fill:#fff3cd
-    style C fill:#f8d7da
-    style D fill:#d4edda
+    A[Current: Single Server] --> B[Phase 4: NestJS Backend]
+    B --> C[Phase 5: Horizontal Scaling]
 ```
 
 ### Federation Network

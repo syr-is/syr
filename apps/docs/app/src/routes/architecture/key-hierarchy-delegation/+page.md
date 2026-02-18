@@ -22,18 +22,27 @@ This document establishes the **minimum viable key model** for Syr v0.1.
 
 ## 2. Design Principles
 
-### 2.1 Root key is managed by the SYR instance
+### 2.1 Root key management
 
-The **root private key**:
+The **root private key** can be managed in two modes:
 
-- is generated **server-side** by the SYR instance on identity creation
-- is stored encrypted at rest on the hosting instance
-- can be **exported by the user** to assume self-custody (future phase)
-- anchors the identity — compromise equals **identity compromise**
+**Server-managed (current default, transitionary):**
 
-**Why server-hosted?** SYR is designed to be self-hosted (or community-hosted). You trust the instance because _you run it_ (or your community does). Server-side key management provides frictionless onboarding — users get a cryptographic identity without understanding key management. This is consistent with SSI principles: the operator is the user or their trusted delegate, not a third-party platform.
+- Generated **server-side** by the SYR instance on identity creation
+- Stored encrypted at rest on the hosting instance
+- Can be **exported by the user** to assume self-custody
+- Provides frictionless onboarding — users get a cryptographic identity without understanding key management
+- **Why server-hosted?** SYR is designed to be self-hosted (or community-hosted). You trust the instance because _you run it_ (or your community does). This is consistent with SSI principles: the operator is the user or their trusted delegate, not a third-party platform.
 
-> **Future:** Users will be able to export their root key and manage it client-side. At that point, the server-custody model becomes _optional_, not mandatory.
+**Syner-managed (canonical self-custody method, future):**
+
+- Generated **on the user's device** by the Syner native application (Tauri v2)
+- Stored in **platform-native secure keystore** (Keychain, DPAPI, libsecret, Android Keystore)
+- Private key **never transmitted** to the SYR instance
+- SYR web app communicates with Syner via SSE signing bridge and deep links
+- See the [Syner Specification](/architecture/syner) for full details
+
+Once Syner is available, Syner-managed identity is the recommended method. Server-managed keys remain available for users who prefer managed hosting or are not yet ready for self-custody. The transition from server-managed to Syner-managed is supported via a secure key transfer flow.
 
 ---
 
@@ -316,16 +325,18 @@ These are deferred to maintain **minimal implementability**.
 
 **Rationale:** SYR instances are self-hosted or community-hosted. The operator **is** the user (or their trusted delegate). Server-side keys provide frictionless onboarding without sacrificing the SSI guarantee that no third-party platform controls your identity.
 
-### Future: Client-custodied keys + delegated signing
+### Future: Syner-managed keys + delegated signing
 
-| Phase                   | Capability                                     |
-| ----------------------- | ---------------------------------------------- |
-| Key offloading          | User exports root key, server deletes its copy |
-| Client-side signing     | Delegated device keys sign mutations locally   |
-| Multi-device delegation | Root key authorizes per-device keys            |
-| Recovery                | Social recovery guardians, threshold keys      |
+| Phase                   | Capability                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Syner key generation    | Root key generated on device, stored in platform-native keystore              |
+| SSE signing bridge      | SYR pushes signing requests to Syner via SSE, Syner returns signatures        |
+| Key transfer            | Server-managed to Syner-managed via encrypted QR code transfer                |
+| Client-side signing     | Delegated device keys sign mutations locally via Syner                        |
+| Multi-device delegation | Root key (in Syner) authorizes per-device keys                                |
+| Recovery                | Social recovery guardians, threshold keys, encrypted backup                   |
 
-The transition is **opt-in** — server-custody remains available for users who prefer managed keys.
+The transition is **opt-in** — server-custody remains available for users who prefer managed keys. See the [Syner Specification](/architecture/syner) and [Syner Integration](/architecture/syner-integration) docs for implementation details.
 
 ---
 
