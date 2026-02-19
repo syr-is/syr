@@ -4,7 +4,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
 
 # Copy workspace configuration
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
