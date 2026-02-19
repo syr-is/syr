@@ -1,5 +1,11 @@
 import { BaseRepository } from './base.repository';
-import { PostSchema, type Post } from '@syr-is/types';
+import {
+	extractDid,
+	extractLocalId,
+	PostSchema,
+	recordIdFromDidAndLocal,
+	type Post
+} from '@syr-is/types';
 
 const MAX_LIMIT = 1000;
 
@@ -7,13 +13,13 @@ export interface FindByDidOptions {
 	/** Max posts per page (default: 500) */
 	limit?: number;
 	/** Cursor for next page: fetch posts before this (created_at, id). Both values required together. */
-	cursor?: { afterCreatedAt: Date; afterId: string };
+	cursor?: { afterCreatedAt: Date; afterDid: string; afterLocalId: string };
 }
 
 export interface FindByDidResult {
 	posts: Post[];
 	/** Next cursor when more results exist; null when done */
-	nextCursor: { afterCreatedAt: Date; afterId: string } | null;
+	nextCursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null;
 }
 
 export class PostRepository extends BaseRepository<Post> {
@@ -29,18 +35,19 @@ export class PostRepository extends BaseRepository<Post> {
 	async findByDid(did: string, options?: FindByDidOptions): Promise<FindByDidResult> {
 		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? 500, MAX_LIMIT)));
 		const afterCreatedAt = options?.cursor?.afterCreatedAt;
-		const afterId = options?.cursor?.afterId;
+		const afterDid = options?.cursor?.afterDid;
+		const afterLocalId = options?.cursor?.afterLocalId;
 
 		let query: string;
 		const params: Record<string, unknown> = { did };
 
-		if (afterCreatedAt != null && afterId != null) {
+		if (afterCreatedAt != null && afterDid != null && afterLocalId != null) {
 			query = `SELECT * FROM post
 				WHERE id.created_by = $did AND (created_at < $afterCreatedAt OR (created_at = $afterCreatedAt AND id < $afterId))
 				ORDER BY created_at DESC, id DESC
 				LIMIT ${limitNum}`;
 			params.afterCreatedAt = afterCreatedAt;
-			params.afterId = afterId;
+			params.afterId = recordIdFromDidAndLocal('post', afterDid, afterLocalId);
 		} else {
 			query = `SELECT * FROM post
 				WHERE id.created_by = $did
@@ -57,7 +64,8 @@ export class PostRepository extends BaseRepository<Post> {
 			lastPost != null
 				? {
 						afterCreatedAt: lastPost.created_at,
-						afterId: typeof lastPost.id === 'string' ? lastPost.id : String(lastPost.id)
+						afterDid: extractDid(lastPost.id),
+						afterLocalId: extractLocalId(lastPost.id)
 					}
 				: null;
 

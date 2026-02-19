@@ -176,7 +176,7 @@ Deep link flow:
 ### 6.3 Communication Security
 
 - All SSE and HTTP communication occurs over TLS
-- Syner authenticates to the SYR instance using a device-specific JWT issued during pairing
+- Syner authenticates to the SYR instance using a device JWT (`device_jwt`), a JWT issued during pairing
 - Signing requests include a nonce to prevent replay attacks
 - Request payloads are integrity-checked (SHA-256 hash in the request matches the canonical payload)
 
@@ -239,7 +239,7 @@ sequenceDiagram
     Syner->>SYR: POST /api/syner/pair {code, device_public_key, device_info}
     SYR->>SYR: Verify pairing code
     SYR->>SYR: Store device record
-    SYR->>Syner: {device_token, instance_url, user_did}
+    SYR->>Syner: {device_jwt, instance_url, user_did}
     Syner->>Syner: Store instance config
     Syner->>SYR: GET /api/syner/events (SSE, authenticated)
     SYR-->>Syner: SSE: paired
@@ -254,12 +254,12 @@ sequenceDiagram
 - Device name/info (OS, model)
 - Pairing timestamp
 - Last active timestamp
-- Device JWT for authentication
+- Device JWT (`device_jwt`) for authentication
 
 **Stored on Syner:**
 
 - Instance URL
-- Device JWT
+- Device JWT (`device_jwt`)
 - User DID
 - Instance name (for display)
 

@@ -32,7 +32,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 		// Query posts (cursor-based, with record cap)
 		const posts: Post[] = [];
-		let postNextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
+		let postNextCursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null =
+			null;
 		do {
 			if (posts.length >= MAX_EXPORT_RECORDS) break;
 			const page = await postRepository.findByDid(did, {
@@ -45,7 +46,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 		// Fetch uploads (cursor-based, with record cap)
 		const uploads: Upload[] = [];
-		let uploadNextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
+		let uploadNextCursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null =
+			null;
 		do {
 			if (uploads.length >= MAX_EXPORT_RECORDS) break;
 			const page = await uploadRepository.findByDid(did, {

@@ -1,4 +1,10 @@
-import { UploadSchema, type Upload } from '@syr-is/types';
+import {
+	extractDid,
+	extractLocalId,
+	recordIdFromDidAndLocal,
+	UploadSchema,
+	type Upload
+} from '@syr-is/types';
 import { BaseRepository } from './base.repository';
 
 const MAX_PAGE = 500;
@@ -17,13 +23,13 @@ export interface FindByDidOptions {
 	/** Max uploads per page (default: 500) */
 	limit?: number;
 	/** Cursor for next page: fetch uploads before this (created_at, id). Both values required together. */
-	cursor?: { afterCreatedAt: Date; afterId: string };
+	cursor?: { afterCreatedAt: Date; afterDid: string; afterLocalId: string };
 }
 
 export interface FindByDidResult {
 	uploads: Upload[];
 	/** Next cursor when more results exist; null when done */
-	nextCursor: { afterCreatedAt: Date; afterId: string } | null;
+	nextCursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null;
 }
 
 export class UploadRepository extends BaseRepository<Upload> {
@@ -57,18 +63,19 @@ export class UploadRepository extends BaseRepository<Upload> {
 	async findByDid(did: string, options?: FindByDidOptions): Promise<FindByDidResult> {
 		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? 500, MAX_PAGE)));
 		const afterCreatedAt = options?.cursor?.afterCreatedAt;
-		const afterId = options?.cursor?.afterId;
+		const afterDid = options?.cursor?.afterDid;
+		const afterLocalId = options?.cursor?.afterLocalId;
 
 		let query: string;
 		const params: Record<string, unknown> = { did };
 
-		if (afterCreatedAt != null && afterId != null) {
+		if (afterCreatedAt != null && afterDid != null && afterLocalId != null) {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did AND (created_at < $afterCreatedAt OR (created_at = $afterCreatedAt AND id < $afterId))
 				ORDER BY created_at DESC, id DESC
 				LIMIT ${limitNum}`;
 			params.afterCreatedAt = afterCreatedAt;
-			params.afterId = afterId;
+			params.afterId = recordIdFromDidAndLocal('upload', afterDid, afterLocalId);
 		} else {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did
@@ -86,7 +93,8 @@ export class UploadRepository extends BaseRepository<Upload> {
 			lastUpload != null
 				? {
 						afterCreatedAt: lastUpload.created_at,
-						afterId: typeof lastUpload.id === 'string' ? lastUpload.id : String(lastUpload.id)
+						afterDid: extractDid(lastUpload.id),
+						afterLocalId: extractLocalId(lastUpload.id)
 					}
 				: null;
 
