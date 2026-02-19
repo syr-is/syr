@@ -7,15 +7,29 @@ import { BaseEntitySchema, RecordIdSchema, DidSyrSchema, TimestampSchema } from 
  * Links a did:syr identifier and public key to a user account.
  * Never stores private keys.
  */
+/** Aegis KDF params stored with the identity (Argon2id) */
+export const AegisKdfParamsSchema = z.object({
+	mem: z.number(),
+	it: z.number(),
+	par: z.number()
+});
+
 export const IdentitySchema = BaseEntitySchema.pick({
 	id: true,
 	created_at: true
 }).extend({
 	did: DidSyrSchema,
 	public_key: z.string().min(1), // multibase-encoded Ed25519 public key
-	private_key: z.string().optional(), // multibase-encoded private key for server-managed keys
 	user_id: RecordIdSchema,
-	tenant_id: RecordIdSchema.optional() // optional tenant scoping
+	tenant_id: RecordIdSchema.optional(), // optional tenant scoping
+	// Aegis (CIGP) encrypted seed - password-protected, server-stored
+	aegis_salt: z.string().optional(),
+	aegis_nonce: z.string().optional(),
+	aegis_ct: z.string().optional(),
+	aegis_tag: z.string().optional(),
+	aegis_kdf_mem: z.number().optional(),
+	aegis_kdf_it: z.number().optional(),
+	aegis_kdf_par: z.number().optional()
 });
 
 export type Identity = z.infer<typeof IdentitySchema>;

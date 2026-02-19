@@ -4,16 +4,22 @@
 	import * as Card from '@syr-is/ui/card';
 	import { buttonVariants } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
+	import { seedHandler } from '$lib/services/seed-handler';
+	import { processPendingRegistryJobs } from '$lib/services/registry-sign.service';
 	import type { PageData } from './$types';
 
 	import RemoveRegistryDialog from '$lib/components/fragments/remove-registry-dialog.svelte';
 	import DeleteAllRegistriesDialog from '$lib/components/fragments/delete-all-registries-dialog.svelte';
 	import RevokeKeyDialog from '$lib/components/fragments/revoke-key-dialog.svelte';
 	import ExportKeyDialog from '$lib/components/fragments/export-key-dialog.svelte';
+	import ImportIdentityDialog from '$lib/components/fragments/import-identity-dialog.svelte';
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
+	import { Input } from '@syr-is/ui/input';
+	import { Loader2 } from 'lucide-svelte';
 
 	let { data }: { data: PageData } = $props();
 	let exportIdentityDialogOpen = $state(false);
+	let importIdentityDialogOpen = $state(false);
 	let newRegistryUrl = $state('');
 	let addingRegistry = $state(false);
 	let retryingJob = $state<string | null>(null);
@@ -25,9 +31,15 @@
 	let keyToRevoke = $state<string | null>(null);
 	let cancelJobDialogOpen = $state(false);
 	let jobToCancel = $state<string | null>(null);
+	let unlockPassword = $state('');
+	let unlockingForSync = $state(false);
 
 	function openExportIdentityDialog() {
 		exportIdentityDialogOpen = true;
+	}
+
+	function openImportIdentityDialog() {
+		importIdentityDialogOpen = true;
 	}
 
 	function openRevokeKeyDialog(publicKey: string) {
@@ -115,6 +127,32 @@
 		}
 	}
 
+	async function unlockForSync() {
+		if (!unlockPassword || unlockPassword.length < 1) return;
+
+		unlockingForSync = true;
+		try {
+			const res = await fetch('/api/identity/aegis-bundle');
+			if (!res.ok) throw new Error('Failed to fetch identity');
+			const bundleData = await res.json();
+			const bundle = bundleData.data?.aegisBundle;
+			if (!bundle) throw new Error('No Aegis bundle found');
+
+			await seedHandler.run({
+				bundle,
+				password: unlockPassword,
+				action: processPendingRegistryJobs
+			});
+			unlockPassword = '';
+			toast.success('Registry sync complete');
+			await invalidateAll();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Unlock failed');
+		} finally {
+			unlockingForSync = false;
+		}
+	}
+
 	// SSE: subscribe to outbox updates when on this page with identity
 	onMount(() => {
 		if (!data.hasIdentity) return;
@@ -129,7 +167,9 @@
 			es.close();
 		};
 
-		return () => es.close();
+		return () => {
+			es.close();
+		};
 	});
 </script>
 
@@ -189,9 +229,15 @@
 				{/if}
 			{:else}
 				<p class="text-muted-foreground">
-					You do not have an identity yet. Identity is created automatically when you first sign in
-					after registration.
+					You do not have an identity yet. Import from a backup if you have one.
 				</p>
+				<button
+					class={buttonVariants({ variant: 'default' })}
+					onclick={openImportIdentityDialog}
+					disabled={importIdentityDialogOpen}
+				>
+					Import identity
+				</button>
 			{/if}
 		</Card.Content>
 	</Card.Root>
@@ -275,6 +321,43 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>
+					<div
+						class="mb-4 space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30"
+					>
+						<p class="text-sm text-amber-800 dark:text-amber-200">
+							Unlock your identity to complete registry sync. Enter your account password to decrypt
+							and sign.
+						</p>
+						<div class="flex items-end gap-2">
+							<div class="flex-1 space-y-1">
+								<label for="unlock-sync-password" class="sr-only text-sm font-medium"
+									>Password</label
+								>
+								<Input
+									id="unlock-sync-password"
+									type="password"
+									bind:value={unlockPassword}
+									placeholder="Account password"
+									autocomplete="current-password"
+									disabled={unlockingForSync}
+									class="w-full"
+									onkeydown={(e) => e.key === 'Enter' && unlockForSync()}
+								/>
+							</div>
+							<button
+								class={buttonVariants({ variant: 'default' })}
+								onclick={unlockForSync}
+								disabled={unlockingForSync || !unlockPassword}
+							>
+								{#if unlockingForSync}
+									<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+									Unlocking...
+								{:else}
+									Unlock
+								{/if}
+							</button>
+						</div>
+					</div>
 					<ul class="space-y-2">
 						{#each data.outboxJobs as job (job.id)}
 							<li class="space-y-1 rounded-md border px-3 py-2 text-sm">
@@ -284,7 +367,12 @@
 											{job.payload?.action ?? job.type} → {job.payload?.registryUrl ?? ''}
 										</span>
 										<span class={statusColor(job.status)}>
-											{job.status} · attempt {job.attempts}/{job.maxAttempts}
+											{job.status}
+											{#if job.type === 'registry_sync' && job.status === 'pending'}
+												· Waiting for unlock
+											{:else}
+												· attempt {job.attempts}/{job.maxAttempts}
+											{/if}
 										</span>
 									</div>
 									<div class="flex gap-1">
@@ -335,6 +423,8 @@
 	hasIdentity={data.hasIdentity}
 	onSuccess={invalidateAll}
 />
+
+<ImportIdentityDialog bind:open={importIdentityDialogOpen} onSuccess={invalidateAll} />
 
 <CancelOutboxJobDialog
 	bind:open={cancelJobDialogOpen}

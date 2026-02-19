@@ -1,4 +1,4 @@
-import { error, isHttpError } from '@sveltejs/kit';
+import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { identityController } from '$lib/controllers/identity.controller';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
@@ -7,71 +7,27 @@ import { uploadRepository } from '$lib/repositories/upload.repository';
 import { s3Service } from '$lib/services/s3';
 import { s3 as s3Config } from '$lib/config';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { zip, strToU8 } from 'fflate';
 import type { IdentityExportManifest, ExportedPost, Post } from '@syr-is/types';
 import { extractLocalId } from '@syr-is/types';
-import { exportPrivateKeyToEncryptedPem } from '@syr-is/crypto/pem';
 
 /**
- * GET returns 405 — use POST with { passphrase } in JSON body.
- */
-export const GET: RequestHandler = async () => {
-	throw error(405, {
-		code: 'METHOD_NOT_ALLOWED',
-		message:
-			'Use POST with JSON body { passphrase: string } to export. The private key is stored as encrypted PKCS#8 PEM.'
-	});
-};
-
-/**
- * POST /api/identity/export-bundle
+ * GET /api/identity/export-bundle-data
  *
- * Export the user's full identity as a portable zip bundle.
- * Contains: manifest.json, identity.json, posts.json, assets.json, pinned_posts.json, and assets/*.
- * When the identity has a server-managed private key, includes private_key.pem (PKCS#8 encrypted).
- *
- * Body: { passphrase: string } - required when exporting a private key (min 8 chars).
+ * Returns manifest, identity, posts, and assets (no key) for client-side export.
+ * The client creates Sigil from seed (decrypted in browser), assembles zip with identity.sigil,
+ * and downloads.
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
 	try {
 		const userId = locals.user.id;
-
 		const identityBundle = await identityController.exportIdentity(userId);
 		const did = identityBundle.did;
 
-		// Fetch private key separately (server-managed identities only)
-		let privateKeyMultibase: string | undefined;
-		try {
-			const keys = await identityController.exportKeys(userId);
-			privateKeyMultibase = keys.privateKey;
-		} catch {
-			// No private key (e.g. Syner-managed)
-		}
-
-		// If we have a private key, we need a passphrase to encrypt it
-		let privateKeyPem: string | undefined;
-		if (privateKeyMultibase) {
-			let passphrase: string;
-			try {
-				const body = await request.json().catch(() => ({}));
-				passphrase = typeof body?.passphrase === 'string' ? body.passphrase : '';
-			} catch {
-				passphrase = '';
-			}
-			if (!passphrase || passphrase.length < 8) {
-				throw error(400, {
-					code: 'PASSPHRASE_REQUIRED',
-					message: 'A passphrase of at least 8 characters is required to encrypt the private key.'
-				});
-			}
-			privateKeyPem = exportPrivateKeyToEncryptedPem(privateKeyMultibase, passphrase);
-		}
-
-		// Query by DID (composite id.created_by) for reliable results (paginated)
+		// Query posts
 		const posts: Post[] = [];
 		let nextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
 		do {
@@ -84,7 +40,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nextCursor = page.nextCursor;
 		} while (nextCursor);
 
-		// Fetch uploads in pages to avoid unbounded memory (same pattern as posts)
+		// Fetch uploads
 		const uploads: Awaited<ReturnType<typeof uploadRepository.findByDid>> = [];
 		let uploadNextCursor: { offset: number } | null = null;
 		do {
@@ -96,7 +52,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			uploadNextCursor = page.nextCursor;
 		} while (uploadNextCursor);
 
-		const zipFiles: Record<string, Uint8Array> = {};
 		const uploadsByUrl = new Map(uploads.map((u) => [u.url, u]));
 		const exportedAssets: Array<{
 			zip_path: string;
@@ -105,14 +60,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			mime_type: string;
 			size: number;
 			sha256?: string;
+			content_base64: string;
 		}> = [];
 
-		// Add ALL uploads to zip (including standalone uploads not in any post)
 		for (const upload of uploads) {
 			if (!upload.key) continue;
 			const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
-			if (zipPath in zipFiles) continue; // avoid duplicates
-
 			try {
 				const cmd = new GetObjectCommand({
 					Bucket: s3Config.bucket,
@@ -121,14 +74,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const resp = await s3Service.client.send(cmd);
 				if (resp.Body) {
 					const bytes = await resp.Body.transformToByteArray();
-					zipFiles[zipPath] = bytes;
+					const base64 = Buffer.from(bytes).toString('base64');
 					exportedAssets.push({
 						zip_path: zipPath,
 						local_id: extractLocalId(upload.id),
 						filename: upload.filename,
 						mime_type: upload.mime_type,
 						size: upload.size,
-						sha256: upload.sha256
+						sha256: upload.sha256,
+						content_base64: base64
 					});
 				}
 			} catch {
@@ -139,16 +93,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const exportedPosts: ExportedPost[] = [];
 		for (const post of posts) {
 			const postAssets: ExportedPost['assets'] = [];
-
 			if (post.media_urls) {
 				for (const mediaUrl of post.media_urls) {
 					const upload = uploadsByUrl.get(mediaUrl);
 					if (!upload?.key) continue;
-
 					const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
-
-					// Only add to postAssets when the asset was successfully fetched and written to zipFiles
-					if (zipPath in zipFiles) {
+					const hasAsset = exportedAssets.some((a) => a.zip_path === zipPath);
+					if (hasAsset) {
 						postAssets.push({
 							local_id: extractLocalId(upload.id),
 							filename: upload.filename,
@@ -160,7 +111,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					}
 				}
 			}
-
 			exportedPosts.push({
 				local_id: extractLocalId(post.id),
 				type: post.type,
@@ -177,7 +127,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		// Fetch pinned post IDs (canonical did/localId format)
 		const pinnedPostIds = await pinnedPostsController.getPinnedPostIds(userId);
 
 		const manifest: IdentityExportManifest = {
@@ -188,39 +137,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			assetCount: exportedAssets.length
 		};
 
-		zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
-		zipFiles['identity.json'] = strToU8(JSON.stringify(identityBundle, null, 2));
-		zipFiles['posts.json'] = strToU8(JSON.stringify(exportedPosts, null, 2));
-		zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: exportedAssets }, null, 2));
-		zipFiles['pinned_posts.json'] = strToU8(JSON.stringify({ post_ids: pinnedPostIds }, null, 2));
-		if (privateKeyPem) {
-			zipFiles['private_key.pem'] = strToU8(privateKeyPem);
-		}
-
-		const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-			zip(zipFiles, { level: 1 }, (err, data) => {
-				if (err) reject(err);
-				else resolve(data ?? new Uint8Array(0));
-			});
-		});
-
-		return new Response(new Blob([zipped as BlobPart]), {
-			headers: {
-				'Content-Type': 'application/zip',
-				'Content-Disposition': `attachment; filename="syr-export-${identityBundle.did.slice(8, 20)}-${Date.now()}.zip"`
-			}
+		return json({
+			status: 'success',
+			data: {
+				manifest,
+				identity: identityBundle,
+				posts: exportedPosts,
+				assets: exportedAssets,
+				pinned_posts: { post_ids: pinnedPostIds }
+			},
+			meta: { timestamp: new Date().toISOString() }
 		});
 	} catch (err) {
 		if (isHttpError(err)) throw err;
-
-		console.error('Identity export-bundle error:', err);
-
+		console.error('Export-bundle-data error:', err);
 		if (err instanceof Error) {
 			if (err.message.includes('no identity') || err.message.includes('no profile')) {
 				throw error(404, { code: 'NOT_FOUND', message: err.message });
 			}
 		}
-
-		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Export bundle generation failed' });
+		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch export data' });
 	}
 };

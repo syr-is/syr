@@ -26,7 +26,7 @@ This document defines the **minimum viable identity architecture** for Syr.
 ### 2.1 Self-sovereign root identity
 
 - Every identity begins with a **server-generated root keypair** managed by the SYR instance.
-- The **private key is stored server-side**, encrypted at rest. Users can explicitly export/offload keys on demand.
+- The **private key is stored server-side**, encrypted at rest (custodial generation follows [Aegis](/architecture/aegis)). Users can explicitly export/offload keys on demand (export format follows [Sigil](/architecture/sigil)).
 - No external institution may seize the root identity.
 - The root identity is the **ultimate trust anchor** for:
   - hosting
@@ -132,7 +132,7 @@ The **root identity** is defined by:
 
 The root identity is the **identity-based auth subject (`sub`)**.
 
-> **Note:** In v0.1, root keys are managed by the SYR instance. Users can export their keys to assume self-custody in a future phase.
+> **Note:** In v0.1, root keys are managed by the SYR instance (per [Aegis](/architecture/aegis)). Users can export their keys to assume self-custody (target format: [Sigil](/architecture/sigil)).
 
 ---
 

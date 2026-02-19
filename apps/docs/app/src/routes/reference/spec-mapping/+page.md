@@ -53,17 +53,26 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Key Hierarchy & Delegation Specification
 
-| Requirement                             | Status          | Details                                                                                                   |
-| --------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
-| Ed25519 root key generation             | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()`.                                                  |
-| Root key stored on server               | **Implemented** | `identity.private_key` field stores multibase-encoded private key (server-managed identities).            |
-| Delegated device keys                   | **Implemented** | `POST /api/identity/delegate`. Delegation statement signed by root key, verified server-side.             |
-| Delegation statement (root-signed)      | **Implemented** | JCS-canonicalized `{ did, delegate, scope, createdAt, expiresAt? }` signed with root key.                 |
-| Delegation verification                 | **Implemented** | `identity.controller.ts` — `verifyDelegation()` checks root signature, DID match, expiration, revocation. |
-| Delegation scopes (`device`, `session`) | **Implemented** | `DelegationScopeSchema` in `packages/types/src/identity.ts`.                                              |
-| Root-signed revocation records          | **Partial**     | `revoked_at` field exists on `DelegatedKey`. Formal revocation record format not yet implemented.         |
-| Multi-device operation                  | **Implemented** | Multiple delegated keys per identity supported.                                                           |
-| Key export                              | **Implemented** | `GET /api/identity/export` and `GET /api/identity/export-bundle` (full zip with posts/assets).            |
+| Requirement                             | Status          | Details                                                                                                                                                                             |
+| --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ed25519 root key generation             | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()`.                                                                                                                            |
+| Root key stored on server               | **Implemented** | `identity.private_key` field stores multibase-encoded private key (server-managed identities).                                                                                      |
+| Delegated device keys                   | **Implemented** | `POST /api/identity/delegate`. Delegation statement signed by root key, verified server-side.                                                                                       |
+| Delegation statement (root-signed)      | **Implemented** | JCS-canonicalized `{ did, delegate, scope, createdAt, expiresAt? }` signed with root key.                                                                                           |
+| Delegation verification                 | **Implemented** | `identity.controller.ts` — `verifyDelegation()` checks root signature, DID match, expiration, revocation.                                                                           |
+| Delegation scopes (`device`, `session`) | **Implemented** | `DelegationScopeSchema` in `packages/types/src/identity.ts`.                                                                                                                        |
+| Root-signed revocation records          | **Partial**     | `revoked_at` field exists on `DelegatedKey`. Formal revocation record format not yet implemented.                                                                                   |
+| Multi-device operation                  | **Implemented** | Multiple delegated keys per identity supported.                                                                                                                                     |
+| Key export                              | **Implemented** | `GET /api/identity/export` and `GET /api/identity/export-bundle` (full zip with posts/assets). Target format: [Sigil](/architecture/sigil); current uses PKCS#8 PEM (transitional). |
+
+---
+
+## Sigil & Aegis Specifications
+
+| Requirement                | Status      | Details                                                                                                                      |
+| -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Aegis custodial generation | **Partial** | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis). |
+| Sigil export format        | **Planned** | Target format for portable identity export. Current implementation uses PKCS#8 PEM. See [Sigil v1](/architecture/sigil).     |
 
 ---
 

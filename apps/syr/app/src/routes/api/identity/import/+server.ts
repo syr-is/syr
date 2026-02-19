@@ -2,8 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { unzipSync, strFromU8 } from 'fflate';
 import { decodePublicKey } from '@syr-is/crypto';
-import { importPrivateKeyFromEncryptedPem } from '@syr-is/crypto/pem';
 import { parseDid } from '@syr-is/did';
+import type { AegisBundle } from '@syr-is/crypto/aegis';
 import {
 	IdentityExportManifestSchema,
 	IdentityExportBundleSchema,
@@ -11,6 +11,7 @@ import {
 	stringToRecordId
 } from '@syr-is/types';
 import { z } from 'zod';
+import { dbService } from '$lib/services/db';
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { postRepository } from '$lib/repositories/post.repository';
@@ -47,12 +48,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const formData = await request.formData();
 	const file = formData.get('bundle');
-	const passphrase = String(formData.get('passphrase') ?? '').trim();
+	const aegisBundleRaw = formData.get('aegisBundle');
 
 	if (!file || !(file instanceof File)) {
 		throw error(400, {
 			code: 'INVALID_REQUEST',
 			message: 'Missing "bundle" file in form data'
+		});
+	}
+
+	if (!aegisBundleRaw || typeof aegisBundleRaw !== 'string') {
+		throw error(400, {
+			code: 'INVALID_REQUEST',
+			message:
+				'Missing "aegisBundle" in form data. The client must decrypt the Sigil and create Aegis with your new password before uploading.'
+		});
+	}
+
+	let aegisBundle: AegisBundle;
+	try {
+		aegisBundle = JSON.parse(aegisBundleRaw) as AegisBundle;
+		if (
+			!aegisBundle.pub ||
+			!aegisBundle.salt ||
+			!aegisBundle.nonce ||
+			!aegisBundle.ct ||
+			!aegisBundle.tag ||
+			!aegisBundle.kdf
+		) {
+			throw new Error('Invalid aegisBundle structure');
+		}
+	} catch {
+		throw error(400, {
+			code: 'INVALID_AEGIS',
+			message: 'Invalid aegisBundle JSON'
 		});
 	}
 
@@ -146,52 +175,32 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let pinnedPostsRestored = false;
 
 	try {
-		// Read private key from separate file (keeps identity.json spec-compliant)
-		// New format: private_key.pem (PKCS#8 encrypted). Legacy: private_key.json.
-		let privateKey: string | undefined;
-		const privateKeyPem = files['private_key.pem'];
-		if (privateKeyPem) {
-			try {
-				if (!passphrase || passphrase.length < 8) {
-					throw error(400, {
-						code: 'PASSPHRASE_REQUIRED',
-						message:
-							'This bundle contains an encrypted private key. Provide the passphrase you set during export.'
-					});
-				}
-				const pemStr = strFromU8(privateKeyPem);
-				privateKey = importPrivateKeyFromEncryptedPem(pemStr, passphrase);
-			} catch (err) {
-				if (err && typeof err === 'object' && 'status' in err) throw err;
-				throw error(400, {
-					code: 'INVALID_PASSPHRASE',
-					message: 'Wrong passphrase or invalid private_key.pem.'
-				});
-			}
-		} else {
-			// Legacy: unencrypted private_key.json (deprecated)
-			const privateKeyPayload = files['private_key.json'];
-			if (privateKeyPayload) {
-				try {
-					const keysData = z
-						.object({ privateKey: z.string(), did: z.string() })
-						.parse(JSON.parse(strFromU8(privateKeyPayload)));
-					if (keysData.did === did) {
-						privateKey = keysData.privateKey;
-					}
-				} catch {
-					// Ignore malformed private_key.json
-				}
-			}
+		// Create identity with Aegis bundle (client decrypts Sigil, creates Aegis with new password)
+		if (aegisBundle.pub !== identity.publicKey) {
+			throw error(400, {
+				code: 'KEY_MISMATCH',
+				message: 'Aegis bundle public key does not match identity public key'
+			});
 		}
+
 		await identityRepository.create({
 			did,
 			public_key: identity.publicKey,
 			user_id: stringToRecordId.decode(userId),
 			created_at: new Date(),
-			...(typeof privateKey === 'string' && privateKey.length > 0
-				? { private_key: privateKey }
-				: {})
+			aegis_salt: aegisBundle.salt,
+			aegis_nonce: aegisBundle.nonce,
+			aegis_ct: aegisBundle.ct,
+			aegis_tag: aegisBundle.tag,
+			aegis_kdf_mem: aegisBundle.kdf.mem,
+			aegis_kdf_it: aegisBundle.kdf.it,
+			aegis_kdf_par: aegisBundle.kdf.par
+		});
+
+		// Update user with DID
+		await dbService.getDb().query('UPDATE $userId SET did = $did', {
+			userId: stringToRecordId.decode(userId),
+			did
 		});
 
 		createdProfile = await profileRepository.createByUserId(userId);

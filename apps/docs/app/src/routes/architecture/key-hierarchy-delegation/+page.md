@@ -28,9 +28,9 @@ The **root private key** can be managed in two modes:
 
 **Server-managed (current default, transitionary):**
 
-- Generated **server-side** by the SYR instance on identity creation
+- Generated **server-side** by the SYR instance on identity creation (see [Aegis](/architecture/aegis) for custodial generation and storage semantics)
 - Stored encrypted at rest on the hosting instance
-- Can be **exported by the user** to assume self-custody
+- Can be **exported by the user** to assume self-custody (target export format: [Sigil](/architecture/sigil))
 - Provides frictionless onboarding — users get a cryptographic identity without understanding key management
 - **Why server-hosted?** SYR is designed to be self-hosted (or community-hosted). You trust the instance because _you run it_ (or your community does). This is consistent with SSI principles: the operator is the user or their trusted delegate, not a third-party platform.
 
@@ -106,8 +106,8 @@ Capabilities:
 
 In v0.1:
 
-- Root keys are **generated and stored server-side** by the SYR instance
-- Users can export keys via the API when ready for self-custody
+- Root keys are **generated and stored server-side** by the SYR instance (per [Aegis](/architecture/aegis))
+- Users can export keys via the API when ready for self-custody (target format: [Sigil](/architecture/sigil))
 - Secure hardware storage is a future goal for exported keys
 
 ---
@@ -314,14 +314,14 @@ These are deferred to maintain **minimal implementability**.
 
 ### Current (v0.1): Server-custodied keys
 
-| Aspect         | v0.1 Behavior                             |
-| -------------- | ----------------------------------------- |
-| Key generation | Server-side (SYR instance)                |
-| Key storage    | Encrypted at rest on instance             |
-| Auth model     | Session-based (JWT)                       |
-| Signing        | Not yet implemented for mutations         |
-| Delegated keys | Data model exists, not used for signing   |
-| Key export     | Available via `/api/identity/export-keys` |
+| Aspect         | v0.1 Behavior                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Key generation | Server-side (SYR instance)                                                                                                |
+| Key storage    | Encrypted at rest on instance                                                                                             |
+| Auth model     | Session-based (JWT)                                                                                                       |
+| Signing        | Not yet implemented for mutations                                                                                         |
+| Delegated keys | Data model exists, not used for signing                                                                                   |
+| Key export     | Available via `/api/identity/export-keys` (target format: [Sigil](/architecture/sigil); current: PKCS#8 PEM transitional) |
 
 **Rationale:** SYR instances are self-hosted or community-hosted. The operator **is** the user (or their trusted delegate). Server-side keys provide frictionless onboarding without sacrificing the SSI guarantee that no third-party platform controls your identity.
 

@@ -2,7 +2,9 @@ import { hashPassword, verifyPassword, generateAccessToken } from '$lib/server/a
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
+import { identityController } from '$lib/controllers/identity.controller';
 import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
+import type { AegisBundle } from '@syr-is/crypto/aegis';
 
 export interface RegisterResponse {
 	user: Omit<User, 'password_hash'>;
@@ -14,6 +16,8 @@ export interface LoginResponse {
 	user: Omit<User, 'password_hash'>;
 	profile: Profile | null;
 	token: string;
+	/** Aegis bundle for client to decrypt and store seed when identity has Aegis */
+	aegisBundle?: AegisBundle;
 }
 
 /**
@@ -60,6 +64,9 @@ export class AuthController {
 			updated_at: now
 		} as Partial<Profile>);
 
+		// Create identity with Aegis (password-protected seed) at registration
+		await identityController.createIdentityAegis(user.id, password);
+
 		// Create session
 		const session = await this.createSession(user, ctx);
 
@@ -103,6 +110,32 @@ export class AuthController {
 		// Find profile
 		const profile = await profileRepository.findByUserId(user.id);
 
+		// Fetch identity and include aegisBundle when identity has Aegis (for client decryption)
+		let aegisBundle: AegisBundle | undefined;
+		const identity = await identityController.getIdentity(user.id);
+		if (
+			identity?.aegis_salt &&
+			identity?.aegis_nonce &&
+			identity?.aegis_ct &&
+			identity?.aegis_tag &&
+			identity?.aegis_kdf_mem != null &&
+			identity?.aegis_kdf_it != null &&
+			identity?.aegis_kdf_par != null
+		) {
+			aegisBundle = {
+				pub: identity.public_key,
+				salt: identity.aegis_salt,
+				nonce: identity.aegis_nonce,
+				ct: identity.aegis_ct,
+				tag: identity.aegis_tag,
+				kdf: {
+					mem: identity.aegis_kdf_mem,
+					it: identity.aegis_kdf_it,
+					par: identity.aegis_kdf_par
+				}
+			};
+		}
+
 		// Create session
 		const session = await this.createSession(user, ctx);
 
@@ -118,7 +151,8 @@ export class AuthController {
 		return {
 			user: userWithoutPassword as Omit<User, 'password_hash'>,
 			profile,
-			token
+			token,
+			...(aegisBundle ? { aegisBundle } : {})
 		};
 	}
 

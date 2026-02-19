@@ -102,14 +102,21 @@ class DatabaseService {
 			`);
 
 			// Identity table: stores root identity metadata
+			// Aegis (CIGP) fields store password-encrypted seed; no raw private_key
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS identity SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS did ON TABLE identity TYPE string
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS public_key ON TABLE identity TYPE string;
-				DEFINE FIELD IF NOT EXISTS private_key ON TABLE identity TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS user_id ON TABLE identity TYPE record<user>;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS aegis_salt ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_nonce ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_ct ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_tag ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_mem ON TABLE identity TYPE option<int>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_it ON TABLE identity TYPE option<int>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_par ON TABLE identity TYPE option<int>;
 				DEFINE INDEX IF NOT EXISTS idx_identity_did ON TABLE identity COLUMNS did UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_identity_user ON TABLE identity COLUMNS user_id UNIQUE;
 			`);

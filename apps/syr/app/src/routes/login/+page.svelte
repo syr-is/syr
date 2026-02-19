@@ -8,6 +8,7 @@
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
+	import { seedHandler } from '$lib/services/seed-handler';
 
 	const form = superForm(defaults(zod4(UserLoginSchema)), {
 		validators: zod4(UserLoginSchema),
@@ -27,6 +28,24 @@
 					const error = await response.json();
 					toast.error(error.error?.message || 'Login failed');
 					return;
+				}
+
+				const result = await response.json();
+				const aegisBundle = result.data?.aegisBundle;
+
+				// If we got an Aegis bundle, verify the password decrypts correctly (seed is never stored)
+				if (aegisBundle && form.data.password) {
+					try {
+						await seedHandler.run({
+							bundle: aegisBundle,
+							password: form.data.password,
+							action: async () => {}
+						});
+					} catch (e) {
+						console.error('[login] Failed to decrypt Aegis bundle:', e);
+						toast.error('Failed to unlock identity');
+						return;
+					}
 				}
 
 				toast.success('Welcome back!');

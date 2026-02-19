@@ -114,6 +114,15 @@ Third-party platforms can authenticate users through their SYR instance. Instead
 
 At any time, you can export your identity as a portable bundle containing your DID, public keys, delegated keys, credentials, and a signed profile snapshot. This bundle can be verified offline and imported to a new provider.
 
+### Syr Ecosystem Naming
+
+Syr uses mythic, evocative names for its core identity primitives:
+
+- **Aegis** — Custodial identity protection. When your identity is born and shielded on a hosting instance (server generates, encrypts, stores; keys never leave encrypted).
+- **Sigil** — Portable identity export format. When you take your identity with you — the moment it becomes self-owned.
+
+_Identity is born in Aegis; when you're ready, you carry the Sigil._
+
 ---
 
 ## What Syr is Not
@@ -150,6 +159,7 @@ See the full [Roadmap](/roadmap) for details on each phase.
 ## Next Steps
 
 - Read the [Identity Model specification](/architecture/identity-model) for the full technical design.
+- See [Sigil (Export Format)](/architecture/sigil) and [Aegis (Custodial Identity)](/architecture/aegis) for the export and custodial specs.
 - See the [Phase 0 Blueprint](/implementation/phase-0-blueprint) for implementation details.
 - See the [Syner Specification](/architecture/syner) for the native companion app design.
 - Check the [Roadmap](/roadmap) for the full implementation timeline.

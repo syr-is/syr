@@ -174,30 +174,48 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	}
 
 	/**
-	 * Create an identity with server-generated keys.
-	 * Stores the encrypted private key.
+	 * Create an identity with Aegis (password-protected encrypted seed).
+	 * Stores the Aegis bundle fields; no raw private key.
 	 */
-	async createIdentityServerSide(params: {
+	async createIdentityAegis(params: {
 		did: string;
 		publicKey: string;
-		privateKey: string;
+		aegisBundle: {
+			salt: string;
+			nonce: string;
+			ct: string;
+			tag: string;
+			kdf: { mem: number; it: number; par: number };
+		};
 		userId: RecordId;
 		tenantId?: RecordId;
 		now: Date;
 	}): Promise<void> {
-		const { did, publicKey, privateKey, userId, tenantId, now } = params;
+		const { did, publicKey, aegisBundle, userId, tenantId, now } = params;
 
 		let query = `CREATE identity SET
 			did = $did,
 			public_key = $publicKey,
-			private_key = $privateKey,
+			aegis_salt = $aegisSalt,
+			aegis_nonce = $aegisNonce,
+			aegis_ct = $aegisCt,
+			aegis_tag = $aegisTag,
+			aegis_kdf_mem = $aegisKdfMem,
+			aegis_kdf_it = $aegisKdfIt,
+			aegis_kdf_par = $aegisKdfPar,
 			user_id = $userId,
 			created_at = $now`;
 
 		const queryParams: Record<string, unknown> = {
 			did,
 			publicKey,
-			privateKey,
+			aegisSalt: aegisBundle.salt,
+			aegisNonce: aegisBundle.nonce,
+			aegisCt: aegisBundle.ct,
+			aegisTag: aegisBundle.tag,
+			aegisKdfMem: aegisBundle.kdf.mem,
+			aegisKdfIt: aegisBundle.kdf.it,
+			aegisKdfPar: aegisBundle.kdf.par,
 			userId,
 			now
 		};
@@ -210,17 +228,14 @@ export class IdentityRepository extends BaseRepository<Identity> {
 		}
 
 		try {
-			// Create identity record
 			await this.db.query(query, queryParams);
 
-			// Update user with DID
 			await this.db.query(`UPDATE $userId SET did = $did;`, {
 				userId,
 				did
 			});
 		} catch (error) {
-			console.error('[identity.repository] Error during server-side identity creation:', error);
-			// Rollback: remove identity if user update failed (identity exists but user.did unset)
+			console.error('[identity.repository] Error during Aegis identity creation:', error);
 			try {
 				await this.db.query(`DELETE identity WHERE did = $did;`, { did });
 			} catch (rollbackError) {
