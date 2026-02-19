@@ -8,7 +8,7 @@ RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
 WORKDIR /app
 
 # Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 # ---- Dependencies Stage ----
 FROM base AS deps
@@ -29,18 +29,12 @@ RUN pnpm install
 # ---- Builder Stage ----
 FROM deps AS builder
 
-# Turbo remote cache (optional - for CI; omit for local builds)
-ARG TURBO_TEAM
-
 # Copy application source (overlays on top of deps, preserving node_modules)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build with turbo (supports remote cache when TURBO_TOKEN/TURBO_TEAM are provided)
-RUN --mount=type=secret,id=turbo_token,required=false \
-    ( [ -f /run/secrets/turbo_token ] && export TURBO_TOKEN=$(cat /run/secrets/turbo_token) ) || true ; \
-    [ -n "$TURBO_TEAM" ] && export TURBO_TEAM="$TURBO_TEAM" || true ; \
-    pnpm exec turbo build --filter=@syr-is/syr
+# Build syr app and its workspace dependencies (types, ui, crypto, did)
+RUN pnpm --filter "...@syr-is/syr" build
 
 # Prune dev dependencies - keep only production dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
