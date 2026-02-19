@@ -32,7 +32,7 @@ jobs:
       - name: Run pnpm build
         run: pnpm exec turbo build --affected
         env:
-          TURBO_TEAM: sosweetham
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           # Resolve base ref for --affected (GitHub uses detached HEAD, so "main" isn't available)
           TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
