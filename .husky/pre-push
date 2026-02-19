@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 # Validate semantic branch naming: <type>/#<issue>-<alias> or <type>/<alias>
 # See: https://gist.github.com/seunggabi/87f8c722d35cd07deb3f649d45a31082
 # Allowed types: feat, feature, fix, docs, style, refactor, test, chore
