@@ -13,8 +13,12 @@
 		defaultMode?: MediaDisplayMode;
 	}
 
-	let { mediaUrls, mediaUrlMimeTypes = {}, mediaUrlFilenames = {}, defaultMode = 'masonry' }: Props =
-		$props();
+	let {
+		mediaUrls,
+		mediaUrlMimeTypes = {},
+		mediaUrlFilenames = {},
+		defaultMode = 'masonry'
+	}: Props = $props();
 
 	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
 	// Writable for bind:mode; init from defaultMode only — do not sync from prop (would override user toggle)

@@ -27,9 +27,7 @@ export interface MediaUrlMetadata {
  * Resolve MIME types and filenames for an array of media URLs by looking up each
  * upload record in the database (keyed by the record ID embedded in the URL).
  */
-export async function resolveMediaUrlMetadata(
-	mediaUrls: string[]
-): Promise<MediaUrlMetadata> {
+export async function resolveMediaUrlMetadata(mediaUrls: string[]): Promise<MediaUrlMetadata> {
 	const mimeTypes: Record<string, string> = {};
 	const filenames: Record<string, string> = {};
 	await Promise.all(

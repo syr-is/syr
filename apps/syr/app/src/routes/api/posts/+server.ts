@@ -65,7 +65,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		p.type === 'media' && p.media_urls ? p.media_urls : []
 	);
 	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
-		allMediaUrls.length > 0 ? await resolveMediaUrlMetadata(allMediaUrls) : { mimeTypes: {}, filenames: {} };
+		allMediaUrls.length > 0
+			? await resolveMediaUrlMetadata(allMediaUrls)
+			: { mimeTypes: {}, filenames: {} };
 
 	const serializedData = data.map((post) => ({
 		...post,

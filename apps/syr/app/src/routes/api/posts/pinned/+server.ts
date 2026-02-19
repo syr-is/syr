@@ -34,7 +34,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 		p.type === 'media' && p.media_urls ? p.media_urls : []
 	);
 	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
-		allMediaUrls.length > 0 ? await resolveMediaUrlMetadata(allMediaUrls) : { mimeTypes: {}, filenames: {} };
+		allMediaUrls.length > 0
+			? await resolveMediaUrlMetadata(allMediaUrls)
+			: { mimeTypes: {}, filenames: {} };
 
 	const serializedPosts = pinnedPosts.map((post) => ({
 		...post,
