@@ -381,7 +381,7 @@
 										<button
 											class={buttonVariants({ variant: 'outline', size: 'sm' })}
 											onclick={() => retryJob(job.id)}
-											disabled={retryingJob === job.id || job.status === 'completed'}
+											disabled={retryingJob === job.id || job.status === 'completed' || (job.type === 'registry_sync' && job.status === 'pending')}
 										>
 											{retryingJob === job.id ? 'Retrying...' : 'Retry now'}
 										</button>

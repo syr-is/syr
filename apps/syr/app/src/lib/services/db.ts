@@ -102,7 +102,7 @@ class DatabaseService {
 			`);
 
 			// Identity table: stores root identity metadata
-			// Aegis (CIGP) fields store password-encrypted seed; no raw private_key
+			// Aegis (CIGP) fields store password-encrypted seed
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS identity SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS did ON TABLE identity TYPE string
@@ -135,23 +135,6 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS canonical_delegation ON TABLE delegated_key TYPE option<string>;
 				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
-			`);
-
-			// Tenant table: multi-tenancy support
-			await db.query(`
-				DEFINE TABLE IF NOT EXISTS tenant SCHEMAFULL;
-				DEFINE FIELD IF NOT EXISTS name ON TABLE tenant TYPE string;
-				DEFINE FIELD IF NOT EXISTS slug ON TABLE tenant TYPE string;
-				DEFINE FIELD IF NOT EXISTS settings ON TABLE tenant FLEXIBLE TYPE object DEFAULT {};
-				DEFINE FIELD IF NOT EXISTS created_at ON TABLE tenant TYPE datetime;
-				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE tenant TYPE datetime;
-				DEFINE INDEX IF NOT EXISTS idx_tenant_slug ON TABLE tenant COLUMNS slug UNIQUE;
-			`);
-
-			// Add optional tenant_id to identity table for tenant-scoped identity pools
-			await db.query(`
-				DEFINE FIELD IF NOT EXISTS tenant_id ON TABLE identity TYPE option<record<tenant>>;
-				DEFINE INDEX IF NOT EXISTS idx_identity_tenant ON TABLE identity COLUMNS tenant_id;
 			`);
 
 			// Outbox table: durable job queue for external service communication

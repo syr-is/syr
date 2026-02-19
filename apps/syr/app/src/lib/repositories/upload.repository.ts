@@ -36,17 +36,17 @@ export class UploadRepository extends BaseRepository<Upload> {
 	 * Prefer findByDid for cursor-based pagination to avoid skip/duplicate under concurrent writes.
 	 */
 	async findByDidPage(did: string, options?: FindByDidPageOptions): Promise<FindByDidPageResult> {
-		const limit = Math.max(1, Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE));
-		const offset = Math.max(0, options?.offset ?? 0);
+		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE)));
+		const offsetNum = Math.floor(Math.max(0, options?.offset ?? 0));
 
 		const result = await this.db.query<[Upload[]]>(
-			`SELECT * FROM upload WHERE id.created_by = $did ORDER BY created_at DESC LIMIT $limit START $offset`,
-			{ did, limit, offset }
+			`SELECT * FROM upload WHERE id.created_by = $did ORDER BY created_at DESC LIMIT ${limitNum} START ${offsetNum}`,
+			{ did }
 		);
 		const raw = result[0] ?? [];
 		const uploads = raw.map((r) => this.validate(r));
 
-		const nextCursor = uploads.length === limit ? { offset: offset + uploads.length } : null;
+		const nextCursor = uploads.length === limitNum ? { offset: offsetNum + uploads.length } : null;
 
 		return { uploads, nextCursor };
 	}
@@ -67,16 +67,15 @@ export class UploadRepository extends BaseRepository<Upload> {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did AND (created_at < $afterCreatedAt OR (created_at = $afterCreatedAt AND id < $afterId))
 				ORDER BY created_at DESC, id DESC
-				LIMIT $limit`;
+				LIMIT ${limitNum}`;
 			params.afterCreatedAt = afterCreatedAt;
 			params.afterId = afterId;
 		} else {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did
 				ORDER BY created_at DESC, id DESC
-				LIMIT $limit`;
+				LIMIT ${limitNum}`;
 		}
-		params.limit = limitNum;
 
 		const result = await this.db.query<[Upload[]]>(query, params);
 		const raw = result[0] ?? [];

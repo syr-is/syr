@@ -92,8 +92,8 @@ On first launch, Syner generates an Ed25519 keypair:
 
 1. Generate 32-byte random seed using platform CSPRNG
 2. Derive Ed25519 keypair from seed
-3. Store private key in platform keystore with label `syr:root:<did>`
-4. Derive DID from public key: `did:syr:z6Mk...`
+3. Derive DID from public key: `did:syr:z6Mk...`
+4. Store private key in platform keystore with label `syr:root:<did>`
 5. Display DID and public key to user
 
 ### 5.2 Key Storage
@@ -187,7 +187,7 @@ Deep link flow:
 ```json
 {
   "id": "uuid",
-  "type": "registry_update | delegation | post_sign | rotation",
+  "request_type": "registry_update | delegation | post_sign | rotation",
   "payload": {
     "...canonicalized JSON payload..."
   },
@@ -209,7 +209,7 @@ Deep link flow:
 
 ### 7.3 Request Types
 
-| Type              | Description                                | Payload                               |
+| request_type      | Description                                | Payload                               |
 | ----------------- | ------------------------------------------ | ------------------------------------- |
 | `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updatedAt }`        |
 | `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, createdAt }` |

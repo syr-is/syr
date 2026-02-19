@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseEntitySchema, RecordIdSchema } from './common.js';
+import { BaseEntitySchema, RecordIdSchema, DidSyrSchema } from './common.js';
 
 export const PostTypeSchema = z.enum(['blog', 'media']);
 
@@ -78,7 +78,7 @@ const PostObjectSchema = BaseEntitySchema.extend({
 	status: PostStatusSchema.default('draft'),
 	author_id: RecordIdSchema,
 	/** DID from composite record ID (present when serialized for API) */
-	did: z.string().optional(),
+	did: DidSyrSchema.optional(),
 	/** Local ID/ULID from composite record ID (present when serialized for API) */
 	local_id: z.string().optional()
 });
@@ -91,7 +91,9 @@ export const PostCreateSchema = PostObjectSchema.omit({
 	id: true,
 	created_at: true,
 	updated_at: true,
-	author_id: true
+	author_id: true,
+	did: true,
+	local_id: true
 }).superRefine(refinePostType);
 
 export type PostCreate = z.infer<typeof PostCreateSchema>;
@@ -99,7 +101,9 @@ export type PostCreate = z.infer<typeof PostCreateSchema>;
 export const PostUpdateSchema = PostObjectSchema.omit({
 	created_at: true,
 	updated_at: true,
-	author_id: true
+	author_id: true,
+	did: true,
+	local_id: true
 }).superRefine(refineMediaNoContentType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;
