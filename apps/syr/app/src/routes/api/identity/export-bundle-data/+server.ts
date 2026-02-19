@@ -37,8 +37,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			if (posts.length >= MAX_EXPORT_RECORDS) break;
 			const page = await postRepository.findByDid(did, {
 				limit: Math.min(500, MAX_EXPORT_RECORDS - posts.length),
-				afterCreatedAt: postNextCursor?.afterCreatedAt,
-				afterId: postNextCursor?.afterId
+				...(postNextCursor && { cursor: postNextCursor })
 			});
 			posts.push(...page.posts);
 			postNextCursor = page.nextCursor;
@@ -51,8 +50,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			if (uploads.length >= MAX_EXPORT_RECORDS) break;
 			const page = await uploadRepository.findByDid(did, {
 				limit: Math.min(500, MAX_EXPORT_RECORDS - uploads.length),
-				afterCreatedAt: uploadNextCursor?.afterCreatedAt,
-				afterId: uploadNextCursor?.afterId
+				...(uploadNextCursor && { cursor: uploadNextCursor })
 			});
 			uploads.push(...page.uploads);
 			uploadNextCursor = page.nextCursor;

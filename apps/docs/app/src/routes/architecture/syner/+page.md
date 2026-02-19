@@ -157,9 +157,11 @@ sequenceDiagram
 
 For platforms where background processes are restricted (primarily iOS), or as a universal fallback:
 
+```text
+syr://sign?request_id=abc123&instance=https%3A%2F%2Fmy.syr.is&payload_hash=sha256hex
 ```
-syr://sign?request_id=abc123&instance=https://my.syr.is&payload_hash=sha256hex
-```
+
+> The `instance` query parameter must be percent-encoded (e.g. `https%3A%2F%2Fmy.syr.is`) so the raw URL does not break parsing on some platforms.
 
 Deep link flow:
 
@@ -187,6 +189,7 @@ Deep link flow:
 ```json
 {
   "id": "uuid",
+  "nonce": "string",
   "request_type": "registry_update | delegation | post_sign | rotation",
   "payload": {
     "...canonicalized JSON payload..."
@@ -285,8 +288,11 @@ sequenceDiagram
 2. SYR instance exports the root private key (encrypted, one-time)
 3. User scans QR code in Syner to receive the key
 4. Syner imports the key into platform keystore
-5. SYR instance deletes its copy of the private key
-6. Identity transitions to Syner-managed
+5. Syner proves possession by signing a server-generated challenge (challenge-response verification); the SYR instance verifies the signature before proceeding. The verification result is persisted atomically on both sides. Only after successful verification may the next step run.
+6. SYR instance deletes its copy of the private key
+7. Identity transitions to Syner-managed
+
+On any verification or persistence failure, abort deletion and surface a clear error/retry path so the SYR instance never destroys the root private key without explicit verified acknowledgement from Syner.
 
 ### 9.3 Identity Backup
 

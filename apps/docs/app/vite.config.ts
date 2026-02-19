@@ -19,6 +19,7 @@ const sidebarConfig = [
 			{ title: 'Key Hierarchy & Delegation v0.1', to: '/architecture/key-hierarchy-delegation' },
 			{ title: 'Sigil v1 (Export Format)', to: '/architecture/sigil' },
 			{ title: 'Aegis v1 (Custodial Identity)', to: '/architecture/aegis' },
+			{ title: 'Syner (Self-Custody Companion)', to: '/architecture/syner' },
 			{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 			{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
 			{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }

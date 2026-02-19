@@ -6,9 +6,8 @@ const MAX_LIMIT = 1000;
 export interface FindByDidOptions {
 	/** Max posts per page (default: 500) */
 	limit?: number;
-	/** Cursor for next page: fetch posts before this (created_at, id) */
-	afterCreatedAt?: Date;
-	afterId?: string;
+	/** Cursor for next page: fetch posts before this (created_at, id). Both values required together. */
+	cursor?: { afterCreatedAt: Date; afterId: string };
 }
 
 export interface FindByDidResult {
@@ -29,8 +28,8 @@ export class PostRepository extends BaseRepository<Post> {
 	 */
 	async findByDid(did: string, options?: FindByDidOptions): Promise<FindByDidResult> {
 		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? 500, MAX_LIMIT)));
-		const afterCreatedAt = options?.afterCreatedAt;
-		const afterId = options?.afterId;
+		const afterCreatedAt = options?.cursor?.afterCreatedAt;
+		const afterId = options?.cursor?.afterId;
 
 		let query: string;
 		const params: Record<string, unknown> = { did };
