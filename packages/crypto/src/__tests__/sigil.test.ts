@@ -42,7 +42,7 @@ describe("sigil", () => {
       },
     };
     await expect(decryptSigil(tampered, "pass")).rejects.toThrow(
-      /Sigil decryption failed|public key mismatch/,
+      /Sigil malformed|Sigil decryption failed|public key mismatch/,
     );
   });
 

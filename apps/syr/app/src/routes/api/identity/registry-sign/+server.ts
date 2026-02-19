@@ -60,13 +60,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(404, { code: 'JOB_NOT_FOUND', message: 'Job not found or already completed' });
 	}
 
+	// Atomically claim the job so only one requester proceeds
+	const claimed = await outboxRepository.claimIfPending(job.id, userId);
+	if (!claimed) {
+		throw error(404, { code: 'JOB_NOT_FOUND', message: 'Job not found or already completed' });
+	}
+
 	const payload = job.payload as {
 		action?: string;
 		did?: string;
 		registryUrl?: string;
 		provider?: string;
 	};
-	if (payload.did !== did || payload.registryUrl !== registryUrl || payload.action !== action) {
+	if (
+		payload.did !== did ||
+		payload.registryUrl !== registryUrl ||
+		payload.action !== action ||
+		(action === 'update' && payload.provider !== provider)
+	) {
 		throw error(400, { code: 'PAYLOAD_MISMATCH', message: 'Request does not match job payload' });
 	}
 
@@ -110,10 +121,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 	try {
 		if (action === 'update') {
+			const providerForRegistry = payload.provider ?? provider!;
 			const res = await fetch(`${base}/api/v1/update`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ did, provider: provider!, updatedAt, signature }),
+				body: JSON.stringify({
+					did,
+					provider: providerForRegistry,
+					updatedAt,
+					signature
+				}),
 				signal
 			});
 			if (!res.ok) {
@@ -156,7 +173,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await outboxRepository.markCompleted(job.id);
 	} catch (dbErr) {
 		const msg = dbErr instanceof Error ? dbErr.message : 'Database update failed';
-		await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
+		try {
+			await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
+		} catch (markErr) {
+			console.error('[registry-sign] markFailed threw:', markErr);
+		}
 	}
 
 	return json({

@@ -7,8 +7,7 @@
 import { argon2id } from "hash-wasm";
 import { getPublicKeyAsync } from "@noble/ed25519";
 import { base64urlnopad } from "@scure/base";
-import { encodeMultibase } from "./encoding.js";
-import { ED25519_MULTICODEC_PREFIX } from "./encoding.js";
+import { encodeMultibase, ED25519_MULTICODEC_PREFIX } from "./encoding.js";
 
 const AAD = new TextEncoder().encode("pief:v1");
 const SALT_LEN = 16;
@@ -163,9 +162,7 @@ export async function decryptSigil(
     ct = base64urlnopad.decode(sigil.enc.ct);
     tag = base64urlnopad.decode(sigil.enc.tag);
   } catch {
-    throw new Error(
-      "Sigil decryption failed: wrong passphrase or corrupted data",
-    );
+    throw new Error("Sigil malformed: invalid base64 for salt/nonce/ct/tag");
   }
 
   const mem = sigil.kdf.mem;

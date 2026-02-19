@@ -7,6 +7,7 @@ import {
 	IdentityExportManifestSchema,
 	IdentityExportBundleSchema,
 	ExportedPostSchema,
+	AssetZipPathSchema,
 	stringToRecordId
 } from '@syr-is/types';
 import { z } from 'zod';
@@ -24,7 +25,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 const MAX_UNCOMPRESSED_BYTES = MAX_UPLOAD_BYTES * 10; // 1 GB — zip-bomb protection
 
 const StandaloneAssetSchema = z.object({
-	zip_path: z.string(),
+	zip_path: AssetZipPathSchema,
 	local_id: z.string(),
 	filename: z.string(),
 	mime_type: z.string(),
@@ -70,8 +71,8 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 			unzip(
 				zipBytes,
 				{
-					filter(file) {
-						if ((file.originalSize === 0 || file.originalSize == null) && file.size > 0) {
+					filter(entry) {
+						if ((entry.originalSize === 0 || entry.originalSize == null) && entry.size > 0) {
 							reject(
 								new Error(
 									'Suspicious zip entry: compressed size present but uncompressed size missing'
@@ -79,7 +80,7 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 							);
 							return false;
 						}
-						const size = file.originalSize ?? 0;
+						const size = entry.originalSize ?? 0;
 						if (totalUncompressed + size > MAX_UNCOMPRESSED_BYTES) {
 							reject(new Error('Uncompressed size exceeds limit'));
 							return false;
@@ -161,16 +162,6 @@ export async function validateBundle(
 				message: 'Public key in bundle does not match the DID'
 			});
 		}
-
-		const existingDid = await identityRepository.findByDid(identity.did);
-		if (existingDid) {
-			throw error(409, {
-				code: 'DID_EXISTS',
-				message: 'An identity with this DID already exists on this instance'
-			});
-		}
-
-		return identity.did;
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		throw error(400, {
@@ -178,6 +169,16 @@ export async function validateBundle(
 			message: 'Failed to validate DID/public key'
 		});
 	}
+
+	const existingDid = await identityRepository.findByDid(identity.did);
+	if (existingDid) {
+		throw error(409, {
+			code: 'DID_EXISTS',
+			message: 'An identity with this DID already exists on this instance'
+		});
+	}
+
+	return identity.did;
 }
 
 /**

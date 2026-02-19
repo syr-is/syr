@@ -2,6 +2,7 @@ import { hashPassword, verifyPassword, generateAccessToken } from '$lib/server/a
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
+import { identityRepository } from '$lib/repositories/identity.repository';
 import { identityController } from '$lib/controllers/identity.controller';
 import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
@@ -11,6 +12,8 @@ export interface RegisterResponse {
 	user: Omit<User, 'password_hash'>;
 	profile: Profile;
 	token: string;
+	/** Aegis bundle for client to decrypt and store seed (optional) */
+	aegisBundle?: AegisBundle;
 }
 
 export interface LoginResponse {
@@ -66,8 +69,12 @@ export class AuthController {
 		} as Partial<Profile>);
 
 		// Create identity with Aegis (password-protected seed) at registration
+		let did: string;
+		let aegisBundle: AegisBundle | undefined;
 		try {
-			await identityController.createIdentityAegis(user.id, password);
+			const result = await identityController.createIdentityAegis(user.id, password);
+			did = result.did;
+			aegisBundle = result.aegisBundle;
 		} catch (err) {
 			// Rollback: remove created user and profile so caller can retry
 			try {
@@ -83,23 +90,46 @@ export class AuthController {
 			throw err;
 		}
 
-		// Create session
-		const session = await this.createSession(user, ctx);
+		// Create session and return; rollback full registration if session creation fails
+		try {
+			const session = await this.createSession(user, ctx);
+			const token = generateAccessToken({
+				userId: user.id.toString(),
+				sessionId: session.id.toString()
+			});
 
-		// Generate JWT token
-		const token = generateAccessToken({
-			userId: user.id.toString(),
-			sessionId: session.id.toString()
-		});
+			const { password_hash: _pwd, ...userWithoutPassword } = user;
 
-		// Remove password_hash from response
-		const { password_hash: _pwd, ...userWithoutPassword } = user;
-
-		return {
-			user: userWithoutPassword as Omit<User, 'password_hash'>,
-			profile,
-			token
-		};
+			return {
+				user: userWithoutPassword as Omit<User, 'password_hash'>,
+				profile,
+				token,
+				...(aegisBundle ? { aegisBundle } : {})
+			};
+		} catch (err) {
+			// Rollback: remove identity, profile, user (unset user.did before deleting identity)
+			try {
+				await userRepository.unsetDid(user.id);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to unset user.did', e);
+			}
+			try {
+				await identityRepository.deleteByDid(did);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to delete identity', e);
+			}
+			try {
+				await profileRepository.delete(profile.id);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to delete profile', e);
+			}
+			try {
+				await userRepository.delete(user.id);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to delete user', e);
+			}
+			throw err;
+		}
 	}
 
 	/**

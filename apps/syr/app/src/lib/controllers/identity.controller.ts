@@ -9,7 +9,7 @@ import {
 	constantTimeEqual,
 	generateRootKeypair
 } from '@syr-is/crypto';
-import { createAegisBundle } from '@syr-is/crypto/aegis';
+import { createAegisBundle, type AegisBundle } from '@syr-is/crypto/aegis';
 import { parseDid, buildDidDocument } from '@syr-is/did';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
@@ -132,13 +132,13 @@ export class IdentityController {
 	 * @param userId - The user to create the identity for
 	 * @param password - The user's password (used to encrypt the seed)
 	 * @param tenantId - Optional tenant to scope the identity to
-	 * @returns The generated DID and public key
+	 * @returns The generated DID, public key, and Aegis bundle (for client decryption)
 	 */
 	async createIdentityAegis(
 		userId: UserIdInput,
 		password: string,
 		tenantId?: RecordId | string
-	): Promise<{ did: string; publicKey: string }> {
+	): Promise<{ did: string; publicKey: string; aegisBundle: AegisBundle }> {
 		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 
 		// Check user does not already have an identity
@@ -174,7 +174,7 @@ export class IdentityController {
 			throw err;
 		}
 
-		return { did, publicKey: bundle.pub };
+		return { did, publicKey: bundle.pub, aegisBundle: bundle };
 	}
 
 	/**

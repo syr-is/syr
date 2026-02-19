@@ -3,7 +3,7 @@ import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { s3 } from '$lib/config';
 
 const CONNECTION_TIMEOUT_MS = 5000;
-const REQUEST_TIMEOUT_MS = 30000;
+const REQUEST_TIMEOUT_MS = 5000;
 
 class S3Service {
 	private static instance: S3Service;

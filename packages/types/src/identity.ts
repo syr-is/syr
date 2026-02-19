@@ -218,7 +218,7 @@ export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema
 const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/i);
 
 /** Path within zip's assets/ directory; disallow path traversal */
-const AssetZipPathSchema = z.string().regex(/^assets\/(?!.*\.\.)[^\0]+$/);
+export const AssetZipPathSchema = z.string().regex(/^assets\/(?!.*\.\.)[^\0]+$/);
 
 /**
  * Exported Post Schema

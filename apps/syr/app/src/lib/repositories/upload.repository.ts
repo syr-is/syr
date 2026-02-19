@@ -67,15 +67,16 @@ export class UploadRepository extends BaseRepository<Upload> {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did AND (created_at < $afterCreatedAt OR (created_at = $afterCreatedAt AND id < $afterId))
 				ORDER BY created_at DESC, id DESC
-				LIMIT ${limitNum}`;
+				LIMIT $limit`;
 			params.afterCreatedAt = afterCreatedAt;
 			params.afterId = afterId;
 		} else {
 			query = `SELECT * FROM upload
 				WHERE id.created_by = $did
 				ORDER BY created_at DESC, id DESC
-				LIMIT ${limitNum}`;
+				LIMIT $limit`;
 		}
+		params.limit = limitNum;
 
 		const result = await this.db.query<[Upload[]]>(query, params);
 		const raw = result[0] ?? [];
