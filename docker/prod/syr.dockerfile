@@ -20,6 +20,8 @@ COPY packages/ui/package.json ./packages/ui/
 COPY packages/crypto/package.json ./packages/crypto/
 COPY packages/did/package.json ./packages/did/
 
+# Enable injection only for Docker builds (required for pnpm deploy in v10)
+RUN echo "inject-workspace-packages=true" >> .npmrc
 # Install all dependencies (including devDependencies for build)
 # packages/ui dist is produced in the builder stage by pnpm build
 RUN pnpm install --frozen-lockfile
