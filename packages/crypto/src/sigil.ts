@@ -208,13 +208,7 @@ export async function decryptSigil(
   }
 
   const key = new Uint8Array(
-    (await deriveKey(
-      passphrase,
-      salt,
-      mem,
-      it,
-      par,
-    )) as ArrayLike<number>,
+    (await deriveKey(passphrase, salt, mem, it, par)) as ArrayLike<number>,
   );
   const cipher = await crypto.subtle.importKey(
     "raw",
