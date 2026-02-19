@@ -19,20 +19,22 @@ export type DisplayItem =
 			createdAt: Date;
 			data: UploadWithCompositeId;
 	  }
-	| { kind: 'media-url'; id: string; url: string; mimeType?: string };
+	| { kind: 'media-url'; id: string; url: string; mimeType?: string; filename?: string };
 
 export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel';
 
 /** Convert an array of bare URLs (from post media_urls) into DisplayItems */
 export function urlsToDisplayItems(
 	urls: string[],
-	mimeTypes?: Record<string, string>
+	mimeTypes?: Record<string, string>,
+	filenames?: Record<string, string>
 ): DisplayItem[] {
 	return urls.map((url, i) => ({
 		kind: 'media-url' as const,
 		id: `${url}-${i}`,
 		url,
-		mimeType: mimeTypes?.[url]
+		mimeType: mimeTypes?.[url],
+		filename: filenames?.[url]
 	}));
 }
 
@@ -76,7 +78,8 @@ export function getItemUrl(item: DisplayItem): string {
 export function getItemFilename(item: DisplayItem): string {
 	if (item.kind === 'folder') return item.name;
 	if (item.kind === 'file') return item.filename;
-	// For media-url, extract from URL
+	// For media-url, use provided filename or fall back to URL path segment
+	if (item.kind === 'media-url' && item.filename) return item.filename;
 	const path = item.url.split('?')[0].split('#')[0];
 	const segments = path.split('/');
 	return decodeURIComponent(segments[segments.length - 1] || 'file');

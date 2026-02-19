@@ -309,7 +309,8 @@
 				{#if data.post.media_urls && data.post.media_urls.length > 0}
 					<MediaViewer
 						mediaUrls={data.post.media_urls}
-						mediaUrlMimeTypes={data.mediaUrlMimeTypes}
+						mediaUrlMimeTypes={data.mediaUrlMimeTypes ?? {}}
+						mediaUrlFilenames={data.mediaUrlFilenames ?? {}}
 						defaultMode={data.post.display_mode ?? 'masonry'}
 					/>
 				{:else}

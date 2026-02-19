@@ -9,10 +9,12 @@
 	interface Props {
 		mediaUrls: string[];
 		mediaUrlMimeTypes?: Record<string, string>;
+		mediaUrlFilenames?: Record<string, string>;
 		defaultMode?: MediaDisplayMode;
 	}
 
-	let { mediaUrls, mediaUrlMimeTypes = {}, defaultMode = 'masonry' }: Props = $props();
+	let { mediaUrls, mediaUrlMimeTypes = {}, mediaUrlFilenames = {}, defaultMode = 'masonry' }: Props =
+		$props();
 
 	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
 	// Writable for bind:mode; init from defaultMode only — do not sync from prop (would override user toggle)
@@ -22,8 +24,10 @@
 	let previewOpen = $state(false);
 	let previewIndex = $state(0);
 
-	// Convert bare URLs to DisplayItems with mime type info from DB
-	const displayItems = $derived(urlsToDisplayItems(mediaUrls, mediaUrlMimeTypes));
+	// Convert bare URLs to DisplayItems with mime type and filename info from DB
+	const displayItems = $derived(
+		urlsToDisplayItems(mediaUrls, mediaUrlMimeTypes, mediaUrlFilenames)
+	);
 
 	function openPreview(index: number) {
 		previewIndex = index;

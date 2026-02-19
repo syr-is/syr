@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
-import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
+import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 import { extractDid, extractLocalId } from '@syr-is/types';
 
 /**
@@ -29,12 +29,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const pinnedPosts = await pinnedPostsController.getPinnedPosts(user.id);
 	const pinnedPostIds = await pinnedPostsController.getPinnedPostIds(user.id);
 
-	// Resolve mime types for all media URLs across pinned posts
+	// Resolve mime types and filenames for all media URLs across pinned posts
 	const allMediaUrls = pinnedPosts.flatMap((p) =>
 		p.type === 'media' && p.media_urls ? p.media_urls : []
 	);
-	const mediaUrlMimeTypes =
-		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
+	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
+		allMediaUrls.length > 0 ? await resolveMediaUrlMetadata(allMediaUrls) : { mimeTypes: {}, filenames: {} };
 
 	const serializedPosts = pinnedPosts.map((post) => ({
 		...post,
@@ -49,7 +49,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		data: {
 			posts: serializedPosts,
 			post_ids: pinnedPostIds,
-			mediaUrlMimeTypes
+			mediaUrlMimeTypes,
+			mediaUrlFilenames
 		},
 		meta: { timestamp: new Date().toISOString() }
 	});

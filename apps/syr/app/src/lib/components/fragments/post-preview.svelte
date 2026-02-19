@@ -28,6 +28,8 @@
 		showPinButton?: boolean;
 		/** Optional URL -> mime_type map for accurate media type detection */
 		mediaUrlMimeTypes?: Record<string, string>;
+		/** Optional URL -> filename map for display names */
+		mediaUrlFilenames?: Record<string, string>;
 	}
 
 	let {
@@ -35,7 +37,8 @@
 		isPinned = false,
 		onPinToggle,
 		showPinButton = true,
-		mediaUrlMimeTypes = {}
+		mediaUrlMimeTypes = {},
+		mediaUrlFilenames = {}
 	}: Props = $props();
 
 	// Check if post is a draft
@@ -68,7 +71,7 @@
 	let previewIndex = $state(0);
 	const displayItems = $derived(
 		post.type === 'media' && post.media_urls?.length
-			? urlsToDisplayItems(post.media_urls, mediaUrlMimeTypes)
+			? urlsToDisplayItems(post.media_urls, mediaUrlMimeTypes, mediaUrlFilenames)
 			: []
 	);
 
@@ -186,14 +189,14 @@
 											{url}
 											mimeType={mediaUrlMimeTypes[url]}
 											mode="card"
-											alt="Media {i + 1}"
+											alt={mediaUrlFilenames[url] ?? `Media ${i + 1}`}
 										/>
 									</div>
 									<!-- Invisible click overlay (opens preview, sits below arrows) -->
 									<button
 										type="button"
 										class="absolute inset-0 z-[5] cursor-pointer opacity-0 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
-										aria-label="Preview media {i + 1}"
+										aria-label="Preview {mediaUrlFilenames[url] ?? `media ${i + 1}`}"
 										onclick={(e) => openPreview(i, e)}
 									></button>
 								</div>

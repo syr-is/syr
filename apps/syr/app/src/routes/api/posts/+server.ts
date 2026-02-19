@@ -12,7 +12,7 @@ import {
 	extractDid,
 	extractLocalId
 } from '@syr-is/types';
-import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
+import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -60,12 +60,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	// Get posts with pagination options
 	const { data, total } = await postController.getUserPosts(user.id, options);
 
-	// Resolve mime types for all media URLs across all posts
+	// Resolve mime types and filenames for all media URLs across all posts
 	const allMediaUrls = data.flatMap((p) =>
 		p.type === 'media' && p.media_urls ? p.media_urls : []
 	);
-	const mediaUrlMimeTypes =
-		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
+	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
+		allMediaUrls.length > 0 ? await resolveMediaUrlMetadata(allMediaUrls) : { mimeTypes: {}, filenames: {} };
 
 	const serializedData = data.map((post) => ({
 		...post,
@@ -79,6 +79,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		status: 'success',
 		data: serializedData,
 		mediaUrlMimeTypes,
+		mediaUrlFilenames,
 		pagination: {
 			limit,
 			offset,

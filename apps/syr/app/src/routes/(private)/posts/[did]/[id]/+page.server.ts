@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { postController } from '$lib/controllers/post.controller';
 import { userRepository } from '$lib/repositories/user.repository';
-import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
+import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 import { recordIdFromDidAndLocal, extractDid, extractLocalId } from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -71,15 +71,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}
 		: null;
 
-	// Resolve mime types for media post URLs from the upload DB records
-	const mediaUrlMimeTypes =
+	// Resolve mime types and filenames for media post URLs from the upload DB records
+	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
 		post.type === 'media' && post.media_urls?.length
-			? await resolveMediaUrlMimeTypes(post.media_urls)
-			: {};
+			? await resolveMediaUrlMetadata(post.media_urls)
+			: { mimeTypes: {}, filenames: {} };
 
 	return {
 		post: serializedPost,
 		user: serializedUser,
-		mediaUrlMimeTypes
+		mediaUrlMimeTypes,
+		mediaUrlFilenames
 	};
 };
