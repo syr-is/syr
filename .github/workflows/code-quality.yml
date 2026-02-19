@@ -44,3 +44,33 @@ jobs:
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
       - run: pnpm lint
 
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || (github.event.before == '0000000000000000000000000000000000000000' && 'origin/main' || github.event.before) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            packages/types/dist
+            packages/ui/dist
+            packages/crypto/dist
+            packages/did/dist
+            packages/resolver/dist
+            packages/ui/.svelte-kit
+            apps/syr/app/.svelte-kit
+            apps/docs/app/.svelte-kit
+            apps/registry/client/.svelte-kit
+          key: ${{ runner.os }}-turbo-check-${{ hashFiles('pnpm-lock.yaml', 'packages/**/*.ts', 'packages/**/*.svelte', 'apps/**/*.ts', 'apps/**/*.svelte', '**/tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-check-${{ hashFiles('pnpm-lock.yaml', 'packages/**/*.ts', 'packages/**/*.svelte', 'apps/**/*.ts', 'apps/**/*.svelte', '**/tsconfig.json') }}-
+      - run: pnpm check
+
