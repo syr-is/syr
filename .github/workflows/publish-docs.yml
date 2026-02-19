@@ -5,13 +5,18 @@ on:
     workflows: [Build]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'Build workflow run ID to use (default: latest successful)'
+        required: false
+        type: string
 
-# Only run when the Build workflow succeeded
 jobs:
   deploy:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     permissions:
       actions: read
       contents: read
@@ -23,11 +28,29 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
+      - name: Resolve build run ID
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.build_run_id }}" ]; then
+              echo "run_id=${{ inputs.build_run_id }}" >> $GITHUB_OUTPUT
+            else
+              RUN_ID=$(gh run list --workflow=build.yml --branch=main --status=success --limit=1 --json=databaseId -q '.[0].databaseId')
+              if [ -z "$RUN_ID" ]; then
+                echo "::error::No successful Build run found. Run the Build workflow first (use 'Force full build' for fresh docs)."
+                exit 1
+              fi
+              echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-output
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.resolve.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if docs dist exists
