@@ -30,11 +30,23 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if docs dist exists
+        id: check
+        run: |
+          if [ -d "apps/docs/app/dist" ] && [ -n "$(ls -A apps/docs/app/dist 2>/dev/null)" ]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Docs were not rebuilt in this run, skipping deploy."
+          fi
+
       - name: Upload Pages artifact
+        if: steps.check.outputs.built == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: apps/docs/app/dist
 
       - name: Deploy to GitHub Pages
+        if: steps.check.outputs.built == 'true'
         id: deploy
         uses: actions/deploy-pages@v4
