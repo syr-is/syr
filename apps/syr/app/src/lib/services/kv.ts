@@ -77,6 +77,7 @@ export class KvService {
 	 * @param type - The category/type to query
 	 * @param field - Field name within the value object
 	 * @param fieldValue - Value to match
+	 * @throws Error when field does not match VALID_FIELD_REGEX (invalid identifier)
 	 */
 	async findByTypeAndValueField(
 		type: string,

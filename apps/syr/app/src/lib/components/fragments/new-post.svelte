@@ -206,8 +206,10 @@
 					draftDid = result.data.did;
 					draftLocalId = result.data.local_id;
 					draftPostId = `${draftDid}/${draftLocalId}`;
-					onDraftCreated?.();
-					return draftPostId;
+					if (dialogOpen) {
+						onDraftCreated?.();
+						return draftPostId;
+					}
 				}
 			} catch (error) {
 				console.error('Error creating draft:', error);

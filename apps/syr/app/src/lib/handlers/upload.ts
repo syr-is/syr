@@ -88,9 +88,11 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 				'Upload API returned invalid response: missing upload identifiers for completion'
 			);
 		}
-		const patchBody: Record<string, unknown> = { status: 'completed' };
-		if (uploadDid != null) patchBody.did = uploadDid;
-		if (uploadLocalId != null) patchBody.local_id = uploadLocalId;
+		const patchBody: Record<string, unknown> = {
+			status: 'completed',
+			did: uploadDid,
+			local_id: uploadLocalId
+		};
 		const completeResponse = await fetch('/api/uploads', {
 			method: 'PATCH',
 			headers: {

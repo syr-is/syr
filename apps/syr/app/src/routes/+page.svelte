@@ -341,7 +341,7 @@
 						<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 					</div>
 					<div class="grid gap-4 md:grid-cols-2">
-						{#each pinnedPosts as post, index (post.id.toString())}
+						{#each pinnedPosts as post, index (getPostId(post))}
 							<DraggableItem
 								{index}
 								{draggedIndex}

@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { identityController } from '$lib/controllers/identity.controller';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
@@ -73,11 +73,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Query by DID (composite id.created_by) for reliable results (paginated)
 		const posts: Post[] = [];
-		let nextCursor: Date | null = null;
+		let nextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
 		do {
 			const page = await postRepository.findByDid(did, {
 				limit: 500,
-				afterCreatedAt: nextCursor ?? undefined
+				afterCreatedAt: nextCursor?.afterCreatedAt,
+				afterId: nextCursor?.afterId
 			});
 			posts.push(...page.posts);
 			nextCursor = page.nextCursor;
@@ -199,6 +200,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 	} catch (err) {
+		if (isHttpError(err)) throw err;
+
 		console.error('Identity export-bundle error:', err);
 
 		if (err instanceof Error) {

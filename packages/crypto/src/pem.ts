@@ -4,7 +4,6 @@
  */
 
 import { createPrivateKey } from "node:crypto";
-import type { KeyObject } from "node:crypto";
 import { decodePrivateKey, encodePrivateKey } from "./encoding.js";
 
 /** Ed25519 OID: 1.3.101.112 */
@@ -137,9 +136,8 @@ export function importPrivateKeyFromEncryptedPem(
     key: pem,
     format: "pem",
     passphrase,
-  }) as KeyObject;
-  const exp = keyObject.export({ type: "pkcs8", format: "der" });
-  const der = Buffer.isBuffer(exp) ? exp : Buffer.from(exp as string, "binary");
+  });
+  const der = keyObject.export({ type: "pkcs8", format: "der" }) as Buffer;
   const raw = extractRawKeyFromPkcs8(der);
   return encodePrivateKey(raw);
 }

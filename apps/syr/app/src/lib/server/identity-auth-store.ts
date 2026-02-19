@@ -44,7 +44,7 @@ export async function deletePendingChallenge(id: string): Promise<void> {
 /**
  * Find the challenge that issued a given authorization code.
  * Returns [challengeId, challenge] or null if not found.
- * Uses database-level filtering for O(1) lookup instead of O(N) in-memory scan.
+ * Uses database-level filtering for lookup; complexity is O(N) without an index on value.code, O(log N) with an index.
  */
 export async function findChallengeByCode(
 	code: string

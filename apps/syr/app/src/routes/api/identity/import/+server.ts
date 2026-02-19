@@ -56,6 +56,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+	if (typeof file.size !== 'number' || file.size > MAX_UPLOAD_BYTES) {
+		throw error(413, {
+			code: 'PAYLOAD_TOO_LARGE',
+			message: `Bundle size must not exceed ${MAX_UPLOAD_BYTES / 1024 / 1024} MB`
+		});
+	}
+
 	const arrayBuffer = await file.arrayBuffer();
 	const zipBytes = new Uint8Array(arrayBuffer);
 
@@ -260,7 +268,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				title: post.title,
 				description: post.description,
 				content: post.content,
-				media_urls: mediaUrls.length > 0 ? mediaUrls : post.media_urls,
+				media_urls: mediaUrls.length > 0 ? mediaUrls : undefined,
 				display_mode: post.display_mode,
 				visibility: post.visibility,
 				status: post.status,

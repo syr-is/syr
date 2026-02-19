@@ -44,7 +44,7 @@ Response:
 
 **`DELETE /api/syner/pair`**
 
-Unpairs a device. Requires device JWT authentication.
+Unpairs the device authenticated by the JWT in the `Authorization: Bearer <token>` header.
 
 ---
 
@@ -58,12 +58,18 @@ Authentication: Device JWT in `Authorization: Bearer <token>` header.
 
 Events:
 
+The SSE discriminant comes from the `event:` line and must be merged with the parsed JSON body. Clients should construct events as:
+
+```
+const ev = { type: eventName, ...JSON.parse(data) };
+```
+
 ```text
 event: connected
 data: {"device_id": "uuid", "instance": "https://my.syr.is"}
 
 event: signing_request
-data: {"id": "uuid", "type": "registry_update", "payload": {...}, "payload_hash": "sha256hex", "created_at": "...", "expires_at": "..."}
+data: {"id": "uuid", "request_type": "registry_update", "payload": {...}, "payload_hash": "sha256hex", "created_at": "...", "expires_at": "..."}
 
 event: ping
 data: {"timestamp": "..."}
@@ -72,6 +78,8 @@ data: {"timestamp": "..."}
 **`GET /api/syner/requests/:id`**
 
 Fetch a specific signing request by ID. Used by the deep link fallback flow.
+
+Authentication: Device JWT in `Authorization: Bearer <token>` header. Implementers must enforce ownership checks when resolving the signing request by ID.
 
 Response:
 
@@ -136,6 +144,45 @@ Response:
 }
 ```
 
+### 1.5 Identity Transfer Confirmation
+
+**`POST /api/identity/confirm-transfer`**
+
+Confirms that Syner has successfully imported the identity's private key. Called by Syner after the user scans the encrypted key bundle QR and imports the key into the platform keystore.
+
+Authentication: Device JWT in `Authorization: Bearer <token>` header (or user session if appropriate). Callers must be authorized for the identity being transferred.
+
+Request body:
+
+```json
+{
+	"identityId": "did:syr:z6Mk...",
+	"synerImportReceipt": "...",
+	"timestamp": "ISO-8601",
+	"signature": "..."
+}
+```
+
+- `identityId` (required): The DID of the identity being transferred
+- `synerImportReceipt` (required): Proof that Syner successfully imported the key (e.g. signature or nonce)
+- `timestamp` (required): When the import occurred
+- `signature` (optional): Cryptographic proof binding the receipt to the identity
+
+Responses:
+
+- **200 OK**: Transfer confirmed. Identity is now marked "syner-managed".
+- **400 Bad Request**: Invalid payload, missing fields, or receipt verification failed.
+- **401 Unauthorized**: Missing or invalid auth token.
+- **403 Forbidden**: Caller not authorized for this identity.
+- **409 Conflict**: Identity already syner-managed or transfer already confirmed (idempotency).
+
+Semantics:
+
+- The server deletes the server-side private key ONLY after `synerImportReceipt` is verified. If verification fails, the key remains and the request returns 400.
+- The identity is marked "syner-managed" only upon successful confirmation.
+- The operation should be idempotent: repeated confirmations for the same identity return 409 or 200 with no side effects.
+- Audit logging must record the transfer event (who, when, identity).
+
 ---
 
 ## 2. Database Schema Extensions
@@ -156,6 +203,7 @@ DEFINE FIELD last_active ON paired_device TYPE datetime DEFAULT time::now();
 DEFINE FIELD is_active ON paired_device TYPE bool DEFAULT true;
 
 DEFINE INDEX idx_paired_device_user ON paired_device FIELDS user_id;
+DEFINE INDEX idx_paired_device_device_token_hash ON paired_device FIELDS device_token_hash;
 ```
 
 ### 2.2 Signing Request Table
@@ -170,7 +218,8 @@ DEFINE FIELD request_type ON signing_request TYPE string
 DEFINE FIELD payload ON signing_request FLEXIBLE TYPE object;
 DEFINE FIELD payload_hash ON signing_request TYPE string;
 DEFINE FIELD status ON signing_request TYPE string
-  ASSERT $value IN ['pending', 'signed', 'expired', 'cancelled'] DEFAULT 'pending';
+  DEFAULT 'pending'
+  ASSERT $value IN ['pending', 'signed', 'expired', 'cancelled'];
 DEFINE FIELD signature ON signing_request TYPE option<string>;
 DEFINE FIELD created_at ON signing_request TYPE datetime DEFAULT time::now();
 DEFINE FIELD expires_at ON signing_request TYPE datetime;
@@ -226,6 +275,8 @@ Custom URL scheme: `syr://`
 | ------ | --------------------------------------------------------------- | ----------------------- |
 | Pair   | `syr://pair?code={code}&instance={url}`                         | Initiate device pairing |
 | Sign   | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}` | Open a signing request  |
+
+**Trusted-instance validation:** The `instance` URL from deep links MUST be validated against a user-configured trusted-instance whitelist before Syner connects. Syner MUST reject or prompt the user for any `instance` not on the trusted list. Canonicalize and percent-decode the URL before comparison. When an untrusted `instance` is encountered, Syner may: reject (refuse to connect), warn (show confirmation dialog), or prompt (ask user to add to whitelist). The chosen behavior should be documented in Syner's UX.
 
 ---
 
@@ -345,10 +396,12 @@ interface SigningRequest {
 	signed_at?: Date;
 }
 
-// SSE event types
+// SSE event types. The discriminant comes from the event: line; merge with data:
+// const ev = { type: eventName, ...JSON.parse(data) };
+// For signing_request, the flat payload matches SigningRequest (request_type field).
 type SynerEvent =
 	| { type: 'connected'; device_id: string; instance: string }
-	| { type: 'signing_request'; data: SigningRequest }
+	| ({ type: 'signing_request' } & SigningRequest)
 	| { type: 'ping'; timestamp: string };
 ```
 

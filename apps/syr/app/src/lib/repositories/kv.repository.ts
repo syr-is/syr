@@ -11,6 +11,12 @@ export class KvRepository {
 	protected schema = KvEntrySchema;
 
 	/**
+	 * Regex to validate field names for safe interpolation into SurrealQL
+	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
+	 */
+	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+	/**
 	 * Get database instance lazily
 	 */
 	protected get db() {
@@ -158,7 +164,9 @@ export class KvRepository {
 
 	/**
 	 * Find KV entries by type and a nested field in value.
-	 * Pushes the filter to the database for O(1) lookup instead of O(N) scan.
+	 * Pushes the filter to the database to reduce network transfer; still requires scanning
+	 * matching records (O(K) across records with kv_type, or O(N) if kv_type is unindexed).
+	 * Proper indexing on kv_type or the nested field is required for indexed lookups.
 	 * @param type - The category/type to query
 	 * @param field - Field name within value object (validated for injection safety)
 	 * @param fieldValue - Value to match
@@ -222,12 +230,6 @@ export class KvRepository {
 
 		return { data, total };
 	}
-
-	/**
-	 * Regex to validate field names for safe interpolation into SurrealQL
-	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
-	 */
-	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 	/**
 	 * Atomically increment a numeric field within the value object
