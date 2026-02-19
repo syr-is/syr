@@ -39,6 +39,7 @@ jobs:
             apps/syr/app/.svelte-kit
             apps/syr/app/build
             apps/docs/app/.svelte-kit
+            apps/docs/app/dist
             apps/registry/client/.svelte-kit
           include-hidden-files: true
           if-no-files-found: ignore
