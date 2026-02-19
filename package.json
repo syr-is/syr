@@ -31,6 +31,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@scarf/scarf",
       "@syr-is/types",
       "@tailwindcss/oxide",
       "esbuild",

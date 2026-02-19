@@ -7,6 +7,12 @@ import { base58 } from "@scure/base";
 export const ED25519_MULTICODEC_PREFIX = new Uint8Array([0xed, 0x01]);
 
 /**
+ * Multicodec prefix for Ed25519 private keys.
+ * varint 0x1300 = [0x80, 0x26]
+ */
+export const ED25519_PRIV_MULTICODEC_PREFIX = new Uint8Array([0x80, 0x26]);
+
+/**
  * Encode bytes as a multibase base58btc string.
  * Prefix 'z' indicates base58btc encoding per the multibase spec.
  * @param bytes - The bytes to encode.
@@ -62,7 +68,7 @@ export function decodePublicKey(encoded: string): Uint8Array {
 
 /**
  * Decode a multibase-encoded Ed25519 private key to 32 raw bytes.
- * Strips the multicodec prefix (0xed 0x01) if present.
+ * Strips the multicodec prefix (0x80 0x26 / 0x1300) if present.
  *
  * @param encoded - Multibase string (e.g. from identity storage).
  * @returns 32-byte Ed25519 private key.
@@ -73,8 +79,8 @@ export function decodePrivateKey(encoded: string): Uint8Array {
   let raw: Uint8Array = bytes;
   if (
     bytes.length === 34 &&
-    bytes[0] === ED25519_MULTICODEC_PREFIX[0] &&
-    bytes[1] === ED25519_MULTICODEC_PREFIX[1]
+    bytes[0] === ED25519_PRIV_MULTICODEC_PREFIX[0] &&
+    bytes[1] === ED25519_PRIV_MULTICODEC_PREFIX[1]
   ) {
     raw = bytes.slice(2);
   }
@@ -84,6 +90,24 @@ export function decodePrivateKey(encoded: string): Uint8Array {
     );
   }
   return raw;
+}
+
+/**
+ * Encode a 32-byte Ed25519 private key seed as multibase with multicodec prefix.
+ *
+ * @param raw - 32-byte Ed25519 private key seed.
+ * @returns Multibase string with Ed25519 private key multicodec prefix.
+ */
+export function encodePrivateKey(raw: Uint8Array): string {
+  if (raw.length !== 32) {
+    throw new Error(`Expected 32-byte Ed25519 key, got ${raw.length} bytes.`);
+  }
+  const prefixed = new Uint8Array(
+    ED25519_PRIV_MULTICODEC_PREFIX.length + raw.length,
+  );
+  prefixed.set(ED25519_PRIV_MULTICODEC_PREFIX);
+  prefixed.set(raw, ED25519_PRIV_MULTICODEC_PREFIX.length);
+  return encodeMultibase(prefixed);
 }
 
 /**

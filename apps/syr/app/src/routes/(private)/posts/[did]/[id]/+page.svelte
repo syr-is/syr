@@ -74,7 +74,9 @@
 	}
 
 	function postApiUrl(): string {
-		return `/api/posts/${data.post.did}/${data.post.local_id}`;
+		const postId =
+			data.post.did && data.post.local_id ? `${data.post.did}/${data.post.local_id}` : data.post.id;
+		return `/api/posts/${postId}`;
 	}
 
 	async function handlePublish() {
@@ -168,7 +170,9 @@
 	}
 
 	function postPageUrl(): string {
-		return `/posts/${data.post.did}/${data.post.local_id}`;
+		const postId =
+			data.post.did && data.post.local_id ? `${data.post.did}/${data.post.local_id}` : data.post.id;
+		return `/posts/${postId}`;
 	}
 </script>
 

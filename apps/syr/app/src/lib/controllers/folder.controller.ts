@@ -48,12 +48,11 @@ export class FolderController {
 	}
 
 	/**
-	 * Build the S3 prefix for a folder based on its path
+	 * Build the S3 prefix for a folder based on its path.
 	 * Format: uploads/{did}/[folder_path/]
+	 * Caller must ensure did is validated (identity exists).
 	 */
-	private async buildS3Prefix(ownerId: RecordId, folderId: RecordId): Promise<string> {
-		const identity = await identityRepository.findByUserId(ownerId);
-		const did = identity?.did ?? ownerId.toString();
+	private async buildS3Prefix(did: string, folderId: RecordId): Promise<string> {
 		const folderPath = await folderRepository.getFullPath(folderId);
 		let prefix = `uploads/${did}`;
 		if (folderPath.length > 0) {
@@ -192,8 +191,12 @@ export class FolderController {
 		}
 
 		if (deleteContents) {
-			// Build the S3 prefix for this folder before deleting
-			const s3Prefix = await this.buildS3Prefix(ownerId, folder.id);
+			// Resolve identity for S3 prefix; fail fast before any DB deletions
+			const identity = await identityRepository.findByUserId(ownerId);
+			if (!identity) {
+				throw new Error('identity not found for ownerId');
+			}
+			const s3Prefix = await this.buildS3Prefix(identity.did, folder.id);
 
 			// Track total bytes to subtract from storage usage
 			let totalBytesToDelete = 0;

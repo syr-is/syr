@@ -38,6 +38,7 @@ function mockFetchSequence(
 
 beforeEach(() => {
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe('resolveDid', () => {
@@ -101,19 +102,6 @@ describe('resolveDid', () => {
 		vi.stubGlobal(
 			'fetch',
 			mockFetchSequence({ status: 200, body: record }, { status: 200, body: record, throws: true })
-		);
-
-		// The second fetch (provider) throws
-		let callCount = 0;
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (_url: string) => {
-				callCount++;
-				if (callCount === 1) {
-					return { ok: true, status: 200, json: async () => record } as unknown as Response;
-				}
-				throw new Error('Network error');
-			})
 		);
 
 		await expect(

@@ -82,8 +82,9 @@
 			loading = true;
 			try {
 				// If we have a draft, update it; otherwise create new
-				const method = draftDid ? 'PATCH' : 'POST';
-				const endpoint = draftDid ? `/api/posts/${draftDid}/${draftLocalId}` : '/api/posts';
+				const hasDraft = !!draftDid && !!draftLocalId;
+				const method = hasDraft ? 'PATCH' : 'POST';
+				const endpoint = hasDraft ? `/api/posts/${draftDid}/${draftLocalId}` : '/api/posts';
 
 				const response = await fetch(endpoint, {
 					method,
@@ -250,7 +251,7 @@
 
 		loading = true;
 		try {
-			if (draftDid) {
+			if (draftDid && draftLocalId) {
 				// Update existing draft
 				const response = await fetch(`/api/posts/${draftDid}/${draftLocalId}`, {
 					method: 'PATCH',
@@ -287,7 +288,7 @@
 
 		loading = true;
 		try {
-			if (draftDid) {
+			if (draftDid && draftLocalId) {
 				const response = await fetch(`/api/posts/${draftDid}/${draftLocalId}`, {
 					method: 'DELETE'
 				});

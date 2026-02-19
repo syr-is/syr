@@ -58,7 +58,7 @@ Authentication: Device JWT in `Authorization: Bearer <token>` header.
 
 Events:
 
-```
+```text
 event: connected
 data: {"device_id": "uuid", "instance": "https://my.syr.is"}
 

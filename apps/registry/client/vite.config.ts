@@ -1,4 +1,3 @@
-import { resolve } from 'path';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
@@ -11,13 +10,6 @@ export default defineConfig(({ mode }) => {
 		plugins: [tailwindcss(), sveltekit()],
 		ssr: {
 			noExternal: ['@syr-is/ui']
-		},
-		resolve: {
-			alias: {
-				// Tailwind plugin uses enhanced-resolve which doesn't fully respect package.json exports.
-				// Use workspace path so styles resolve regardless of pnpm store layout.
-				'@syr-is/ui/styles': resolve(process.cwd(), '../../../packages/ui/src/app.css')
-			}
 		},
 		server: {
 			proxy: {

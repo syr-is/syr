@@ -1,3 +1,4 @@
+import { parseKvId } from '@syr-is/types';
 import { identityAuth } from '$lib/config';
 import { kvService } from '$lib/services/kv';
 
@@ -43,18 +44,16 @@ export async function deletePendingChallenge(id: string): Promise<void> {
 /**
  * Find the challenge that issued a given authorization code.
  * Returns [challengeId, challenge] or null if not found.
+ * Uses database-level filtering for O(1) lookup instead of O(N) in-memory scan.
  */
 export async function findChallengeByCode(
 	code: string
 ): Promise<[string, PendingChallenge] | null> {
-	const entries = await kvService.getByType(KV_TYPE);
-	for (const entry of entries) {
-		const challenge = entry.value as PendingChallenge;
-		if (challenge?.code === code) {
-			const parts = String(entry.id).split(':');
-			const index = parts[parts.length - 1];
-			return [index, challenge];
-		}
-	}
-	return null;
+	const entries = await kvService.findByTypeAndValueField(KV_TYPE, 'code', code);
+	const entry = entries[0];
+	if (!entry) return null;
+
+	const challenge = entry.value as PendingChallenge;
+	const { index } = parseKvId(String(entry.id));
+	return [index, challenge];
 }

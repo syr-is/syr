@@ -5,11 +5,7 @@
 
 import { createPrivateKey } from "node:crypto";
 import type { KeyObject } from "node:crypto";
-import {
-  decodePrivateKey,
-  encodeMultibase,
-  ED25519_MULTICODEC_PREFIX,
-} from "./encoding.js";
+import { decodePrivateKey, encodePrivateKey } from "./encoding.js";
 
 /** Ed25519 OID: 1.3.101.112 */
 const ED25519_OID = new Uint8Array([0x06, 0x03, 0x2b, 0x65, 0x70]);
@@ -145,10 +141,5 @@ export function importPrivateKeyFromEncryptedPem(
   const exp = keyObject.export({ type: "pkcs8", format: "der" });
   const der = Buffer.isBuffer(exp) ? exp : Buffer.from(exp as string, "binary");
   const raw = extractRawKeyFromPkcs8(der);
-  const prefixed = new Uint8Array(
-    ED25519_MULTICODEC_PREFIX.length + raw.length,
-  );
-  prefixed.set(ED25519_MULTICODEC_PREFIX);
-  prefixed.set(raw, ED25519_MULTICODEC_PREFIX.length);
-  return encodeMultibase(prefixed);
+  return encodePrivateKey(raw);
 }

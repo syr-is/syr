@@ -217,11 +217,12 @@
 
 	// Download file
 	async function downloadFile(upload: UploadWithCompositeId) {
+		if (!upload.did || !upload.local_id) {
+			toast.error('Download not available for this file');
+			return;
+		}
 		try {
-			const url =
-				upload.did && upload.local_id
-					? `/api/uploads/${upload.did}/${upload.local_id}`
-					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}`;
+			const url = `/api/uploads/${upload.did}/${upload.local_id}`;
 			const response = await fetch(url);
 			if (!response.ok) {
 				throw new Error('Failed to get download URL');
@@ -246,12 +247,12 @@
 			toast.error('URL not available');
 			return;
 		}
-
+		if (!upload.did || !upload.local_id) {
+			toast.error('Link not available for this file');
+			return;
+		}
 		try {
-			const url =
-				upload.did && upload.local_id
-					? `/api/uploads/${upload.did}/${upload.local_id}`
-					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}`;
+			const url = `/api/uploads/${upload.did}/${upload.local_id}`;
 			const response = await fetch(url);
 			if (!response.ok) {
 				throw new Error('Failed to get upload info');

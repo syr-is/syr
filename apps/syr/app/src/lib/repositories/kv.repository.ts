@@ -157,6 +157,34 @@ export class KvRepository {
 	}
 
 	/**
+	 * Find KV entries by type and a nested field in value.
+	 * Pushes the filter to the database for O(1) lookup instead of O(N) scan.
+	 * @param type - The category/type to query
+	 * @param field - Field name within value object (validated for injection safety)
+	 * @param fieldValue - Value to match
+	 * @returns Matching entries (expired ones excluded)
+	 */
+	async findByTypeAndValueField(
+		type: string,
+		field: string,
+		fieldValue: unknown
+	): Promise<KvEntry[]> {
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
+		}
+
+		const result = await this.db.query<[KvEntry[]]>(
+			`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND value.${field} = $fieldValue AND (expires_at = NONE OR expires_at >= time::now())`,
+			{ type, fieldValue }
+		);
+
+		const records = result[0] ?? [];
+		return records.map((record: unknown) => this.validate(record));
+	}
+
+	/**
 	 * Delete all KV entries by type
 	 */
 	async deleteByType(type: string): Promise<void> {
@@ -189,7 +217,7 @@ export class KvRepository {
 		]);
 
 		const rawData = dataResult[0] ?? [];
-		const data = rawData.map((record) => this.validate(record));
+		const data = rawData.map((record: unknown) => this.validate(record));
 		const total = countResult[0]?.[0]?.total ?? 0;
 
 		return { data, total };

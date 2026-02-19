@@ -244,7 +244,7 @@ All API routes are under `src/routes/api/`.
   2. Server creates `upload` record (status: `pending`)
   3. Server generates presigned PUT URL
   4. Client uploads directly to S3
-  5. Client confirms via `PATCH /api/uploads/[id]` (status: `completed`)
+  5. Client confirms via `PATCH /api/uploads/[did]/[id]` (status: `completed`)
 - Key format: `uploads/{did}/[folder_path/]{ulid}` (DID-namespaced, aligned with composite record IDs)
 - Public access: Files in `public` folder hierarchy are served without signed URLs
 - S3 config: SeaweedFS `s3_config.json` must allow anonymous read for `Read:syr/uploads/did:syr:*/public/*`

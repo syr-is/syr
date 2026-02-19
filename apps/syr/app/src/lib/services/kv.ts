@@ -72,6 +72,21 @@ export class KvService {
 	}
 
 	/**
+	 * Find entries by type and a nested field in the value.
+	 * Uses database-level filtering for efficient lookup instead of in-memory scan.
+	 * @param type - The category/type to query
+	 * @param field - Field name within the value object
+	 * @param fieldValue - Value to match
+	 */
+	async findByTypeAndValueField(
+		type: string,
+		field: string,
+		fieldValue: unknown
+	): Promise<KvEntry[]> {
+		return this.repository.findByTypeAndValueField(type, field, fieldValue);
+	}
+
+	/**
 	 * Delete all entries of a specific type
 	 * @param type - The category/type to delete
 	 */

@@ -6,6 +6,7 @@ import {
   decodePrivateKey,
   deriveDid,
   ED25519_MULTICODEC_PREFIX,
+  ED25519_PRIV_MULTICODEC_PREFIX,
 } from "../encoding.js";
 import { generateRootKeypair } from "../keys.js";
 import { concatBytes } from "../utils.js";
@@ -80,7 +81,7 @@ describe("decodePublicKey", () => {
 describe("decodePrivateKey", () => {
   it("decodes a multibase-encoded Ed25519 private key with multicodec prefix", async () => {
     const kp = await generateRootKeypair();
-    const prefixed = concatBytes(ED25519_MULTICODEC_PREFIX, kp.privateKey);
+    const prefixed = concatBytes(ED25519_PRIV_MULTICODEC_PREFIX, kp.privateKey);
     const encoded = encodeMultibase(prefixed);
     const decoded = decodePrivateKey(encoded);
     expect(decoded.length).toBe(32);

@@ -54,6 +54,13 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	}
 
 	/**
+	 * Delete identity by DID. Used for import rollback.
+	 */
+	async deleteByDid(did: string): Promise<void> {
+		await this.db.query('DELETE identity WHERE did = $did', { did });
+	}
+
+	/**
 	 * Find identity by DID within a specific tenant scope
 	 */
 	async findByDidAndTenant(did: string, tenantId: string | RecordId): Promise<Identity | null> {
@@ -308,6 +315,13 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 		const record = result[0]?.[0];
 		if (!record) throw new Error('Failed to create delegated key.');
 		return this.validate(record);
+	}
+
+	/**
+	 * Delete all delegated keys for a DID. Used for import rollback.
+	 */
+	async deleteByDid(did: string): Promise<void> {
+		await this.db.query('DELETE delegated_key WHERE did = $did', { did });
 	}
 
 	/**

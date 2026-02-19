@@ -3,7 +3,7 @@ import { generateRootKeypair } from "../keys.js";
 import {
   encodeMultibase,
   decodePrivateKey,
-  ED25519_MULTICODEC_PREFIX,
+  ED25519_PRIV_MULTICODEC_PREFIX,
 } from "../encoding.js";
 import { concatBytes } from "../utils.js";
 import {
@@ -16,7 +16,7 @@ import {
 describe("pem", () => {
   it("round-trip: raw → pkcs8 → pem(encrypted) → import → raw matches", async () => {
     const kp = await generateRootKeypair();
-    const prefixed = concatBytes(ED25519_MULTICODEC_PREFIX, kp.privateKey);
+    const prefixed = concatBytes(ED25519_PRIV_MULTICODEC_PREFIX, kp.privateKey);
     const multibase = encodeMultibase(prefixed);
 
     const pem = exportPrivateKeyToEncryptedPem(multibase, "test-passphrase");
@@ -30,7 +30,7 @@ describe("pem", () => {
 
   it("OpenSSL compatibility: generated PEM works with openssl pkey", async () => {
     const kp = await generateRootKeypair();
-    const prefixed = concatBytes(ED25519_MULTICODEC_PREFIX, kp.privateKey);
+    const prefixed = concatBytes(ED25519_PRIV_MULTICODEC_PREFIX, kp.privateKey);
     const multibase = encodeMultibase(prefixed);
     const pem = exportPrivateKeyToEncryptedPem(multibase, "xxx");
     const { execSync } = await import("node:child_process");

@@ -249,10 +249,9 @@
 
 	// Handle post click - navigate to viewing page
 	function handlePostClick(post: Post) {
-		const did = post.did ?? '';
-		const localId = post.local_id ?? '';
+		const postId = getPostId(post);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto(`/posts/${did}/${localId}`);
+		goto(`/posts/${postId}`);
 	}
 
 	// Calculate total pages

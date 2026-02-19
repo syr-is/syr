@@ -10,7 +10,7 @@
 	import { zod4 } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { PostUpdateSchema } from '@syr-is/types';
+	import { PostUpdateSchema, getPostId } from '@syr-is/types';
 	import { Crepe } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/nord-dark.css';
@@ -73,11 +73,7 @@
 			if (response.ok) {
 				const result = await response.json();
 				const pinnedIds: string[] = result.data?.post_ids || [];
-				const postId =
-					data.post.did && data.post.local_id
-						? `${data.post.did}/${data.post.local_id}`
-						: data.post.id;
-				isPinned = pinnedIds.includes(postId);
+				isPinned = pinnedIds.includes(getPostId(data.post));
 			}
 		} catch {
 			// Ignore errors
@@ -93,10 +89,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					post_id:
-						data.post.did && data.post.local_id
-							? `${data.post.did}/${data.post.local_id}`
-							: data.post.id,
+					post_id: getPostId(data.post),
 					action: isPinned ? 'unpin' : 'pin'
 				})
 			});

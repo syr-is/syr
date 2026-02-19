@@ -250,10 +250,12 @@
 
 	// Handle post click - navigate to viewing page
 	function handlePostClick(post: Post) {
-		const did = post.did ?? '';
-		const localId = post.local_id ?? '';
+		if (!post.did || !post.local_id) {
+			toast.error('Post link not available');
+			return;
+		}
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto(`/posts/${did}/${localId}`);
+		goto(`/posts/${post.did}/${post.local_id}`);
 	}
 
 	// Calculate total pages

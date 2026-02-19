@@ -183,17 +183,36 @@ export function recordIdFromDidAndLocal(table: string, did: string, localId: str
 	return new RecordId(table, { created_by: did, id: localId });
 }
 
+function assertCompositeRecordId(recordId: RecordId): void {
+	const obj = recordId?.id;
+	if (typeof obj !== 'object' || obj === null) {
+		throw new Error(
+			`Expected composite RecordId (object with created_by and id), got: ${typeof obj === 'string' ? obj : JSON.stringify(obj)}`
+		);
+	}
+	const o = obj as Record<string, unknown>;
+	if (typeof o.created_by !== 'string' || typeof o.id !== 'string') {
+		throw new Error(
+			`Expected composite RecordId (created_by, id), got keys: ${Object.keys(o).join(', ')}`
+		);
+	}
+}
+
 /**
  * Extract the ULID portion from a composite RecordId.
+ * @throws If recordId.id is not an object with created_by and id.
  */
 export function extractLocalId(recordId: RecordId): string {
+	assertCompositeRecordId(recordId);
 	return (recordId.id as unknown as CompositeId).id;
 }
 
 /**
  * Extract the full DID string from a composite RecordId.
+ * @throws If recordId.id is not an object with created_by and id.
  */
 export function extractDid(recordId: RecordId): string {
+	assertCompositeRecordId(recordId);
 	return (recordId.id as unknown as CompositeId).created_by;
 }
 
@@ -207,7 +226,7 @@ export function buildResourceUrl(prefix: string, recordId: RecordId): string {
 
 /**
  * Get canonical post ID for URLs and API calls.
- * Uses did/local_id when present (API serialized), otherwise extracts from RecordId.
+ * Uses did/local_id when present (API serialized), otherwise extracts from composite RecordId.
  */
 export function getPostId(post: {
 	id: RecordId | string;
@@ -215,7 +234,8 @@ export function getPostId(post: {
 	local_id?: string;
 }): string {
 	if (post.did && post.local_id) return `${post.did}/${post.local_id}`;
-	return typeof post.id === 'string' ? post.id : post.id.toString();
+	if (typeof post.id === 'string') return post.id;
+	return `${extractDid(post.id)}/${extractLocalId(post.id)}`;
 }
 
 export { ulid } from 'ulid';

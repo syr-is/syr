@@ -9,6 +9,7 @@ import {
 	constantTimeEqual,
 	generateRootKeypair,
 	encodeMultibase,
+	encodePrivateKey,
 	concatBytes,
 	ED25519_MULTICODEC_PREFIX
 } from '@syr-is/crypto';
@@ -155,10 +156,8 @@ export class IdentityController {
 			concatBytes(ED25519_MULTICODEC_PREFIX, rootKeypair.publicKey)
 		);
 
-		// Encode private key as multibase (same format as public key for consistency)
-		const privateKeyMultibase = encodeMultibase(
-			concatBytes(ED25519_MULTICODEC_PREFIX, rootKeypair.privateKey)
-		);
+		// Encode private key as multibase with Ed25519 private key multicodec prefix
+		const privateKeyMultibase = encodePrivateKey(rootKeypair.privateKey);
 
 		const now = new Date();
 

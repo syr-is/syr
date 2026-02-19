@@ -8,7 +8,7 @@ import { s3Service } from '$lib/services/s3';
 import { s3 as s3Config } from '$lib/config';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { zip, strToU8 } from 'fflate';
-import type { IdentityExportManifest, ExportedPost } from '@syr-is/types';
+import type { IdentityExportManifest, ExportedPost, Post } from '@syr-is/types';
 import { extractLocalId } from '@syr-is/types';
 import { exportPrivateKeyToEncryptedPem } from '@syr-is/crypto/pem';
 
@@ -71,8 +71,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			privateKeyPem = exportPrivateKeyToEncryptedPem(privateKeyMultibase, passphrase);
 		}
 
-		// Query by DID (composite id.created_by) for reliable results
-		const posts = await postRepository.findByDid(did);
+		// Query by DID (composite id.created_by) for reliable results (paginated)
+		const posts: Post[] = [];
+		let nextCursor: Date | null = null;
+		do {
+			const page = await postRepository.findByDid(did, {
+				limit: 500,
+				afterCreatedAt: nextCursor ?? undefined
+			});
+			posts.push(...page.posts);
+			nextCursor = page.nextCursor;
+		} while (nextCursor);
 		const uploads = await uploadRepository.findByDid(did);
 
 		const zipFiles: Record<string, Uint8Array> = {};
@@ -126,14 +135,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 					const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
 
-					postAssets.push({
-						local_id: extractLocalId(upload.id),
-						filename: upload.filename,
-						mime_type: upload.mime_type,
-						size: upload.size,
-						sha256: upload.sha256,
-						zip_path: zipPath
-					});
+					// Only add to postAssets when the asset was successfully fetched and written to zipFiles
+					if (zipPath in zipFiles) {
+						postAssets.push({
+							local_id: extractLocalId(upload.id),
+							filename: upload.filename,
+							mime_type: upload.mime_type,
+							size: upload.size,
+							sha256: upload.sha256,
+							zip_path: zipPath
+						});
+					}
 				}
 			}
 

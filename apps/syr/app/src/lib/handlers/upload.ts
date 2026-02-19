@@ -60,7 +60,14 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 		}
 
 		const result = await response.json();
+		if (!result || typeof result !== 'object' || !result.data) {
+			throw new Error('Upload API returned invalid response: missing data');
+		}
 		const { signedUrl, finalUrl, uploadDid, uploadLocalId } = result.data;
+
+		if (!signedUrl || !finalUrl) {
+			throw new Error('Upload API returned invalid response: missing signedUrl or finalUrl');
+		}
 
 		// Step 2: Upload file to S3 using the signed URL
 		const uploadResponse = await fetch(signedUrl, {
@@ -75,13 +82,21 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 			throw new Error(`Failed to upload file: ${uploadResponse.statusText}`);
 		}
 
-		// Step 3: Complete the upload
+		// Step 3: Complete the upload (requires upload identifiers from API)
+		if (uploadDid == null || uploadLocalId == null) {
+			throw new Error(
+				'Upload API returned invalid response: missing upload identifiers for completion'
+			);
+		}
+		const patchBody: Record<string, unknown> = { status: 'completed' };
+		if (uploadDid != null) patchBody.did = uploadDid;
+		if (uploadLocalId != null) patchBody.local_id = uploadLocalId;
 		const completeResponse = await fetch('/api/uploads', {
 			method: 'PATCH',
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
+			body: JSON.stringify(patchBody)
 		});
 
 		if (!completeResponse.ok) {
