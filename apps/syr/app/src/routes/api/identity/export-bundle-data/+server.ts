@@ -88,28 +88,34 @@ export const GET: RequestHandler = async ({ locals }) => {
 					Key: upload.key
 				});
 				const resp = await s3Service.client.send(cmd);
-				if (resp.Body) {
-					const bytes = await resp.Body.transformToByteArray();
-					totalAssetBytes += bytes.length;
-					if (totalAssetBytes > MAX_EXPORT_ASSET_BYTES) {
-						skippedAssets.push({
-							zip_path: zipPath,
-							url: upload.url,
-							reason: 'Total asset size exceeds limit'
-						});
-						continue;
-					}
-					const base64 = Buffer.from(bytes).toString('base64');
-					exportedAssets.push({
+				if (!resp.Body) {
+					skippedAssets.push({
 						zip_path: zipPath,
-						local_id: extractLocalId(upload.id),
-						filename: upload.filename,
-						mime_type: upload.mime_type,
-						size: upload.size,
-						sha256: upload.sha256,
-						content_base64: base64
+						url: upload.url,
+						reason: 'No response body'
 					});
+					continue;
 				}
+				const bytes = await resp.Body.transformToByteArray();
+				if (totalAssetBytes + bytes.length > MAX_EXPORT_ASSET_BYTES) {
+					skippedAssets.push({
+						zip_path: zipPath,
+						url: upload.url,
+						reason: 'Total asset size exceeds limit'
+					});
+					continue;
+				}
+				totalAssetBytes += bytes.length;
+				const base64 = Buffer.from(bytes).toString('base64');
+				exportedAssets.push({
+					zip_path: zipPath,
+					local_id: extractLocalId(upload.id),
+					filename: upload.filename,
+					mime_type: upload.mime_type,
+					size: upload.size,
+					sha256: upload.sha256,
+					content_base64: base64
+				});
 			} catch (err) {
 				skippedAssets.push({
 					zip_path: zipPath,
@@ -183,7 +189,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		console.error('Export-bundle-data error:', err);
 		if (err instanceof Error) {
 			if (err.message.includes('no identity') || err.message.includes('no profile')) {
-				throw error(404, { code: 'NOT_FOUND', message: err.message });
+				console.error('Export-bundle-data identity not found:', err.message);
+				throw error(404, { code: 'NOT_FOUND', message: 'Identity not found' });
 			}
 		}
 		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch export data' });

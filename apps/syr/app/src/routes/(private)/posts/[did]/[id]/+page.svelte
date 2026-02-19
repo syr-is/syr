@@ -18,6 +18,10 @@
 	// Check if post is a draft
 	const isDraft = $derived(data.post.status === 'draft');
 
+	const compositePostId = $derived(
+		data.post.did && data.post.local_id ? `${data.post.did}/${data.post.local_id}` : data.post.id
+	);
+
 	// Check if post is pinned on mount
 	$effect(() => {
 		if (data.user) {
@@ -31,11 +35,7 @@
 			if (response.ok) {
 				const result = await response.json();
 				const pinnedIds: string[] = result.data?.post_ids || [];
-				const postId =
-					data.post.did && data.post.local_id
-						? `${data.post.did}/${data.post.local_id}`
-						: data.post.id;
-				isPinned = pinnedIds.includes(postId);
+				isPinned = pinnedIds.includes(compositePostId);
 			}
 		} catch {
 			// Ignore errors
@@ -51,10 +51,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					post_id:
-						data.post.did && data.post.local_id
-							? `${data.post.did}/${data.post.local_id}`
-							: data.post.id,
+					post_id: compositePostId,
 					action: isPinned ? 'unpin' : 'pin'
 				})
 			});
@@ -74,9 +71,7 @@
 	}
 
 	function postApiUrl(): string {
-		const postId =
-			data.post.did && data.post.local_id ? `${data.post.did}/${data.post.local_id}` : data.post.id;
-		return `/api/posts/${postId}`;
+		return `/api/posts/${compositePostId}`;
 	}
 
 	async function handlePublish() {

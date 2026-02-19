@@ -120,6 +120,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const data = PostCreateSchema.parse(body);
 		const result = await postController.createPost(user, data);
 
+		// user.did guard above and postController.createPost(user, data) guarantee result.id is a composite record ID
 		return json(
 			{
 				status: 'success',

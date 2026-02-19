@@ -61,7 +61,7 @@ export class UploadRepository extends BaseRepository<Upload> {
 	 * Uses composite cursor (created_at, id) to avoid dropping uploads with identical timestamps.
 	 */
 	async findByDid(did: string, options?: FindByDidOptions): Promise<FindByDidResult> {
-		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? 500, MAX_PAGE)));
+		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE)));
 		const afterCreatedAt = options?.cursor?.afterCreatedAt;
 		const afterDid = options?.cursor?.afterDid;
 		const afterLocalId = options?.cursor?.afterLocalId;

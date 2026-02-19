@@ -177,8 +177,10 @@ Deep link flow:
 
 - All SSE and HTTP communication occurs over TLS
 - Syner authenticates to the SYR instance using a device JWT (`device_jwt`), a JWT issued during pairing
-- Signing requests include a nonce to prevent replay attacks
+- Signing requests include a nonce to prevent replay attacks (see §7.1 for nonce requirements)
 - Request payloads are integrity-checked (SHA-256 hash in the request matches the canonical payload)
+
+**Nonce enforcement:** The server stores nonces per `device_jwt` and rejects duplicate nonces until the request's `expires_at` window. Both `id` and `nonce` are required but serve distinct roles: `id` provides idempotent routing and tracking (UUID), while `nonce` provides cryptographic replay protection.
 
 ---
 
@@ -189,7 +191,7 @@ Deep link flow:
 ```json
 {
   "id": "uuid",
-  "nonce": "string",
+  "nonce": "<hex or base64 string, see below>",
   "request_type": "registry_update | delegation | post_sign | rotation",
   "payload": {
     "...canonicalized JSON payload..."
@@ -199,6 +201,8 @@ Deep link flow:
   "expires_at": "ISO-8601"
 }
 ```
+
+- **nonce**: The client (Syner) MUST include a CSPRNG-derived nonce of at least 16 bytes (128 bits), encoded as hex or base64. The server MUST track nonces and reject reuse within the request's `expires_at` window.
 
 ### 7.2 Signing Response Format
 
@@ -212,12 +216,12 @@ Deep link flow:
 
 ### 7.3 Request Types
 
-| request_type      | Description                                | Payload                               |
-| ----------------- | ------------------------------------------ | ------------------------------------- |
-| `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updatedAt }`        |
-| `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, createdAt }` |
-| `post_sign`       | Sign a post or content mutation            | `{ did, action, contentHash, ... }`   |
-| `rotation`        | Rotate root key                            | `{ did, newRoot, rotatedAt }`         |
+| request_type      | Description                                | Payload                                |
+| ----------------- | ------------------------------------------ | -------------------------------------- |
+| `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updated_at }`        |
+| `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, created_at }` |
+| `post_sign`       | Sign a post or content mutation            | `{ did, action, content_hash, ... }`   |
+| `rotation`        | Rotate root key                            | `{ did, new_root, rotated_at }`        |
 
 ---
 
