@@ -45,6 +45,9 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.crypto == 'true'
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,14 +65,16 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @syr-is/crypto build
-      - run: pnpm --filter @syr-is/crypto test
+      - run: pnpm exec turbo test --filter=@syr-is/crypto
 
   test-did:
     name: "Test: @syr-is/did"
     needs: detect-changes
     if: needs.detect-changes.outputs.did == 'true'
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -87,14 +92,16 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @syr-is/crypto build && pnpm --filter @syr-is/did build
-      - run: pnpm --filter @syr-is/did test
+      - run: pnpm exec turbo test --filter=@syr-is/did
 
   test-resolver:
     name: "Test: @syr-is/resolver"
     needs: detect-changes
     if: needs.detect-changes.outputs.resolver == 'true'
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -112,14 +119,16 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @syr-is/crypto build && pnpm --filter @syr-is/did build && pnpm --filter @syr-is/resolver build
-      - run: pnpm --filter @syr-is/resolver test
+      - run: pnpm exec turbo test --filter=@syr-is/resolver
 
   test-types:
     name: "Test: @syr-is/types"
     needs: detect-changes
     if: needs.detect-changes.outputs.types == 'true'
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -137,5 +146,4 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @syr-is/types build
-      - run: pnpm --filter @syr-is/types test
+      - run: pnpm exec turbo test --filter=@syr-is/types

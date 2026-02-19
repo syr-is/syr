@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ---- Base Stage ----
 FROM node:20-alpine AS base
 
@@ -26,15 +27,18 @@ RUN pnpm install --frozen-lockfile
 # ---- Builder Stage ----
 FROM deps AS builder
 
+# Turbo remote cache (optional - for CI; omit for local builds)
+ARG TURBO_TEAM
+
 # Copy application source (overlays on top of deps, preserving node_modules)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build workspace dependency packages (produces dist/ in each)
-RUN pnpm --filter "@syr-is/syr..." --filter "!@syr-is/syr" build
-
-# Build the syr app
-RUN pnpm --filter "@syr-is/syr" build
+# Build with turbo (supports remote cache when TURBO_TOKEN/TURBO_TEAM are provided)
+RUN --mount=type=secret,id=turbo_token,required=false \
+    ( [ -f /run/secrets/turbo_token ] && export TURBO_TOKEN=$(cat /run/secrets/turbo_token) ) || true ; \
+    [ -n "$TURBO_TEAM" ] && export TURBO_TEAM="$TURBO_TEAM" || true ; \
+    pnpm exec turbo build --filter=@syr-is/syr
 
 # Prune dev dependencies - keep only production dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
