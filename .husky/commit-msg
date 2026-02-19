@@ -3,8 +3,8 @@
 # See: https://gist.github.com/joshbuchea/6f47e86d2510bce28f8e7f42ae84c716
 COMMIT_MSG_FILE=$1
 
-# Ignore merge commits and "into" merges
-if grep -qE " into |^Merge " "$COMMIT_MSG_FILE" 2>/dev/null; then
+# Ignore merge commits (branch merges, GitHub PR merges)
+if grep -qE "^Merge (branch .* into |pull request #)" "$COMMIT_MSG_FILE" 2>/dev/null; then
   exit 0
 fi
 

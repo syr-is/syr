@@ -36,10 +36,9 @@
 				// If we got an Aegis bundle, verify the password decrypts correctly (seed is never stored)
 				if (aegisBundle && form.data.password) {
 					try {
-						await seedHandler.run({
+						await seedHandler.verify({
 							bundle: aegisBundle,
-							password: form.data.password,
-							action: async () => {}
+							password: form.data.password
 						});
 					} catch (e) {
 						console.error('[login] Failed to decrypt Aegis bundle:', e);

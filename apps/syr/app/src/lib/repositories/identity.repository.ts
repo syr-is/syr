@@ -238,6 +238,7 @@ export class IdentityRepository extends BaseRepository<Identity> {
 			console.error('[identity.repository] Error during Aegis identity creation:', error);
 			try {
 				await this.db.query(`DELETE identity WHERE did = $did;`, { did });
+				await this.db.query(`UPDATE $userId UNSET did;`, { userId });
 			} catch (rollbackError) {
 				console.error('[identity.repository] Rollback failed:', rollbackError);
 			}

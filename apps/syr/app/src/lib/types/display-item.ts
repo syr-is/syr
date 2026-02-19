@@ -1,4 +1,4 @@
-import type { UploadWithCompositeId, Folder } from '@syr-is/types';
+import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 import { getMediaType, type MediaType } from '$lib/utils/media';
 
 /**
@@ -122,8 +122,8 @@ export async function resolveItemUrl(
 	try {
 		const uploadUrl =
 			item.data.did && item.data.local_id
-				? `/api/uploads/${item.data.did}/${item.data.local_id}`
-				: `/api/uploads/${item.id}`;
+				? getUploadApiUrl(item.data)
+				: getUploadApiUrl({ id: item.id });
 		const response = await fetch(uploadUrl);
 		if (!response.ok) return null;
 		const result = await response.json();

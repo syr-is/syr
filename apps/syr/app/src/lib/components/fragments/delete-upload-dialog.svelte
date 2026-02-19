@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
-	import type { UploadWithCompositeId } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, TriangleAlert, Trash2 } from 'lucide-svelte';
 	import { storageEvents } from '$lib/stores/storage-events.svelte';
@@ -23,11 +23,7 @@
 
 		deleting = true;
 		try {
-			const uploadUrl =
-				upload.did && upload.local_id
-					? `/api/uploads/${upload.did}/${upload.local_id}`
-					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}`;
-			const response = await fetch(uploadUrl, {
+			const response = await fetch(getUploadApiUrl(upload), {
 				method: 'DELETE'
 			});
 

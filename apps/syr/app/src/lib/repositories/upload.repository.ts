@@ -36,7 +36,7 @@ export class UploadRepository extends BaseRepository<Upload> {
 	 * Used for export-bundle to avoid loading unbounded results into memory.
 	 */
 	async findByDidPage(did: string, options?: FindByDidPageOptions): Promise<FindByDidPageResult> {
-		const limit = Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE);
+		const limit = Math.max(1, Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE));
 		const offset = Math.max(0, options?.offset ?? 0);
 
 		const result = await this.db.query<[Upload[]]>(

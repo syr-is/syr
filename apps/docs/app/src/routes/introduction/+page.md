@@ -159,8 +159,8 @@ See the full [Roadmap](/roadmap) for details on each phase.
 ## Next Steps
 
 - Read the [Identity Model specification](/architecture/identity-model) for the full technical design.
-- See [Sigil (Export Format)](/architecture/sigil) and [Aegis (Custodial Identity)](/architecture/aegis) for the export and custodial specs.
-- See the [Phase 0 Blueprint](/implementation/phase-0-blueprint) for implementation details.
-- See the [Syner Specification](/architecture/syner) for the native companion app design.
+- Refer to [Sigil (Export Format)](/architecture/sigil) and [Aegis (Custodial Identity)](/architecture/aegis) for the export and custodial specs.
+- Consult the [Phase 0 Blueprint](/implementation/phase-0-blueprint) for implementation details.
+- Review the [Syner Specification](/architecture/syner) for the native companion app design.
 - Check the [Roadmap](/roadmap) for the full implementation timeline.
 - Browse the [Reference](/reference/types) section for current codebase documentation.

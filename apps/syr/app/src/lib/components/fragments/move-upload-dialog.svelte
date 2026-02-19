@@ -3,7 +3,7 @@
 	import * as Accordion from '@syr-is/ui/accordion';
 	import { Button } from '@syr-is/ui/button';
 	import { Label } from '@syr-is/ui/label';
-	import type { UploadWithCompositeId, Folder } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import {
 		Loader2,
@@ -160,11 +160,7 @@
 
 		moving = true;
 		try {
-			const uploadUrl =
-				upload.did && upload.local_id
-					? `/api/uploads/${upload.did}/${upload.local_id}`
-					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}`;
-			const response = await fetch(uploadUrl, {
+			const response = await fetch(getUploadApiUrl(upload), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

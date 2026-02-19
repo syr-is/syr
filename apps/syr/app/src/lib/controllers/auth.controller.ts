@@ -3,6 +3,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { identityController } from '$lib/controllers/identity.controller';
+import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 
@@ -65,7 +66,22 @@ export class AuthController {
 		} as Partial<Profile>);
 
 		// Create identity with Aegis (password-protected seed) at registration
-		await identityController.createIdentityAegis(user.id, password);
+		try {
+			await identityController.createIdentityAegis(user.id, password);
+		} catch (err) {
+			// Rollback: remove created user and profile so caller can retry
+			try {
+				await profileRepository.delete(profile.id);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to delete profile', e);
+			}
+			try {
+				await userRepository.delete(user.id);
+			} catch (e) {
+				console.error('[auth.controller] Rollback: failed to delete user', e);
+			}
+			throw err;
+		}
 
 		// Create session
 		const session = await this.createSession(user, ctx);
@@ -111,30 +127,8 @@ export class AuthController {
 		const profile = await profileRepository.findByUserId(user.id);
 
 		// Fetch identity and include aegisBundle when identity has Aegis (for client decryption)
-		let aegisBundle: AegisBundle | undefined;
 		const identity = await identityController.getIdentity(user.id);
-		if (
-			identity?.aegis_salt &&
-			identity?.aegis_nonce &&
-			identity?.aegis_ct &&
-			identity?.aegis_tag &&
-			identity?.aegis_kdf_mem != null &&
-			identity?.aegis_kdf_it != null &&
-			identity?.aegis_kdf_par != null
-		) {
-			aegisBundle = {
-				pub: identity.public_key,
-				salt: identity.aegis_salt,
-				nonce: identity.aegis_nonce,
-				ct: identity.aegis_ct,
-				tag: identity.aegis_tag,
-				kdf: {
-					mem: identity.aegis_kdf_mem,
-					it: identity.aegis_kdf_it,
-					par: identity.aegis_kdf_par
-				}
-			};
-		}
+		const aegisBundle = buildAegisBundleFromIdentity(identity ?? null);
 
 		// Create session
 		const session = await this.createSession(user, ctx);

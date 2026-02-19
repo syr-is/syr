@@ -4,7 +4,7 @@
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
-	import type { UploadWithCompositeId } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, Link, Clock, Copy, Check } from 'lucide-svelte';
 
@@ -35,12 +35,8 @@
 
 		generating = true;
 		try {
-			const uploadUrl =
-				upload.did && upload.local_id
-					? `/api/uploads/${upload.did}/${upload.local_id}/share`
-					: `/api/uploads/${typeof upload.id === 'string' ? upload.id : upload.id.toString()}/share`;
 			const expiresIn = parseInt(expiryValue, 10);
-			const response = await fetch(uploadUrl, {
+			const response = await fetch(getUploadApiUrl(upload, '/share'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ expiresIn })

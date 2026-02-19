@@ -7,6 +7,8 @@ import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { stringToRecordId } from '@syr-is/types';
 import { z } from 'zod';
 
+const REQUEST_TIMEOUT_MS = 5000;
+
 const RegistrySignSchema = z.object({
 	jobId: z.string().min(1),
 	action: z.enum(['update', 'delete']),
@@ -91,12 +93,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Send to registry
 	const base = registryUrl.replace(/\/$/, '');
+	const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 	try {
 		if (action === 'update') {
 			const res = await fetch(`${base}/api/v1/update`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ did, provider: provider!, updatedAt, signature })
+				body: JSON.stringify({ did, provider: provider!, updatedAt, signature }),
+				signal
 			});
 			if (!res.ok) {
 				const body = await res.text();
@@ -106,7 +110,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const res = await fetch(`${base}/api/v1/delete`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ did, deletedAt, signature })
+				body: JSON.stringify({ did, deletedAt, signature }),
+				signal
 			});
 			if (!res.ok) {
 				const body = await res.text();
@@ -116,6 +121,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (action === 'update') {
 			await registryRepository.updateStatus(did, registryUrl, 'synced');
+		} else {
+			const registryEntry = await registryRepository.findByDidAndUrl(did, registryUrl);
+			if (registryEntry) {
+				await registryRepository.removeRegistry(registryEntry.id);
+			}
 		}
 		await outboxRepository.markCompleted(job.id);
 
@@ -125,7 +135,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			meta: { timestamp: new Date().toISOString() }
 		});
 	} catch (err) {
-		const msg = err instanceof Error ? err.message : 'Registry request failed';
+		const msg =
+			err instanceof Error && err.name === 'AbortError'
+				? 'Registry request timed out'
+				: err instanceof Error
+					? err.message
+					: 'Registry request failed';
 		await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
 		throw error(502, { code: 'REGISTRY_ERROR', message: msg });
 	}

@@ -143,13 +143,13 @@
 				password: unlockPassword,
 				action: processPendingRegistryJobs
 			});
-			unlockPassword = '';
 			toast.success('Registry sync complete');
 			await invalidateAll();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Unlock failed');
 		} finally {
 			unlockingForSync = false;
+			unlockPassword = '';
 		}
 	}
 
@@ -321,43 +321,45 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<div
-						class="mb-4 space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30"
-					>
-						<p class="text-sm text-amber-800 dark:text-amber-200">
-							Unlock your identity to complete registry sync. Enter your account password to decrypt
-							and sign.
-						</p>
-						<div class="flex items-end gap-2">
-							<div class="flex-1 space-y-1">
-								<label for="unlock-sync-password" class="sr-only text-sm font-medium"
-									>Password</label
+					{#if data.outboxJobs?.some((j) => j.type === 'registry_sync' && j.status === 'pending')}
+						<div
+							class="mb-4 space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30"
+						>
+							<p class="text-sm text-amber-800 dark:text-amber-200">
+								Unlock your identity to complete registry sync. Enter your account password to
+								decrypt and sign.
+							</p>
+							<div class="flex items-end gap-2">
+								<div class="flex-1 space-y-1">
+									<label for="unlock-sync-password" class="sr-only text-sm font-medium"
+										>Password</label
+									>
+									<Input
+										id="unlock-sync-password"
+										type="password"
+										bind:value={unlockPassword}
+										placeholder="Account password"
+										autocomplete="current-password"
+										disabled={unlockingForSync}
+										class="w-full"
+										onkeydown={(e) => e.key === 'Enter' && unlockForSync()}
+									/>
+								</div>
+								<button
+									class={buttonVariants({ variant: 'default' })}
+									onclick={unlockForSync}
+									disabled={unlockingForSync || !unlockPassword}
 								>
-								<Input
-									id="unlock-sync-password"
-									type="password"
-									bind:value={unlockPassword}
-									placeholder="Account password"
-									autocomplete="current-password"
-									disabled={unlockingForSync}
-									class="w-full"
-									onkeydown={(e) => e.key === 'Enter' && unlockForSync()}
-								/>
+									{#if unlockingForSync}
+										<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+										Unlocking...
+									{:else}
+										Unlock
+									{/if}
+								</button>
 							</div>
-							<button
-								class={buttonVariants({ variant: 'default' })}
-								onclick={unlockForSync}
-								disabled={unlockingForSync || !unlockPassword}
-							>
-								{#if unlockingForSync}
-									<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-									Unlocking...
-								{:else}
-									Unlock
-								{/if}
-							</button>
 						</div>
-					</div>
+					{/if}
 					<ul class="space-y-2">
 						{#each data.outboxJobs as job (job.id)}
 							<li class="space-y-1 rounded-md border px-3 py-2 text-sm">

@@ -7,11 +7,24 @@ import { sign, canonicalize, encodeMultibase } from '@syr-is/crypto';
  * and submitting to the registry-sign API.
  */
 export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void> {
-	const res = await fetch('/api/identity/pending-registry-jobs', { credentials: 'include' });
-	if (!res.ok) return;
+	let res: Response;
+	try {
+		res = await fetch('/api/identity/pending-registry-jobs', { credentials: 'include' });
+	} catch (err) {
+		console.error('Failed to fetch pending registry jobs:', err);
+		toast.error('Network error loading registry jobs');
+		return;
+	}
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		console.error('Pending registry jobs failed:', res.status, body);
+		toast.error(`Failed to load registry jobs (${res.status})`);
+		return;
+	}
 
 	const { data: jobData } = await res.json();
 	const jobs = jobData?.jobs ?? [];
+	let anySuccess = false;
 
 	for (const job of jobs) {
 		try {
@@ -26,9 +39,12 @@ export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void
 					provider: job.provider,
 					updatedAt
 				});
-			} else {
+			} else if (job.action === 'delete') {
 				deletedAt = new Date().toISOString();
 				canonicalPayload = canonicalize({ did: job.did, deletedAt });
+			} else {
+				console.warn('Unknown registry job action, skipping:', job.action);
+				continue;
 			}
 
 			const signatureBytes = await sign(canonicalPayload, seed);
@@ -37,6 +53,7 @@ export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void
 			const signRes = await fetch('/api/identity/registry-sign', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
 				body: JSON.stringify({
 					jobId: job.id,
 					action: job.action,
@@ -50,11 +67,15 @@ export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void
 			});
 
 			if (signRes.ok) {
-				toast.success('Registry synced');
-				await invalidateAll();
+				anySuccess = true;
 			}
 		} catch (e) {
 			console.error('Registry sign/submit failed:', e);
 		}
+	}
+
+	if (anySuccess) {
+		toast.success('Registry synced');
+		await invalidateAll();
 	}
 }

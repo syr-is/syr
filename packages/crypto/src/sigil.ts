@@ -18,8 +18,15 @@ const KDF_IT = 3;
 const KDF_PAR = 1;
 const KEY_LEN = 32;
 
+const CHUNK_SIZE = 0x8000; // Avoid stack overflow for large inputs
+
 function base64urlEncode(bytes: Uint8Array): string {
-  const b64 = btoa(String.fromCharCode(...bytes));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  const b64 = btoa(binary);
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 

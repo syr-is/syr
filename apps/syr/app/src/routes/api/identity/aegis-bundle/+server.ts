@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { identityController } from '$lib/controllers/identity.controller';
-import type { AegisBundle } from '@syr-is/crypto/aegis';
+import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 
 /**
  * GET /api/identity/aegis-bundle
@@ -28,33 +28,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	if (
-		!identity.aegis_salt ||
-		!identity.aegis_nonce ||
-		!identity.aegis_ct ||
-		!identity.aegis_tag ||
-		identity.aegis_kdf_mem == null ||
-		identity.aegis_kdf_it == null ||
-		identity.aegis_kdf_par == null
-	) {
+	const aegisBundle = buildAegisBundleFromIdentity(identity);
+	if (!aegisBundle) {
 		throw error(404, {
 			code: 'NO_AEGIS',
 			message: 'Identity has no Aegis bundle'
 		});
 	}
-
-	const aegisBundle: AegisBundle = {
-		pub: identity.public_key,
-		salt: identity.aegis_salt,
-		nonce: identity.aegis_nonce,
-		ct: identity.aegis_ct,
-		tag: identity.aegis_tag,
-		kdf: {
-			mem: identity.aegis_kdf_mem,
-			it: identity.aegis_kdf_it,
-			par: identity.aegis_kdf_par
-		}
-	};
 
 	return json({
 		status: 'success',

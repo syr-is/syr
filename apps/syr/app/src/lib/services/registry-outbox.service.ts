@@ -20,6 +20,12 @@ export interface RegistryUpdatePayload {
 class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 	readonly jobType = 'registry_sync';
 
+	override start(): never {
+		throw new Error(
+			'RegistryOutboxService must not be started; use pending-registry-jobs and registry-sign.'
+		);
+	}
+
 	protected async processJob(_payload: RegistryUpdatePayload, _entry: OutboxEntry): Promise<void> {
 		throw new Error(
 			'Registry jobs require client-side signing. Use pending-registry-jobs and registry-sign.'

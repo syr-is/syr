@@ -238,4 +238,33 @@ export function getPostId(post: {
 	return `${extractDid(post.id)}/${extractLocalId(post.id)}`;
 }
 
+/**
+ * Get the API URL for an upload resource.
+ * Uses did/local_id when present (API serialized), otherwise extracts from composite RecordId or id.
+ * Use for fetch calls to upload endpoints (GET, PATCH, DELETE, etc.).
+ *
+ * @param pathSuffix - Optional suffix (e.g. '/share') appended to the base URL
+ */
+export function getUploadApiUrl(
+	upload: {
+		id: RecordId | string | number;
+		did?: string;
+		local_id?: string;
+	},
+	pathSuffix = ''
+): string {
+	let path: string;
+	if (upload.did && upload.local_id) {
+		path = `${upload.did}/${upload.local_id}`;
+	} else if (typeof upload.id === 'string') {
+		path = upload.id;
+	} else if (typeof upload.id === 'number') {
+		path = upload.id.toString();
+	} else {
+		path = `${extractDid(upload.id)}/${extractLocalId(upload.id)}`;
+	}
+	const base = `/api/uploads/${path}`;
+	return pathSuffix ? `${base}${pathSuffix}` : base;
+}
+
 export { ulid } from 'ulid';

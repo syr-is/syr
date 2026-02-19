@@ -139,11 +139,11 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Testing & CI
 
-| Requirement                    | Status          | Details                                                                              |
-| ------------------------------ | --------------- | ------------------------------------------------------------------------------------ |
-| Unit tests for shared packages | **Implemented** | Vitest tests for `crypto` (35), `did` (17), `resolver` (9), `types` (32) — 93 total. |
-| CI pipeline                    | **Implemented** | `.github/workflows/test.yml` with per-package path-filtered jobs.                    |
-| Code quality checks            | **Implemented** | `.github/workflows/code-quality.yml` with lint and format checks.                    |
+| Requirement                    | Status          | Details                                                                                 |
+| ------------------------------ | --------------- | --------------------------------------------------------------------------------------- |
+| Unit tests for shared packages | **Implemented** | Vitest tests for `crypto`, `did`, `resolver`, `types` — see CI/repo for current counts. |
+| CI pipeline                    | **Implemented** | `.github/workflows/test.yml` with per-package path-filtered jobs.                       |
+| Code quality checks            | **Implemented** | `.github/workflows/code-quality.yml` with lint and format checks.                       |
 
 ---
 

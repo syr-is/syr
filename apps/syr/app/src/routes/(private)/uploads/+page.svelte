@@ -4,7 +4,7 @@
 	import * as Pagination from '@syr-is/ui/pagination';
 	import { Button } from '@syr-is/ui/button';
 	import { Skeleton } from '@syr-is/ui/skeleton';
-	import type { UploadWithCompositeId, Folder } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 
@@ -222,8 +222,7 @@
 			return;
 		}
 		try {
-			const url = `/api/uploads/${upload.did}/${upload.local_id}`;
-			const response = await fetch(url);
+			const response = await fetch(getUploadApiUrl(upload));
 			if (!response.ok) {
 				throw new Error('Failed to get download URL');
 			}
@@ -252,8 +251,7 @@
 			return;
 		}
 		try {
-			const url = `/api/uploads/${upload.did}/${upload.local_id}`;
-			const response = await fetch(url);
+			const response = await fetch(getUploadApiUrl(upload));
 			if (!response.ok) {
 				throw new Error('Failed to get upload info');
 			}

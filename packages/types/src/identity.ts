@@ -214,6 +214,12 @@ export const IdentityExportManifestSchema = z.object({
 
 export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema>;
 
+/** ULID format: 26 chars, Crockford Base32 (0-9, A-HJKMNP-TV-Z) */
+const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/i);
+
+/** Path within zip's assets/ directory; disallow path traversal */
+const AssetZipPathSchema = z.string().regex(/^assets\/(?!.*\.\.)[^\0]+$/);
+
 /**
  * Exported Post Schema
  * A post in the portable export format (no RecordId, uses string IDs).
@@ -221,13 +227,13 @@ export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema
  * so the same composite key can be recreated on import.
  */
 export const ExportedPostSchema = z.object({
-	local_id: z.string().min(1),
+	local_id: UlidSchema,
 	type: z.enum(['blog', 'media']),
 	content_type: z.enum(['markdown', 'html']).optional(),
 	title: z.string().optional(),
 	description: z.string().max(280).optional(),
 	content: z.string().optional(),
-	media_urls: z.array(z.string()).optional(),
+	media_urls: z.array(z.string().url()).optional(),
 	display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
 	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
 	status: z.enum(['draft', 'completed']).default('draft'),
@@ -235,13 +241,13 @@ export const ExportedPostSchema = z.object({
 	assets: z
 		.array(
 			z.object({
-				local_id: z.string().min(1),
+				local_id: UlidSchema,
 				filename: z.string(),
 				mime_type: z.string(),
 				size: z.number().int().nonnegative(),
 				sha256: z.string().optional(),
 				/** Path within the zip's assets/ directory */
-				zip_path: z.string()
+				zip_path: AssetZipPathSchema
 			})
 		)
 		.optional()
@@ -258,3 +264,5 @@ export const IdentityImportRequestSchema = z.object({
 	identity: IdentityExportBundleSchema,
 	posts: z.array(ExportedPostSchema)
 });
+
+export type IdentityImportRequest = z.infer<typeof IdentityImportRequestSchema>;

@@ -35,7 +35,7 @@ CIGP intentionally avoids:
 
 ### 2.1 Root Secret
 
-```
+```text
 seed: 32 random bytes
 algorithm: Ed25519
 ```
@@ -65,7 +65,7 @@ CIGP v1 does **NOT** protect against:
 
 ## 4. High-Level Architecture
 
-```
+```text
 Server generates seed
 → Immediately encrypted with user-derived key
 → Server stores ONLY encrypted seed
@@ -83,7 +83,7 @@ Server generates seed
 
 ### 5.1 Inputs
 
-```
+```text
 user_password (UTF-8)
 ```
 
@@ -93,26 +93,26 @@ user_password (UTF-8)
 
 1. **Generate seed**
 
-   ```
+   ```text
    seed = CSPRNG(32 bytes)
    ```
 
 2. **Generate KDF salt**
 
-   ```
+   ```text
    salt = CSPRNG(16 bytes)
    ```
 
 3. **Derive user encryption key**
 
-   ```
+   ```text
    K_user = Argon2id(password, salt, params)
    output length = 32 bytes
    ```
 
 4. **Encrypt seed**
 
-   ```
+   ```text
    nonce = CSPRNG(12 bytes)
 
    ciphertext, tag = AES-256-GCM(
@@ -127,13 +127,13 @@ user_password (UTF-8)
 
 6. **Derive public key**
 
-   ```
+   ```text
    pub = Ed25519(seed).public
    ```
 
 7. **Persist record**
 
-```
+```text
 {
   pub,
   salt,
@@ -162,7 +162,7 @@ Server MUST NOT store:
 
 **Default parameters:**
 
-```
+```text
 memory: 64 MiB
 iterations: 3
 parallelism: 1
@@ -177,7 +177,7 @@ Servers MAY increase cost but MUST store parameters per-user.
 
 **Algorithm:** AES-256-GCM
 
-```
+```text
 nonce: 12 bytes random
 tag: 16 bytes
 AAD: "cigp:v1"
@@ -193,7 +193,7 @@ plaintext: 32-byte seed
 1. User enters password.
 2. Client downloads encrypted seed bundle.
 3. Client derives:
-   ```
+   ```text
    K_user = Argon2id(password, salt, params)
    ```
 4. Client decrypts AES-GCM.
@@ -201,7 +201,7 @@ plaintext: 32-byte seed
 6. Client reconstructs Ed25519 private key locally.
 7. Seed SHOULD be kept only in:
 
-```
+```text
 secure memory
 or
 OS secure storage (Keychain / Keystore)
@@ -213,11 +213,10 @@ OS secure storage (Keychain / Keystore)
 
 To change password **without exposing seed**:
 
-1. Client decrypts seed locally.
-2. Client derives **new** `K_user'` using new password + new salt.
-3. Client re-encrypts seed.
-4. Client uploads **new encrypted bundle**.
-5. Server replaces old record atomically.
+1. Locally decrypt the seed with the current password.
+2. Derive new `K_user'` with the new password and salt.
+3. Re-encrypt the seed and upload the new encrypted bundle.
+4. Server replaces the old record atomically.
 
 Server never sees plaintext.
 
@@ -227,7 +226,7 @@ Server never sees plaintext.
 
 CIGP integrates with **Sigil (PIEF) v1 export**:
 
-```
+```text
 decrypt seed locally
 → create encrypted export blob
 → store seed in device secure storage
@@ -249,7 +248,7 @@ Two supported models:
 
 Each device:
 
-```
+```text
 downloads encrypted seed
 → derives K_user
 → decrypts locally
@@ -297,7 +296,7 @@ To mitigate **offline KDF brute force** after DB leak.
 
 UI SHOULD require:
 
-```
+```text
 minimum length ≥ 10
 OR entropy ≥ 50 bits
 ```
@@ -312,7 +311,7 @@ If database leaks:
 
 Attacker obtains only:
 
-```
+```text
 salt
 kdf params
 nonce
@@ -331,7 +330,7 @@ No plaintext identities exposed.
 
 ## 13. Versioning
 
-```
+```text
 scheme identifier: "cigp"
 version: 1
 AAD string: "cigp:v1"
@@ -360,7 +359,7 @@ Future versions MUST:
 
 If unsure, implement exactly:
 
-```
+```text
 Argon2id: 64 MiB, t=3, p=1
 AES-256-GCM
 12-byte nonce

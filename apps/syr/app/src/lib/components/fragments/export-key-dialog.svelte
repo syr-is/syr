@@ -39,7 +39,7 @@
 
 	function canExport(): boolean {
 		if (passphrase !== confirmPassphrase) return false;
-		if (passphrase.length > 0 && passphrase.length < 10) return false;
+		if (passphrase.length < 10) return false;
 		return true;
 	}
 
@@ -53,6 +53,9 @@
 			const data = await res.json();
 			const b = data.data?.aegisBundle;
 			if (!b) throw new Error('No Aegis bundle found');
+
+			// Verify password by attempting to decrypt
+			await seedHandler.verify({ bundle: b, password: unlockPassword });
 
 			bundle = b;
 			step = 'export';
@@ -122,7 +125,7 @@
 					for (const asset of data.assets ?? []) {
 						if (asset.content_base64 && asset.zip_path) {
 							const binary = Uint8Array.from(atob(asset.content_base64), (c) => c.charCodeAt(0));
-							zipFiles[asset.zip_path] = new Uint8Array(binary);
+							zipFiles[asset.zip_path] = binary;
 						}
 					}
 

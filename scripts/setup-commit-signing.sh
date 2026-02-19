@@ -19,8 +19,9 @@ read -r choice
 
 case "$choice" in
   1)
+    git config gpg.format openpgp
     git config commit.gpgsign true
-    echo "Set commit.gpgsign=true"
+    echo "Set gpg.format=openpgp, commit.gpgsign=true"
     echo ""
     echo "Ensure you have a GPG key configured: gpg --list-secret-keys"
     echo "Link it: git config user.signingkey YOUR_KEY_ID"
@@ -28,14 +29,19 @@ case "$choice" in
   2)
     git config commit.gpgsign true
     git config gpg.format ssh
-    # Default to common SSH key paths
+    found=
     for key in ~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub; do
       if [ -f "$key" ]; then
         git config user.signingkey "$key"
         echo "Set user.signingkey=$key"
+        found=1
         break
       fi
     done
+    if [ -z "$found" ]; then
+      echo "No SSH key found at ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub" >&2
+      exit 1
+    fi
     echo "Set commit.gpgsign=true, gpg.format=ssh"
     ;;
   *)
