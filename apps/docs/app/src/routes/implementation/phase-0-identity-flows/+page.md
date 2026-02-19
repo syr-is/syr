@@ -6,6 +6,8 @@ title: 'Phase 0: Identity Flows'
 
 This page documents the end-to-end flows for identity creation, signed mutations, and identity export as implemented in Phase 0.
 
+> **Note:** This page documents the **client-managed** identity flow only ("The server never sees or stores private keys" — see Identity Creation Flow below). For server-managed identities, key generation and storage follow [Aegis v1](/architecture/aegis). The target export format is [Sigil v1](/architecture/sigil); current export uses PKCS#8 PEM (transitional).
+
 ---
 
 ## 1. Identity Creation Flow

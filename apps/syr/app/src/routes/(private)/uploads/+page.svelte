@@ -4,7 +4,7 @@
 	import * as Pagination from '@syr-is/ui/pagination';
 	import { Button } from '@syr-is/ui/button';
 	import { Skeleton } from '@syr-is/ui/skeleton';
-	import type { Upload, Folder } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 
@@ -39,7 +39,7 @@
 	let viewMode = $state<ViewMode>('list');
 
 	// Uploads state
-	let uploads = $state<Upload[]>([]);
+	let uploads = $state<UploadWithCompositeId[]>([]);
 	let folders = $state<Folder[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -73,7 +73,7 @@
 
 	// Dialog states
 	let deleteUploadDialogOpen = $state(false);
-	let uploadToDelete = $state<Upload | null>(null);
+	let uploadToDelete = $state<UploadWithCompositeId | null>(null);
 
 	let deleteFolderDialogOpen = $state(false);
 	let folderToDelete = $state<Folder | null>(null);
@@ -83,13 +83,13 @@
 	let createFolderDialogOpen = $state(false);
 
 	let moveDialogOpen = $state(false);
-	let uploadToMove = $state<Upload | null>(null);
+	let uploadToMove = $state<UploadWithCompositeId | null>(null);
 
 	let renameDialogOpen = $state(false);
-	let uploadToRename = $state<Upload | null>(null);
+	let uploadToRename = $state<UploadWithCompositeId | null>(null);
 
 	let shareDialogOpen = $state(false);
-	let uploadToShare = $state<Upload | null>(null);
+	let uploadToShare = $state<UploadWithCompositeId | null>(null);
 
 	// Media preview modal for visual browsing (gallery/masonry modes)
 	let mediaPreviewOpen = $state(false);
@@ -205,7 +205,7 @@
 	}
 
 	// Open delete dialogs
-	function openDeleteUploadDialog(upload: Upload) {
+	function openDeleteUploadDialog(upload: UploadWithCompositeId) {
 		uploadToDelete = upload;
 		deleteUploadDialogOpen = true;
 	}
@@ -216,10 +216,13 @@
 	}
 
 	// Download file
-	async function downloadFile(upload: Upload) {
+	async function downloadFile(upload: UploadWithCompositeId) {
+		if (!upload.did || !upload.local_id) {
+			toast.error('Download not available for this file');
+			return;
+		}
 		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`);
+			const response = await fetch(getUploadApiUrl(upload));
 			if (!response.ok) {
 				throw new Error('Failed to get download URL');
 			}
@@ -238,15 +241,17 @@
 	}
 
 	// Copy link to clipboard - fetches current public status before deciding
-	async function copyLink(upload: Upload) {
+	async function copyLink(upload: UploadWithCompositeId) {
 		if (!upload.url) {
 			toast.error('URL not available');
 			return;
 		}
-
+		if (!upload.did || !upload.local_id) {
+			toast.error('Link not available for this file');
+			return;
+		}
 		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`);
+			const response = await fetch(getUploadApiUrl(upload));
 			if (!response.ok) {
 				throw new Error('Failed to get upload info');
 			}
@@ -278,17 +283,17 @@
 	}
 
 	// Open dialogs
-	function openMoveDialog(upload: Upload) {
+	function openMoveDialog(upload: UploadWithCompositeId) {
 		uploadToMove = upload;
 		moveDialogOpen = true;
 	}
 
-	function openRenameDialog(upload: Upload) {
+	function openRenameDialog(upload: UploadWithCompositeId) {
 		uploadToRename = upload;
 		renameDialogOpen = true;
 	}
 
-	function openShareDialog(upload: Upload) {
+	function openShareDialog(upload: UploadWithCompositeId) {
 		uploadToShare = upload;
 		shareDialogOpen = true;
 	}

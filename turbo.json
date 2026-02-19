@@ -30,6 +30,10 @@
     },
     "format:check": {
       "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
     }
   }
 }

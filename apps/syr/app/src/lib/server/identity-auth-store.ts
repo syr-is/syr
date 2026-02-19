@@ -1,8 +1,12 @@
+import { parseKvId } from '@syr-is/types';
 import { identityAuth } from '$lib/config';
+import { kvService } from '$lib/services/kv';
+
+const KV_TYPE = 'identity_auth_challenge';
 
 /**
  * Pending identity-auth challenge.
- * Stored in memory. In production, use a persistent store (Redis, SurrealDB KV, etc.).
+ * Persisted in SurrealDB via the KV service with automatic TTL expiry.
  */
 export interface PendingChallenge {
 	did: string;
@@ -12,24 +16,59 @@ export interface PendingChallenge {
 	state?: string;
 	user_id: string;
 	created_at: number;
-	/** Set after user consents — the authorization code */
+	/** Set after user consents -- the authorization code */
 	code?: string;
 }
 
 /**
- * In-memory store for pending identity-auth challenges.
+ * Store a pending challenge with automatic TTL expiry.
  */
-export const pendingChallenges = new Map<string, PendingChallenge>();
+export async function setPendingChallenge(id: string, challenge: PendingChallenge): Promise<void> {
+	await kvService.set(KV_TYPE, id, challenge, identityAuth.challengeExpiresIn);
+}
 
 /**
- * Remove challenges older than the configured expiry.
+ * Retrieve a pending challenge by ID. Returns null if not found or expired.
  */
-export function cleanupExpiredChallenges() {
-	const now = Date.now();
-	const expiryMs = identityAuth.challengeExpiresIn * 1000;
-	for (const [id, challenge] of pendingChallenges) {
-		if (now - challenge.created_at > expiryMs) {
-			pendingChallenges.delete(id);
-		}
+export async function getPendingChallenge(id: string): Promise<PendingChallenge | null> {
+	return kvService.get<PendingChallenge>(KV_TYPE, id);
+}
+
+/**
+ * Delete a pending challenge (e.g. after code exchange).
+ */
+export async function deletePendingChallenge(id: string): Promise<void> {
+	await kvService.delete(KV_TYPE, id);
+}
+
+/**
+ * Find the challenge that issued a given authorization code.
+ * Returns [challengeId, challenge] or null if not found.
+ * Uses database-level filtering for lookup; complexity is O(N) without an index on value.code, O(log N) with an index.
+ */
+export async function findChallengeByCode(
+	code: string
+): Promise<[string, PendingChallenge] | null> {
+	const entries = await kvService.findByTypeAndValueField(KV_TYPE, 'code', code);
+	const entry = entries[0];
+	if (!entry) return null;
+
+	const value = entry.value;
+	if (
+		!value ||
+		typeof value !== 'object' ||
+		typeof (value as PendingChallenge).origin !== 'string' ||
+		typeof (value as PendingChallenge).callback_url !== 'string'
+	) {
+		return null;
 	}
+	const challenge = value as PendingChallenge;
+
+	let index: string;
+	try {
+		({ index } = parseKvId(String(entry.id)));
+	} catch {
+		return null;
+	}
+	return [index, challenge];
 }

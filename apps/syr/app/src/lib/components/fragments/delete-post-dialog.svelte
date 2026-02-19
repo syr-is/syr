@@ -3,7 +3,7 @@
 	import { Input } from '@syr-is/ui/input';
 	import { Button } from '@syr-is/ui/button';
 	import { Label } from '@syr-is/ui/label';
-	import type { Post } from '@syr-is/types';
+	import { getPostId, type Post } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
 	import { storageEvents } from '$lib/stores/storage-events.svelte';
@@ -21,8 +21,7 @@
 
 		loading = true;
 		try {
-			const postId = typeof post.id === 'string' ? post.id : post.id.toString();
-			const response = await fetch(`/api/posts/${postId}`, {
+			const response = await fetch(`/api/posts/${getPostId(post)}`, {
 				method: 'DELETE'
 			});
 

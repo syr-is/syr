@@ -102,14 +102,21 @@ class DatabaseService {
 			`);
 
 			// Identity table: stores root identity metadata
+			// Aegis (CIGP) fields store password-encrypted seed
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS identity SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS did ON TABLE identity TYPE string
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS public_key ON TABLE identity TYPE string;
-				DEFINE FIELD IF NOT EXISTS private_key ON TABLE identity TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS user_id ON TABLE identity TYPE record<user>;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS aegis_salt ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_nonce ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_ct ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_tag ON TABLE identity TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_mem ON TABLE identity TYPE option<int>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_it ON TABLE identity TYPE option<int>;
+				DEFINE FIELD IF NOT EXISTS aegis_kdf_par ON TABLE identity TYPE option<int>;
 				DEFINE INDEX IF NOT EXISTS idx_identity_did ON TABLE identity COLUMNS did UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_identity_user ON TABLE identity COLUMNS user_id UNIQUE;
 			`);
@@ -128,23 +135,6 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS canonical_delegation ON TABLE delegated_key TYPE option<string>;
 				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
-			`);
-
-			// Tenant table: multi-tenancy support
-			await db.query(`
-				DEFINE TABLE IF NOT EXISTS tenant SCHEMAFULL;
-				DEFINE FIELD IF NOT EXISTS name ON TABLE tenant TYPE string;
-				DEFINE FIELD IF NOT EXISTS slug ON TABLE tenant TYPE string;
-				DEFINE FIELD IF NOT EXISTS settings ON TABLE tenant FLEXIBLE TYPE object DEFAULT {};
-				DEFINE FIELD IF NOT EXISTS created_at ON TABLE tenant TYPE datetime;
-				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE tenant TYPE datetime;
-				DEFINE INDEX IF NOT EXISTS idx_tenant_slug ON TABLE tenant COLUMNS slug UNIQUE;
-			`);
-
-			// Add optional tenant_id to identity table for tenant-scoped identity pools
-			await db.query(`
-				DEFINE FIELD IF NOT EXISTS tenant_id ON TABLE identity TYPE option<record<tenant>>;
-				DEFINE INDEX IF NOT EXISTS idx_identity_tenant ON TABLE identity COLUMNS tenant_id;
 			`);
 
 			// Outbox table: durable job queue for external service communication

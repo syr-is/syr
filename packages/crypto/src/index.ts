@@ -17,8 +17,10 @@ export {
   decodeMultibase,
   decodePublicKey,
   decodePrivateKey,
+  encodePrivateKey,
   deriveDid,
   ED25519_MULTICODEC_PREFIX,
+  ED25519_PRIV_MULTICODEC_PREFIX,
 } from "./encoding.js";
 
 export { canonicalize } from "./canonical.js";

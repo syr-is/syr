@@ -3,7 +3,7 @@
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
-	import type { Upload } from '@syr-is/types';
+	import { getUploadApiUrl, type UploadWithCompositeId } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 
 	let {
@@ -11,7 +11,7 @@
 		open = $bindable(false),
 		onSuccess
 	}: {
-		upload?: Upload | null;
+		upload?: UploadWithCompositeId | null;
 		open?: boolean;
 		onSuccess?: () => void;
 	} = $props();
@@ -24,8 +24,7 @@
 
 		renaming = true;
 		try {
-			const uploadId = typeof upload.id === 'string' ? upload.id : upload.id.toString();
-			const response = await fetch(`/api/uploads/${uploadId}`, {
+			const response = await fetch(getUploadApiUrl(upload), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

@@ -4,6 +4,8 @@
   "description": "SvelteKit monorepo",
   "private": true,
   "scripts": {
+    "prepare": "husky",
+    "setup-signing": "sh scripts/setup-commit-signing.sh",
     "dev": "turbo dev",
     "dev:syr": "pnpm --filter @syr-is/syr dev",
     "dev:docs": "pnpm --filter @syr-is/docs dev",
@@ -15,21 +17,24 @@
     "format": "turbo format",
     "format:check": "turbo format:check",
     "lint": "turbo lint",
-    "check": "turbo check"
+    "check": "turbo check",
+    "test": "turbo test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.18.1",
+  "packageManager": "pnpm@10.29.3",
   "dependencies": {
     "@syr-is/types": "workspace:*",
     "@syr-is/ui": "workspace:*"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "turbo": "^2.5.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@nestjs/core",
       "@syr-is/types",
       "@tailwindcss/oxide",
       "esbuild",
@@ -38,5 +43,8 @@
     "overrides": {
       "@smithy/types": "^4.11.0"
     }
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

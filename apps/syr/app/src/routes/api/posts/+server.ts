@@ -7,9 +7,12 @@ import {
 	QueryParamsSchema,
 	QueryOptionsSchema,
 	PostCreateSchema,
-	PostUpdateSchema
+	PostUpdateSchema,
+	recordIdFromDidAndLocal,
+	extractDid,
+	extractLocalId
 } from '@syr-is/types';
-import { resolveMediaUrlMimeTypes } from '$lib/utils/post-media.server';
+import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -57,17 +60,28 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	// Get posts with pagination options
 	const { data, total } = await postController.getUserPosts(user.id, options);
 
-	// Resolve mime types for all media URLs across all posts
+	// Resolve mime types and filenames for all media URLs across all posts
 	const allMediaUrls = data.flatMap((p) =>
 		p.type === 'media' && p.media_urls ? p.media_urls : []
 	);
-	const mediaUrlMimeTypes =
-		allMediaUrls.length > 0 ? await resolveMediaUrlMimeTypes(allMediaUrls) : {};
+	const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
+		allMediaUrls.length > 0
+			? await resolveMediaUrlMetadata(allMediaUrls)
+			: { mimeTypes: {}, filenames: {} };
+
+	const serializedData = data.map((post) => ({
+		...post,
+		id: post.id.toString(),
+		did: extractDid(post.id),
+		local_id: extractLocalId(post.id),
+		author_id: post.author_id.toString()
+	}));
 
 	return json({
 		status: 'success',
-		data,
+		data: serializedData,
 		mediaUrlMimeTypes,
+		mediaUrlFilenames,
 		pagination: {
 			limit,
 			offset,
@@ -94,15 +108,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	if (!user.did) {
+		throw error(400, {
+			code: 'IDENTITY_REQUIRED',
+			message: 'You must create an identity before creating posts'
+		});
+	}
+
 	try {
 		const body = await request.json();
 		const data = PostCreateSchema.parse(body);
 		const result = await postController.createPost(user, data);
 
+		// user.did guard above and postController.createPost(user, data) guarantee result.id is a composite record ID
 		return json(
 			{
 				status: 'success',
-				data: result,
+				data: {
+					...result,
+					id: result.id.toString(),
+					did: extractDid(result.id),
+					local_id: extractLocalId(result.id),
+					author_id: result.author_id.toString()
+				},
 				meta: {
 					timestamp: new Date().toISOString()
 				}
@@ -154,10 +182,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		// Convert string ID to RecordId if needed
-		if (body.id && typeof body.id === 'string') {
-			const { stringToRecordId } = await import('@syr-is/types');
-			body.id = stringToRecordId.decode(body.id);
+		// Convert DID + local_id to composite RecordId
+		if (body.did && body.local_id) {
+			body.id = recordIdFromDidAndLocal('post', body.did, body.local_id);
+			delete body.did;
+			delete body.local_id;
 		}
 		const data = PostUpdateSchema.parse(body);
 

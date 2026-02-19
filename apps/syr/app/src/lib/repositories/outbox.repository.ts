@@ -82,6 +82,20 @@ class OutboxRepository {
 	}
 
 	/**
+	 * Atomically claim a pending job (set status to processing). Returns true if claimed, false if already claimed or not found.
+	 */
+	async claimIfPending(id: RecordId, userId: RecordId): Promise<boolean> {
+		const result = await this.db.query<[OutboxEntry[]]>(
+			`UPDATE outbox SET status = "processing", updated_at = time::now()
+				WHERE id = $id AND user_id = $userId AND status = "pending"
+				RETURN AFTER`,
+			{ id, userId }
+		);
+		const updated = result[0] ?? [];
+		return updated.length > 0;
+	}
+
+	/**
 	 * Mark a job as processing.
 	 */
 	async markProcessing(id: RecordId): Promise<void> {
@@ -168,6 +182,37 @@ class OutboxRepository {
 			{ userId, type }
 		);
 		return result[0] ?? [];
+	}
+
+	/**
+	 * Find a single active job by id and user. Returns null if not found or completed/cancelled.
+	 * @param jobId - RecordId or string (e.g. "outbox:xxxx")
+	 */
+	async findActiveByIdAndUser(
+		jobId: RecordId | string,
+		userId: RecordId
+	): Promise<OutboxEntry | null> {
+		const isString = typeof jobId === 'string';
+		const [query, params] = isString
+			? [
+					`SELECT * FROM outbox
+				WHERE id = type::thing($jobId)
+				AND user_id = $userId
+				AND status NOT IN ["completed", "cancelled"]
+				LIMIT 1`,
+					{ jobId, userId }
+				]
+			: [
+					`SELECT * FROM outbox
+				WHERE id = $jobId
+				AND user_id = $userId
+				AND status NOT IN ["completed", "cancelled"]
+				LIMIT 1`,
+					{ jobId, userId }
+				];
+		const result = await this.db.query<[OutboxEntry[]]>(query, params);
+		const entries = result[0] ?? [];
+		return entries[0] ?? null;
 	}
 }
 

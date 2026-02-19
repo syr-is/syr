@@ -1,5 +1,9 @@
 import { S3Client } from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { s3 } from '$lib/config';
+
+const CONNECTION_TIMEOUT_MS = 5000;
+const REQUEST_TIMEOUT_MS = 5000;
 
 class S3Service {
 	private static instance: S3Service;
@@ -14,7 +18,11 @@ class S3Service {
 				accessKeyId: s3.accessKeyId,
 				secretAccessKey: s3.secretAccessKey
 			},
-			forcePathStyle: true
+			forcePathStyle: true,
+			requestHandler: new NodeHttpHandler({
+				connectionTimeout: CONNECTION_TIMEOUT_MS,
+				requestTimeout: REQUEST_TIMEOUT_MS
+			})
 		});
 	}
 

@@ -10,44 +10,29 @@ jobs:
   format:
     name: Format Check
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.1
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
-      - run: pnpm install --frozen-lockfile
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
       - run: pnpm format:check
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.1
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
       - uses: actions/cache@v4
         with:
           path: |
@@ -57,38 +42,5 @@ jobs:
           key: ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
-      - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-
-  typecheck:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.1
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            packages/types/dist
-            packages/ui/dist
-          key: ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm check
 

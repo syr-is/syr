@@ -11,6 +11,12 @@ export class KvRepository {
 	protected schema = KvEntrySchema;
 
 	/**
+	 * Regex to validate field names for safe interpolation into SurrealQL
+	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
+	 */
+	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+	/**
 	 * Get database instance lazily
 	 */
 	protected get db() {
@@ -137,23 +143,42 @@ export class KvRepository {
 	 */
 	async findByType(type: string): Promise<KvEntry[]> {
 		const result = await this.db.query<[KvEntry[]]>(
-			`SELECT * FROM ${this.tableName} WHERE kv_type = $type`,
+			`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now())`,
 			{ type }
 		);
 
 		const records = result[0] ?? [];
-		const now = new Date();
+		return records.map((record: unknown) => this.validate(record));
+	}
 
-		// Filter out expired entries and validate
-		const validEntries: KvEntry[] = [];
-		for (const record of records) {
-			const entry = this.validate(record);
-			if (!entry.expires_at || entry.expires_at >= now) {
-				validEntries.push(entry);
-			}
+	/**
+	 * Find KV entries by type and a nested field in value.
+	 * Pushes the filter to the database to reduce network transfer; still requires scanning
+	 * matching records (O(K) across records with kv_type, or O(N) if kv_type is unindexed).
+	 * Proper indexing on kv_type or the nested field is required for indexed lookups.
+	 * @param type - The category/type to query
+	 * @param field - Field name within value object (validated for injection safety)
+	 * @param fieldValue - Value to match
+	 * @returns Matching entries (expired ones excluded)
+	 */
+	async findByTypeAndValueField(
+		type: string,
+		field: string,
+		fieldValue: unknown
+	): Promise<KvEntry[]> {
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
 		}
 
-		return validEntries;
+		const result = await this.db.query<[KvEntry[]]>(
+			`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND value.${field} = $fieldValue AND (expires_at = NONE OR expires_at >= time::now())`,
+			{ type, fieldValue }
+		);
+
+		const records = result[0] ?? [];
+		return records.map((record: unknown) => this.validate(record));
 	}
 
 	/**
@@ -189,17 +214,11 @@ export class KvRepository {
 		]);
 
 		const rawData = dataResult[0] ?? [];
-		const data = rawData.map((record) => this.validate(record));
+		const data = rawData.map((record: unknown) => this.validate(record));
 		const total = countResult[0]?.[0]?.total ?? 0;
 
 		return { data, total };
 	}
-
-	/**
-	 * Regex to validate field names for safe interpolation into SurrealQL
-	 * Only allows valid identifier names: starts with letter/underscore, followed by alphanumeric/underscore
-	 */
-	private static readonly VALID_FIELD_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 	/**
 	 * Atomically increment a numeric field within the value object

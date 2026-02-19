@@ -34,3 +34,7 @@ jobs:
           tags: syr-${{ matrix.variant }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            TURBO_TEAM=${{ vars.TURBO_TEAM }}
+          secrets: |
+            turbo_token=${{ secrets.TURBO_TOKEN }}

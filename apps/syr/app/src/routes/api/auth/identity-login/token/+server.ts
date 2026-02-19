@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { IdentityAuthTokenRequestSchema } from '@syr-is/types';
 import { identityAuth } from '$lib/config';
 import { generateAccessToken } from '$lib/server/auth';
-import { pendingChallenges } from '$lib/server/identity-auth-store';
+import { findChallengeByCode, deletePendingChallenge } from '$lib/server/identity-auth-store';
 
 /**
  * POST /api/auth/identity-login/token
@@ -16,21 +16,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = IdentityAuthTokenRequestSchema.parse(body);
 
-		// Find the challenge that issued this code
-		let matchedChallengeId: string | null = null;
-		let matchedChallenge:
-			| (typeof pendingChallenges extends Map<string, infer V> ? V : never)
-			| null = null;
+		const result = await findChallengeByCode(data.code);
 
-		for (const [id, challenge] of pendingChallenges) {
-			if (challenge.code === data.code) {
-				matchedChallengeId = id;
-				matchedChallenge = challenge;
-				break;
-			}
-		}
-
-		if (!matchedChallengeId || !matchedChallenge) {
+		if (!result) {
 			return json(
 				{
 					error: 'invalid_code',
@@ -40,7 +28,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Verify origin matches
+		const [challengeId, matchedChallenge] = result;
+
 		if (matchedChallenge.origin !== data.origin) {
 			return json(
 				{
@@ -51,7 +40,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Verify callback_url matches
 		if (matchedChallenge.callback_url !== data.callback_url) {
 			return json(
 				{
@@ -62,11 +50,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Check if challenge has expired
 		const now = Date.now();
 		const expiryMs = identityAuth.challengeExpiresIn * 1000;
 		if (now - matchedChallenge.created_at > expiryMs) {
-			pendingChallenges.delete(matchedChallengeId);
+			await deletePendingChallenge(challengeId);
 			return json(
 				{
 					error: 'challenge_expired',
@@ -76,17 +63,15 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Generate an access token for the third party
 		const accessToken = generateAccessToken(
 			{
 				userId: matchedChallenge.user_id,
-				sessionId: `identity-auth:${matchedChallengeId}`
+				sessionId: `identity-auth:${challengeId}`
 			},
 			`${identityAuth.tokenExpiresIn}s`
 		);
 
-		// Clean up the used challenge
-		pendingChallenges.delete(matchedChallengeId);
+		await deletePendingChallenge(challengeId);
 
 		return json({
 			access_token: accessToken,

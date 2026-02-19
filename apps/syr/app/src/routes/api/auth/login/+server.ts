@@ -32,7 +32,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			{
 				status: 'success',
 				data: {
-					user: result.user
+					user: result.user,
+					...(result.aegisBundle ? { aegisBundle: result.aegisBundle } : {})
 				},
 				meta: {
 					timestamp: new Date().toISOString()

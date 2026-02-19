@@ -7,7 +7,7 @@ import { uploadController } from '$lib/controllers/upload.controller';
 
 /**
  * Upload endpoint for post assets
- * Files uploaded here go to: uploads/{user_id}/posts/{post_id}/public/
+ * Files uploaded here go to: uploads/{did}/posts/{post_ulid}/public/
  * Folder hierarchy on uploads page: posts/{post_id}/public/{upload_id}
  * These files are publicly accessible for embedding in posts
  */
@@ -37,7 +37,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const data = PostAssetUploadSchema.parse(body);
 		const { post_id, ...uploadData } = data;
 
-		const result = await uploadController.getPostAssetPutUrl(user, post_id, uploadData);
+		// post_id comes as "did:syr:z6Mk.../01JMXYZ" from the client - extract just the local ID
+		const slashIdx = post_id.lastIndexOf('/');
+		const postLocalId = slashIdx !== -1 ? post_id.substring(slashIdx + 1) : post_id;
+
+		const result = await uploadController.getPostAssetPutUrl(user, postLocalId, uploadData);
 
 		return json(
 			{

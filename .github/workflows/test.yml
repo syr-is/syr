@@ -1,0 +1,107 @@
+name: Tests
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/**"
+
+jobs:
+  detect-changes:
+    name: Detect Changed Packages
+    runs-on: ubuntu-latest
+    outputs:
+      crypto: ${{ steps.filter.outputs.crypto }}
+      did: ${{ steps.filter.outputs.did }}
+      resolver: ${{ steps.filter.outputs.resolver }}
+      types: ${{ steps.filter.outputs.types }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            crypto:
+              - 'packages/crypto/**'
+            did:
+              - 'packages/did/**'
+              - 'packages/crypto/**'
+            resolver:
+              - 'packages/resolver/**'
+              - 'packages/crypto/**'
+              - 'packages/did/**'
+            types:
+              - 'packages/types/**'
+
+  test-crypto:
+    name: "Test: @syr-is/crypto"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.crypto == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo test --filter=@syr-is/crypto
+
+  test-did:
+    name: "Test: @syr-is/did"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.did == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo test --filter=@syr-is/did
+
+  test-resolver:
+    name: "Test: @syr-is/resolver"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.resolver == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo test --filter=@syr-is/resolver
+
+  test-types:
+    name: "Test: @syr-is/types"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.types == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo test --filter=@syr-is/types

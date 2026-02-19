@@ -6,7 +6,7 @@
 	import { Badge } from '@syr-is/ui/badge';
 	import NewPost from '$lib/components/fragments/new-post.svelte';
 	import PostPreview from '$lib/components/fragments/post-preview.svelte';
-	import type { Post } from '@syr-is/types';
+	import { getPostId, type Post } from '@syr-is/types';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { Pin } from 'lucide-svelte';
@@ -24,8 +24,9 @@
 	let pinnedPostIds = $state<string[]>([]);
 	let _pinnedLoading = $state(false);
 
-	// Mime type map for media URLs (shared across all posts)
+	// Mime type and filename maps for media URLs (shared across all posts)
 	let mediaUrlMimeTypes = $state<Record<string, string>>({});
+	let mediaUrlFilenames = $state<Record<string, string>>({});
 
 	// Drag and drop state
 	let draggedIndex = $state<number | null>(null);
@@ -65,7 +66,9 @@
 			posts = result.data || [];
 			total = result.pagination?.total || 0;
 			const newMimeTypes: Record<string, string> = result.mediaUrlMimeTypes || {};
+			const newFilenames: Record<string, string> = result.mediaUrlFilenames || {};
 			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
+			mediaUrlFilenames = { ...mediaUrlFilenames, ...newFilenames };
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			posts = [];
@@ -90,7 +93,9 @@
 			pinnedPosts = result.data?.posts || [];
 			pinnedPostIds = result.data?.post_ids || [];
 			const newMimeTypes: Record<string, string> = result.data?.mediaUrlMimeTypes || {};
+			const newFilenames: Record<string, string> = result.data?.mediaUrlFilenames || {};
 			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
+			mediaUrlFilenames = { ...mediaUrlFilenames, ...newFilenames };
 		} catch (err) {
 			console.error('Failed to fetch pinned posts:', err);
 			pinnedPosts = [];
@@ -249,7 +254,7 @@
 
 	// Handle post click - navigate to viewing page
 	function handlePostClick(post: Post) {
-		const postId = typeof post.id === 'string' ? post.id : post.id.toString();
+		const postId = getPostId(post);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		goto(`/posts/${postId}`);
 	}
@@ -346,7 +351,7 @@
 					<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
 				</div>
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each pinnedPosts as post, index (post.id.toString())}
+					{#each pinnedPosts as post, index (getPostId(post))}
 						<DraggableItem
 							{index}
 							{draggedIndex}
@@ -374,6 +379,7 @@
 									onPinToggle={handlePinToggle}
 									showPinButton={true}
 									{mediaUrlMimeTypes}
+									{mediaUrlFilenames}
 								/>
 							</button>
 						</DraggableItem>
@@ -417,7 +423,7 @@
 			<div class="space-y-3">
 				<h2 class="text-lg font-semibold">All Posts</h2>
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each posts as post (post.id.toString())}
+					{#each posts as post (getPostId(post))}
 						<button
 							type="button"
 							class="w-full text-left"
@@ -431,10 +437,11 @@
 						>
 							<PostPreview
 								{post}
-								isPinned={isPostPinned(post.id.toString())}
+								isPinned={isPostPinned(getPostId(post))}
 								onPinToggle={handlePinToggle}
 								showPinButton={true}
 								{mediaUrlMimeTypes}
+								{mediaUrlFilenames}
 							/>
 						</button>
 					{/each}

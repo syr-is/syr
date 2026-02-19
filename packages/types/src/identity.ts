@@ -7,15 +7,41 @@ import { BaseEntitySchema, RecordIdSchema, DidSyrSchema, TimestampSchema } from 
  * Links a did:syr identifier and public key to a user account.
  * Never stores private keys.
  */
+/** Aegis KDF params stored with the identity (Argon2id) */
+export const AegisKdfParamsSchema = z.object({
+	mem: z.number(),
+	it: z.number(),
+	par: z.number()
+});
+
+/** Aegis bundle: password-encrypted seed + KDF params (CIGP format) */
+export const AegisBundleSchema = z.object({
+	pub: z.string().min(1),
+	salt: z.string().min(1),
+	nonce: z.string().min(1),
+	ct: z.string().min(1),
+	tag: z.string().min(1),
+	kdf: AegisKdfParamsSchema
+});
+
+export type AegisBundle = z.infer<typeof AegisBundleSchema>;
+
 export const IdentitySchema = BaseEntitySchema.pick({
 	id: true,
 	created_at: true
 }).extend({
 	did: DidSyrSchema,
 	public_key: z.string().min(1), // multibase-encoded Ed25519 public key
-	private_key: z.string().optional(), // multibase-encoded private key for server-managed keys
 	user_id: RecordIdSchema,
-	tenant_id: RecordIdSchema.optional() // optional tenant scoping
+	tenant_id: RecordIdSchema.optional(), // optional tenant scoping
+	// Aegis (CIGP) encrypted seed - password-protected, server-stored
+	aegis_salt: z.string().optional(),
+	aegis_nonce: z.string().optional(),
+	aegis_ct: z.string().optional(),
+	aegis_tag: z.string().optional(),
+	aegis_kdf_mem: z.number().optional(),
+	aegis_kdf_it: z.number().optional(),
+	aegis_kdf_par: z.number().optional()
 });
 
 export type Identity = z.infer<typeof IdentitySchema>;
@@ -106,11 +132,12 @@ export type RotationStatement = z.infer<typeof RotationStatementSchema>;
 /**
  * Identity Export Bundle Schema
  * Portable identity data that can be exported and verified offline.
- * Never includes private keys.
+ * privateKey is optional; included for full migration bundles when server-managed.
  */
 export const IdentityExportBundleSchema = z.object({
 	did: DidSyrSchema,
 	publicKey: z.string().min(1), // multibase-encoded root public key
+	privateKey: z.string().min(1).optional(), // multibase-encoded root private key (full export only)
 	didDocument: z.record(z.string(), z.unknown()),
 	delegatedKeys: z.array(
 		z.object({
@@ -184,3 +211,70 @@ export const SignedMutationSchema = z.object({
 });
 
 export type SignedMutation = z.infer<typeof SignedMutationSchema>;
+
+/**
+ * Identity Full Export Manifest Schema
+ * Metadata about a full identity export zip.
+ */
+export const IdentityExportManifestSchema = z.object({
+	version: z.literal(1),
+	did: DidSyrSchema,
+	exportedAt: z.string().datetime(),
+	postCount: z.number().int().nonnegative(),
+	assetCount: z.number().int().nonnegative()
+});
+
+export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema>;
+
+/** ULID format: 26 chars, Crockford Base32 (0-9, A-HJKMNP-TV-Z) */
+const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/i);
+
+/** Path within zip's assets/ directory; disallow path traversal */
+export const AssetZipPathSchema = z.string().regex(/^assets\/(?!.*\.\.)[^\0]+$/);
+
+/**
+ * Exported Post Schema
+ * A post in the portable export format (no RecordId, uses string IDs).
+ * `local_id` is the ULID portion of the composite record ID, preserved
+ * so the same composite key can be recreated on import.
+ */
+export const ExportedPostSchema = z.object({
+	local_id: UlidSchema,
+	type: z.enum(['blog', 'media']),
+	content_type: z.enum(['markdown', 'html']).optional(),
+	title: z.string().optional(),
+	description: z.string().max(280).optional(),
+	content: z.string().optional(),
+	media_urls: z.array(z.string().url()).optional(),
+	display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
+	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
+	status: z.enum(['draft', 'completed']).default('draft'),
+	created_at: z.string().datetime(),
+	assets: z
+		.array(
+			z.object({
+				local_id: UlidSchema,
+				filename: z.string(),
+				mime_type: z.string(),
+				size: z.number().int().nonnegative(),
+				sha256: z.string().optional(),
+				/** Path within the zip's assets/ directory */
+				zip_path: AssetZipPathSchema
+			})
+		)
+		.optional()
+});
+
+export type ExportedPost = z.infer<typeof ExportedPostSchema>;
+
+/**
+ * Identity Import Request Schema
+ * Validated during import to verify the zip contents are well-formed.
+ */
+export const IdentityImportRequestSchema = z.object({
+	manifest: IdentityExportManifestSchema,
+	identity: IdentityExportBundleSchema,
+	posts: z.array(ExportedPostSchema)
+});
+
+export type IdentityImportRequest = z.infer<typeof IdentityImportRequestSchema>;

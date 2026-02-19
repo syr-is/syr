@@ -32,7 +32,6 @@
 		"eslint": "^9.36.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.12.4",
-		"formsnap": "^2.0.1",
 		"globals": "^16.4.0",
 		"mdsvex": "^0.12.6",
 		"mode-watcher": "^1.1.0",
@@ -53,6 +52,7 @@
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.966.0",
 		"@aws-sdk/s3-request-presigner": "^3.966.0",
+		"@smithy/node-http-handler": "^4.4.7",
 		"@milkdown/components": "^7.18.0",
 		"@milkdown/crepe": "^7.18.0",
 		"@milkdown/kit": "^7.18.0",
@@ -62,6 +62,7 @@
 		"@syr-is/types": "workspace:*",
 		"@syr-is/ui": "workspace:*",
 		"clsx": "^2.1.1",
+		"fflate": "^0.8.2",
 		"jsonwebtoken": "^9.0.2",
 		"lucide-svelte": "^0.545.0",
 		"marked": "^17.0.1",

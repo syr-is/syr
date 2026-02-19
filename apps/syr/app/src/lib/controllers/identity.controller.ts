@@ -7,11 +7,9 @@ import {
 	decodePublicKey,
 	deriveDid,
 	constantTimeEqual,
-	generateRootKeypair,
-	encodeMultibase,
-	concatBytes,
-	ED25519_MULTICODEC_PREFIX
+	generateRootKeypair
 } from '@syr-is/crypto';
+import { createAegisBundle, type AegisBundle } from '@syr-is/crypto/aegis';
 import { parseDid, buildDidDocument } from '@syr-is/did';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
@@ -126,18 +124,21 @@ export class IdentityController {
 	}
 
 	/**
-	 * Create an identity server-side (no client crypto required).
-	 * The server generates the root keypair, derives the DID,
-	 * and stores the encrypted private key.
+	 * Create an identity with Aegis (password-protected seed).
+	 * Called at registration when the password is available.
+	 * The server generates the root keypair, creates an Aegis bundle,
+	 * and stores the encrypted seed (no raw private key).
 	 *
 	 * @param userId - The user to create the identity for
+	 * @param password - The user's password (used to encrypt the seed)
 	 * @param tenantId - Optional tenant to scope the identity to
-	 * @returns The generated DID and public key
+	 * @returns The generated DID, public key, and Aegis bundle (for client decryption)
 	 */
-	async createIdentityServerSide(
+	async createIdentityAegis(
 		userId: UserIdInput,
+		password: string,
 		tenantId?: RecordId | string
-	): Promise<{ did: string; publicKey: string }> {
+	): Promise<{ did: string; publicKey: string; aegisBundle: AegisBundle }> {
 		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 
 		// Check user does not already have an identity
@@ -146,28 +147,18 @@ export class IdentityController {
 			throw new Error('User already has an identity.');
 		}
 
-		// Generate root keypair server-side
+		// Generate root keypair and create Aegis bundle
 		const rootKeypair = await generateRootKeypair();
+		const bundle = await createAegisBundle(rootKeypair.privateKey, password);
 		const did = deriveDid(rootKeypair.publicKey);
-
-		// Encode public key as multibase
-		const pubKeyMultibase = encodeMultibase(
-			concatBytes(ED25519_MULTICODEC_PREFIX, rootKeypair.publicKey)
-		);
-
-		// Encode private key as multibase (same format as public key for consistency)
-		const privateKeyMultibase = encodeMultibase(
-			concatBytes(ED25519_MULTICODEC_PREFIX, rootKeypair.privateKey)
-		);
 
 		const now = new Date();
 
-		// Create identity record with private key
 		try {
-			await identityRepository.createIdentityServerSide({
+			await identityRepository.createIdentityAegis({
 				did,
-				publicKey: pubKeyMultibase,
-				privateKey: privateKeyMultibase,
+				publicKey: bundle.pub,
+				aegisBundle: bundle,
 				userId: resolvedUserId,
 				tenantId: tenantId
 					? typeof tenantId === 'string'
@@ -183,33 +174,7 @@ export class IdentityController {
 			throw err;
 		}
 
-		return { did, publicKey: pubKeyMultibase };
-	}
-
-	/**
-	 * Export private key for a user's identity.
-	 * Only returns the key if the identity was created with server-side key generation.
-	 * After export, the user is responsible for key custody.
-	 */
-	async exportKeys(
-		userId: UserIdInput
-	): Promise<{ did: string; privateKey: string; publicKey: string }> {
-		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
-		const identity = await identityRepository.findByUserId(resolvedUserId);
-		if (!identity) {
-			throw new Error('User has no identity.');
-		}
-		if (!identity.private_key) {
-			throw new Error(
-				'Identity was not created with server-managed keys. Private key was never stored.'
-			);
-		}
-
-		return {
-			did: identity.did,
-			privateKey: identity.private_key,
-			publicKey: identity.public_key
-		};
+		return { did, publicKey: bundle.pub, aegisBundle: bundle };
 	}
 
 	/**

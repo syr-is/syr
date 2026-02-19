@@ -11,6 +11,9 @@ let setupPromise: Promise<void> | null = null;
 
 /**
  * Ensures the S3 bucket exists. Creates it if missing (idempotent).
+ *
+ * Note: Anonymous read for public files is configured in s3_config.json (SeaweedFS).
+ * Required pattern: Read:syr/uploads/did:syr:.../public/...
  */
 async function ensureBucket(): Promise<void> {
 	try {

@@ -1,7 +1,4 @@
 import { OutboxService } from '$lib/services/outbox.service';
-import { sign, canonicalize, encodeMultibase, decodePrivateKey } from '@syr-is/crypto';
-import { identityRepository } from '$lib/repositories/identity.repository';
-import { registryRepository } from '$lib/repositories/registry.repository';
 import type { OutboxEntry } from '$lib/repositories/outbox.repository';
 
 /**
@@ -17,95 +14,22 @@ export interface RegistryUpdatePayload {
 
 /**
  * Registry outbox service.
- * Extends the abstract outbox to handle registry_sync jobs.
- * Signs hosting records using the identity's private key (SYR as custodian).
+ * Jobs stay pending; the client signs via GET /api/identity/pending-registry-jobs
+ * and POST /api/identity/registry-sign. This processor is not started.
  */
 class RegistryOutboxService extends OutboxService<RegistryUpdatePayload> {
 	readonly jobType = 'registry_sync';
 
-	protected async processJob(payload: RegistryUpdatePayload, _entry: OutboxEntry): Promise<void> {
-		if (payload.action === 'update') {
-			await this.sendUpdate(payload);
-		} else if (payload.action === 'delete') {
-			await this.sendDelete(payload);
-		} else {
-			throw new Error(`Unknown registry action: ${payload.action}`);
-		}
+	override start(): never {
+		throw new Error(
+			'RegistryOutboxService must not be started; use pending-registry-jobs and registry-sign.'
+		);
 	}
 
-	/**
-	 * Sign and send a hosting record update to the registry.
-	 */
-	private async sendUpdate(payload: RegistryUpdatePayload): Promise<void> {
-		const { did, registryUrl, provider } = payload;
-
-		// Get the identity's private key for signing
-		const identity = await identityRepository.findByDid(did);
-		if (!identity || !identity.private_key) {
-			throw new Error(`Cannot sign: no private key found for ${did}`);
-		}
-
-		const rawPrivateKey = decodePrivateKey(identity.private_key);
-
-		// Build the canonical payload
-		const updatedAt = new Date().toISOString();
-		const canonicalPayload = canonicalize({ did, provider, updatedAt });
-
-		// Sign it
-		const signatureBytes = await sign(canonicalPayload, rawPrivateKey);
-		const signature = encodeMultibase(signatureBytes);
-
-		// Send to registry (API is at /api/v1/)
-		const base = registryUrl.replace(/\/$/, '');
-		const res = await fetch(`${base}/api/v1/update`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ did, provider, updatedAt, signature })
-		});
-
-		if (!res.ok) {
-			const body = await res.text();
-			throw new Error(`Registry update failed (${res.status}): ${body}`);
-		}
-
-		// Update the identity_registry status
-		await registryRepository.updateStatus(did, registryUrl, 'synced');
-	}
-
-	/**
-	 * Sign and send a deletion request to the registry.
-	 */
-	private async sendDelete(payload: RegistryUpdatePayload): Promise<void> {
-		const { did, registryUrl } = payload;
-
-		// Get the identity's private key for signing
-		const identity = await identityRepository.findByDid(did);
-		if (!identity || !identity.private_key) {
-			throw new Error(`Cannot sign: no private key found for ${did}`);
-		}
-
-		const rawPrivateKey = decodePrivateKey(identity.private_key);
-
-		// Build the canonical payload
-		const deletedAt = new Date().toISOString();
-		const canonicalPayload = canonicalize({ did, deletedAt });
-
-		// Sign it
-		const signatureBytes = await sign(canonicalPayload, rawPrivateKey);
-		const signature = encodeMultibase(signatureBytes);
-
-		// Send to registry (API is at /api/v1/)
-		const base = registryUrl.replace(/\/$/, '');
-		const res = await fetch(`${base}/api/v1/delete`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ did, deletedAt, signature })
-		});
-
-		if (!res.ok) {
-			const body = await res.text();
-			throw new Error(`Registry delete failed (${res.status}): ${body}`);
-		}
+	protected async processJob(_payload: RegistryUpdatePayload, _entry: OutboxEntry): Promise<void> {
+		throw new Error(
+			'Registry jobs require client-side signing. Use pending-registry-jobs and registry-sign.'
+		);
 	}
 }
 

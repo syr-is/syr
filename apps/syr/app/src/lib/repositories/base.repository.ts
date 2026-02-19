@@ -1,7 +1,7 @@
 import type { Surreal, RecordId } from 'surrealdb';
 import { z } from 'zod';
 import type { QueryOptions } from '@syr-is/types';
-import { stringToRecordId } from '@syr-is/types';
+import { stringToRecordId, createOwnedRecordId } from '@syr-is/types';
 import { dbService } from '$lib/services/db';
 
 /**
@@ -64,6 +64,27 @@ export abstract class BaseRepository<T> {
 		// SurrealDB returns array for table creation, single object for record creation
 		const record = Array.isArray(result) ? result[0] : result;
 		// Validate the result from database
+		return this.validate(record);
+	}
+
+	/**
+	 * Create a record with a DID-based composite ID (auto-generates ULID).
+	 */
+	async createWithCompositeId(did: string, data: Partial<T>): Promise<T> {
+		const recordId = createOwnedRecordId(this.tableName, did);
+		const result = await this.db.create(recordId, data as Record<string, unknown>);
+		const record = Array.isArray(result) ? result[0] : result;
+		return this.validate(record);
+	}
+
+	/**
+	 * Create a record with a DID-based composite ID using an explicit local ID.
+	 * Used during import to preserve the original ULID from the source instance.
+	 */
+	async createWithExplicitId(did: string, localId: string, data: Partial<T>): Promise<T> {
+		const recordId = createOwnedRecordId(this.tableName, did, localId);
+		const result = await this.db.create(recordId, data as Record<string, unknown>);
+		const record = Array.isArray(result) ? result[0] : result;
 		return this.validate(record);
 	}
 

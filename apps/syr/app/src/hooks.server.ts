@@ -5,7 +5,6 @@ import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { userRepository } from '$lib/repositories/user.repository';
-import { registryOutboxService } from '$lib/services/registry-outbox.service';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
@@ -40,8 +39,10 @@ async function initializeS3() {
 // Initialize on module load (run in parallel; they don't depend on each other)
 Promise.all([initializeDatabase(), initializeS3()])
 	.then(() => {
-		// Start outbox processors after DB is ready
-		registryOutboxService.start();
+		// Registry outbox jobs require client-side signing (server no longer has key).
+		// Jobs stay pending; client polls GET /api/identity/pending-registry-jobs and
+		// submits signatures via POST /api/identity/registry-sign.
+		// registryOutboxService.start(); — disabled
 	})
 	.catch(console.error);
 

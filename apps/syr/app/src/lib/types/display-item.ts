@@ -1,4 +1,4 @@
-import type { Upload, Folder } from '@syr-is/types';
+import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 import { getMediaType, type MediaType } from '$lib/utils/media';
 
 /**
@@ -17,27 +17,32 @@ export type DisplayItem =
 			isPublic: boolean;
 			status: string;
 			createdAt: Date;
-			data: Upload;
+			data: UploadWithCompositeId;
 	  }
-	| { kind: 'media-url'; id: string; url: string; mimeType?: string };
+	| { kind: 'media-url'; id: string; url: string; mimeType?: string; filename?: string };
 
 export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel';
 
 /** Convert an array of bare URLs (from post media_urls) into DisplayItems */
 export function urlsToDisplayItems(
 	urls: string[],
-	mimeTypes?: Record<string, string>
+	mimeTypes?: Record<string, string>,
+	filenames?: Record<string, string>
 ): DisplayItem[] {
 	return urls.map((url, i) => ({
 		kind: 'media-url' as const,
 		id: `${url}-${i}`,
 		url,
-		mimeType: mimeTypes?.[url]
+		mimeType: mimeTypes?.[url],
+		filename: filenames?.[url]
 	}));
 }
 
 /** Convert uploads and folders into DisplayItems (folders first) */
-export function uploadsToDisplayItems(folders: Folder[], uploads: Upload[]): DisplayItem[] {
+export function uploadsToDisplayItems(
+	folders: Folder[],
+	uploads: UploadWithCompositeId[]
+): DisplayItem[] {
 	const folderItems: DisplayItem[] = folders.map((f) => ({
 		kind: 'folder' as const,
 		id: typeof f.id === 'string' ? f.id : f.id.toString(),
@@ -73,7 +78,8 @@ export function getItemUrl(item: DisplayItem): string {
 export function getItemFilename(item: DisplayItem): string {
 	if (item.kind === 'folder') return item.name;
 	if (item.kind === 'file') return item.filename;
-	// For media-url, extract from URL
+	// For media-url, use provided filename or fall back to URL path segment
+	if (item.kind === 'media-url' && item.filename) return item.filename;
 	const path = item.url.split('?')[0].split('#')[0];
 	const segments = path.split('/');
 	return decodeURIComponent(segments[segments.length - 1] || 'file');
@@ -117,7 +123,11 @@ export async function resolveItemUrl(
 	if (item.kind === 'media-url') return { url: item.url, isPublic: true };
 	// kind === 'file' — fetch a signed download URL via the API
 	try {
-		const response = await fetch(`/api/uploads/${item.id}`);
+		const uploadUrl =
+			item.data.did && item.data.local_id
+				? getUploadApiUrl(item.data)
+				: getUploadApiUrl({ id: item.id });
+		const response = await fetch(uploadUrl);
 		if (!response.ok) return null;
 		const result = await response.json();
 		const url = result.data?.downloadUrl;

@@ -1,8 +1,9 @@
+# syntax=docker/dockerfile:1
 # ---- Base Stage ----
 FROM node:20-alpine AS base
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
 
 WORKDIR /app
 
@@ -19,6 +20,8 @@ COPY packages/ui/package.json ./packages/ui/
 COPY packages/crypto/package.json ./packages/crypto/
 COPY packages/did/package.json ./packages/did/
 
+# Enable injection only for Docker builds (required for pnpm deploy in v10)
+RUN echo "inject-workspace-packages=true" >> .npmrc
 # Install all dependencies (including devDependencies for build)
 # packages/ui dist is produced in the builder stage by pnpm build
 RUN pnpm install --frozen-lockfile
@@ -26,23 +29,18 @@ RUN pnpm install --frozen-lockfile
 # ---- Builder Stage ----
 FROM deps AS builder
 
+# Turbo remote cache (optional - for CI; omit for local builds)
+ARG TURBO_TEAM
+
 # Copy application source (overlays on top of deps, preserving node_modules)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build workspace dependency packages (produces dist/ in each)
-RUN pnpm --filter "@syr-is/syr..." --filter "!@syr-is/syr" build
-
-# Fix @syr-is/ui resolution: pnpm routes it through the virtual store (due to
-# peerDependencies) where only package.json exists — no dist/ or src/.
-# Replace with a direct symlink to the source package so the app can resolve
-# both dist/ exports (components) and src/ exports (styles).
-RUN target="apps/syr/app/node_modules/@syr-is/ui" && \
-    rm "$target" && \
-    ln -s ../../../../../packages/ui "$target"
-
-# Build the syr app
-RUN pnpm --filter "@syr-is/syr" build
+# Build with turbo (supports remote cache when TURBO_TOKEN/TURBO_TEAM are provided)
+RUN --mount=type=secret,id=turbo_token,required=false \
+    ( [ -f /run/secrets/turbo_token ] && export TURBO_TOKEN=$(cat /run/secrets/turbo_token) ) || true ; \
+    [ -n "$TURBO_TEAM" ] && export TURBO_TEAM="$TURBO_TEAM" || true ; \
+    pnpm exec turbo build --filter=@syr-is/syr
 
 # Prune dev dependencies - keep only production dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned

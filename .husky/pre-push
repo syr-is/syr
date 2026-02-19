@@ -1,0 +1,67 @@
+#!/bin/sh
+set -e
+# Validate semantic branch naming: <type>/#<issue>-<alias> or <type>/<alias>
+# See: https://gist.github.com/seunggabi/87f8c722d35cd07deb3f649d45a31082
+# Allowed types: feat, feature, fix, docs, style, refactor, test, chore
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+if [ -z "$BRANCH" ]; then
+  exit 0
+fi
+
+# Allow main, master, develop, and release/* branches
+case "$BRANCH" in
+  main|master|develop)
+    exit 0
+    ;;
+  release/*)
+    exit 0
+    ;;
+esac
+
+# Semantic format: type/alias or type/#issue-alias (e.g. feature/#1-init, feat/auth-flow)
+SEMANTIC_REGEX='^(feat|feature|fix|docs|style|refactor|test|chore)/.+$'
+
+if ! echo "$BRANCH" | grep -qE "$SEMANTIC_REGEX"; then
+  echo ""
+  echo "ERROR: Branch name does not follow semantic convention."
+  echo ""
+  echo "Format: <type>/<alias> or <type>/#<issue>-<alias>"
+  echo ""
+  echo "Valid types: feat, feature, fix, docs, style, refactor, test, chore"
+  echo ""
+  echo "Examples:"
+  echo "  feature/#1-init"
+  echo "  fix/#42-login-bug"
+  echo "  feat/auth-flow"
+  echo ""
+  exit 1
+fi
+
+# Require all pushed commits to be signed (GPG or SSH)
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ -z "$local_sha" ] || [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+  [ -z "$remote_sha" ] && remote_sha="0000000000000000000000000000000000000000"
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    range="$local_sha --not --remotes"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  for commit in $(git rev-list $range 2>/dev/null); do
+    if ! git verify-commit "$commit" 2>/dev/null; then
+      echo ""
+      echo "ERROR: Unsigned commit $commit."
+      echo ""
+      echo "All commits must be signed. Configure signing:"
+      echo "  GPG:  git config --global commit.gpgsign true"
+      echo "  SSH:  git config --global gpg.format ssh"
+      echo "        git config --global user.signingkey ~/.ssh/id_ed25519.pub"
+      echo ""
+      exit 1
+    fi
+  done
+done
+
+exit 0

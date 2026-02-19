@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RecordId } from 'surrealdb';
+import { ulid } from 'ulid';
 
 /**
  * Zod Codecs
@@ -156,3 +157,114 @@ export const nullToUndefined = z.codec(z.null(), z.undefined(), {
 	decode: () => undefined,
 	encode: () => null
 });
+
+// ---------------------------------------------------------------------------
+// Composite Record IDs (DID-based ownership)
+// ---------------------------------------------------------------------------
+
+interface CompositeId {
+	created_by: string;
+	id: string;
+}
+
+/**
+ * Create a RecordId with an embedded DID owner and optional ULID.
+ * Format: `table:{ created_by: "did:syr:...", id: "<ulid>" }`
+ */
+export function createOwnedRecordId(table: string, did: string, localId?: string): RecordId {
+	return new RecordId(table, { created_by: did, id: localId ?? ulid() });
+}
+
+/**
+ * Reconstruct a composite RecordId from a full DID and a local ID.
+ * Used in route handlers to rebuild the key from URL params.
+ */
+export function recordIdFromDidAndLocal(table: string, did: string, localId: string): RecordId {
+	return new RecordId(table, { created_by: did, id: localId });
+}
+
+function assertCompositeRecordId(recordId: RecordId): void {
+	const obj = recordId?.id;
+	if (typeof obj !== 'object' || obj === null) {
+		throw new Error(
+			`Expected composite RecordId (object with created_by and id), got: ${typeof obj === 'string' ? obj : JSON.stringify(obj)}`
+		);
+	}
+	const o = obj as Record<string, unknown>;
+	if (typeof o.created_by !== 'string' || typeof o.id !== 'string') {
+		throw new Error(
+			`Expected composite RecordId (created_by, id), got keys: ${Object.keys(o).join(', ')}`
+		);
+	}
+}
+
+/**
+ * Extract the ULID portion from a composite RecordId.
+ * @throws If recordId.id is not an object with created_by and id.
+ */
+export function extractLocalId(recordId: RecordId): string {
+	assertCompositeRecordId(recordId);
+	return (recordId.id as unknown as CompositeId).id;
+}
+
+/**
+ * Extract the full DID string from a composite RecordId.
+ * @throws If recordId.id is not an object with created_by and id.
+ */
+export function extractDid(recordId: RecordId): string {
+	assertCompositeRecordId(recordId);
+	return (recordId.id as unknown as CompositeId).created_by;
+}
+
+/**
+ * Build a URL path segment from a composite RecordId.
+ * Returns `${did}/${localId}`.
+ */
+export function buildResourceUrl(prefix: string, recordId: RecordId): string {
+	return `${prefix}/${extractDid(recordId)}/${extractLocalId(recordId)}`;
+}
+
+/**
+ * Get canonical post ID for URLs and API calls.
+ * Uses did/local_id when present (API serialized), otherwise extracts from composite RecordId.
+ */
+export function getPostId(post: {
+	id: RecordId | string;
+	did?: string;
+	local_id?: string;
+}): string {
+	if (post.did && post.local_id) return `${post.did}/${post.local_id}`;
+	if (typeof post.id === 'string') return post.id;
+	return `${extractDid(post.id)}/${extractLocalId(post.id)}`;
+}
+
+/**
+ * Get the API URL for an upload resource.
+ * Uses did/local_id when present (API serialized), otherwise extracts from composite RecordId or id.
+ * Use for fetch calls to upload endpoints (GET, PATCH, DELETE, etc.).
+ *
+ * @param pathSuffix - Optional suffix (e.g. '/share') appended to the base URL
+ */
+export function getUploadApiUrl(
+	upload: {
+		id: RecordId | string | number;
+		did?: string;
+		local_id?: string;
+	},
+	pathSuffix = ''
+): string {
+	let path: string;
+	if (upload.did && upload.local_id) {
+		path = `${upload.did}/${upload.local_id}`;
+	} else if (typeof upload.id === 'string') {
+		path = upload.id;
+	} else if (typeof upload.id === 'number') {
+		path = upload.id.toString();
+	} else {
+		path = `${extractDid(upload.id)}/${extractLocalId(upload.id)}`;
+	}
+	const base = `/api/uploads/${path}`;
+	return pathSuffix ? `${base}${pathSuffix}` : base;
+}
+
+export { ulid } from 'ulid';

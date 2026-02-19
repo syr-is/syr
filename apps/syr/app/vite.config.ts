@@ -4,6 +4,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), devtoolsJson()]
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	ssr: {
+		noExternal: [/^@syr-is\/ui($|\/)/]
+	}
 });
-// Force restart

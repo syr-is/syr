@@ -7,16 +7,17 @@ import { stringToRecordId } from './codecs.js';
  * Validates the upload key format for file storage paths.
  *
  * Format patterns:
- * - With folder: uploads/{owner_id}/{folder_path}/{table:id}
- * - Without folder (root): uploads/{owner_id}/{table:id}
- * - Post assets: uploads/{owner_id}/public/post_assets/{post_id}/{table:id}
+ * - With folder: uploads/{did}/{folder_path}/{ulid}
+ * - Without folder (root): uploads/{did}/{ulid}
+ * - Post assets: uploads/{did}/posts/{post_ulid}/public/{ulid}
  *
+ * The DID prefix (did:syr:z6Mk...) namespaces all uploads by identity owner.
  * Note: folder_path can be nested like "public/images/2024"
  */
 export const UploadKeySchema = z
 	.string()
-	.regex(/^uploads\/[^/]+\/.+$/, 'Upload key must start with uploads/{owner_id}/')
-	.describe('Upload key in format uploads/{owner_id}/[folder_path/]{table:id}');
+	.regex(/^uploads\/did:syr:[a-zA-Z0-9]+\/.+$/, 'Upload key must start with uploads/{did}/')
+	.describe('Upload key in format uploads/{did}/[folder_path/]{ulid}');
 
 export type UploadKey = z.infer<typeof UploadKeySchema>;
 
@@ -77,6 +78,12 @@ export const UploadSchema = BaseEntitySchema.extend({
 );
 
 export type Upload = z.infer<typeof UploadSchema>;
+
+/**
+ * Upload with composite ID components for API responses and URL construction.
+ * did and local_id are added when serializing uploads for the client.
+ */
+export type UploadWithCompositeId = Upload & { did?: string; local_id?: string };
 
 /**
  * Upload Create Schema

@@ -10,7 +10,6 @@ This page maps each requirement from the architecture specifications to the curr
 
 - **Implemented** -- Working in the current codebase
 - **Partial** -- Some aspects exist, others are missing
-- **Stubbed** -- Code exists but is commented out or incomplete
 - **Missing** -- No implementation exists yet
 - **Planned** -- Targeted for a specific phase
 
@@ -18,114 +17,133 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Identity Model Specification
 
-| Requirement                       | Status      | Details                                                                                                        |
-| --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
-| Root keypair generation (Ed25519) | **Missing** | Phase 0 target. `packages/crypto` to be created.                                                               |
-| DID derivation (`did:syr`)        | **Stubbed** | `generateDID()` is commented out in `auth.controller.ts:42`. Uses `did:web`, needs migration to `did:syr`.     |
-| Identity independent of hosting   | **Missing** | Currently identity is server-bound (username + password).                                                      |
-| Profile mutations signed          | **Missing** | Currently simple auth-gated writes. Phase 0 target.                                                            |
-| Identity exportable               | **Missing** | Phase 0 target. `GET /api/identity/export` to be created.                                                      |
-| Delegated device keys             | **Missing** | Phase 0 target. `delegated_key` table to be created.                                                           |
-| Provider hosting                  | **Partial** | App serves profiles and APIs but no `.well-known/syr` discovery endpoint.                                      |
-| Registry resolution               | **Missing** | Phase 1 target. Registry server not yet built.                                                                 |
-| OAuth with DID as `sub`           | **Missing** | Replaced by identity-based login. OAuth schemas in `packages/types/oauth.ts` to be refactored. Phase 2 target. |
-| Attestations                      | **Missing** | Future phase. No attestation types or logic.                                                                   |
-| Layered identity assurance        | **Partial** | Permissionless layer exists (any user can register). Social and legal layers missing.                          |
-| Migration model                   | **Missing** | Phase 1 target. Requires registry + provider export/import.                                                    |
+| Requirement                       | Status          | Details                                                                                                                     |
+| --------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Root keypair generation (Ed25519) | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()` and `generateDeviceKeypair()` using `@noble/ed25519`.               |
+| DID derivation (`did:syr`)        | **Implemented** | `packages/crypto/src/encoding.ts` — `deriveDid()` produces `did:syr:z6Mk...` from Ed25519 public key.                       |
+| Identity independent of hosting   | **Implemented** | Identity is DID-based, derived from public key. Registry maps DID to provider.                                              |
+| Profile mutations signed          | **Partial**     | `verifySignedMutation()` exists in `identity.controller.ts` but is not yet enforced on all mutations.                       |
+| Identity exportable               | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets. |
+| Identity importable               | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                        |
+| Delegated device keys             | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.              |
+| Provider hosting                  | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` discovery endpoint missing.        |
+| Registry resolution               | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did` and `POST /update` with signature verification.                |
+| Identity-based login              | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.  |
+| Attestations / VCs                | **Partial**     | Type schemas exist in `packages/types/src/credentials.ts`. No API endpoints yet.                                            |
+| Layered identity assurance        | **Partial**     | Permissionless layer exists (any user can register). Social and legal layers missing.                                       |
+| Migration model                   | **Implemented** | Export-bundle + import endpoints enable full migration. Registry update to point to new provider.                           |
 
 ---
 
 ## did:syr Method Specification
 
-| Requirement                                    | Status      | Details                                                       |
-| ---------------------------------------------- | ----------- | ------------------------------------------------------------- |
-| DID syntax `did:syr:<multibase-pubkey>`        | **Missing** | Code has remnants of `did:web`. `packages/did` to be created. |
-| Multibase-encoded Ed25519 public key           | **Missing** | `packages/crypto` to provide `encodeMultibase()`.             |
-| DID Document structure                         | **Missing** | `packages/did` to provide `buildDidDocument()`.               |
-| Resolution via registry lookup                 | **Missing** | Phase 1 target.                                               |
-| DID Document contains `verificationMethod`     | **Missing** | Part of `buildDidDocument()` in Phase 0.                      |
-| Service endpoint in DID Document               | **Missing** | Depends on registry (Phase 1).                                |
-| Registry update authorization (root signature) | **Missing** | Phase 1 target.                                               |
-| Migration semantics (DID unchanged)            | **Missing** | Phase 1 target.                                               |
-| Identity-based auth binding (`sub` = DID)      | **Missing** | Replaced by identity-based login. Phase 2 target.             |
+| Requirement                                    | Status          | Details                                                                                                |
+| ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
+| DID syntax `did:syr:<multibase-pubkey>`        | **Implemented** | `packages/did/src/parse.ts` — `parseDid()` validates and extracts public key from `did:syr:z...`.      |
+| Multibase-encoded Ed25519 public key           | **Implemented** | `packages/crypto/src/encoding.ts` — `encodeMultibase()` and `decodeMultibase()` with base58btc.        |
+| DID Document structure                         | **Implemented** | `packages/did/src/document.ts` — `buildDidDocument()` returns W3C-compliant DID Document.              |
+| Resolution via registry lookup                 | **Implemented** | `packages/resolver/src/resolve.ts` — `resolveDid()` queries registry, verifies signature, fetches doc. |
+| DID Document contains `verificationMethod`     | **Implemented** | `Ed25519VerificationKey2020` with `#root` id.                                                          |
+| Service endpoint in DID Document               | **Implemented** | Optional `#provider` service with `SyrIdentityProvider` type.                                          |
+| Registry update authorization (root signature) | **Implemented** | `POST /update` on registry verifies Ed25519 signature over JCS-canonicalized payload.                  |
+| Migration semantics (DID unchanged)            | **Implemented** | DID is key-anchored. Migration only changes provider URL in registry.                                  |
+| Identity-based auth binding                    | **Implemented** | Challenge/token flow binds authentication to DID via SYR instance.                                     |
 
 ---
 
 ## Key Hierarchy & Delegation Specification
 
-| Requirement                              | Status      | Details                                                                              |
-| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
-| Ed25519 root key generation              | **Missing** | Phase 0 target.                                                                      |
-| Root key stored locally, never on server | **Missing** | Phase 0 target: server-managed keys (self-hosted model). Export on demand.           |
-| Delegated device keys                    | **Missing** | Phase 0 target.                                                                      |
-| Delegation statement (root-signed)       | **Missing** | Phase 0 target. Schema: `{ did, delegate, scope, createdAt, expiresAt?, signature }` |
-| Delegation verification                  | **Missing** | Phase 0 target. Server must verify root signature.                                   |
-| Delegation scopes (`device`, `session`)  | **Missing** | Phase 0: `device` scope only.                                                        |
-| Root-signed revocation records           | **Missing** | Phase 0 stub (compile-level only).                                                   |
-| Multi-device operation                   | **Missing** | Phase 0 supports multiple delegated keys.                                            |
+| Requirement                             | Status          | Details                                                                                                                                                                             |
+| --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ed25519 root key generation             | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()`.                                                                                                                            |
+| Root key stored on server               | **Implemented** | `identity.private_key` field stores multibase-encoded private key (server-managed identities).                                                                                      |
+| Delegated device keys                   | **Implemented** | `POST /api/identity/delegate`. Delegation statement signed by root key, verified server-side.                                                                                       |
+| Delegation statement (root-signed)      | **Implemented** | JCS-canonicalized `{ did, delegate, scope, createdAt, expiresAt? }` signed with root key.                                                                                           |
+| Delegation verification                 | **Implemented** | `identity.controller.ts` — `verifyDelegation()` checks root signature, DID match, expiration, revocation.                                                                           |
+| Delegation scopes (`device`, `session`) | **Implemented** | `DelegationScopeSchema` in `packages/types/src/identity.ts`.                                                                                                                        |
+| Root-signed revocation records          | **Partial**     | `revoked_at` field exists on `DelegatedKey`. Formal revocation record format not yet implemented.                                                                                   |
+| Multi-device operation                  | **Implemented** | Multiple delegated keys per identity supported.                                                                                                                                     |
+| Key export                              | **Implemented** | `GET /api/identity/export` and `GET /api/identity/export-bundle` (full zip with posts/assets). Target format: [Sigil](/architecture/sigil); current uses PKCS#8 PEM (transitional). |
+
+---
+
+## Sigil & Aegis Specifications
+
+| Requirement                | Status      | Details                                                                                                                      |
+| -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Aegis custodial generation | **Partial** | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis). |
+| Sigil export format        | **Planned** | Target format for portable identity export. Current implementation uses PKCS#8 PEM. See [Sigil v1](/architecture/sigil).     |
 
 ---
 
 ## Registry Protocol Specification
 
-| Requirement                                | Status      | Details                                        |
-| ------------------------------------------ | ----------- | ---------------------------------------------- |
-| Hosting record (`did -> provider`)         | **Missing** | Phase 1 target.                                |
-| Ed25519 signature on records               | **Missing** | `packages/crypto` provides signing.            |
-| JCS canonical signing (RFC 8785)           | **Missing** | `packages/crypto` to provide `canonicalize()`. |
-| `GET /resolve/{did}`                       | **Missing** | Phase 1: Registry server.                      |
-| `POST /update` with signature verification | **Missing** | Phase 1: Registry server.                      |
-| Strictly increasing `updatedAt` timestamps | **Missing** | Phase 1.                                       |
-| Migration flow                             | **Missing** | Phase 1.                                       |
+| Requirement                                | Status          | Details                                                                                       |
+| ------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------- |
+| Hosting record (`did -> provider`)         | **Implemented** | `apps/registry/api` — SurrealDB-backed registry with `identity_registry` table.               |
+| Ed25519 signature on records               | **Implemented** | Registry verifies Ed25519 signatures using `@syr-is/crypto`.                                  |
+| JCS canonical signing (RFC 8785)           | **Implemented** | `packages/crypto/src/canonical.ts` — `canonicalize()` implements RFC 8785.                    |
+| `GET /resolve/:did`                        | **Implemented** | Returns hosting record with provider URL.                                                     |
+| `POST /update` with signature verification | **Implemented** | Verifies signature, validates DID ownership, updates hosting record.                          |
+| Strictly increasing `updatedAt` timestamps | **Implemented** | Registry rejects stale timestamps.                                                            |
+| Migration flow                             | **Implemented** | Export identity + assets from old provider, import on new, update registry with new provider. |
 
 ---
 
 ## Provider Service Specification
 
-| Requirement                                      | Status          | Details                                                              |
-| ------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
-| `GET /.well-known/syr` discovery                 | **Missing**     | Phase 1 target.                                                      |
-| `GET /profile` public endpoint                   | **Partial**     | Profile data exists in DB. No public DID-addressed profile endpoint. |
-| OAuth endpoints (`/oauth/authorize`, etc.)       | **Missing**     | Replaced by identity-based auth endpoints. Phase 2 target.           |
-| `sub` = DID in auth tokens                       | **Missing**     | Phase 2 target.                                                      |
-| `GET /export` endpoint                           | **Missing**     | Phase 0 target. `GET /api/identity/export`.                          |
-| Export authentication (root/delegated key proof) | **Missing**     | Phase 0 target.                                                      |
-| TLS requirement                                  | **Implemented** | App runs behind HTTPS in production.                                 |
-| Import endpoint                                  | **Missing**     | Out of scope for v0.1.                                               |
+| Requirement                       | Status          | Details                                                       |
+| --------------------------------- | --------------- | ------------------------------------------------------------- |
+| `GET /.well-known/did/:did`       | **Implemented** | Returns DID Document for identities hosted on this instance.  |
+| `GET /.well-known/syr` discovery  | **Missing**     | Instance capabilities discovery endpoint not yet implemented. |
+| `GET /api/identity/export`        | **Implemented** | Returns portable identity bundle (JSON).                      |
+| `GET /api/identity/export-bundle` | **Implemented** | Returns full zip with identity, posts, and assets.            |
+| `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.        |
+| Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store. |
+| TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                          |
+
+---
+
+## ActivityPub Federation
+
+| Requirement                    | Status      | Details                                                               |
+| ------------------------------ | ----------- | --------------------------------------------------------------------- |
+| Outbox (publishing activities) | **Partial** | Outbox routes exist (`/api/identity/outbox/*`). Registry sync outbox. |
+| Inbox (receiving activities)   | **Missing** | No inbox endpoint for receiving activities from remote instances.     |
+| HTTP Signatures                | **Partial** | Signature infrastructure exists but inbox verification missing.       |
+| Actor discovery (WebFinger)    | **Missing** | No WebFinger endpoint yet.                                            |
+
+---
+
+## Multi-Tenancy
+
+| Requirement           | Status          | Details                                        |
+| --------------------- | --------------- | ---------------------------------------------- |
+| Tenant CRUD           | **Implemented** | `/api/tenants/*` routes and tenant repository. |
+| Tenant isolation      | **Implemented** | Optional `tenant_id` on identity records.      |
+| Tenant-scoped queries | **Partial**     | Identity repository supports tenant filtering. |
 
 ---
 
 ## Recovery & Rotation Specification
 
-| Requirement                                  | Status      | Details                                          |
-| -------------------------------------------- | ----------- | ------------------------------------------------ |
-| Recovery key generation at identity creation | **Missing** | Future phase.                                    |
-| Recovery statement format                    | **Missing** | Future phase.                                    |
-| Root key rotation via signed chain           | **Missing** | Phase 0 stub (compile-level only).               |
-| Rotation statement format                    | **Missing** | Phase 0 stub. `packages/crypto/src/rotation.ts`. |
-| Key history chain (append-only)              | **Missing** | Phase 0 stub (data structure only).              |
-| Registry update after rotation               | **Missing** | Phase 1.                                         |
+| Requirement                                  | Status      | Details                                                                                       |
+| -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
+| Recovery key generation at identity creation | **Missing** | Future phase.                                                                                 |
+| Recovery statement format                    | **Missing** | Future phase.                                                                                 |
+| Root key rotation (signed chain)             | **Partial** | `createRotationStatement()` / `verifyRotationStatement()` in crypto package. No API endpoint. |
+| Key history chain (append-only)              | **Missing** | Data structure not yet implemented.                                                           |
+| Registry update after rotation               | **Missing** | Would require rotation endpoint + registry update.                                            |
 
 ---
 
-## Known Bugs and Inconsistencies
+## Testing & CI
 
-### Type System Issues
-
-| Issue                                                                                       | Location                            | Impact                                                             | Fix Target            |
-| ------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------ | --------------------- |
-| `AuthenticatedUserSchema` picks `did` from `UserSchema` but `UserSchema` has no `did` field | `packages/types/src/user.ts:137`    | Runtime error if `AuthenticatedUserSchema` is used with `.parse()` | Phase 0               |
-| `DBActorSchema` uses `z.uuid()` for `user_id`                                               | `packages/types/src/activitypub.ts` | Mismatch with app's SurrealDB `RecordId` pattern                   | Future reconciliation |
-| OAuth schemas use `z.uuid()` for user references                                            | `packages/types/src/oauth.ts`       | Same `RecordId` vs `uuid` mismatch                                 | Future reconciliation |
-
-### Architecture Gaps
-
-| Gap                          | Description                                                                       | Resolution                                             |
-| ---------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| No DID field on User         | `UserSchema` has no `did` field despite `AuthenticatedUserSchema` expecting one   | Phase 0: Add optional `did` field                      |
-| Commented-out DID generation | `auth.controller.ts:42` has `// const did = generateDID(username);` for `did:web` | Phase 0: Replace with `did:syr` from `packages/crypto` |
-| No cryptographic signing     | All mutations are auth-gated but not cryptographically signed                     | Phase 0: Add device key signing                        |
-| No identity export           | No way to export identity state for portability                                   | Phase 0: `GET /api/identity/export`                    |
+| Requirement                    | Status          | Details                                                                                 |
+| ------------------------------ | --------------- | --------------------------------------------------------------------------------------- |
+| Unit tests for shared packages | **Implemented** | Vitest tests for `crypto`, `did`, `resolver`, `types` — see CI/repo for current counts. |
+| CI pipeline                    | **Implemented** | `.github/workflows/test.yml` with per-package path-filtered jobs.                       |
+| Code quality checks            | **Implemented** | `.github/workflows/code-quality.yml` with lint and format checks.                       |
 
 ---
 
@@ -133,16 +151,19 @@ This page maps each requirement from the architecture specifications to the curr
 
 ```mermaid
 flowchart LR
-    Phase0["Phase 0: Identity Correctness"] --> Phase1["Phase 1: Registry + Portability"]
+    Phase0["Phase 0: Identity Correctness"] --> Phase05["Phase 0.5: Testing and Hardening"]
+    Phase05 --> Phase1["Phase 1: Registry + Portability"]
     Phase1 --> Phase2["Phase 2: Identity-Based Auth + VCs"]
-    Phase2 --> Phase3["Phase 3: Federation + Multi-Tenancy"]
+    Phase2 --> Phase3["Phase 3: Federation + Syner"]
 
     Phase0 --- P0Items["Server-managed root keypair, DID,
-    device keys, signed mutations, export"]
+    device keys, signed mutations, export/import"]
+    Phase05 --- P05Items["Unit tests, CI pipeline,
+    persistent stores, hardened auth"]
     Phase1 --- P1Items["Registry server, provider discovery,
     migration, .well-known/syr"]
     Phase2 --- P2Items["Identity-based login, DID as sub,
     identity-linked credentials"]
     Phase3 --- P3Items["SYR-to-SYR ActivityPub federation,
-    multi-tenant isolation"]
+    Syner native app, multi-tenant isolation"]
 ```

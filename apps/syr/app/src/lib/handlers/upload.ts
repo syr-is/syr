@@ -60,7 +60,19 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 		}
 
 		const result = await response.json();
-		const { signedUrl, finalUrl, uploadId } = result.data;
+		if (!result || typeof result !== 'object' || !result.data) {
+			throw new Error('Upload API returned invalid response: missing data');
+		}
+		const { signedUrl, finalUrl, uploadDid, uploadLocalId } = result.data;
+
+		if (!signedUrl || !finalUrl) {
+			throw new Error('Upload API returned invalid response: missing signedUrl or finalUrl');
+		}
+		if (uploadDid == null || uploadLocalId == null) {
+			throw new Error(
+				'Upload API returned invalid response: missing upload identifiers for completion'
+			);
+		}
 
 		// Step 2: Upload file to S3 using the signed URL
 		const uploadResponse = await fetch(signedUrl, {
@@ -75,13 +87,18 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 			throw new Error(`Failed to upload file: ${uploadResponse.statusText}`);
 		}
 
-		// Step 3: Complete the upload
+		// Step 3: Complete the upload (requires upload identifiers from API)
+		const patchBody: Record<string, unknown> = {
+			status: 'completed',
+			did: uploadDid,
+			local_id: uploadLocalId
+		};
 		const completeResponse = await fetch('/api/uploads', {
 			method: 'PATCH',
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ id: uploadId, status: 'completed' })
+			body: JSON.stringify(patchBody)
 		});
 
 		if (!completeResponse.ok) {
@@ -100,7 +117,7 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 
 /**
  * Handle file upload for post assets
- * Files are stored in: uploads/{user_id}/posts/{post_id}/public/
+ * Files are stored in: uploads/{did}/posts/{post_ulid}/public/
  * Folder hierarchy on uploads page: posts/{post_id}/public/{upload_id}
  * These files are publicly accessible
  */

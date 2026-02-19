@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
 
 	return {
 		plugins: [tailwindcss(), sveltekit()],
+		ssr: {
+			noExternal: [/^@syr-is\/ui($|\/)/]
+		},
 		server: {
 			proxy: {
 				'/api/v1': {
