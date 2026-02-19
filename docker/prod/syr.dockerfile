@@ -29,14 +29,24 @@ RUN pnpm install
 # ---- Builder Stage ----
 FROM deps AS builder
 
-# Copy application source (overlays on top of deps, preserving node_modules)
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
-# Build syr app and its workspace dependencies (types, ui, crypto, did)
-RUN pnpm --filter "...@syr-is/syr" build
+# Build workspace packages first (dist/ doesn't exist at install time with injection)
+# Order matters: types has no workspace deps, ui/crypto/did depend on types
+RUN pnpm --filter @syr-is/types build
+RUN pnpm --filter @syr-is/crypto build
+RUN pnpm --filter @syr-is/did build
+RUN pnpm --filter @syr-is/ui build
 
-# Prune dev dependencies - keep only production dependencies
+# Re-inject now that all dist/ folders exist
+# node_modules/@syr-is/ui/dist will now contain the built files
+RUN pnpm install
+
+# Build the app — workspace deps are now properly injected with dist/
+RUN pnpm --filter @syr-is/syr build
+
+# Prune dev dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
 
 # ---- Production Stage ----
