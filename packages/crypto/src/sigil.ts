@@ -6,6 +6,7 @@
 
 import { argon2id } from "hash-wasm";
 import { getPublicKeyAsync } from "@noble/ed25519";
+import { base64urlnopad } from "@scure/base";
 import { encodeMultibase } from "./encoding.js";
 import { ED25519_MULTICODEC_PREFIX } from "./encoding.js";
 
@@ -24,26 +25,6 @@ const MAX_ARGON2_MEMORY = 262144; // 256 MiB
 const MAX_ARGON2_ITERS = 10;
 /** Maximum Argon2 parallelism */
 const MAX_ARGON2_PARALLELISM = 4;
-
-const CHUNK_SIZE = 0x8000; // Avoid stack overflow for large inputs
-
-function base64urlEncode(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
-    binary += String.fromCharCode(...chunk);
-  }
-  const b64 = btoa(binary);
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64urlDecode(str: string): Uint8Array {
-  const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = (4 - (b64.length % 4)) % 4;
-  const padded = b64 + "=".repeat(pad);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
 
 export interface SigilKdf {
   name: string;
@@ -103,15 +84,7 @@ export async function createSigil(
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
 
-  const key = new Uint8Array(
-    (await deriveKey(
-      passphrase,
-      salt,
-      KDF_MEM_KIB,
-      KDF_IT,
-      KDF_PAR,
-    )) as ArrayLike<number>,
-  );
+  const key = await deriveKey(passphrase, salt, KDF_MEM_KIB, KDF_IT, KDF_PAR);
   const pubKey = await getPublicKeyAsync(seed);
   const pub = encodeMultibase(
     new Uint8Array([...ED25519_MULTICODEC_PREFIX, ...pubKey]),
@@ -150,16 +123,16 @@ export async function createSigil(
     v: 1,
     kdf: {
       name: "argon2id",
-      salt: base64urlEncode(salt),
+      salt: base64urlnopad.encode(salt),
       mem: KDF_MEM_KIB,
       it: KDF_IT,
       par: KDF_PAR,
     },
     enc: {
       name: "aes-256-gcm",
-      nonce: base64urlEncode(nonce),
-      ct: base64urlEncode(ct),
-      tag: base64urlEncode(tag),
+      nonce: base64urlnopad.encode(nonce),
+      ct: base64urlnopad.encode(ct),
+      tag: base64urlnopad.encode(tag),
     },
     pub,
   };
@@ -180,10 +153,20 @@ export async function decryptSigil(
     throw new Error("Unsupported KDF or cipher in Sigil");
   }
 
-  const salt = base64urlDecode(sigil.kdf.salt);
-  const nonce = base64urlDecode(sigil.enc.nonce);
-  const ct = base64urlDecode(sigil.enc.ct);
-  const tag = base64urlDecode(sigil.enc.tag);
+  let salt: Uint8Array;
+  let nonce: Uint8Array;
+  let ct: Uint8Array;
+  let tag: Uint8Array;
+  try {
+    salt = base64urlnopad.decode(sigil.kdf.salt);
+    nonce = base64urlnopad.decode(sigil.enc.nonce);
+    ct = base64urlnopad.decode(sigil.enc.ct);
+    tag = base64urlnopad.decode(sigil.enc.tag);
+  } catch {
+    throw new Error(
+      "Sigil decryption failed: wrong passphrase or corrupted data",
+    );
+  }
 
   const mem = sigil.kdf.mem;
   const it = sigil.kdf.it;
@@ -207,9 +190,7 @@ export async function decryptSigil(
     );
   }
 
-  const key = new Uint8Array(
-    (await deriveKey(passphrase, salt, mem, it, par)) as ArrayLike<number>,
-  );
+  const key = await deriveKey(passphrase, salt, mem, it, par);
   const cipher = await crypto.subtle.importKey(
     "raw",
     key as unknown as BufferSource,

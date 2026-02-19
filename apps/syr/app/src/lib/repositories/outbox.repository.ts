@@ -169,6 +169,26 @@ class OutboxRepository {
 		);
 		return result[0] ?? [];
 	}
+
+	/**
+	 * Find a single active job by id and user. Returns null if not found or completed/cancelled.
+	 * @param jobId - RecordId or string (e.g. "outbox:xxxx")
+	 */
+	async findActiveByIdAndUser(
+		jobId: RecordId | string,
+		userId: RecordId
+	): Promise<OutboxEntry | null> {
+		const result = await this.db.query<[OutboxEntry[]]>(
+			`SELECT * FROM outbox
+				WHERE id = type::thing($jobId)
+				AND user_id = $userId
+				AND status NOT IN ["completed", "cancelled"]
+				LIMIT 1`,
+			{ jobId: typeof jobId === 'string' ? jobId : jobId.toString(), userId }
+		);
+		const entries = result[0] ?? [];
+		return entries[0] ?? null;
+	}
 }
 
 export const outboxRepository = new OutboxRepository();

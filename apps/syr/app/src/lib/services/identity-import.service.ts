@@ -71,6 +71,14 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 				zipBytes,
 				{
 					filter(file) {
+						if ((file.originalSize === 0 || file.originalSize == null) && file.size > 0) {
+							reject(
+								new Error(
+									'Suspicious zip entry: compressed size present but uncompressed size missing'
+								)
+							);
+							return false;
+						}
 						const size = file.originalSize ?? 0;
 						if (totalUncompressed + size > MAX_UNCOMPRESSED_BYTES) {
 							reject(new Error('Uncompressed size exceeds limit'));
@@ -182,6 +190,7 @@ export async function importIdentityAndProfile(
 ): Promise<void> {
 	const { identity } = parsed;
 
+	// Defense-in-depth: validateBundle already enforces this invariant; recheck before DB writes.
 	if (aegisBundle.pub !== identity.publicKey) {
 		throw error(400, {
 			code: 'KEY_MISMATCH',
@@ -427,16 +436,17 @@ export async function rollbackImport(ctx: ImportContext): Promise<void> {
 			console.error('Rollback: failed to delete pinned_posts', e);
 		}
 	}
-	for (const uploadId of ctx.createdUploadIds) {
+	// Delete posts before uploads to avoid posts with dangling media_urls
+	for (const postId of ctx.createdPostIds) {
 		try {
-			await uploadRepository.delete(uploadId);
+			await postRepository.delete(postId);
 		} catch {
 			// Best-effort per-record cleanup
 		}
 	}
-	for (const postId of ctx.createdPostIds) {
+	for (const uploadId of ctx.createdUploadIds) {
 		try {
-			await postRepository.delete(postId);
+			await uploadRepository.delete(uploadId);
 		} catch {
 			// Best-effort per-record cleanup
 		}

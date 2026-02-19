@@ -40,9 +40,16 @@ fi
 
 # Require all pushed commits to be signed (GPG or SSH)
 while read -r local_ref local_sha remote_ref remote_sha; do
-  [ -z "$local_sha" ] || [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+  if [ -z "$local_sha" ] || [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
   [ -z "$remote_sha" ] && remote_sha="0000000000000000000000000000000000000000"
-  for commit in $(git rev-list "$remote_sha".."$local_sha" 2>/dev/null); do
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  for commit in $(git rev-list "$range" 2>/dev/null); do
     if ! git verify-commit "$commit" 2>/dev/null; then
       echo ""
       echo "ERROR: Unsigned commit $commit."
@@ -56,8 +63,5 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fi
   done
 done
-
-echo "Running build..."
-pnpm run build
 
 exit 0

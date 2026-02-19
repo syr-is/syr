@@ -31,7 +31,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const parsed = RegistrySignSchema.safeParse(await request.json());
+	let parsedBody: unknown;
+	try {
+		parsedBody = await request.json();
+	} catch (err) {
+		throw error(400, {
+			code: 'VALIDATION_ERROR',
+			message: 'Invalid JSON body',
+			details: { parseError: err instanceof Error ? err.message : 'Failed to parse JSON' }
+		});
+	}
+	const parsed = RegistrySignSchema.safeParse(parsedBody);
 	if (!parsed.success) {
 		throw error(400, {
 			code: 'VALIDATION_ERROR',
@@ -45,8 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Verify job belongs to user and is pending
 	const userId = stringToRecordId.decode(locals.user.id);
-	const allJobs = await outboxRepository.findActiveByUserAndType(userId, 'registry_sync');
-	const job = allJobs.find((j) => String(j.id) === jobId);
+	const job = await outboxRepository.findActiveByIdAndUser(jobId, userId);
 	if (!job) {
 		throw error(404, { code: 'JOB_NOT_FOUND', message: 'Job not found or already completed' });
 	}
@@ -96,7 +105,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
 	}
 
-	// Send to registry
+	// Send to registry (fetch only; DB updates in separate try)
 	const base = registryUrl.replace(/\/$/, '');
 	const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 	try {
@@ -123,22 +132,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				throw new Error(`Registry delete failed (${res.status}): ${body}`);
 			}
 		}
-
-		if (action === 'update') {
-			await registryRepository.updateStatus(did, registryUrl, 'synced');
-		} else {
-			const registryEntry = await registryRepository.findByDidAndUrl(did, registryUrl);
-			if (registryEntry) {
-				await registryRepository.removeRegistry(registryEntry.id);
-			}
-		}
-		await outboxRepository.markCompleted(job.id);
-
-		return json({
-			status: 'success',
-			data: { completed: true },
-			meta: { timestamp: new Date().toISOString() }
-		});
 	} catch (err) {
 		const msg =
 			err instanceof Error && err.name === 'AbortError'
@@ -149,4 +142,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
 		throw error(502, { code: 'REGISTRY_ERROR', message: msg });
 	}
+
+	// Fetch succeeded; persist DB updates (mark job complete on success, markFailed on DB error but still return 200)
+	try {
+		if (action === 'update') {
+			await registryRepository.updateStatus(did, registryUrl, 'synced');
+		} else {
+			const registryEntry = await registryRepository.findByDidAndUrl(did, registryUrl);
+			if (registryEntry) {
+				await registryRepository.removeRegistry(registryEntry.id);
+			}
+		}
+		await outboxRepository.markCompleted(job.id);
+	} catch (dbErr) {
+		const msg = dbErr instanceof Error ? dbErr.message : 'Database update failed';
+		await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
+	}
+
+	return json({
+		status: 'success',
+		data: { completed: true },
+		meta: { timestamp: new Date().toISOString() }
+	});
 };

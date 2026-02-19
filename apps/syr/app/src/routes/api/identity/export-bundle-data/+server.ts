@@ -10,6 +10,9 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import type { IdentityExportManifest, ExportedPost, Post, Upload } from '@syr-is/types';
 import { extractLocalId } from '@syr-is/types';
 
+const MAX_EXPORT_RECORDS = 10_000;
+const MAX_EXPORT_ASSET_BYTES = 500 * 1024 * 1024; // 500 MB total asset bytes
+
 /**
  * GET /api/identity/export-bundle-data
  *
@@ -27,30 +30,33 @@ export const GET: RequestHandler = async ({ locals }) => {
 		const identityBundle = await identityController.exportIdentity(userId);
 		const did = identityBundle.did;
 
-		// Query posts
+		// Query posts (cursor-based, with record cap)
 		const posts: Post[] = [];
-		let nextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
+		let postNextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
 		do {
+			if (posts.length >= MAX_EXPORT_RECORDS) break;
 			const page = await postRepository.findByDid(did, {
-				limit: 500,
-				afterCreatedAt: nextCursor?.afterCreatedAt,
-				afterId: nextCursor?.afterId
+				limit: Math.min(500, MAX_EXPORT_RECORDS - posts.length),
+				afterCreatedAt: postNextCursor?.afterCreatedAt,
+				afterId: postNextCursor?.afterId
 			});
 			posts.push(...page.posts);
-			nextCursor = page.nextCursor;
-		} while (nextCursor);
+			postNextCursor = page.nextCursor;
+		} while (postNextCursor && posts.length < MAX_EXPORT_RECORDS);
 
-		// Fetch uploads
+		// Fetch uploads (cursor-based, with record cap)
 		const uploads: Upload[] = [];
-		let uploadNextCursor: { offset: number } | null = null;
+		let uploadNextCursor: { afterCreatedAt: Date; afterId: string } | null = null;
 		do {
-			const page = await uploadRepository.findByDidPage(did, {
-				limit: 500,
-				offset: uploadNextCursor?.offset
+			if (uploads.length >= MAX_EXPORT_RECORDS) break;
+			const page = await uploadRepository.findByDid(did, {
+				limit: Math.min(500, MAX_EXPORT_RECORDS - uploads.length),
+				afterCreatedAt: uploadNextCursor?.afterCreatedAt,
+				afterId: uploadNextCursor?.afterId
 			});
 			uploads.push(...page.uploads);
 			uploadNextCursor = page.nextCursor;
-		} while (uploadNextCursor);
+		} while (uploadNextCursor && uploads.length < MAX_EXPORT_RECORDS);
 
 		const uploadsByUrl = new Map(uploads.map((u) => [u.url, u]));
 		const exportedAssets: Array<{
@@ -62,9 +68,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 			sha256?: string;
 			content_base64: string;
 		}> = [];
+		const skippedAssets: Array<{ zip_path: string; url?: string; reason?: string }> = [];
+		let totalAssetBytes = 0;
 
 		for (const upload of uploads) {
 			if (!upload.key) continue;
+			if (totalAssetBytes + upload.size > MAX_EXPORT_ASSET_BYTES) {
+				skippedAssets.push({
+					zip_path: `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`,
+					url: upload.url,
+					reason: 'Total asset size exceeds limit'
+				});
+				continue;
+			}
 			const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
 			try {
 				const cmd = new GetObjectCommand({
@@ -74,6 +90,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 				const resp = await s3Service.client.send(cmd);
 				if (resp.Body) {
 					const bytes = await resp.Body.transformToByteArray();
+					totalAssetBytes += bytes.length;
+					if (totalAssetBytes > MAX_EXPORT_ASSET_BYTES) {
+						skippedAssets.push({
+							zip_path: zipPath,
+							url: upload.url,
+							reason: 'Total asset size exceeds limit'
+						});
+						continue;
+					}
 					const base64 = Buffer.from(bytes).toString('base64');
 					exportedAssets.push({
 						zip_path: zipPath,
@@ -85,11 +110,16 @@ export const GET: RequestHandler = async ({ locals }) => {
 						content_base64: base64
 					});
 				}
-			} catch {
-				// Skip assets that can't be fetched
+			} catch (err) {
+				skippedAssets.push({
+					zip_path: zipPath,
+					url: upload.url,
+					reason: err instanceof Error ? err.message : 'Fetch failed'
+				});
 			}
 		}
 
+		const exportedAssetZipPaths = new Set(exportedAssets.map((a) => a.zip_path));
 		const exportedPosts: ExportedPost[] = [];
 		for (const post of posts) {
 			const postAssets: ExportedPost['assets'] = [];
@@ -98,8 +128,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 					const upload = uploadsByUrl.get(mediaUrl);
 					if (!upload?.key) continue;
 					const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
-					const hasAsset = exportedAssets.some((a) => a.zip_path === zipPath);
-					if (hasAsset) {
+					if (exportedAssetZipPaths.has(zipPath)) {
 						postAssets.push({
 							local_id: extractLocalId(upload.id),
 							filename: upload.filename,
@@ -144,6 +173,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 				identity: identityBundle,
 				posts: exportedPosts,
 				assets: exportedAssets,
+				skipped_assets: skippedAssets.length > 0 ? skippedAssets : undefined,
 				pinned_posts: { post_ids: pinnedPostIds }
 			},
 			meta: { timestamp: new Date().toISOString() }
