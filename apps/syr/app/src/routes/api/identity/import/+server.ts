@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { AegisBundle } from '@syr-is/crypto/aegis';
+import { AegisBundleSchema } from '@syr-is/types';
 import { identityRepository } from '$lib/repositories/identity.repository';
+import { z } from 'zod';
 import {
 	parseBundle,
 	validateBundle,
@@ -57,20 +58,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	let aegisBundle: AegisBundle;
+	let aegisBundle: z.infer<typeof AegisBundleSchema>;
 	try {
-		aegisBundle = JSON.parse(aegisBundleRaw) as AegisBundle;
-		if (
-			!aegisBundle.pub ||
-			!aegisBundle.salt ||
-			!aegisBundle.nonce ||
-			!aegisBundle.ct ||
-			!aegisBundle.tag ||
-			!aegisBundle.kdf
-		) {
-			throw new Error('Invalid aegisBundle structure');
+		const parsed = JSON.parse(aegisBundleRaw);
+		aegisBundle = AegisBundleSchema.parse(parsed);
+	} catch (err) {
+		if (err instanceof z.ZodError) {
+			throw error(400, {
+				code: 'INVALID_AEGIS',
+				message: 'Invalid aegisBundle structure',
+				details: z.treeifyError(err)
+			});
 		}
-	} catch {
 		throw error(400, {
 			code: 'INVALID_AEGIS',
 			message: 'Invalid aegisBundle JSON'

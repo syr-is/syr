@@ -14,6 +14,18 @@ export const AegisKdfParamsSchema = z.object({
 	par: z.number()
 });
 
+/** Aegis bundle: password-encrypted seed + KDF params (CIGP format) */
+export const AegisBundleSchema = z.object({
+	pub: z.string().min(1),
+	salt: z.string().min(1),
+	nonce: z.string().min(1),
+	ct: z.string().min(1),
+	tag: z.string().min(1),
+	kdf: AegisKdfParamsSchema
+});
+
+export type AegisBundle = z.infer<typeof AegisBundleSchema>;
+
 export const IdentitySchema = BaseEntitySchema.pick({
 	id: true,
 	created_at: true
