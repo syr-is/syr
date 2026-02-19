@@ -24,7 +24,7 @@ COPY packages/did/package.json ./packages/did/
 RUN echo "inject-workspace-packages=true" >> .npmrc
 # Install all dependencies (including devDependencies for build)
 # packages/ui dist is produced in the builder stage by pnpm build
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # ---- Builder Stage ----
 FROM deps AS builder
