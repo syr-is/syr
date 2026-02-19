@@ -9,7 +9,6 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [tailwindcss(), sveltekit()],
 		ssr: {
-			// Regex ensures subpath imports like @syr-is/ui/sonner are bundled (not externalized)
 			noExternal: [/^@syr-is\/ui($|\/)/]
 		},
 		server: {
