@@ -33,22 +33,6 @@ COPY packages ./packages
 # Build workspace dependency packages (produces dist/ in each)
 RUN pnpm --filter "@syr-is/syr..." --filter "!@syr-is/syr" build
 
-# Fix @syr-is/ui resolution: pnpm routes it through the virtual store (due to
-# peerDependencies) where only package.json exists — no dist/ or src/.
-# Replace with a direct symlink to the source package so the app can resolve
-# both dist/ exports (components) and src/ exports (styles).
-RUN target="/app/apps/syr/app/node_modules/@syr-is/ui" && \
-    rm -f "$target" && \
-    ln -s ../../../../../packages/ui "$target"
-
-# Give packages/ui access to its deps (formsnap, tailwindcss, @lucide/svelte, etc.)
-# from the pnpm store. With @lucide/svelte, tailwindcss, tw-animate-css as direct
-# deps, the store's ui node_modules has everything needed.
-RUN ui_deps=$(ls -d /app/node_modules/.pnpm/@syr-is+ui@file+packages+ui*/node_modules 2>/dev/null | head -1) && \
-    [ -n "$ui_deps" ] || (echo "ERROR: Could not find UI store deps" && exit 1) && \
-    rm -rf /app/packages/ui/node_modules 2>/dev/null && \
-    ln -sf "$ui_deps" /app/packages/ui/node_modules
-
 # Build the syr app
 RUN pnpm --filter "@syr-is/syr" build
 
