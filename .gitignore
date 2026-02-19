@@ -44,3 +44,6 @@ logs/
 
 .svelte-kit
 .pnpm-store
+
+# Turborepo
+.turbo
