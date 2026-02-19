@@ -143,23 +143,12 @@ export class KvRepository {
 	 */
 	async findByType(type: string): Promise<KvEntry[]> {
 		const result = await this.db.query<[KvEntry[]]>(
-			`SELECT * FROM ${this.tableName} WHERE kv_type = $type`,
+			`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now())`,
 			{ type }
 		);
 
 		const records = result[0] ?? [];
-		const now = new Date();
-
-		// Filter out expired entries and validate
-		const validEntries: KvEntry[] = [];
-		for (const record of records) {
-			const entry = this.validate(record);
-			if (!entry.expires_at || entry.expires_at >= now) {
-				validEntries.push(entry);
-			}
-		}
-
-		return validEntries;
+		return records.map((record: unknown) => this.validate(record));
 	}
 
 	/**

@@ -29,7 +29,7 @@ export function rawToPkcs8Der(raw: Uint8Array): Buffer {
   const innerOctet = Buffer.alloc(34); // 04 20 [32] = 34 bytes
   innerOctet[0] = 0x04;
   innerOctet[1] = 0x20;
-  raw.forEach((b, i) => (innerOctet[2 + i] = b));
+  innerOctet.set(raw, 2);
   const privKeyLen = encodeDerLength(innerOctet.length); // 34
   const privKey = Buffer.alloc(1 + privKeyLen.length + innerOctet.length);
   let off = 0;
@@ -65,8 +65,7 @@ function parseDerLength(
   if (numLenBytes > 4 || off + 1 + numLenBytes > der.length)
     throw new Error("Invalid PKCS#8 Ed25519 private key");
   let value = 0;
-  for (let i = 0; i < numLenBytes; i++)
-    value = (value << 8) | der[off + 1 + i]!;
+  for (let i = 0; i < numLenBytes; i++) value = value * 256 + der[off + 1 + i]!;
   return { value, numBytes: 1 + numLenBytes };
 }
 
@@ -82,6 +81,8 @@ export function extractRawKeyFromPkcs8(der: Buffer): Uint8Array {
   const seqEnd = off + seqLen;
   if (der[off++] !== 0x02 || der[off++] !== 0x01)
     throw new Error("Invalid PKCS#8 Ed25519 private key");
+  if (der[off] !== 0x00)
+    throw new Error("Unsupported PKCS#8 version: expected 0x00");
   off += 1;
   if (der[off++] !== 0x30)
     throw new Error("Invalid PKCS#8 Ed25519 private key");

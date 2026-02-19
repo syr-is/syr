@@ -83,7 +83,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			posts.push(...page.posts);
 			nextCursor = page.nextCursor;
 		} while (nextCursor);
-		const uploads = await uploadRepository.findByDid(did);
+
+		// Fetch uploads in pages to avoid unbounded memory (same pattern as posts)
+		const uploads: Awaited<ReturnType<typeof uploadRepository.findByDid>> = [];
+		let uploadNextCursor: { offset: number } | null = null;
+		do {
+			const page = await uploadRepository.findByDidPage(did, {
+				limit: 500,
+				offset: uploadNextCursor?.offset
+			});
+			uploads.push(...page.uploads);
+			uploadNextCursor = page.nextCursor;
+		} while (uploadNextCursor);
 
 		const zipFiles: Record<string, Uint8Array> = {};
 		const uploadsByUrl = new Map(uploads.map((u) => [u.url, u]));
@@ -193,7 +204,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		});
 
-		return new Response(new Blob([new Uint8Array(zipped)]), {
+		return new Response(new Blob([zipped as BlobPart]), {
 			headers: {
 				'Content-Type': 'application/zip',
 				'Content-Disposition': `attachment; filename="syr-export-${identityBundle.did.slice(8, 20)}-${Date.now()}.zip"`

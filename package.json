@@ -4,6 +4,8 @@
   "description": "SvelteKit monorepo",
   "private": true,
   "scripts": {
+    "prepare": "husky",
+    "setup-signing": "sh scripts/setup-commit-signing.sh",
     "dev": "turbo dev",
     "dev:syr": "pnpm --filter @syr-is/syr dev",
     "dev:docs": "pnpm --filter @syr-is/docs dev",
@@ -27,12 +29,12 @@
     "@syr-is/ui": "workspace:*"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "turbo": "^2.5.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@nestjs/core",
-      "@scarf/scarf",
       "@syr-is/types",
       "@tailwindcss/oxide",
       "esbuild",
@@ -43,6 +45,6 @@
     }
   },
   "engines": {
-    "node": ">=18.4.0"
+    "node": ">=20.0.0"
   }
 }

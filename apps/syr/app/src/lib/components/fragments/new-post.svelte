@@ -203,13 +203,17 @@
 
 				const result = await response.json();
 				if (result.data?.did && result.data?.local_id) {
-					draftDid = result.data.did;
-					draftLocalId = result.data.local_id;
-					draftPostId = `${draftDid}/${draftLocalId}`;
 					if (dialogOpen) {
+						draftDid = result.data.did;
+						draftLocalId = result.data.local_id;
+						draftPostId = `${draftDid}/${draftLocalId}`;
 						onDraftCreated?.();
 						return draftPostId;
 					}
+					// Dialog was closed during request - cleanup orphaned draft on server
+					fetch(`/api/posts/${result.data.did}/${result.data.local_id}`, {
+						method: 'DELETE'
+					}).catch(() => {});
 				}
 			} catch (error) {
 				console.error('Error creating draft:', error);
@@ -486,13 +490,10 @@
 		}
 	});
 
-	// Cleanup draft if dialog is closed without publishing
+	// Cleanup draft if dialog is closed without publishing (e.g. Escape, click outside)
 	$effect(() => {
 		if (!dialogOpen && draftPostId) {
-			draftPostId = null;
-			draftDid = null;
-			draftLocalId = null;
-			resetForm();
+			cancelAndDelete();
 		}
 	});
 </script>

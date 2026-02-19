@@ -60,7 +60,7 @@ Events:
 
 The SSE discriminant comes from the `event:` line and must be merged with the parsed JSON body. Clients should construct events as:
 
-```
+```typescript
 const ev = { type: eventName, ...JSON.parse(data) };
 ```
 
@@ -86,13 +86,16 @@ Response:
 ```json
 {
 	"id": "uuid",
-	"type": "delegation",
+	"request_type": "delegation",
 	"payload": { "did": "...", "delegate": "...", "scope": "device", "createdAt": "..." },
 	"payload_hash": "sha256hex",
 	"created_at": "...",
-	"expires_at": "..."
+	"expires_at": "...",
+	"status": "pending"
 }
 ```
+
+The `status` field (`"pending" | "signed" | "expired" | "cancelled"`) tells deep-link fallback consumers whether the request is terminal. The payload shape mirrors the `SigningRequest` interface and the SSE event format.
 
 ---
 
@@ -157,31 +160,83 @@ Request body:
 ```json
 {
 	"identityId": "did:syr:z6Mk...",
-	"synerImportReceipt": "...",
-	"timestamp": "ISO-8601",
-	"signature": "..."
+	"synerImportReceipt": {
+		"challenge": "server-issued-nonce",
+		"signature": "z...(multibase Ed25519 signature over challenge)"
+	},
+	"timestamp": "ISO-8601"
 }
 ```
 
 - `identityId` (required): The DID of the identity being transferred
-- `synerImportReceipt` (required): Proof that Syner successfully imported the key (e.g. signature or nonce)
+- `synerImportReceipt` (required): A defined structure containing a server-issued challenge signed by the Syner device. Plain nonces are not accepted. The receipt must include:
+  - `challenge` (required): The challenge issued by the server (e.g. during the transfer initiation flow)
+  - `signature` (required): Ed25519 signature over the challenge, produced using the Syner device's private key
 - `timestamp` (required): When the import occurred
-- `signature` (optional): Cryptographic proof binding the receipt to the identity
 
 Responses:
 
 - **200 OK**: Transfer confirmed. Identity is now marked "syner-managed".
-- **400 Bad Request**: Invalid payload, missing fields, or receipt verification failed.
+- **400 Bad Request**: Invalid payload, missing fields, receipt verification failed, or malformed receipt.
 - **401 Unauthorized**: Missing or invalid auth token.
 - **403 Forbidden**: Caller not authorized for this identity.
 - **409 Conflict**: Identity already syner-managed or transfer already confirmed (idempotency).
 
 Semantics:
 
-- The server deletes the server-side private key ONLY after `synerImportReceipt` is verified. If verification fails, the key remains and the request returns 400.
+- The server MUST verify the receipt signature using the device's `device_public_key` (from the paired device record) before marking the identity as "syner-managed" or deleting any server-side private key.
+- The server deletes the server-side private key ONLY after `synerImportReceipt` verification succeeds. If verification fails, the key remains and the request returns 400.
 - The identity is marked "syner-managed" only upon successful confirmation.
 - The operation should be idempotent: repeated confirmations for the same identity return 409 or 200 with no side effects.
 - Audit logging must record the transfer event (who, when, identity).
+
+### 1.6 Syner-First Identity Init
+
+**`POST /api/identity/init`**
+
+Registers a new identity that was created and key-managed entirely by Syner. Called by Syner when the user creates an identity in the app and pairs with a SYR instance (see sequence diagram in §4.2).
+
+Request:
+
+```json
+{
+	"did": "did:syr:z6Mk...",
+	"publicKey": "z6Mk...(multibase Ed25519)",
+	"deviceId": "uuid",
+	"deviceSignature": "z...(multibase Ed25519, optional)"
+}
+```
+
+- `did` (required): The DID derived from the Syner-managed public key
+- `publicKey` (required): Multibase-encoded Ed25519 public key
+- `deviceId` (optional): ID of the paired device making the request (for device-binding)
+- `deviceSignature` (optional): Signature over the request body using the device's private key
+
+Response (success):
+
+```json
+{
+	"id": "record_id",
+	"did": "did:syr:z6Mk...",
+	"publicKey": "z6Mk...",
+	"createdAt": "ISO-8601"
+}
+```
+
+Alternatively, a simple ACK with `identityId` may be returned.
+
+Authentication/bootstrapping: Syner authenticates pre-identity using one of: anonymous bootstrap (new user flow), one-time bootstrap token, or device-signed request (when device is already paired). Implementers must enforce at least one of these mechanisms.
+
+Error cases:
+
+| Condition                | HTTP Status | Code / Message                        |
+| ------------------------ | ----------- | ------------------------------------- |
+| Duplicate DID            | 409         | Identity with this DID already exists |
+| Invalid publicKey format | 400         | Invalid or malformed public key       |
+| Missing required fields  | 400         | did and publicKey are required        |
+| Unauthorized bootstrap   | 401         | Invalid or expired bootstrap token    |
+
+This endpoint corresponds to the `POST /api/identity/init {did, publicKey, ...}` step in the Syner-First Identity Creation sequence diagram (§4.2).
 
 ---
 
@@ -203,7 +258,7 @@ DEFINE FIELD last_active ON paired_device TYPE datetime DEFAULT time::now();
 DEFINE FIELD is_active ON paired_device TYPE bool DEFAULT true;
 
 DEFINE INDEX idx_paired_device_user ON paired_device FIELDS user_id;
-DEFINE INDEX idx_paired_device_device_token_hash ON paired_device FIELDS device_token_hash;
+DEFINE INDEX idx_paired_device_device_token_hash ON paired_device FIELDS device_token_hash UNIQUE;
 ```
 
 ### 2.2 Signing Request Table

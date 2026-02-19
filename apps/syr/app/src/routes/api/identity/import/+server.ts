@@ -110,27 +110,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	const parsed = parseDid(identity.did);
-	const pubKeyFromDid = parsed.publicKey;
-	const pubKeyFromBundle = decodePublicKey(identity.publicKey);
+	let did: string;
+	try {
+		const parsed = parseDid(identity.did);
+		const pubKeyFromDid = parsed.publicKey;
+		const pubKeyFromBundle = decodePublicKey(identity.publicKey);
 
-	const keysMatch = pubKeyFromDid.every((b, i) => b === pubKeyFromBundle[i]);
-	if (!keysMatch || pubKeyFromDid.length !== pubKeyFromBundle.length) {
+		const keysMatch = pubKeyFromDid.every((b, i) => b === pubKeyFromBundle[i]);
+		if (!keysMatch || pubKeyFromDid.length !== pubKeyFromBundle.length) {
+			throw error(400, {
+				code: 'KEY_MISMATCH',
+				message: 'Public key in bundle does not match the DID'
+			});
+		}
+
+		const existingDid = await identityRepository.findByDid(identity.did);
+		if (existingDid) {
+			throw error(409, {
+				code: 'DID_EXISTS',
+				message: 'An identity with this DID already exists on this instance'
+			});
+		}
+		did = identity.did;
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
 		throw error(400, {
-			code: 'KEY_MISMATCH',
-			message: 'Public key in bundle does not match the DID'
+			code: 'IMPORT_FAILED',
+			message: 'Failed to validate DID/public key'
 		});
 	}
-
-	const existingDid = await identityRepository.findByDid(identity.did);
-	if (existingDid) {
-		throw error(409, {
-			code: 'DID_EXISTS',
-			message: 'An identity with this DID already exists on this instance'
-		});
-	}
-
-	const did = identity.did;
 	const uploadedS3Keys: string[] = [];
 	let createdProfile: Awaited<ReturnType<typeof profileRepository.createByUserId>> = null;
 	const createdPostIds: string[] = [];
@@ -381,35 +389,44 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		console.error('Identity import error:', err);
 		// Rollback: remove DB records created during partial import (reverse order of creation)
-		try {
-			if (pinnedPostsRestored) {
+		// Each deletion wrapped in try/catch so one failure doesn't skip subsequent cleanup
+		if (pinnedPostsRestored) {
+			try {
 				await kvService.delete('pinned_posts', String(userId));
+			} catch (e) {
+				console.error('Rollback: failed to delete pinned_posts', e);
 			}
-			for (const uploadId of createdUploadIds) {
-				try {
-					await uploadRepository.delete(uploadId);
-				} catch {
-					// Best-effort per-record cleanup
-				}
+		}
+		for (const uploadId of createdUploadIds) {
+			try {
+				await uploadRepository.delete(uploadId);
+			} catch {
+				// Best-effort per-record cleanup
 			}
-			for (const postId of createdPostIds) {
-				try {
-					await postRepository.delete(postId);
-				} catch {
-					// Best-effort per-record cleanup
-				}
+		}
+		for (const postId of createdPostIds) {
+			try {
+				await postRepository.delete(postId);
+			} catch {
+				// Best-effort per-record cleanup
 			}
+		}
+		try {
 			await delegatedKeyRepository.deleteByDid(did);
-			if (createdProfile) {
-				try {
-					await profileRepository.delete(createdProfile.id);
-				} catch {
-					// Best-effort
-				}
+		} catch (e) {
+			console.error('Rollback: failed to delete delegated keys', e);
+		}
+		if (createdProfile) {
+			try {
+				await profileRepository.delete(createdProfile.id);
+			} catch {
+				// Best-effort
 			}
+		}
+		try {
 			await identityRepository.deleteByDid(did);
-		} catch (rollbackErr) {
-			console.error('Import rollback failed:', rollbackErr);
+		} catch (e) {
+			console.error('Rollback: failed to delete identity', e);
 		}
 		// Best-effort S3 cleanup
 		for (const key of uploadedS3Keys) {

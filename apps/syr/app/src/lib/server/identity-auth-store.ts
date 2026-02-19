@@ -53,7 +53,22 @@ export async function findChallengeByCode(
 	const entry = entries[0];
 	if (!entry) return null;
 
-	const challenge = entry.value as PendingChallenge;
-	const { index } = parseKvId(String(entry.id));
+	const value = entry.value;
+	if (
+		!value ||
+		typeof value !== 'object' ||
+		typeof (value as PendingChallenge).origin !== 'string' ||
+		typeof (value as PendingChallenge).callback_url !== 'string'
+	) {
+		return null;
+	}
+	const challenge = value as PendingChallenge;
+
+	let index: string;
+	try {
+		({ index } = parseKvId(String(entry.id)));
+	} catch {
+		return null;
+	}
 	return [index, challenge];
 }
