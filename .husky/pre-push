@@ -57,7 +57,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   done
 done
 
-echo "Running Docker build..."
-docker build -f docker/prod/syr.dockerfile -t syr:prepush .
+echo "Running build..."
+pnpm run build
 
 exit 0
