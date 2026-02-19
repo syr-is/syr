@@ -18,6 +18,13 @@ const KDF_IT = 3;
 const KDF_PAR = 1;
 const KEY_LEN = 32;
 
+/** Maximum Argon2 memory (KiB) to prevent DoS from malicious Sigils */
+const MAX_ARGON2_MEMORY = 262144; // 256 MiB
+/** Maximum Argon2 iterations */
+const MAX_ARGON2_ITERS = 10;
+/** Maximum Argon2 parallelism */
+const MAX_ARGON2_PARALLELISM = 4;
+
 const CHUNK_SIZE = 0x8000; // Avoid stack overflow for large inputs
 
 function base64urlEncode(bytes: Uint8Array): string {
@@ -178,13 +185,35 @@ export async function decryptSigil(
   const ct = base64urlDecode(sigil.enc.ct);
   const tag = base64urlDecode(sigil.enc.tag);
 
+  const mem = sigil.kdf.mem;
+  const it = sigil.kdf.it;
+  const par = sigil.kdf.par;
+  if (
+    typeof mem !== "number" ||
+    typeof it !== "number" ||
+    typeof par !== "number" ||
+    !Number.isInteger(mem) ||
+    !Number.isInteger(it) ||
+    !Number.isInteger(par) ||
+    mem < 1 ||
+    mem > MAX_ARGON2_MEMORY ||
+    it < 1 ||
+    it > MAX_ARGON2_ITERS ||
+    par < 1 ||
+    par > MAX_ARGON2_PARALLELISM
+  ) {
+    throw new Error(
+      `Invalid Sigil KDF parameters: mem/it/par must be positive integers within safe bounds`,
+    );
+  }
+
   const key = new Uint8Array(
     (await deriveKey(
       passphrase,
       salt,
-      sigil.kdf.mem,
-      sigil.kdf.it,
-      sigil.kdf.par,
+      mem,
+      it,
+      par,
     )) as ArrayLike<number>,
   );
   const cipher = await crypto.subtle.importKey(

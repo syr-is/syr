@@ -7,7 +7,7 @@ import { uploadRepository } from '$lib/repositories/upload.repository';
 import { s3Service } from '$lib/services/s3';
 import { s3 as s3Config } from '$lib/config';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import type { IdentityExportManifest, ExportedPost, Post } from '@syr-is/types';
+import type { IdentityExportManifest, ExportedPost, Post, Upload } from '@syr-is/types';
 import { extractLocalId } from '@syr-is/types';
 
 /**
@@ -41,7 +41,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		} while (nextCursor);
 
 		// Fetch uploads
-		const uploads: Awaited<ReturnType<typeof uploadRepository.findByDid>> = [];
+		const uploads: Upload[] = [];
 		let uploadNextCursor: { offset: number } | null = null;
 		do {
 			const page = await uploadRepository.findByDidPage(did, {

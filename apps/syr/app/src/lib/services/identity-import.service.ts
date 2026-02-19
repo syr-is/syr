@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { unzipSync, strFromU8 } from 'fflate';
-import { decodePublicKey } from '@syr-is/crypto';
+import { unzip, strFromU8 } from 'fflate';
+import { decodePublicKey, constantTimeEqual, canonicalize } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 import {
@@ -21,6 +21,7 @@ import { s3 as s3Config } from '$lib/config';
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_UNCOMPRESSED_BYTES = MAX_UPLOAD_BYTES * 10; // 1 GB — zip-bomb protection
 
 const StandaloneAssetSchema = z.object({
 	zip_path: z.string(),
@@ -64,7 +65,27 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 
 	let files: Record<string, Uint8Array>;
 	try {
-		files = unzipSync(zipBytes);
+		let totalUncompressed = 0;
+		files = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+			unzip(
+				zipBytes,
+				{
+					filter(file) {
+						const size = file.originalSize ?? 0;
+						if (totalUncompressed + size > MAX_UNCOMPRESSED_BYTES) {
+							reject(new Error('Uncompressed size exceeds limit'));
+							return false;
+						}
+						totalUncompressed += size;
+						return true;
+					}
+				},
+				(err, data) => {
+					if (err) reject(err);
+					else resolve(data);
+				}
+			);
+		});
 	} catch {
 		throw error(400, { code: 'INVALID_ZIP', message: 'Could not parse zip file' });
 	}
@@ -99,11 +120,11 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 }
 
 /**
- * Validate bundle: DID match, public key match, no duplicate DID on instance.
+ * Validate bundle: DID match, public key match, Aegis bundle match, no duplicate DID on instance.
  */
 export async function validateBundle(
 	parsed: ParsedBundle,
-	_aegisBundle: AegisBundle
+	aegisBundle: AegisBundle
 ): Promise<string> {
 	const { manifest, identity } = parsed;
 
@@ -114,13 +135,19 @@ export async function validateBundle(
 		});
 	}
 
+	if (aegisBundle.pub !== identity.publicKey) {
+		throw error(400, {
+			code: 'KEY_MISMATCH',
+			message: 'Aegis bundle public key does not match identity public key'
+		});
+	}
+
 	try {
 		const parsedDid = parseDid(identity.did);
 		const pubKeyFromDid = parsedDid.publicKey;
 		const pubKeyFromBundle = decodePublicKey(identity.publicKey);
 
-		const keysMatch = pubKeyFromDid.every((b, i) => b === pubKeyFromBundle[i]);
-		if (!keysMatch || pubKeyFromDid.length !== pubKeyFromBundle.length) {
+		if (!constantTimeEqual(pubKeyFromDid, pubKeyFromBundle)) {
 			throw error(400, {
 				code: 'KEY_MISMATCH',
 				message: 'Public key in bundle does not match the DID'
@@ -187,15 +214,25 @@ export async function importIdentityAndProfile(
 	});
 
 	for (const dk of identity.delegatedKeys) {
-		await delegatedKeyRepository.create({
+		const canonicalDelegation = canonicalize({
 			did: ctx.did,
-			public_key: dk.publicKey,
+			delegate: dk.publicKey,
 			scope: dk.scope,
-			signature: dk.signature,
-			created_at: new Date(dk.createdAt),
-			expires_at: dk.expiresAt ? new Date(dk.expiresAt) : undefined,
-			revoked_at: dk.revokedAt ? new Date(dk.revokedAt) : undefined
+			createdAt: dk.createdAt,
+			...(dk.expiresAt ? { expiresAt: dk.expiresAt } : {})
 		});
+		const created = await delegatedKeyRepository.createDelegatedKey({
+			did: ctx.did,
+			publicKey: dk.publicKey,
+			scope: dk.scope,
+			createdAt: new Date(dk.createdAt),
+			expiresAt: dk.expiresAt ? new Date(dk.expiresAt) : undefined,
+			signature: dk.signature,
+			canonicalDelegation
+		});
+		if (dk.revokedAt) {
+			await delegatedKeyRepository.revoke(created.id);
+		}
 	}
 }
 

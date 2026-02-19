@@ -127,7 +127,12 @@ export class AuthController {
 		const profile = await profileRepository.findByUserId(user.id);
 
 		// Fetch identity and include aegisBundle when identity has Aegis (for client decryption)
-		const identity = await identityController.getIdentity(user.id);
+		let identity: Awaited<ReturnType<typeof identityController.getIdentity>> = null;
+		try {
+			identity = await identityController.getIdentity(user.id);
+		} catch (err) {
+			console.debug('[auth.controller] getIdentity failed, treating identity as null:', err);
+		}
 		const aegisBundle = buildAegisBundleFromIdentity(identity ?? null);
 
 		// Create session

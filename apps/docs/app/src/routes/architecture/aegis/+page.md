@@ -123,13 +123,13 @@ user_password (UTF-8)
    )
    ```
 
-5. **Zero plaintext seed from server memory**
-
-6. **Derive public key**
+5. **Derive public key**
 
    ```text
    pub = Ed25519(seed).public
    ```
+
+6. **Zero plaintext seed from server memory**
 
 7. **Persist record**
 

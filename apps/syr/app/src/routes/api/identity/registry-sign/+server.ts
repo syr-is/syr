@@ -84,9 +84,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		canonicalPayload = canonicalize({ did, deletedAt });
 	}
 
-	const rootKey = decodePublicKey(identity.public_key);
-	const signatureBytes = decodeMultibase(signature);
-	const valid = await verify(canonicalPayload, signatureBytes, rootKey);
+	let valid: boolean;
+	try {
+		const rootKey = decodePublicKey(identity.public_key);
+		const signatureBytes = decodeMultibase(signature);
+		valid = await verify(canonicalPayload, signatureBytes, rootKey);
+	} catch {
+		throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
+	}
 	if (!valid) {
 		throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
 	}
