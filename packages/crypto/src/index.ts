@@ -2,17 +2,16 @@
  * @syr-is/crypto
  * Cryptographic primitives for the Syr identity system.
  * Ed25519 key generation, multibase encoding, signing, verification, and JCS canonicalization.
+ * Prefers WASM when initCryptoWasm() has been called (browser); falls back to TypeScript.
  */
 
+export { initCryptoWasm } from "./wasm-adapter.js";
 export {
   generateRootKeypair,
   generateDeviceKeypair,
   sign,
   verify,
   constantTimeEqual,
-} from "./keys.js";
-
-export {
   encodeMultibase,
   decodeMultibase,
   decodePublicKey,
@@ -21,14 +20,10 @@ export {
   deriveDid,
   ED25519_MULTICODEC_PREFIX,
   ED25519_PRIV_MULTICODEC_PREFIX,
-} from "./encoding.js";
-
-export { canonicalize } from "./canonical.js";
-
-export {
+  canonicalize,
   createRotationStatement,
   verifyRotationStatement,
-} from "./rotation.js";
+} from "./wasm-adapter.js";
 
 export {
   generateEd25519KeyPairWebCrypto,

@@ -454,6 +454,9 @@ importers:
       '@scure/base':
         specifier: ^1.2.4
         version: 1.2.6
+      '@syr-is/crypto-wasm':
+        specifier: workspace:*
+        version: link:../crypto-wasm
       canonicalize:
         specifier: ^2.1.0
         version: 2.1.0
@@ -485,6 +488,8 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
+
+  packages/crypto-wasm: {}
 
   packages/did:
     dependencies:

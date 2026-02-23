@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "syr-crypto-core",
+    "syr-crypto-sigil",
+    "syr-crypto-aegis",
+    "syr-did",
+    "syr-crypto-wasm",
+]

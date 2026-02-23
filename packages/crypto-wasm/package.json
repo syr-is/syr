@@ -1,0 +1,30 @@
+{
+  "name": "@syr-is/crypto-wasm",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WASM build of Syr crypto (keys, encoding, sigil, aegis, did)",
+  "main": "./dist/syr_crypto_wasm.js",
+  "types": "./dist/syr_crypto_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/syr_crypto_wasm.d.ts",
+      "import": "./dist/syr_crypto_wasm.js",
+      "default": "./dist/syr_crypto_wasm.js"
+    },
+    "./syr_crypto_wasm_bg.wasm": "./dist/syr_crypto_wasm_bg.wasm"
+  },
+  "sideEffects": [
+    "./dist/snippets/*"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "cd ../rust/syr-crypto-wasm && wasm-pack build --target web --out-dir ../../crypto-wasm/dist",
+    "prepublishOnly": "pnpm run build"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.4.0"
+  }
+}
