@@ -111,9 +111,15 @@ pub fn decrypt_aegis_bundle(bundle: &AegisBundle, password: &str) -> Result<[u8;
     let salt = engine
         .decode(&bundle.salt)
         .map_err(|_| "Aegis malformed: invalid base64 for salt")?;
+    if salt.len() < 8 {
+        return Err("Aegis malformed: salt too short".to_string());
+    }
     let nonce = engine
         .decode(&bundle.nonce)
         .map_err(|_| "Aegis malformed: invalid base64 for nonce")?;
+    if nonce.len() != 12 {
+        return Err("Aegis malformed: nonce must be 12 bytes".to_string());
+    }
     let ct = engine
         .decode(&bundle.ct)
         .map_err(|_| "Aegis malformed: invalid base64 for ct")?;

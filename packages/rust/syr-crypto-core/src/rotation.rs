@@ -80,7 +80,7 @@ pub fn verify_rotation_statement(
 
     let signature_bytes = decode_multibase(&statement.signature)?;
     if signature_bytes.len() != 64 {
-        return Ok(false);
+        return Err("Invalid signature length".to_string());
     }
     let mut sig = [0u8; 64];
     sig.copy_from_slice(&signature_bytes);

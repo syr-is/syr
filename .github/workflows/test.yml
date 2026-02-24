@@ -31,16 +31,16 @@ jobs:
         with:
           filters: |
             crypto:
-              - 'packages/crypto/**'
+              - 'packages/ts/crypto/**'
             did:
-              - 'packages/did/**'
-              - 'packages/crypto/**'
+              - 'packages/ts/did/**'
+              - 'packages/ts/crypto/**'
             resolver:
-              - 'packages/resolver/**'
-              - 'packages/crypto/**'
-              - 'packages/did/**'
+              - 'packages/ts/resolver/**'
+              - 'packages/ts/crypto/**'
+              - 'packages/ts/did/**'
             types:
-              - 'packages/types/**'
+              - 'packages/ts/types/**'
 
   test-crypto:
     name: "Test: @syr-is/crypto"

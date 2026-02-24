@@ -134,9 +134,15 @@ pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], 
     let salt = engine
         .decode(&sigil.kdf.salt)
         .map_err(|_| "Sigil malformed: invalid base64 for salt")?;
+    if salt.len() < 8 {
+        return Err("Sigil malformed: salt too short".to_string());
+    }
     let nonce = engine
         .decode(&sigil.enc.nonce)
         .map_err(|_| "Sigil malformed: invalid base64 for nonce")?;
+    if nonce.len() != 12 {
+        return Err("Sigil malformed: nonce must be 12 bytes".to_string());
+    }
     let ct = engine
         .decode(&sigil.enc.ct)
         .map_err(|_| "Sigil malformed: invalid base64 for ct")?;

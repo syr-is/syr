@@ -15,10 +15,10 @@ FROM base AS deps
 
 # Copy app and packages package.json for dependency resolution
 COPY apps/syr/app/package.json ./apps/syr/app/
-COPY packages/types/package.json ./packages/types/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/crypto/package.json ./packages/crypto/
-COPY packages/did/package.json ./packages/did/
+COPY packages/ts/types/package.json ./packages/ts/types/
+COPY packages/ts/ui/package.json ./packages/ts/ui/
+COPY packages/ts/crypto/package.json ./packages/ts/crypto/
+COPY packages/ts/did/package.json ./packages/ts/did/
 
 # Enable injection only for Docker builds (required for pnpm deploy in v10)
 RUN echo "inject-workspace-packages=true" >> .npmrc

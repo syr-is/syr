@@ -19,10 +19,10 @@ importers:
     dependencies:
       '@syr-is/types':
         specifier: workspace:*
-        version: link:packages/types
+        version: link:packages/ts/types
       '@syr-is/ui':
         specifier: workspace:*
-        version: link:packages/ui
+        version: link:packages/ts/ui
     devDependencies:
       husky:
         specifier: ^9.1.7
@@ -122,13 +122,13 @@ importers:
         version: 1.0.24
       '@syr-is/crypto':
         specifier: workspace:*
-        version: link:../../../packages/crypto
+        version: link:../../../packages/ts/crypto
       '@syr-is/did':
         specifier: workspace:*
-        version: link:../../../packages/did
+        version: link:../../../packages/ts/did
       '@syr-is/types':
         specifier: workspace:*
-        version: link:../../../packages/types
+        version: link:../../../packages/ts/types
       nestjs-zod:
         specifier: ^5.1.1
         version: 5.1.1(@nestjs/common@11.1.13(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/swagger@11.2.6(@nestjs/common@11.1.13(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.13)(class-validator@0.14.2)(reflect-metadata@0.2.2))(rxjs@7.8.2)(zod@4.3.6)
@@ -180,7 +180,7 @@ importers:
         version: 0.564.0(svelte@5.51.0)
       '@syr-is/ui':
         specifier: workspace:*
-        version: link:../../../packages/ui
+        version: link:../../../packages/ts/ui
       svelte-sonner:
         specifier: ^1.0.5
         version: 1.0.5(svelte@5.51.0)
@@ -305,16 +305,16 @@ importers:
         version: 4.4.7
       '@syr-is/crypto':
         specifier: workspace:*
-        version: link:../../../packages/crypto
+        version: link:../../../packages/ts/crypto
       '@syr-is/did':
         specifier: workspace:*
-        version: link:../../../packages/did
+        version: link:../../../packages/ts/did
       '@syr-is/types':
         specifier: workspace:*
-        version: link:../../../packages/types
+        version: link:../../../packages/ts/types
       '@syr-is/ui':
         specifier: workspace:*
-        version: link:../../../packages/ui
+        version: link:../../../packages/ts/ui
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -446,23 +446,7 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0(vite@7.3.1(@types/node@20.19.20)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2))
 
-  packages/crypto:
-    dependencies:
-      '@noble/ed25519':
-        specifier: ^2.2.3
-        version: 2.3.0
-      '@scure/base':
-        specifier: ^1.2.4
-        version: 1.2.6
-      '@syr-is/crypto-wasm':
-        specifier: workspace:*
-        version: link:../crypto-wasm
-      canonicalize:
-        specifier: ^2.1.0
-        version: 2.1.0
-      hash-wasm:
-        specifier: ^4.12.0
-        version: 4.12.0
+  packages/ts/crypto:
     devDependencies:
       '@eslint/js':
         specifier: ^9.36.0
@@ -489,9 +473,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
 
-  packages/crypto-wasm: {}
-
-  packages/did:
+  packages/ts/did:
     dependencies:
       '@syr-is/crypto':
         specifier: workspace:*
@@ -519,7 +501,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
 
-  packages/resolver:
+  packages/ts/resolver:
     dependencies:
       '@syr-is/crypto':
         specifier: workspace:*
@@ -550,7 +532,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
 
-  packages/types:
+  packages/ts/types:
     dependencies:
       surrealdb:
         specifier: ^1.3.2
@@ -584,7 +566,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
 
-  packages/ui:
+  packages/ts/ui:
     dependencies:
       bits-ui:
         specifier: ^2.15.4
@@ -2508,9 +2490,6 @@ packages:
       class-validator:
         optional: true
 
-  '@noble/ed25519@2.3.0':
-    resolution: {integrity: sha512-M7dvXL2B92/M7dw9+gzuydL8qn/jiqNHaoR3Q+cb1q1GHV7uwE17WCyFMG+Y+TZb5izcaXk5TdJRrDUxHXL78A==}
-
   '@node-rs/argon2-android-arm-eabi@2.0.2':
     resolution: {integrity: sha512-DV/H8p/jt40lrao5z5g6nM9dPNPGEHL+aK6Iy/og+dbL503Uj0AHLqj1Hk9aVUSCNnsDdUEKp4TVMi0YakDYKw==}
     engines: {node: '>= 10'}
@@ -2846,9 +2825,6 @@ packages:
 
   '@scarf/scarf@1.4.0':
     resolution: {integrity: sha512-xxeapPiUXdZAE3che6f3xogoJPeZgig6omHEy1rIY5WVsB3H2BHNnZH+gHG6x91SCWyQCzWGsuL2Hh3ClO5/qQ==}
-
-  '@scure/base@1.2.6':
-    resolution: {integrity: sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg==}
 
   '@shikijs/core@3.22.0':
     resolution: {integrity: sha512-iAlTtSDDbJiRpvgL5ugKEATDtHdUVkqgHDm/gbD2ZS9c88mx7G1zSYjjOxp5Qa0eaW0MAQosFRmJSk354PRoQA==}
@@ -4177,10 +4153,6 @@ packages:
   caniuse-lite@1.0.30001769:
     resolution: {integrity: sha512-BCfFL1sHijQlBGWBMuJyhZUhzo7wer5sVj9hqekB/7xn0Ypy+pER/edCYQm4exbXj4WiySGp40P8UuTh6w1srg==}
 
-  canonicalize@2.1.0:
-    resolution: {integrity: sha512-F705O3xrsUtgt98j7leetNhTWPe+5S72rlL5O4jA1pKqBVQ/dT1O1D6PFxmSXvc0SUOinWS57DKx0I3CHrXJHQ==}
-    hasBin: true
-
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
 
@@ -5150,9 +5122,6 @@ packages:
   has-tostringtag@1.0.2:
     resolution: {integrity: sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==}
     engines: {node: '>= 0.4'}
-
-  hash-wasm@4.12.0:
-    resolution: {integrity: sha512-+/2B2rYLb48I/evdOIhP+K/DD2ca2fgBjp6O+GBEnCDk2e4rpeXIK8GvIyRPjTezgmWn9gmKwkQjjx6BtqDHVQ==}
 
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
@@ -10369,8 +10338,6 @@ snapshots:
     optionalDependencies:
       class-validator: 0.14.2
 
-  '@noble/ed25519@2.3.0': {}
-
   '@node-rs/argon2-android-arm-eabi@2.0.2':
     optional: true
 
@@ -10627,8 +10594,6 @@ snapshots:
       zod: 4.3.6
 
   '@scarf/scarf@1.4.0': {}
-
-  '@scure/base@1.2.6': {}
 
   '@shikijs/core@3.22.0':
     dependencies:
@@ -12448,8 +12413,6 @@ snapshots:
 
   caniuse-lite@1.0.30001769: {}
 
-  canonicalize@2.1.0: {}
-
   ccount@2.0.1: {}
 
   chai@6.2.2: {}
@@ -13593,8 +13556,6 @@ snapshots:
   has-tostringtag@1.0.2:
     dependencies:
       has-symbols: 1.1.0
-
-  hash-wasm@4.12.0: {}
 
   hasown@2.0.2:
     dependencies:

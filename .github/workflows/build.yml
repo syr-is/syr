@@ -42,12 +42,12 @@ jobs:
           name: build-output
           path: |
             .turbo
-            packages/types/dist
-            packages/ui/dist
-            packages/ui/.svelte-kit
-            packages/crypto/dist
-            packages/did/dist
-            packages/resolver/dist
+            packages/ts/types/dist
+            packages/ts/ui/dist
+            packages/ts/ui/.svelte-kit
+            packages/ts/crypto/dist
+            packages/ts/did/dist
+            packages/ts/resolver/dist
             apps/syr/app/.svelte-kit
             apps/syr/app/build
             apps/docs/app/.svelte-kit

@@ -53,15 +53,22 @@ pub fn sign_payload(payload: Vec<u8>, private_key_base64: String) -> Result<Vec<
 #[tauri::command]
 pub fn verify_signature(
     payload: Vec<u8>,
-    signature: Vec<u8>,
-    public_key: Vec<u8>,
+    signature_base64: String,
+    public_key_base64: String,
 ) -> Result<bool, String> {
-    if public_key.len() != 32 {
+    let pk_raw = base64_decode(&public_key_base64)?;
+    if pk_raw.len() != 32 {
         return Err("Public key must be 32 bytes".to_string());
     }
+    let sig_raw = base64_decode(&signature_base64)?;
+    if sig_raw.len() != 64 {
+        return Err("Signature must be 64 bytes".to_string());
+    }
     let mut pk = [0u8; 32];
-    pk.copy_from_slice(&public_key);
-    Ok(verify(&payload, &signature, &pk))
+    pk.copy_from_slice(&pk_raw);
+    let mut sig = [0u8; 64];
+    sig.copy_from_slice(&sig_raw);
+    Ok(verify(&payload, &sig, &pk))
 }
 
 #[tauri::command]
@@ -105,12 +112,13 @@ pub fn decrypt_aegis_bundle_cmd(bundle_json: String, password: String) -> Result
 }
 
 #[tauri::command]
-pub fn derive_did_cmd(public_key: Vec<u8>) -> Result<String, String> {
-    if public_key.len() != 32 {
+pub fn derive_did_cmd(public_key_base64: String) -> Result<String, String> {
+    let raw = base64_decode(&public_key_base64)?;
+    if raw.len() != 32 {
         return Err("Public key must be 32 bytes".to_string());
     }
     let mut pk = [0u8; 32];
-    pk.copy_from_slice(&public_key);
+    pk.copy_from_slice(&raw);
     Ok(derive_did(&pk))
 }
 
@@ -159,10 +167,11 @@ pub fn canonicalize_cmd(obj_json: String) -> Result<String, String> {
 #[tauri::command]
 pub fn create_rotation_statement_cmd(
     did: String,
-    new_public_key: Vec<u8>,
+    new_public_key_base64: String,
     current_private_key_base64: String,
 ) -> Result<String, String> {
-    if new_public_key.len() != 32 {
+    let new_pk_raw = base64_decode(&new_public_key_base64)?;
+    if new_pk_raw.len() != 32 {
         return Err("New public key must be 32 bytes".to_string());
     }
     let priv_raw = base64_decode(&current_private_key_base64)?;
@@ -170,7 +179,7 @@ pub fn create_rotation_statement_cmd(
         return Err("Current private key must be 32 bytes".to_string());
     }
     let mut pk = [0u8; 32];
-    pk.copy_from_slice(&new_public_key);
+    pk.copy_from_slice(&new_pk_raw);
     let mut priv_k = [0u8; 32];
     priv_k.copy_from_slice(&priv_raw);
     let stmt = create_rotation_statement(&did, &pk, &priv_k)?;
@@ -180,15 +189,16 @@ pub fn create_rotation_statement_cmd(
 #[tauri::command]
 pub fn verify_rotation_statement_cmd(
     statement_json: String,
-    current_public_key: Vec<u8>,
+    current_public_key_base64: String,
 ) -> Result<bool, String> {
     let stmt: RotationStatement =
         serde_json::from_str(&statement_json).map_err(|e| e.to_string())?;
-    if current_public_key.len() != 32 {
+    let raw = base64_decode(&current_public_key_base64)?;
+    if raw.len() != 32 {
         return Err("Current public key must be 32 bytes".to_string());
     }
     let mut pk = [0u8; 32];
-    pk.copy_from_slice(&current_public_key);
+    pk.copy_from_slice(&raw);
     verify_rotation_statement(&stmt, &pk)
 }
 

@@ -37,8 +37,8 @@ jobs:
         with:
           path: |
             .turbo
-            packages/types/dist
-            packages/ui/dist
+            packages/ts/types/dist
+            packages/ts/ui/dist
           key: ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
@@ -60,12 +60,12 @@ jobs:
         with:
           path: |
             .turbo
-            packages/types/dist
-            packages/ui/dist
-            packages/crypto/dist
-            packages/did/dist
-            packages/resolver/dist
-            packages/ui/.svelte-kit
+            packages/ts/types/dist
+            packages/ts/ui/dist
+            packages/ts/crypto/dist
+            packages/ts/did/dist
+            packages/ts/resolver/dist
+            packages/ts/ui/.svelte-kit
             apps/syr/app/.svelte-kit
             apps/docs/app/.svelte-kit
             apps/registry/client/.svelte-kit

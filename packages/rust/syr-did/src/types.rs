@@ -11,6 +11,7 @@ pub struct ParsedDid {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VerificationMethod {
     pub id: String,
     #[serde(rename = "type")]
@@ -20,6 +21,7 @@ pub struct VerificationMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceEndpoint {
     pub id: String,
     #[serde(rename = "type")]
@@ -28,6 +30,7 @@ pub struct ServiceEndpoint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DidDocument {
     #[serde(rename = "@context")]
     pub context: serde_json::Value,
