@@ -57,3 +57,34 @@ pub fn parse_did(did: &str) -> Result<ParsedDid, String> {
         public_key,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syr_crypto_core::encoding::derive_did;
+    use syr_crypto_core::keys::generate_root_keypair;
+
+    #[test]
+    fn parse_valid_did() {
+        let (pub_k, _) = generate_root_keypair();
+        let did = derive_did(&pub_k);
+        let parsed = parse_did(&did).unwrap();
+        assert_eq!(parsed.method, "syr");
+        assert_eq!(parsed.public_key, pub_k);
+    }
+
+    #[test]
+    fn parse_rejects_did_web() {
+        assert!(parse_did("did:web:example.com").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_empty() {
+        assert!(parse_did("").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_invalid_format() {
+        assert!(parse_did("did:syr:abc123").is_err());
+    }
+}

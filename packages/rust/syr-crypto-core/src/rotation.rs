@@ -87,3 +87,35 @@ pub fn verify_rotation_statement(
 
     Ok(verify(payload_bytes, &sig, current_public_key))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keys::generate_root_keypair;
+
+    #[test]
+    fn create_and_verify_rotation_statement() {
+        let (old_pub, old_priv) = generate_root_keypair();
+        let (new_pub, _) = generate_root_keypair();
+        let did = crate::encoding::derive_did(&old_pub);
+
+        let stmt = create_rotation_statement(&did, &new_pub, &old_priv).unwrap();
+        assert_eq!(stmt.did, did);
+        assert!(!stmt.signature.is_empty());
+
+        let valid = verify_rotation_statement(&stmt, &old_pub).unwrap();
+        assert!(valid);
+    }
+
+    #[test]
+    fn verify_rotation_rejects_wrong_key() {
+        let (old_pub, old_priv) = generate_root_keypair();
+        let (new_pub, _) = generate_root_keypair();
+        let (wrong_pub, _) = generate_root_keypair();
+        let did = crate::encoding::derive_did(&old_pub);
+
+        let stmt = create_rotation_statement(&did, &new_pub, &old_priv).unwrap();
+        let valid = verify_rotation_statement(&stmt, &wrong_pub).unwrap();
+        assert!(!valid);
+    }
+}

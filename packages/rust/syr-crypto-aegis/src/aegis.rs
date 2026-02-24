@@ -153,3 +153,28 @@ pub fn decrypt_aegis_bundle(bundle: &AegisBundle, password: &str) -> Result<[u8;
     arr.copy_from_slice(&seed);
     Ok(arr)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::RngCore;
+
+    #[test]
+    fn create_and_decrypt_aegis_roundtrip() {
+        let mut seed = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut seed);
+        let password = "test password";
+
+        let bundle = create_aegis_bundle(&seed, password).unwrap();
+        let decrypted = decrypt_aegis_bundle(&bundle, password).unwrap();
+        assert_eq!(decrypted, seed);
+    }
+
+    #[test]
+    fn decrypt_aegis_wrong_password_fails() {
+        let mut seed = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut seed);
+        let bundle = create_aegis_bundle(&seed, "correct").unwrap();
+        assert!(decrypt_aegis_bundle(&bundle, "wrong").is_err());
+    }
+}

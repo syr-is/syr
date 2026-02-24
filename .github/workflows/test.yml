@@ -22,6 +22,7 @@ jobs:
       did: ${{ steps.filter.outputs.did }}
       resolver: ${{ steps.filter.outputs.resolver }}
       types: ${{ steps.filter.outputs.types }}
+      rust: ${{ steps.filter.outputs.rust }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,15 +33,35 @@ jobs:
           filters: |
             crypto:
               - 'packages/ts/crypto/**'
+              - 'packages/rust/**'
             did:
               - 'packages/ts/did/**'
               - 'packages/ts/crypto/**'
+              - 'packages/rust/**'
             resolver:
               - 'packages/ts/resolver/**'
               - 'packages/ts/crypto/**'
               - 'packages/ts/did/**'
+              - 'packages/rust/**'
             types:
               - 'packages/ts/types/**'
+            rust:
+              - 'packages/rust/**'
+
+  test-rust:
+    name: "Test: Rust crates"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust
+      - run: cargo test --manifest-path packages/rust/Cargo.toml --workspace
 
   test-crypto:
     name: "Test: @syr-is/crypto"
@@ -56,6 +77,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/crypto...
       - run: pnpm exec turbo test --filter=@syr-is/crypto
 
   test-did:
@@ -72,6 +94,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/did...
       - run: pnpm exec turbo test --filter=@syr-is/did
 
   test-resolver:
@@ -88,6 +111,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/resolver...
       - run: pnpm exec turbo test --filter=@syr-is/resolver
 
   test-types:

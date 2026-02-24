@@ -59,3 +59,65 @@ pub fn verify(payload: &[u8], signature: &[u8], public_key: &[u8; 32]) -> bool {
     let sig = Signature::from_bytes(&sig_bytes);
     key.verify(payload, &sig).is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_root_keypair_returns_32_byte_keys() {
+        let (pub_k, priv_k) = generate_root_keypair();
+        assert_eq!(pub_k.len(), 32);
+        assert_eq!(priv_k.len(), 32);
+    }
+
+    #[test]
+    fn generate_device_keypair_returns_32_byte_keys() {
+        let (pub_k, priv_k) = generate_device_keypair();
+        assert_eq!(pub_k.len(), 32);
+        assert_eq!(priv_k.len(), 32);
+    }
+
+    #[test]
+    fn generate_keypairs_are_unique() {
+        let (pub_a, priv_a) = generate_root_keypair();
+        let (pub_b, priv_b) = generate_root_keypair();
+        assert_ne!(pub_a, pub_b);
+        assert_ne!(priv_a, priv_b);
+    }
+
+    #[test]
+    fn sign_and_verify_roundtrip() {
+        let (pub_k, priv_k) = generate_root_keypair();
+        let payload = b"hello world";
+        let sig = sign(payload, &priv_k).unwrap();
+        assert_eq!(sig.len(), 64);
+        assert!(verify(payload, &sig, &pub_k));
+    }
+
+    #[test]
+    fn verify_rejects_tampered_payload() {
+        let (pub_k, priv_k) = generate_root_keypair();
+        let sig = sign(b"original", &priv_k).unwrap();
+        assert!(!verify(b"tampered", &sig, &pub_k));
+    }
+
+    #[test]
+    fn constant_time_equal_same() {
+        let a = [1u8; 32];
+        assert!(constant_time_equal(&a, &a));
+    }
+
+    #[test]
+    fn constant_time_equal_different() {
+        let a = [1u8; 32];
+        let mut b = [1u8; 32];
+        b[0] = 2;
+        assert!(!constant_time_equal(&a, &b));
+    }
+
+    #[test]
+    fn constant_time_equal_different_length() {
+        assert!(!constant_time_equal(&[1u8; 32], &[1u8; 16]));
+    }
+}

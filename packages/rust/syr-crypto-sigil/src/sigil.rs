@@ -204,3 +204,31 @@ pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], 
     arr.copy_from_slice(&seed);
     Ok(arr)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::RngCore;
+
+    #[test]
+    fn create_and_decrypt_sigil_roundtrip() {
+        let mut seed = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut seed);
+        let passphrase = "test passphrase";
+
+        let sigil = create_sigil(&seed, passphrase).unwrap();
+        assert_eq!(sigil.v, 1);
+        assert_eq!(sigil.kdf.name, "argon2id");
+
+        let decrypted = decrypt_sigil(&sigil, passphrase).unwrap();
+        assert_eq!(decrypted, seed);
+    }
+
+    #[test]
+    fn decrypt_sigil_wrong_passphrase_fails() {
+        let mut seed = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut seed);
+        let sigil = create_sigil(&seed, "correct").unwrap();
+        assert!(decrypt_sigil(&sigil, "wrong").is_err());
+    }
+}

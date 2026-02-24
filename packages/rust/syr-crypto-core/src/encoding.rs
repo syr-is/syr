@@ -88,3 +88,52 @@ pub fn derive_did(public_key: &[u8; 32]) -> String {
     prefixed.extend_from_slice(public_key);
     format!("did:syr:{}", encode_multibase(&prefixed))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_decode_multibase_roundtrip() {
+        let bytes: Vec<u8> = (0..32).collect();
+        let encoded = encode_multibase(&bytes);
+        assert!(encoded.starts_with('z'));
+        let decoded = decode_multibase(&encoded).unwrap();
+        assert_eq!(decoded, bytes);
+    }
+
+    #[test]
+    fn decode_multibase_rejects_empty() {
+        assert!(decode_multibase("").is_err());
+    }
+
+    #[test]
+    fn decode_multibase_rejects_wrong_prefix() {
+        assert!(decode_multibase("mbase58").is_err());
+    }
+
+    #[test]
+    fn derive_did_format() {
+        let pk: [u8; 32] = [1; 32];
+        let did = derive_did(&pk);
+        assert!(did.starts_with("did:syr:z"));
+    }
+
+    #[test]
+    fn encode_decode_private_key_roundtrip() {
+        let (_, priv_k) = crate::keys::generate_root_keypair();
+        let encoded = encode_private_key(&priv_k);
+        assert!(encoded.starts_with('z'));
+        let decoded = decode_private_key(&encoded).unwrap();
+        assert_eq!(decoded, priv_k);
+    }
+
+    #[test]
+    fn derive_did_decode_roundtrip() {
+        let (pub_k, _) = crate::keys::generate_root_keypair();
+        let did = derive_did(&pub_k);
+        let id_part = did.strip_prefix("did:syr:").unwrap();
+        let decoded = decode_public_key(id_part).unwrap();
+        assert_eq!(decoded, pub_k);
+    }
+}
