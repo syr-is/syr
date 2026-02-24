@@ -54,7 +54,7 @@
 			await invoke('update_persona_profile_cmd', {
 				personaId: persona.id,
 				displayName: displayName.trim(),
-				bio: bio.trim() || null,
+				bio: bio.trim() === '' ? '' : bio.trim(),
 				avatarUrl: null,
 				bannerUrl: null
 			});

@@ -11,12 +11,11 @@ export function toAvatarSrc(url: string | undefined): string | undefined {
 }
 
 export function getInitials(name: string): string {
-	return (
-		name
-			.split(/\s+/)
-			.map((s) => s[0])
-			.slice(0, 2)
-			.join('')
-			.toUpperCase() || '?'
-	);
+	const tokens = name.split(/\s+/).filter((s) => s.length > 0);
+	const initials = tokens
+		.map((s) => s[0])
+		.slice(0, 2)
+		.join('')
+		.toUpperCase();
+	return initials || '?';
 }

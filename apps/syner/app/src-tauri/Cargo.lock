@@ -3743,10 +3743,8 @@ dependencies = [
  "dirs 5.0.1",
  "serde",
  "serde_json",
- "syr-crypto-aegis",
  "syr-crypto-core",
  "syr-crypto-sigil",
- "syr-did",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3763,20 +3761,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "syr-crypto-aegis"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "argon2",
- "base64 0.21.7",
- "ed25519-dalek",
- "rand 0.8.5",
- "serde",
- "syr-crypto-core",
- "unicode-normalization",
 ]
 
 [[package]]
@@ -3804,17 +3788,7 @@ dependencies = [
  "serde",
  "syr-crypto-core",
  "unicode-normalization",
-]
-
-[[package]]
-name = "syr-did"
-version = "0.1.0"
-dependencies = [
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "syr-crypto-core",
+ "zeroize",
 ]
 
 [[package]]

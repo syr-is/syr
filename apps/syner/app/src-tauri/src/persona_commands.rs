@@ -1,7 +1,7 @@
 //! Tauri commands for persona (local identity) management.
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tauri::Manager;
 
 use syr_crypto_core::{
@@ -59,7 +59,7 @@ fn save_config(app: &tauri::AppHandle, config: &PersonaConfig) -> Result<(), Str
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
-fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let config = load_config(app)?;
     match config.personas_base_path {
         Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
@@ -77,6 +77,15 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     base64::engine::general_purpose::STANDARD
         .decode(s)
         .map_err(|e| e.to_string())
+}
+
+fn validate_persona_id(persona_id: &str) -> Result<(), String> {
+    for c in Path::new(persona_id).components() {
+        if !matches!(c, Component::Normal(_)) {
+            return Err("Invalid persona id: path traversal not allowed".to_string());
+        }
+    }
+    Ok(())
 }
 
 /// Derive persona id (folder name) from public key: multibase-encoded with multicodec prefix.
@@ -111,6 +120,7 @@ pub fn persona_id_from_public_key_cmd(public_key_base64: String) -> Result<Strin
 
 #[tauri::command]
 pub fn persona_exists_cmd(app: tauri::AppHandle, persona_id: String) -> Result<bool, String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let persona_dir = base.join(&persona_id);
     let profile_path = persona_dir.join("profile.json");
@@ -268,19 +278,6 @@ pub fn import_persona_from_sigil_cmd(
 }
 
 #[tauri::command]
-pub fn get_persona_cmd(app: tauri::AppHandle, persona_id: String) -> Result<Persona, String> {
-    let base = get_base_path(&app)?;
-    let persona_dir = base.join(&persona_id);
-    let profile_path = persona_dir.join("profile.json");
-    if !profile_path.exists() {
-        return Err("Persona not found".to_string());
-    }
-    let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
-    let persona: Persona = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    Ok(resolve_persona_asset_paths(&persona_dir, persona))
-}
-
-#[tauri::command]
 pub fn update_persona_profile_cmd(
     app: tauri::AppHandle,
     persona_id: String,
@@ -289,6 +286,7 @@ pub fn update_persona_profile_cmd(
     avatar_url: Option<String>,
     banner_url: Option<String>,
 ) -> Result<Persona, String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let profile_path = base.join(&persona_id).join("profile.json");
     if !profile_path.exists() {
@@ -330,6 +328,7 @@ pub fn save_persona_avatar_cmd(
     persona_id: String,
     source_path: String,
 ) -> Result<Persona, String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let persona_dir = base.join(&persona_id);
     if !persona_dir.exists() {
@@ -358,6 +357,7 @@ pub fn save_persona_banner_cmd(
     persona_id: String,
     source_path: String,
 ) -> Result<Persona, String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let persona_dir = base.join(&persona_id);
     if !persona_dir.exists() {
@@ -382,6 +382,7 @@ pub fn save_persona_banner_cmd(
 
 #[tauri::command]
 pub fn delete_persona_cmd(app: tauri::AppHandle, persona_id: String) -> Result<(), String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let persona_dir = base.join(&persona_id);
     if !persona_dir.exists() {
@@ -396,6 +397,7 @@ pub fn decrypt_persona_sigil_cmd(
     persona_id: String,
     passphrase: String,
 ) -> Result<Vec<u8>, String> {
+    validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
     let sigil_path = base.join(&persona_id).join("identity.sigil");
     if !sigil_path.exists() {
@@ -404,5 +406,5 @@ pub fn decrypt_persona_sigil_cmd(
     let content = std::fs::read_to_string(&sigil_path).map_err(|e| e.to_string())?;
     let obj: SigilObject = serde_json::from_str(&content).map_err(|e| e.to_string())?;
     let seed = decrypt_sigil(&obj, &passphrase)?;
-    Ok(seed.to_vec())
+    Ok(seed.as_ref().to_vec())
 }

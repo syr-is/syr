@@ -180,7 +180,7 @@ pub fn decrypt_sigil_wasm(sigil_json: &str, passphrase: &str) -> Result<Vec<u8>,
     let obj: SigilObject = serde_json::from_str(sigil_json)
         .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
     decrypt_sigil(&obj, passphrase)
-        .map(|arr| arr.to_vec())
+        .map(|arr| arr.as_ref().to_vec())
         .map_err(|e| JsValue::from_str(&e))
 }
 

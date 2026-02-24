@@ -1,7 +1,7 @@
 [package]
 name = "syner"
 version = "0.1.0"
-description = "Syr Persona Manger"
+description = "Syr Persona Manager"
 authors = ["SoSweetHam <sosweetham@gmail.com>"]
 edition = "2021"
 
@@ -24,8 +24,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 syr-crypto-core = { path = "../../../../packages/rust/syr-crypto-core" }
 syr-crypto-sigil = { path = "../../../../packages/rust/syr-crypto-sigil" }
-syr-crypto-aegis = { path = "../../../../packages/rust/syr-crypto-aegis" }
-syr-did = { path = "../../../../packages/rust/syr-did" }
 base64 = "0.21"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"

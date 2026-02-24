@@ -7,6 +7,7 @@ use ed25519_dalek::SigningKey;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
+use zeroize::Zeroizing;
 
 use syr_crypto_core::encoding::{encode_multibase, ED25519_MULTICODEC_PREFIX};
 
@@ -59,8 +60,8 @@ fn derive_key(
     mem: u32,
     it: u32,
     par: u32,
-) -> Result<[u8; KEY_LEN], String> {
-    let pw: String = passphrase.nfkc().collect();
+) -> Result<Zeroizing<[u8; KEY_LEN]>, String> {
+    let pw = Zeroizing::new(passphrase.nfkc().collect::<String>());
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::V0x13,
@@ -70,7 +71,7 @@ fn derive_key(
     argon2
         .hash_password_into(pw.as_bytes(), salt, &mut key)
         .map_err(|e| e.to_string())?;
-    Ok(key)
+    Ok(Zeroizing::new(key))
 }
 
 /// Create a Sigil from a 32-byte seed and passphrase.
@@ -81,6 +82,7 @@ pub fn create_sigil(seed: &[u8; 32], passphrase: &str) -> Result<SigilObject, St
     rand::rngs::OsRng.fill_bytes(&mut nonce);
 
     let key = derive_key(passphrase, &salt, KDF_MEM_KIB, KDF_IT, KDF_PAR)?;
+    let cipher = Aes256Gcm::new_from_slice(key.as_ref()).map_err(|e| e.to_string())?;
     let signing_key = SigningKey::from_bytes(seed);
     let vk = signing_key.verifying_key();
     let pub_key_bytes = vk.as_bytes();
@@ -90,7 +92,6 @@ pub fn create_sigil(seed: &[u8; 32], passphrase: &str) -> Result<SigilObject, St
     prefixed.extend_from_slice(pub_key_bytes);
     let pub_encoded = encode_multibase(&prefixed);
 
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
     let payload = aes_gcm::aead::Payload {
         msg: seed.as_ref(),
         aad: AAD,
@@ -127,8 +128,8 @@ pub fn create_sigil(seed: &[u8; 32], passphrase: &str) -> Result<SigilObject, St
     })
 }
 
-/// Decrypt a Sigil with the passphrase, returning the 32-byte seed.
-pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], String> {
+/// Decrypt a Sigil with the passphrase, returning the 32-byte seed (zeroized on drop).
+pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<Zeroizing<[u8; 32]>, String> {
     if sigil.v != 1 {
         return Err(format!("Unsupported Sigil version: {}", sigil.v));
     }
@@ -170,7 +171,7 @@ pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], 
     }
 
     let key = derive_key(passphrase, &salt, mem, it, par)?;
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let cipher = Aes256Gcm::new_from_slice(key.as_ref()).map_err(|e| e.to_string())?;
 
     let mut ct_with_tag = ct;
     ct_with_tag.extend_from_slice(&tag);
@@ -205,7 +206,7 @@ pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], 
 
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&seed);
-    Ok(arr)
+    Ok(Zeroizing::new(arr))
 }
 
 #[cfg(test)]
@@ -224,7 +225,7 @@ mod tests {
         assert_eq!(sigil.kdf.name, "argon2id");
 
         let decrypted = decrypt_sigil(&sigil, passphrase).unwrap();
-        assert_eq!(decrypted, seed);
+        assert_eq!(decrypted.as_ref(), &seed);
     }
 
     #[test]

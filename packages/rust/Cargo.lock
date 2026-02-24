@@ -714,6 +714,7 @@ dependencies = [
  "serde",
  "syr-crypto-core",
  "unicode-normalization",
+ "zeroize",
 ]
 
 [[package]]

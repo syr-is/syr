@@ -20,6 +20,7 @@
 		{@const Icon = item.icon}
 		<a
 			href={item.href}
+			aria-current={currentPath === item.href ? 'page' : undefined}
 			class="hover:bg-accent hover:text-accent-foreground flex flex-col items-center gap-1 rounded-md px-4 py-2 text-xs transition-colors {currentPath ===
 			item.href
 				? 'text-primary'

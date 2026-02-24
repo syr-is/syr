@@ -108,8 +108,11 @@
 					payloadStr = await invoke<string>('canonicalize_cmd', {
 						objJson: JSON.stringify(parsed)
 					});
-				} catch {
-					// Not valid JSON, use as-is
+				} catch (parseErr) {
+					error = parseErr instanceof Error ? parseErr.message : 'Invalid JSON';
+					toast.error(error);
+					loading = false;
+					return;
 				}
 			}
 			const payloadBytes = Array.from(new TextEncoder().encode(payloadStr));
