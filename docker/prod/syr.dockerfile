@@ -29,6 +29,12 @@ RUN pnpm install
 # ---- Builder Stage ----
 FROM deps AS builder
 
+# Install wasm-pack for building @syr-is/crypto (Rust WASM)
+# Use Alpine edge community repo for pre-built wasm-pack (faster than cargo install)
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache wasm-pack
+
 COPY apps/syr ./apps/syr
 COPY packages ./packages
 
