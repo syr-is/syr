@@ -1,5 +1,8 @@
 name: Code Quality
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -55,7 +58,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/rust
-      - run: pnpm cargo:format:check
+      - run: sh scripts/cargo-format-check.sh
 
   rust-clippy:
     name: Rust Clippy
@@ -70,7 +73,7 @@ jobs:
           workspaces: |
             packages/rust
             apps/syner/app/src-tauri
-      - run: pnpm cargo:clippy
+      - run: sh scripts/cargo-clippy.sh
 
   typecheck:
     name: Type Check
