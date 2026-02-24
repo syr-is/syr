@@ -11,10 +11,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 
 # Copy app and packages package.json for dependency resolution
 COPY apps/syr/app/package.json ./apps/syr/app/
-COPY packages/types/package.json ./packages/types/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/crypto/package.json ./packages/crypto/
-COPY packages/did/package.json ./packages/did/
+COPY packages/ts/types/package.json ./packages/ts/types/
+COPY packages/ts/ui/package.json ./packages/ts/ui/
+COPY packages/ts/crypto/package.json ./packages/ts/crypto/
+COPY packages/ts/did/package.json ./packages/ts/did/
 
 # Install dependencies from workspace root
 RUN pnpm install --frozen-lockfile

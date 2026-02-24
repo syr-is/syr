@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_EXTENDS$", "packages/rust/**"]
+    },
+    "test": {
+      "inputs": ["$TURBO_EXTENDS$", "packages/rust/**"]
+    }
+  }
+}

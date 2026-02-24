@@ -22,6 +22,7 @@ jobs:
       did: ${{ steps.filter.outputs.did }}
       resolver: ${{ steps.filter.outputs.resolver }}
       types: ${{ steps.filter.outputs.types }}
+      rust: ${{ steps.filter.outputs.rust }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,20 +32,59 @@ jobs:
         with:
           filters: |
             crypto:
-              - 'packages/crypto/**'
+              - 'packages/ts/crypto/**'
+              - 'packages/rust/**'
             did:
-              - 'packages/did/**'
-              - 'packages/crypto/**'
+              - 'packages/ts/did/**'
+              - 'packages/ts/crypto/**'
+              - 'packages/rust/**'
             resolver:
-              - 'packages/resolver/**'
-              - 'packages/crypto/**'
-              - 'packages/did/**'
+              - 'packages/ts/resolver/**'
+              - 'packages/ts/crypto/**'
+              - 'packages/ts/did/**'
+              - 'packages/rust/**'
             types:
-              - 'packages/types/**'
+              - 'packages/ts/types/**'
+            rust:
+              - 'packages/rust/**'
+
+  test-rust:
+    name: "Test: Rust crates"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust
+      - run: cargo test --manifest-path packages/rust/Cargo.toml --workspace
+
+  build-wasm:
+    name: "Build: Rust WASM (crypto)"
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.crypto == 'true' ||
+      needs.detect-changes.outputs.did == 'true' ||
+      needs.detect-changes.outputs.resolver == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/crypto...
 
   test-crypto:
     name: "Test: @syr-is/crypto"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.crypto == 'true'
     runs-on: ubuntu-latest
     env:
@@ -56,11 +96,12 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/crypto...
       - run: pnpm exec turbo test --filter=@syr-is/crypto
 
   test-did:
     name: "Test: @syr-is/did"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.did == 'true'
     runs-on: ubuntu-latest
     env:
@@ -72,11 +113,12 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/did...
       - run: pnpm exec turbo test --filter=@syr-is/did
 
   test-resolver:
     name: "Test: @syr-is/resolver"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.resolver == 'true'
     runs-on: ubuntu-latest
     env:
@@ -88,6 +130,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/resolver...
       - run: pnpm exec turbo test --filter=@syr-is/resolver
 
   test-types:

@@ -4,9 +4,13 @@
 	import { SidebarProvider, SidebarTrigger, SidebarInset } from '@syr-is/ui/sidebar';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { initCryptoWasm } from '@syr-is/crypto';
 	import '../app.css';
 
 	let { children, data } = $props();
+
+	// Initialize WASM crypto early (browser only; falls back to TS if unavailable)
+	initCryptoWasm();
 
 	let open = $state(true);
 
