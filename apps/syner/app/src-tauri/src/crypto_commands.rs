@@ -2,18 +2,21 @@
 
 use serde::{Deserialize, Serialize};
 
+use syr_crypto_aegis::{create_aegis_bundle, decrypt_aegis_bundle, AegisBundle};
 use syr_crypto_core::{
+    canonical::canonicalize,
     encoding::{
         decode_multibase, decode_private_key, decode_public_key, derive_did, encode_multibase,
         encode_private_key,
     },
-    keys::{generate_device_keypair, generate_root_keypair, sign, verify, constant_time_equal},
-    canonical::canonicalize,
+    keys::{
+        constant_time_equal, derive_public_key_from_seed, generate_device_keypair,
+        generate_root_keypair, sign, verify,
+    },
     rotation::{create_rotation_statement, verify_rotation_statement, RotationStatement},
 };
 use syr_crypto_sigil::{create_sigil, decrypt_sigil, SigilObject};
-use syr_crypto_aegis::{create_aegis_bundle, decrypt_aegis_bundle, AegisBundle};
-use syr_did::{parse_did, build_did_document, is_valid_syr_did, BuildDidDocumentInput};
+use syr_did::{build_did_document, is_valid_syr_did, parse_did, BuildDidDocumentInput};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeypairResult {
@@ -85,8 +88,7 @@ pub fn create_sigil_cmd(seed_base64: String, passphrase: String) -> Result<Strin
 
 #[tauri::command]
 pub fn decrypt_sigil_cmd(sigil_json: String, passphrase: String) -> Result<Vec<u8>, String> {
-    let obj: SigilObject =
-        serde_json::from_str(&sigil_json).map_err(|e| e.to_string())?;
+    let obj: SigilObject = serde_json::from_str(&sigil_json).map_err(|e| e.to_string())?;
     let seed = decrypt_sigil(&obj, &passphrase)?;
     Ok(seed.to_vec())
 }
@@ -105,10 +107,20 @@ pub fn create_aegis_bundle_cmd(seed_base64: String, password: String) -> Result<
 
 #[tauri::command]
 pub fn decrypt_aegis_bundle_cmd(bundle_json: String, password: String) -> Result<Vec<u8>, String> {
-    let bundle: AegisBundle =
-        serde_json::from_str(&bundle_json).map_err(|e| e.to_string())?;
+    let bundle: AegisBundle = serde_json::from_str(&bundle_json).map_err(|e| e.to_string())?;
     let seed = decrypt_aegis_bundle(&bundle, &password)?;
     Ok(seed.to_vec())
+}
+
+#[tauri::command]
+pub fn derive_public_key_from_seed_cmd(seed_base64: String) -> Result<Vec<u8>, String> {
+    let raw = base64_decode(&seed_base64)?;
+    if raw.len() != 32 {
+        return Err("Seed must be 32 bytes".to_string());
+    }
+    let mut s = [0u8; 32];
+    s.copy_from_slice(&raw);
+    Ok(derive_public_key_from_seed(&s).to_vec())
 }
 
 #[tauri::command]
@@ -154,8 +166,7 @@ pub fn is_valid_syr_did_cmd(did: String) -> bool {
 
 #[tauri::command]
 pub fn canonicalize_cmd(obj_json: String) -> Result<String, String> {
-    let obj: serde_json::Value =
-        serde_json::from_str(&obj_json).map_err(|e| e.to_string())?;
+    let obj: serde_json::Value = serde_json::from_str(&obj_json).map_err(|e| e.to_string())?;
     let map = obj.as_object().ok_or("Expected JSON object")?;
     let mut rust_map = serde_json::Map::new();
     for (k, v) in map {
@@ -235,6 +246,12 @@ pub fn encode_private_key_cmd(raw: Vec<u8>) -> Result<String, String> {
 #[tauri::command]
 pub fn constant_time_equal_cmd(a: Vec<u8>, b: Vec<u8>) -> bool {
     constant_time_equal(&a, &b)
+}
+
+/// Reads file content at the given path. Used for sigil import when user selects a file via dialog.
+#[tauri::command]
+pub fn read_file_content_cmd(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 fn base64_decode(s: &str) -> Result<Vec<u8>, String> {

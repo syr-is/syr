@@ -36,6 +36,13 @@ fn generate_keypair() -> ([u8; 32], [u8; 32]) {
     )
 }
 
+/// Derive the public key from a 32-byte seed (Ed25519 private key).
+/// Used when recovering from Sigil: decrypt yields the seed, this gives the public key for DID.
+pub fn derive_public_key_from_seed(seed: &[u8; 32]) -> [u8; 32] {
+    let signing_key = SigningKey::from_bytes(seed);
+    signing_key.verifying_key().to_bytes()
+}
+
 /// Sign a payload with an Ed25519 private key.
 pub fn sign(payload: &[u8], private_key: &[u8; 32]) -> Result<[u8; 64], String> {
     let signing_key = SigningKey::from_bytes(private_key);
