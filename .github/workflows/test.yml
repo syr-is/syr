@@ -63,9 +63,28 @@ jobs:
           workspaces: packages/rust
       - run: cargo test --manifest-path packages/rust/Cargo.toml --workspace
 
+  build-wasm:
+    name: "Build: Rust WASM (crypto)"
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.crypto == 'true' ||
+      needs.detect-changes.outputs.did == 'true' ||
+      needs.detect-changes.outputs.resolver == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm exec turbo build --filter=@syr-is/crypto...
+
   test-crypto:
     name: "Test: @syr-is/crypto"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.crypto == 'true'
     runs-on: ubuntu-latest
     env:
@@ -82,7 +101,7 @@ jobs:
 
   test-did:
     name: "Test: @syr-is/did"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.did == 'true'
     runs-on: ubuntu-latest
     env:
@@ -99,7 +118,7 @@ jobs:
 
   test-resolver:
     name: "Test: @syr-is/resolver"
-    needs: detect-changes
+    needs: [detect-changes, build-wasm]
     if: needs.detect-changes.outputs.resolver == 'true'
     runs-on: ubuntu-latest
     env:
