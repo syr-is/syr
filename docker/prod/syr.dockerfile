@@ -45,6 +45,11 @@ RUN pnpm --filter @syr-is/crypto build
 RUN pnpm --filter @syr-is/did build
 RUN pnpm --filter @syr-is/ui build
 
+# Remove wasm-pack and build tools (no longer needed after WASM build)
+RUN apk del wasm-pack \
+    && sed -i '/alpine\/edge\/community/d' /etc/apk/repositories \
+    && rm -rf /var/cache/apk/*
+
 # Re-inject now that all dist/ folders exist
 # node_modules/@syr-is/ui/dist will now contain the built files
 RUN pnpm install
