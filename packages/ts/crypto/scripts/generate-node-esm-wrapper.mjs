@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, "..");
-const outPath = join(pkgRoot, "dist/wasm/node/syr_crypto_wasm_esm.js");
+const outPath = join(pkgRoot, "dist/wasm/node/syr_crypto_wasm_esm.mjs");
 
 const EXPORTS = [
   "build_did_document_wasm",

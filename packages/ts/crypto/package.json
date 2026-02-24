@@ -22,7 +22,7 @@
     },
     "./wasm": {
       "types": "./dist/wasm/web/syr_crypto_wasm.d.ts",
-      "node": "./dist/wasm/node/syr_crypto_wasm_esm.js",
+      "node": "./dist/wasm/node/syr_crypto_wasm_esm.mjs",
       "import": "./dist/wasm/web/syr_crypto_wasm.js",
       "default": "./dist/wasm/web/syr_crypto_wasm.js"
     }
