@@ -22,7 +22,7 @@
     },
     "./wasm": {
       "types": "./dist/wasm/web/syr_crypto_wasm.d.ts",
-      "node": "./dist/wasm/node/syr_crypto_wasm.js",
+      "node": "./dist/wasm/node/syr_crypto_wasm_esm.js",
       "import": "./dist/wasm/web/syr_crypto_wasm.js",
       "default": "./dist/wasm/web/syr_crypto_wasm.js"
     }
@@ -33,9 +33,10 @@
   "sideEffects": false,
   "scripts": {
     "build": "pnpm run build:wasm && tsc",
-    "build:wasm": "pnpm run build:wasm:web && pnpm run build:wasm:node",
+    "build:wasm": "pnpm run build:wasm:web && pnpm run build:wasm:node && pnpm run build:wasm:node:esm",
     "build:wasm:web": "cd ../../rust/syr-crypto-wasm && wasm-pack build --target web --out-dir ../../ts/crypto/dist/wasm/web",
     "build:wasm:node": "cd ../../rust/syr-crypto-wasm && wasm-pack build --target nodejs --out-dir ../../ts/crypto/dist/wasm/node",
+    "build:wasm:node:esm": "node scripts/generate-node-esm-wrapper.mjs",
     "dev": "tsc --watch --preserveWatchOutput",
     "check": "tsc --noEmit",
     "test": "vitest run",
@@ -49,6 +50,7 @@
     "@types/node": "^22.10.0",
     "@eslint/js": "^9.36.0",
     "eslint": "^9.36.0",
+    "espree": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",

@@ -460,6 +460,9 @@ importers:
       eslint-config-prettier:
         specifier: ^10.1.8
         version: 10.1.8(eslint@9.37.0(jiti@2.6.1))
+      espree:
+        specifier: ^10.4.0
+        version: 10.4.0
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
