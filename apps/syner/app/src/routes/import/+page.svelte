@@ -20,9 +20,12 @@
 	let passphrase = $state('');
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let result = $state<{ did: string; publicKeyBase64: string; seedBase64: string; sigilJson: string } | null>(
-		null
-	);
+	let result = $state<{
+		did: string;
+		publicKeyBase64: string;
+		seedBase64: string;
+		sigilJson: string;
+	} | null>(null);
 	let passphraseForSave = $state('');
 	let saveAsPersona = $state(false);
 	let saveDisplayName = $state('');
@@ -130,8 +133,8 @@
 		</CardHeader>
 		<CardContent class="flex flex-col gap-4">
 			{#if result}
-				<div class="rounded-lg border border-border bg-muted/50 p-4 space-y-4">
-					<p class="text-sm font-medium text-muted-foreground">Identity imported successfully</p>
+				<div class="border-border bg-muted/50 space-y-4 rounded-lg border p-4">
+					<p class="text-muted-foreground text-sm font-medium">Identity imported successfully</p>
 					<p class="font-mono text-sm break-all">{result.did}</p>
 					{#if saveAsPersona}
 						<div class="space-y-2">
@@ -184,7 +187,7 @@
 								</div>
 							</div>
 							{#if saveError}
-								<p class="text-sm text-destructive">{saveError}</p>
+								<p class="text-destructive text-sm">{saveError}</p>
 							{/if}
 							<div class="flex gap-2">
 								<Button
@@ -215,12 +218,15 @@
 													return;
 												}
 											}
-											const persona = await invoke<{ id: string }>('import_persona_from_sigil_cmd', {
-												sigilJson: result!.sigilJson,
-												passphrase: passphraseForSave,
-												displayName: saveDisplayName.trim(),
-												bio: saveBio.trim() || null
-											});
+											const persona = await invoke<{ id: string }>(
+												'import_persona_from_sigil_cmd',
+												{
+													sigilJson: result!.sigilJson,
+													passphrase: passphraseForSave,
+													displayName: saveDisplayName.trim(),
+													bio: saveBio.trim() || null
+												}
+											);
 											if (saveAvatarPath) {
 												await invoke('save_persona_avatar_cmd', {
 													personaId: persona.id,
@@ -250,7 +256,11 @@
 								>
 									{saveLoading ? 'Saving…' : 'Save as persona'}
 								</Button>
-								<Button variant="outline" onclick={() => (saveAsPersona = false)} disabled={saveLoading}>
+								<Button
+									variant="outline"
+									onclick={() => (saveAsPersona = false)}
+									disabled={saveLoading}
+								>
 									Cancel
 								</Button>
 							</div>
@@ -311,7 +321,7 @@
 				</div>
 
 				{#if error}
-					<p class="text-sm text-destructive">{error}</p>
+					<p class="text-destructive text-sm">{error}</p>
 				{/if}
 			{/if}
 		</CardContent>

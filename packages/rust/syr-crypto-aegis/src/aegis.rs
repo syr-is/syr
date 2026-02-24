@@ -41,13 +41,16 @@ pub struct AegisBundle {
     pub kdf: AegisKdfParams,
 }
 
-fn derive_key(password: &str, salt: &[u8], params: &AegisKdfParams) -> Result<[u8; KEY_LEN], String> {
+fn derive_key(
+    password: &str,
+    salt: &[u8],
+    params: &AegisKdfParams,
+) -> Result<[u8; KEY_LEN], String> {
     let pw: String = password.nfkc().collect();
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::V0x13,
-        argon2::Params::new(params.mem, params.it, params.par, None)
-            .map_err(|e| e.to_string())?,
+        argon2::Params::new(params.mem, params.it, params.par, None).map_err(|e| e.to_string())?,
     );
     let mut key = [0u8; KEY_LEN];
     argon2

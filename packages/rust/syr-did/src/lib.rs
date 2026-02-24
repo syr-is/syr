@@ -1,11 +1,11 @@
 //! did:syr parse, document, validate.
 
-pub mod parse;
 pub mod document;
-pub mod validate;
+pub mod parse;
 pub mod types;
+pub mod validate;
 
-pub use parse::parse_did;
 pub use document::{build_did_document, BuildDidDocumentInput};
+pub use parse::parse_did;
+pub use types::{DidDocument, ParsedDid, ServiceEndpoint, VerificationMethod};
 pub use validate::is_valid_syr_did;
-pub use types::{ParsedDid, VerificationMethod, ServiceEndpoint, DidDocument};

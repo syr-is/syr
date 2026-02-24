@@ -1,11 +1,7 @@
 <script lang="ts">
 	import { Toaster } from '@syr-is/ui/sonner';
 	import { ModeWatcher } from 'mode-watcher';
-	import {
-		SidebarProvider,
-		SidebarTrigger,
-		SidebarInset
-	} from '@syr-is/ui/sidebar';
+	import { SidebarProvider, SidebarTrigger, SidebarInset } from '@syr-is/ui/sidebar';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import BottomBar from '$lib/components/bottom-bar.svelte';
 	import { IsMobile } from '@syr-is/ui/sidebar';

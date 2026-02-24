@@ -36,10 +36,7 @@ fn default_personas_path() -> Result<PathBuf, String> {
 }
 
 fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let app_data = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
     Ok(app_data.join(CONFIG_FILENAME))
 }
@@ -130,7 +127,7 @@ fn extension_from_path(path: &Path) -> String {
         .unwrap_or_else(|| "png".to_string())
 }
 
-fn resolve_relative_asset(persona_dir: &PathBuf, url: Option<&String>) -> Option<String> {
+fn resolve_relative_asset(persona_dir: &Path, url: Option<&String>) -> Option<String> {
     let url = url?;
     let path = url.strip_prefix("./").or_else(|| url.strip_prefix(".\\"))?;
     let full = persona_dir.join(path);
@@ -141,7 +138,7 @@ fn resolve_relative_asset(persona_dir: &PathBuf, url: Option<&String>) -> Option
     }
 }
 
-fn find_legacy_asset(persona_dir: &PathBuf, prefix: &str) -> Option<String> {
+fn find_legacy_asset(persona_dir: &Path, prefix: &str) -> Option<String> {
     for ext in IMAGE_EXTENSIONS {
         let p = persona_dir.join(format!("{}.{}", prefix, ext));
         if p.exists() {
@@ -151,7 +148,7 @@ fn find_legacy_asset(persona_dir: &PathBuf, prefix: &str) -> Option<String> {
     None
 }
 
-fn resolve_persona_asset_paths(persona_dir: &PathBuf, mut persona: Persona) -> Persona {
+fn resolve_persona_asset_paths(persona_dir: &Path, mut persona: Persona) -> Persona {
     persona.avatar_url = resolve_relative_asset(persona_dir, persona.avatar_url.as_ref())
         .or_else(|| find_legacy_asset(persona_dir, "avatar"));
     persona.banner_url = resolve_relative_asset(persona_dir, persona.banner_url.as_ref())
@@ -260,9 +257,12 @@ pub fn import_persona_from_sigil_cmd(
         remove_asset_files(&persona_dir, "banner");
     }
 
-    std::fs::write(&persona_dir.join("profile.json"), serde_json::to_string(&persona).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
-    std::fs::write(&persona_dir.join("identity.sigil"), &sigil_json).map_err(|e| e.to_string())?;
+    std::fs::write(
+        persona_dir.join("profile.json"),
+        serde_json::to_string(&persona).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::write(persona_dir.join("identity.sigil"), &sigil_json).map_err(|e| e.to_string())?;
 
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }
@@ -317,7 +317,7 @@ pub fn update_persona_profile_cmd(
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }
 
-fn remove_asset_files(persona_dir: &PathBuf, prefix: &str) {
+fn remove_asset_files(persona_dir: &Path, prefix: &str) {
     for ext in IMAGE_EXTENSIONS {
         let p = persona_dir.join(format!("{}.{}", prefix, ext));
         let _ = std::fs::remove_file(&p);

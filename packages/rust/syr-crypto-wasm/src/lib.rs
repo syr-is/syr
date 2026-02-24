@@ -2,18 +2,18 @@
 
 use wasm_bindgen::prelude::*;
 
+use syr_crypto_aegis::{create_aegis_bundle, decrypt_aegis_bundle, AegisBundle};
 use syr_crypto_core::{
+    canonical::canonicalize,
     encoding::{
         decode_multibase, decode_private_key, decode_public_key, derive_did, encode_multibase,
         encode_private_key, ED25519_MULTICODEC_PREFIX, ED25519_PRIV_MULTICODEC_PREFIX,
     },
     keys::{constant_time_equal, generate_device_keypair, generate_root_keypair, sign, verify},
-    canonical::canonicalize,
     rotation::{create_rotation_statement, verify_rotation_statement, RotationStatement},
 };
 use syr_crypto_sigil::{create_sigil, decrypt_sigil, SigilObject};
-use syr_crypto_aegis::{create_aegis_bundle, decrypt_aegis_bundle, AegisBundle};
-use syr_did::{parse_did, build_did_document, is_valid_syr_did, BuildDidDocumentInput};
+use syr_did::{build_did_document, is_valid_syr_did, parse_did, BuildDidDocumentInput};
 
 // ---- Keys ----
 
@@ -121,8 +121,8 @@ pub fn ed25519_priv_multicodec_prefix_wasm() -> Vec<u8> {
 
 #[wasm_bindgen]
 pub fn canonicalize_wasm(obj_json: &str) -> Result<String, JsValue> {
-    let obj: serde_json::Value =
-        serde_json::from_str(obj_json).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
+    let obj: serde_json::Value = serde_json::from_str(obj_json)
+        .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
     let map = obj
         .as_object()
         .ok_or_else(|| JsValue::from_str("Expected JSON object"))?;
@@ -147,8 +147,7 @@ pub fn create_rotation_statement_wasm(
     let priv_k: [u8; 32] = current_private_key
         .try_into()
         .map_err(|_| JsValue::from_str("Current private key must be 32 bytes"))?;
-    let stmt = create_rotation_statement(did, &pk, &priv_k)
-        .map_err(|e| JsValue::from_str(&e))?;
+    let stmt = create_rotation_statement(did, &pk, &priv_k).map_err(|e| JsValue::from_str(&e))?;
     serde_json::to_string(&stmt).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))
 }
 
@@ -157,8 +156,8 @@ pub fn verify_rotation_statement_wasm(
     statement_json: &str,
     current_public_key: &[u8],
 ) -> Result<bool, JsValue> {
-    let stmt: RotationStatement =
-        serde_json::from_str(statement_json).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
+    let stmt: RotationStatement = serde_json::from_str(statement_json)
+        .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
     let pk: [u8; 32] = current_public_key
         .try_into()
         .map_err(|_| JsValue::from_str("Current public key must be 32 bytes"))?;
@@ -178,8 +177,8 @@ pub fn create_sigil_wasm(seed: &[u8], passphrase: &str) -> Result<String, JsValu
 
 #[wasm_bindgen]
 pub fn decrypt_sigil_wasm(sigil_json: &str, passphrase: &str) -> Result<Vec<u8>, JsValue> {
-    let obj: SigilObject =
-        serde_json::from_str(sigil_json).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
+    let obj: SigilObject = serde_json::from_str(sigil_json)
+        .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
     decrypt_sigil(&obj, passphrase)
         .map(|arr| arr.to_vec())
         .map_err(|e| JsValue::from_str(&e))
@@ -198,8 +197,8 @@ pub fn create_aegis_bundle_wasm(seed: &[u8], password: &str) -> Result<String, J
 
 #[wasm_bindgen]
 pub fn decrypt_aegis_bundle_wasm(bundle_json: &str, password: &str) -> Result<Vec<u8>, JsValue> {
-    let bundle: AegisBundle =
-        serde_json::from_str(bundle_json).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
+    let bundle: AegisBundle = serde_json::from_str(bundle_json)
+        .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
     decrypt_aegis_bundle(&bundle, password)
         .map(|arr| arr.to_vec())
         .map_err(|e| JsValue::from_str(&e))

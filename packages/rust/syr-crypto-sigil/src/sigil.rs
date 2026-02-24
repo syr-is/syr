@@ -5,8 +5,8 @@ use argon2::Argon2;
 use base64::Engine;
 use ed25519_dalek::SigningKey;
 use rand::RngCore;
-use unicode_normalization::UnicodeNormalization;
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 use syr_crypto_core::encoding::{encode_multibase, ED25519_MULTICODEC_PREFIX};
 
@@ -53,7 +53,13 @@ pub struct SigilObject {
     pub pub_key: String,
 }
 
-fn derive_key(passphrase: &str, salt: &[u8], mem: u32, it: u32, par: u32) -> Result<[u8; KEY_LEN], String> {
+fn derive_key(
+    passphrase: &str,
+    salt: &[u8],
+    mem: u32,
+    it: u32,
+    par: u32,
+) -> Result<[u8; KEY_LEN], String> {
     let pw: String = passphrase.nfkc().collect();
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
@@ -153,12 +159,9 @@ pub fn decrypt_sigil(sigil: &SigilObject, passphrase: &str) -> Result<[u8; 32], 
     let mem = sigil.kdf.mem;
     let it = sigil.kdf.it;
     let par = sigil.kdf.par;
-    if mem < 1
-        || mem > MAX_ARGON2_MEMORY
-        || it < 1
-        || it > MAX_ARGON2_ITERS
-        || par < 1
-        || par > MAX_ARGON2_PARALLELISM
+    if !(1..=MAX_ARGON2_MEMORY).contains(&mem)
+        || !(1..=MAX_ARGON2_ITERS).contains(&it)
+        || !(1..=MAX_ARGON2_PARALLELISM).contains(&par)
     {
         return Err(
             "Invalid Sigil KDF parameters: mem/it/par must be positive integers within safe bounds"

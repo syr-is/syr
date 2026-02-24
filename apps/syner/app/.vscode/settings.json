@@ -1,7 +1,4 @@
 {
-  "svelte.enable-ts-plugin": true,
-  "rust-analyzer.linkedProjects": [
-    "../../../packages/rust/Cargo.toml",
-    "src-tauri/Cargo.toml"
-  ]
+	"svelte.enable-ts-plugin": true,
+	"rust-analyzer.linkedProjects": ["../../../packages/rust/Cargo.toml", "src-tauri/Cargo.toml"]
 }

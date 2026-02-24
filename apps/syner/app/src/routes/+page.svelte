@@ -91,7 +91,7 @@
 			{#if loading}
 				<p class="text-muted-foreground text-sm">Loading…</p>
 			{:else if error}
-				<p class="text-sm text-destructive">{error}</p>
+				<p class="text-destructive text-sm">{error}</p>
 			{:else if personas.length === 0}
 				<p class="text-muted-foreground text-sm">
 					No personas yet. Create one or import from a Sigil file.
@@ -104,59 +104,53 @@
 				<ul class="space-y-3">
 					{#each personas as persona (persona.id)}
 						<li
-							class="relative overflow-hidden rounded-lg border border-border transition-colors {persona.bannerUrl ? '' : 'bg-muted/50'} hover:bg-muted/50"
+							class="border-border relative overflow-hidden rounded-lg border transition-colors {persona.bannerUrl
+								? ''
+								: 'bg-muted/50'} hover:bg-muted/50"
 						>
 							{#if toAvatarSrc(persona.bannerUrl)}
 								<div
-									class="absolute inset-0 bg-cover bg-center [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [mask-size:cover] [-webkit-mask-size:cover]"
+									class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
 									style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
 								></div>
 							{/if}
 							<div class="relative z-10 flex items-center gap-4 p-4">
-							<Avatar.Root class="h-12 w-12 shrink-0">
-								{#if toAvatarSrc(persona.avatarUrl)}
-									<Avatar.Image src={toAvatarSrc(persona.avatarUrl)!} alt={persona.displayName} />
-								{/if}
-								<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
-							</Avatar.Root>
-							<div class="min-w-0 flex-1">
-								<p class="font-medium">{persona.displayName}</p>
-								<p class="font-mono text-muted-foreground truncate text-xs">{persona.did}</p>
-							</div>
-							<div class="flex gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onclick={() => openEdit(persona)}
-								>
-									<Pencil class="h-4 w-4" />
-									Edit
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									onclick={() => {
-										selectedPersona.set({
-											id: persona.id,
-											displayName: persona.displayName,
-											did: persona.did,
-											avatarUrl: persona.avatarUrl,
-											bannerUrl: persona.bannerUrl
-										});
-										goto('/sign');
-									}}
-								>
-									<PenLine class="h-4 w-4" />
-									Sign
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									onclick={() => deletePersona(persona.id)}
-								>
-									<Trash2 class="h-4 w-4 text-destructive" />
-								</Button>
-							</div>
+								<Avatar.Root class="h-12 w-12 shrink-0">
+									{#if toAvatarSrc(persona.avatarUrl)}
+										<Avatar.Image src={toAvatarSrc(persona.avatarUrl)!} alt={persona.displayName} />
+									{/if}
+									<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
+								</Avatar.Root>
+								<div class="min-w-0 flex-1">
+									<p class="font-medium">{persona.displayName}</p>
+									<p class="text-muted-foreground truncate font-mono text-xs">{persona.did}</p>
+								</div>
+								<div class="flex gap-2">
+									<Button variant="outline" size="sm" onclick={() => openEdit(persona)}>
+										<Pencil class="h-4 w-4" />
+										Edit
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onclick={() => {
+											selectedPersona.set({
+												id: persona.id,
+												displayName: persona.displayName,
+												did: persona.did,
+												avatarUrl: persona.avatarUrl,
+												bannerUrl: persona.bannerUrl
+											});
+											goto('/sign');
+										}}
+									>
+										<PenLine class="h-4 w-4" />
+										Sign
+									</Button>
+									<Button variant="ghost" size="icon-sm" onclick={() => deletePersona(persona.id)}>
+										<Trash2 class="text-destructive h-4 w-4" />
+									</Button>
+								</div>
 							</div>
 						</li>
 					{/each}

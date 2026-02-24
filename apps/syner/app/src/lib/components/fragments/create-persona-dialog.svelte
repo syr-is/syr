@@ -169,7 +169,7 @@
 				</div>
 			</div>
 			{#if error}
-				<p class="text-sm text-destructive">{error}</p>
+				<p class="text-destructive text-sm">{error}</p>
 			{/if}
 		</div>
 		<Dialog.Footer>

@@ -44,6 +44,34 @@ jobs:
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
       - run: pnpm lint
 
+  rust-format:
+    name: Rust Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust
+      - run: pnpm cargo:format:check
+
+  rust-clippy:
+    name: Rust Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/rust
+            apps/syner/app/src-tauri
+      - run: pnpm cargo:clippy
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest

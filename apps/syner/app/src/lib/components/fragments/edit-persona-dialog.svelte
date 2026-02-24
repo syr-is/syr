@@ -127,7 +127,10 @@
 						<div class="flex flex-col gap-2">
 							<Avatar.Root class="h-16 w-16">
 								{#if toAvatarSrc(avatarPath ?? persona.avatarUrl)}
-									<Avatar.Image src={toAvatarSrc(avatarPath ?? persona.avatarUrl)!} alt={persona.displayName} />
+									<Avatar.Image
+										src={toAvatarSrc(avatarPath ?? persona.avatarUrl)!}
+										alt={persona.displayName}
+									/>
 								{/if}
 								<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
 							</Avatar.Root>
@@ -175,7 +178,7 @@
 					</div>
 				</div>
 				{#if error}
-					<p class="text-sm text-destructive">{error}</p>
+					<p class="text-destructive text-sm">{error}</p>
 				{/if}
 			</div>
 			<Dialog.Footer>

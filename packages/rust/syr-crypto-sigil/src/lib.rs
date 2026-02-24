@@ -4,4 +4,4 @@
 
 mod sigil;
 
-pub use sigil::{create_sigil, decrypt_sigil, SigilKdf, SigilEnc, SigilObject};
+pub use sigil::{create_sigil, decrypt_sigil, SigilEnc, SigilKdf, SigilObject};

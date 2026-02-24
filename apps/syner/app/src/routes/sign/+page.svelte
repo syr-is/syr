@@ -20,7 +20,13 @@
 	let error = $state<string | null>(null);
 	let signature = $state<string | null>(null);
 	let seedFromStore = $state<string | null>(null);
-	let persona = $state<{ id: string; displayName: string; did: string; avatarUrl?: string; bannerUrl?: string } | null>(null);
+	let persona = $state<{
+		id: string;
+		displayName: string;
+		did: string;
+		avatarUrl?: string;
+		bannerUrl?: string;
+	} | null>(null);
 
 	$effect(() => {
 		const unsubSeed = sessionSeed.subscribe((v) => {
@@ -37,8 +43,7 @@
 
 	/** Effective key: from session, from persona unlock, or from pasted */
 	let effectiveKey = $derived(
-		seedFromStore ??
-			(pastedKey.trim().length > 0 ? pastedKey.trim() : null)
+		seedFromStore ?? (pastedKey.trim().length > 0 ? pastedKey.trim() : null)
 	);
 
 	function bytesToBase64(bytes: number[]): string {
@@ -131,11 +136,13 @@
 
 	{#if seedFromStore || pastedKey.trim()}
 		<div
-			class="relative overflow-hidden flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm {persona?.bannerUrl ? '' : 'bg-muted/50'}"
+			class="border-border relative flex items-center gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm {persona?.bannerUrl
+				? ''
+				: 'bg-muted/50'}"
 		>
 			{#if persona?.bannerUrl && toAvatarSrc(persona.bannerUrl)}
 				<div
-					class="absolute inset-0 bg-cover bg-center [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [mask-size:cover] [-webkit-mask-size:cover]"
+					class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
 					style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
 				></div>
 			{/if}
@@ -147,8 +154,12 @@
 					<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
 				</Avatar.Root>
 			{/if}
-			<span class="relative z-10 text-muted-foreground flex-1">
-				{seedFromStore ? (persona ? `Unlocked: ${persona.displayName}` : 'Key in session') : 'Key from input'}
+			<span class="text-muted-foreground relative z-10 flex-1">
+				{seedFromStore
+					? persona
+						? `Unlocked: ${persona.displayName}`
+						: 'Key in session'
+					: 'Key from input'}
 			</span>
 			<Button class="relative z-10" variant="ghost" size="sm" onclick={lockSession}>
 				<Lock class="h-4 w-4" />
@@ -157,11 +168,13 @@
 		</div>
 	{:else if persona}
 		<div
-			class="relative overflow-hidden rounded-lg border border-border p-4 space-y-3 {persona.bannerUrl ? '' : 'bg-muted/50'}"
+			class="border-border relative space-y-3 overflow-hidden rounded-lg border p-4 {persona.bannerUrl
+				? ''
+				: 'bg-muted/50'}"
 		>
 			{#if toAvatarSrc(persona.bannerUrl)}
 				<div
-					class="absolute inset-0 bg-cover bg-center [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [mask-size:cover] [-webkit-mask-size:cover]"
+					class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
 					style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
 				></div>
 			{/if}
@@ -174,7 +187,7 @@
 				</Avatar.Root>
 				<div class="min-w-0 flex-1">
 					<p class="text-sm font-medium">Sign with: {persona.displayName}</p>
-					<p class="font-mono text-muted-foreground truncate text-xs">{persona.did}</p>
+					<p class="text-muted-foreground truncate font-mono text-xs">{persona.did}</p>
 				</div>
 			</div>
 			<div class="relative z-10 flex gap-2">
@@ -198,17 +211,17 @@
 				Sign payload
 			</CardTitle>
 			<CardDescription>
-				Sign a payload with your identity. Select a persona from the list, import a sigil, or paste a
-				private key.
+				Sign a payload with your identity. Select a persona from the list, import a sigil, or paste
+				a private key.
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="flex flex-col gap-4">
 			{#if !seedFromStore && !persona}
-				<p class="text-sm text-muted-foreground">
+				<p class="text-muted-foreground text-sm">
 					Select a persona from the
 					<a href="/" class="text-primary underline">Personas</a> page, or
-					<a href="/import" class="text-primary underline">import a sigil</a> and use "Use for signing", or
-					paste your private key (base64, 32 bytes) below.
+					<a href="/import" class="text-primary underline">import a sigil</a> and use "Use for signing",
+					or paste your private key (base64, 32 bytes) below.
 				</p>
 				<div class="space-y-2">
 					<Label for="private-key">Private key (base64)</Label>
@@ -255,14 +268,14 @@
 			</div>
 
 			{#if signature}
-				<div class="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
-					<p class="text-sm font-medium text-muted-foreground">Signature (multibase)</p>
+				<div class="border-border bg-muted/50 space-y-2 rounded-lg border p-4">
+					<p class="text-muted-foreground text-sm font-medium">Signature (multibase)</p>
 					<p class="font-mono text-sm break-all select-all">{signature}</p>
 				</div>
 			{/if}
 
 			{#if error}
-				<p class="text-sm text-destructive">{error}</p>
+				<p class="text-destructive text-sm">{error}</p>
 			{/if}
 		</CardContent>
 	</Card>
