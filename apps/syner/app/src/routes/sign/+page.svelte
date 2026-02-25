@@ -101,7 +101,7 @@
 		error = null;
 		signature = null;
 		try {
-			let payloadStr = payload.trim();
+			let payloadStr = payload;
 			if (canonicalizeJson) {
 				try {
 					const parsed = JSON.parse(payloadStr);

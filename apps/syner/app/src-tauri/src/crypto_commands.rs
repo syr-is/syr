@@ -1,6 +1,6 @@
 //! Tauri commands for Syr crypto.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::persona_commands;
 use tauri::Manager;
@@ -93,7 +93,7 @@ pub fn read_file_content_cmd(app: tauri::AppHandle, path: String) -> Result<Stri
     let config_dir = app.path().config_dir().map_err(|e| e.to_string())?;
     let personas_base = persona_commands::get_base_path(&app)?;
 
-    let mut allowed_roots = vec![app_data, config_dir, personas_base];
+    let mut allowed_roots: Vec<PathBuf> = vec![app_data, config_dir, personas_base];
     if let Some(doc) = dirs::document_dir() {
         allowed_roots.push(doc);
     }
@@ -101,7 +101,13 @@ pub fn read_file_content_cmd(app: tauri::AppHandle, path: String) -> Result<Stri
         allowed_roots.push(home);
     }
 
-    let in_allowed = allowed_roots.iter().any(|root| canonical.starts_with(root));
+    let canonical_roots: Vec<PathBuf> = allowed_roots
+        .iter()
+        .map(|root| root.canonicalize().unwrap_or_else(|_| root.clone()))
+        .collect();
+    let in_allowed = canonical_roots
+        .iter()
+        .any(|root| canonical.starts_with(root));
 
     if !in_allowed {
         return Err("Path not in allowed directory".to_string());
