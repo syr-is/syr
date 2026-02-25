@@ -44,3 +44,6 @@ export * from './tenant.js';
 
 // Registry (DID hosting record) types
 export * from './registry.js';
+
+// Persona types (Syner local identities)
+export * from './persona.js';

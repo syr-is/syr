@@ -1,5 +1,8 @@
 name: Code Quality
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -43,6 +46,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-${{ hashFiles('packages/**/*.ts', 'packages/**/*.svelte', 'packages/**/tsconfig.json') }}-
       - run: pnpm lint
+
+  rust-format:
+    name: Rust Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust
+      - run: sh scripts/cargo-format-check.sh
+
+  rust-clippy:
+    name: Rust Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri/GTK dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/rust
+            apps/syner/app/src-tauri
+      - run: sh scripts/cargo-clippy.sh
 
   typecheck:
     name: Type Check

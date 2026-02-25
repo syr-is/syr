@@ -46,6 +46,12 @@
   // Svelte
   "svelte.enable-ts-plugin": true,
 
+  // Rust (rust-analyzer)
+  "rust-analyzer.linkedProjects": [
+    "packages/rust/Cargo.toml",
+    "apps/syner/app/src-tauri/Cargo.toml"
+  ],
+
   // TypeScript
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,

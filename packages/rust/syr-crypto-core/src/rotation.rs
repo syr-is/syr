@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::canonical::canonicalize;
-use crate::encoding::{encode_multibase, decode_multibase, ED25519_MULTICODEC_PREFIX};
+use crate::encoding::{decode_multibase, encode_multibase, ED25519_MULTICODEC_PREFIX};
 use crate::keys::{sign, verify};
 
 /// A rotation statement signed by the current root key.
