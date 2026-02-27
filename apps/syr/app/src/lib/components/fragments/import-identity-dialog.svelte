@@ -96,9 +96,7 @@
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
 			<div class="space-y-2">
-				<label for="import-bundle" class="text-sm font-medium"
-					>Bundle (.syr or .zip file)</label
-				>
+				<label for="import-bundle" class="text-sm font-medium">Bundle (.syr or .zip file)</label>
 				<Input
 					id="import-bundle"
 					type="file"

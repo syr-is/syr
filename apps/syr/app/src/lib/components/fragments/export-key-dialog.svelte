@@ -62,11 +62,7 @@
 	}
 
 	const dialogTitle = $derived(
-		exportType === 'syr'
-			? 'Export SYR'
-			: exportType === 'sigil'
-				? 'Export Sigil'
-				: 'Export Persona'
+		exportType === 'syr' ? 'Export SYR' : exportType === 'sigil' ? 'Export Sigil' : 'Export Persona'
 	);
 
 	async function handleUnlock() {
@@ -150,12 +146,8 @@
 						};
 
 						const zipFiles: Record<string, Uint8Array> = {};
-						zipFiles[`${personaId}/identity.sigil`] = strToU8(
-							JSON.stringify(sigil, null, 2)
-						);
-						zipFiles[`${personaId}/profile.json`] = strToU8(
-							JSON.stringify(profile, null, 2)
-						);
+						zipFiles[`${personaId}/identity.sigil`] = strToU8(JSON.stringify(sigil, null, 2));
+						zipFiles[`${personaId}/profile.json`] = strToU8(JSON.stringify(profile, null, 2));
 						if (data.avatar_base64 && data.avatar_filename) {
 							zipFiles[`${personaId}/${data.avatar_filename}`] = Uint8Array.from(
 								atob(data.avatar_base64),
@@ -228,9 +220,7 @@
 
 					for (const asset of data.assets ?? []) {
 						if (asset.content_base64 && asset.zip_path) {
-							const binary = Uint8Array.from(atob(asset.content_base64), (c) =>
-								c.charCodeAt(0)
-							);
+							const binary = Uint8Array.from(atob(asset.content_base64), (c) => c.charCodeAt(0));
 							zipFiles[asset.zip_path] = binary;
 						}
 					}
@@ -275,19 +265,18 @@
 			<Dialog.Description>
 				{#if step === 'unlock'}
 					<p class="text-sm text-muted-foreground">
-						Enter your account password to unlock your identity. The seed was encrypted at login
-						and needs to be decrypted before export.
+						Enter your account password to unlock your identity. The seed was encrypted at login and
+						needs to be decrypted before export.
 					</p>
 				{:else}
 					<div class="space-y-2 text-sm">
 						<p>
-							⚠️ You are about to download your identity bundle (including your ROOT PRIVATE
-							KEY, encrypted as Sigil).
+							⚠️ You are about to download your identity bundle (including your ROOT PRIVATE KEY,
+							encrypted as Sigil).
 						</p>
 						<ul class="list-inside list-disc space-y-1 text-muted-foreground">
 							<li>
-								Choose a strong passphrase (min 10 chars) — you will need it to import this
-								bundle.
+								Choose a strong passphrase (min 10 chars) — you will need it to import this bundle.
 							</li>
 							<li>Store the bundle and passphrase in a secure, offline location.</li>
 							<li>Anyone with both can fully impersonate your identity.</li>

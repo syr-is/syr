@@ -219,17 +219,16 @@
 					<p class="font-medium">Export methods</p>
 					<ul class="space-y-1.5 text-muted-foreground">
 						<li>
-							<strong class="text-foreground">Export SYR</strong> — Complete backup (.syr file).
-							All posts, assets, manifest, and identity. Use for full migration or reclaim identity
-							in SYR.
+							<strong class="text-foreground">Export SYR</strong> — Complete backup (.syr file). All
+							posts, assets, manifest, and identity. Use for full migration or reclaim identity in SYR.
 						</li>
 						<li>
-							<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup
-							(.sigil file). Single encrypted file. Use for key recovery or minimal backup.
+							<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup (.sigil
+							file). Single encrypted file. Use for key recovery or minimal backup.
 						</li>
 						<li>
-							<strong class="text-foreground">Export Persona</strong> — Syner-readable profile
-							(.persona file). Sigil, profile.json, avatar, banner. Open in Syner to import.
+							<strong class="text-foreground">Export Persona</strong> — Syner-readable profile (.persona
+							file). Sigil, profile.json, avatar, banner. Open in Syner to import.
 						</li>
 					</ul>
 				</div>

@@ -10,11 +10,11 @@ The SYR web application supports three export methods, each with a purpose-speci
 
 ## 1. File Extensions Overview
 
-| Extension | Format | Opens in | Use case |
-| --------- | ------ | -------- | -------- |
-| `.sigil` | JSON (PIEF v1) | — | Bare minimum identity; key recovery |
-| `.persona` | ZIP | Syner | Syner-readable profile; import into Syner desktop |
-| `.syr` | ZIP | SYR web | Full backup; reclaim identity in SYR |
+| Extension  | Format         | Opens in | Use case                                          |
+| ---------- | -------------- | -------- | ------------------------------------------------- |
+| `.sigil`   | JSON (PIEF v1) | —        | Bare minimum identity; key recovery               |
+| `.persona` | ZIP            | Syner    | Syner-readable profile; import into Syner desktop |
+| `.syr`     | ZIP            | SYR web  | Full backup; reclaim identity in SYR              |
 
 All three include the root identity seed encrypted as **Sigil** (PIEF v1). See [Sigil v1](/architecture/sigil) for the cryptographic specification.
 
@@ -50,14 +50,14 @@ All three include the root identity seed encrypted as **Sigil** (PIEF v1). See [
 
 ```json
 {
-  "id": "<persona_id>",
-  "did": "<did>",
-  "publicKey": "<base64>",
-  "displayName": "<string>",
-  "bio": "<string>",
-  "avatarUrl": "./avatar.png",
-  "bannerUrl": "./banner.png",
-  "createdAt": "<ISO8601>"
+	"id": "<persona_id>",
+	"did": "<did>",
+	"publicKey": "<base64>",
+	"displayName": "<string>",
+	"bio": "<string>",
+	"avatarUrl": "./avatar.png",
+	"bannerUrl": "./banner.png",
+	"createdAt": "<ISO8601>"
 }
 ```
 
