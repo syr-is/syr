@@ -15,7 +15,7 @@
       "import": "./dist/aegis.js",
       "default": "./dist/aegis.js"
     },
-    "./sigil": {
+    "./persona-id":{"types":"./dist/persona-id.d.ts","import":"./dist/persona-id.js","default":"./dist/persona-id.js"},"./sigil": {
       "types": "./dist/sigil.d.ts",
       "import": "./dist/sigil.js",
       "default": "./dist/sigil.js"

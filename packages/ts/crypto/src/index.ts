@@ -32,5 +32,7 @@ export {
   importPrivateKeyFromStorage,
 } from "./webcrypto.js";
 
+export { personaIdFromPublicKey } from "./persona-id.js";
+
 export type { Keypair, RotationStatement } from "./types.js";
 export * from "./utils.js";

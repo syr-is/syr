@@ -11,14 +11,17 @@
 	import RemoveRegistryDialog from '$lib/components/fragments/remove-registry-dialog.svelte';
 	import DeleteAllRegistriesDialog from '$lib/components/fragments/delete-all-registries-dialog.svelte';
 	import RevokeKeyDialog from '$lib/components/fragments/revoke-key-dialog.svelte';
+	import * as DropdownMenu from '@syr-is/ui/dropdown-menu';
 	import ExportKeyDialog from '$lib/components/fragments/export-key-dialog.svelte';
 	import ImportIdentityDialog from '$lib/components/fragments/import-identity-dialog.svelte';
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
 	import { Input } from '@syr-is/ui/input';
-	import { Loader2 } from 'lucide-svelte';
+	import { Loader2, ChevronDown } from 'lucide-svelte';
+	import type { ExportType } from '$lib/components/fragments/export-key-dialog.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let exportIdentityDialogOpen = $state(false);
+	let exportTypeForDialog = $state<ExportType>('syr');
 	let importIdentityDialogOpen = $state(false);
 	let newRegistryUrl = $state('');
 	let addingRegistry = $state(false);
@@ -34,7 +37,8 @@
 	let unlockPassword = $state('');
 	let unlockingForSync = $state(false);
 
-	function openExportIdentityDialog() {
+	function openExportIdentityDialog(type: ExportType = 'syr') {
+		exportTypeForDialog = type;
 		exportIdentityDialogOpen = true;
 	}
 
@@ -189,13 +193,45 @@
 				</div>
 
 				<div class="flex flex-wrap gap-2">
-					<button
-						class={buttonVariants({ variant: 'default' })}
-						onclick={openExportIdentityDialog}
-						disabled={exportIdentityDialogOpen}
-					>
-						Export identity
-					</button>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger
+							class={buttonVariants({ variant: 'default' })}
+							disabled={exportIdentityDialogOpen}
+						>
+							Export
+							<ChevronDown class="ml-1 h-4 w-4" />
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start">
+							<DropdownMenu.Item onclick={() => openExportIdentityDialog('syr')}>
+								Export SYR
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => openExportIdentityDialog('sigil')}>
+								Export Sigil
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => openExportIdentityDialog('persona')}>
+								Export Persona
+							</DropdownMenu.Item>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+
+				<div class="space-y-2 rounded-md border p-3 text-sm">
+					<p class="font-medium">Export methods</p>
+					<ul class="space-y-1.5 text-muted-foreground">
+						<li>
+							<strong class="text-foreground">Export SYR</strong> — Complete backup (.syr file).
+							All posts, assets, manifest, and identity. Use for full migration or reclaim identity
+							in SYR.
+						</li>
+						<li>
+							<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup
+							(.sigil file). Single encrypted file. Use for key recovery or minimal backup.
+						</li>
+						<li>
+							<strong class="text-foreground">Export Persona</strong> — Syner-readable profile
+							(.persona file). Sigil, profile.json, avatar, banner. Open in Syner to import.
+						</li>
+					</ul>
 				</div>
 
 				{#if data.delegatedKeys?.length}
@@ -425,6 +461,7 @@
 <ExportKeyDialog
 	bind:open={exportIdentityDialogOpen}
 	hasIdentity={data.hasIdentity}
+	exportType={exportTypeForDialog}
 	onSuccess={invalidateAll}
 />
 

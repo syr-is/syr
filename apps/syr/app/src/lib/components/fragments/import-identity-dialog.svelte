@@ -86,7 +86,7 @@
 			<Dialog.Title>Import identity</Dialog.Title>
 			<Dialog.Description>
 				<div class="space-y-2 text-sm">
-					<p>Restore your identity from an exported backup (zip with identity.sigil).</p>
+					<p>Restore your identity from an exported backup (.syr or .zip with identity.sigil).</p>
 					<ul class="list-inside list-disc space-y-1 text-muted-foreground">
 						<li>Export passphrase: the passphrase you set when exporting.</li>
 						<li>New password: your account password on this instance.</li>
@@ -96,11 +96,13 @@
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
 			<div class="space-y-2">
-				<label for="import-bundle" class="text-sm font-medium">Bundle (zip file)</label>
+				<label for="import-bundle" class="text-sm font-medium"
+					>Bundle (.syr or .zip file)</label
+				>
 				<Input
 					id="import-bundle"
 					type="file"
-					accept=".zip"
+					accept=".syr,.zip"
 					onchange={(e) => {
 						const f = (e.target as HTMLInputElement).files?.[0];
 						bundleFile = f ?? null;
