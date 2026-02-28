@@ -9,6 +9,6 @@ pnpm run check
 pnpm run test
 echo "Running cargo format, format check, and clippy..."
 pnpm run cargo:format
-git add -u packages/rust apps/syner/app/src-tauri 2>/dev/null || true
+git add -u packages/rust apps/syner/app/src-tauri
 pnpm run cargo:format:check
 pnpm run cargo:clippy

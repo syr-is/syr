@@ -379,12 +379,12 @@ pub fn import_persona_from_bundle_cmd(
         }
 
         if entry.is_file() {
-            let mut buf = Vec::with_capacity(MAX_ENTRY_BYTES.min(4096));
-            let n = entry
-                .take(MAX_ENTRY_BYTES as u64)
+            let mut buf = Vec::with_capacity((MAX_ENTRY_BYTES + 1).min(4096));
+            entry
+                .take((MAX_ENTRY_BYTES + 1) as u64)
                 .read_to_end(&mut buf)
                 .map_err(|e| e.to_string())?;
-            if n >= MAX_ENTRY_BYTES {
+            if buf.len() > MAX_ENTRY_BYTES {
                 return Err("Archive entry exceeds maximum size".to_string());
             }
             if cumulative_total_bytes + buf.len() > MAX_ARCHIVE_BYTES {
@@ -444,10 +444,22 @@ pub fn import_persona_from_bundle_cmd(
         format!("Invalid profile: {}", e)
     })?;
 
+    let backup_dir = base.join(format!("{}.old", persona_id));
     if persona_dir.exists() {
-        std::fs::remove_dir_all(&persona_dir).map_err(|e| e.to_string())?;
+        if backup_dir.exists() {
+            std::fs::remove_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::rename(&persona_dir, &backup_dir).map_err(|e| e.to_string())?;
     }
-    std::fs::rename(&staging_dir, &persona_dir).map_err(|e| e.to_string())?;
+    if let Err(e) = std::fs::rename(&staging_dir, &persona_dir) {
+        if backup_dir.exists() {
+            let _ = std::fs::rename(&backup_dir, &persona_dir);
+        }
+        return Err(e.to_string());
+    }
+    if backup_dir.exists() {
+        std::fs::remove_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    }
 
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }

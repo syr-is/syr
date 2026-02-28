@@ -63,11 +63,10 @@
 		return base;
 	}
 
-	function getDidShort(): string {
-		const b = bundle;
-		if (!b?.pub) return 'export';
+	function getDidShort(bundleSnapshot: AegisBundle | null): string {
+		if (!bundleSnapshot?.pub) return 'export';
 		try {
-			const raw = decodePublicKey(b.pub);
+			const raw = decodePublicKey(bundleSnapshot.pub);
 			const did = deriveDid(raw);
 			return did.slice(8, 20);
 		} catch {
@@ -150,7 +149,7 @@
 				bundle: b,
 				password: pwd,
 				action: async (seed) => {
-					const didShort = getDidShort();
+					const didShort = getDidShort(b);
 					const timestamp = Date.now();
 
 					if (exportType === 'sigil') {
@@ -171,7 +170,11 @@
 					if (exportType === 'persona') {
 						const dataRes = await fetch('/api/identity/export-persona-data');
 						if (!dataRes.ok) throw new Error('Failed to fetch export data');
-						const { data } = await dataRes.json();
+						const json = await dataRes.json();
+						const data = json?.data ?? json;
+						if (!data || typeof data !== 'object' || !data.identity) {
+							throw new Error('Invalid export payload: missing identity');
+						}
 
 						const sigil = await createSigil(seed, passphrase);
 						// Use sigil as single source of truth for identity-derived fields

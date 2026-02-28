@@ -92,7 +92,7 @@
 			goto('/');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			if (msg === 'Persona already exists') {
+			if (msg.toLowerCase().includes('persona already exists')) {
 				const confirmed = await confirm(
 					'A persona with this identity already exists. Importing will replace it. Continue?',
 					{ title: 'Replace Existing Persona', kind: 'warning' }
