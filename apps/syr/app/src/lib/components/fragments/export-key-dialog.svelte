@@ -244,9 +244,7 @@
 						!Array.isArray(data.posts) ||
 						!Array.isArray(data.assets)
 					) {
-						throw new Error(
-							'Invalid export payload: missing manifest, identity, posts, or assets'
-						);
+						throw new Error('Invalid export payload: missing manifest, identity, posts, or assets');
 					}
 
 					const sigil = await createSigil(seed, passphrase);
