@@ -340,7 +340,13 @@
 					<div class="space-y-2">
 						<Label for="file-picker">File</Label>
 						<div class="flex gap-2">
-							<Button type="button" variant="outline" onclick={pickFile} disabled={loading}>
+							<Button
+								id="file-picker"
+								type="button"
+								variant="outline"
+								onclick={pickFile}
+								disabled={loading}
+							>
 								{selectedPath
 									? selectedPath.split(/[/\\]/).pop()
 									: 'Select .persona or .sigil file'}

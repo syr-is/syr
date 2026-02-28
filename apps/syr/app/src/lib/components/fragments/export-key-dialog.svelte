@@ -234,7 +234,20 @@
 					// exportType === 'syr'
 					const dataRes = await fetch('/api/identity/export-bundle-data');
 					if (!dataRes.ok) throw new Error('Failed to fetch export data');
-					const { data } = await dataRes.json();
+					const resJson = await dataRes.json();
+					const data = resJson?.data ?? resJson;
+					if (
+						!data ||
+						typeof data !== 'object' ||
+						!data.manifest ||
+						!data.identity ||
+						!Array.isArray(data.posts) ||
+						!Array.isArray(data.assets)
+					) {
+						throw new Error(
+							'Invalid export payload: missing manifest, identity, posts, or assets'
+						);
+					}
 
 					const sigil = await createSigil(seed, passphrase);
 
