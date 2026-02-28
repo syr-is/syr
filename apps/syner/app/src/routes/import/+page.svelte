@@ -57,8 +57,9 @@
 		const file = await open({
 			multiple: false,
 			directory: false,
-			title: 'Select Sigil file',
+			title: 'Select Persona or Sigil file',
 			filters: [
+				{ name: 'Persona files', extensions: ['persona'] },
 				{ name: 'Sigil files', extensions: ['sigil'] },
 				{ name: 'All files', extensions: ['*'] }
 			]
@@ -67,6 +68,63 @@
 			selectedPath = file;
 		} else if (Array.isArray(file) && file.length > 0) {
 			selectedPath = file[0];
+		}
+	}
+
+	const SUPPORTED_EXTENSIONS = ['persona', 'sigil'] as const;
+	const fileExt = $derived(
+		(() => {
+			const p = selectedPath?.toLowerCase();
+			if (!p) return null;
+			const lastDot = p.lastIndexOf('.');
+			return lastDot > 0 ? p.slice(lastDot + 1) : null;
+		})()
+	);
+	const isPersonaFile = $derived(fileExt === 'persona');
+	const isSigilFile = $derived(fileExt === 'sigil');
+	const unsupportedMessage = $derived(
+		`Unsupported file type. Please select a ${SUPPORTED_EXTENSIONS.map((e) => '.' + e).join(' or ')} file.`
+	);
+
+	async function importPersona() {
+		if (!selectedPath) return;
+		loading = true;
+		error = null;
+		try {
+			await invoke('import_persona_from_bundle_cmd', {
+				path: selectedPath,
+				replaceIfExists: false
+			});
+			toast.success('Persona imported');
+			goto('/');
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (msg.toLowerCase().includes('persona already exists')) {
+				const confirmed = await confirm(
+					'A persona with this identity already exists. Importing will replace it. Continue?',
+					{ title: 'Replace Existing Persona', kind: 'warning' }
+				);
+				if (confirmed) {
+					try {
+						await invoke('import_persona_from_bundle_cmd', {
+							path: selectedPath,
+							replaceIfExists: true
+						});
+						toast.success('Persona replaced');
+						goto('/');
+					} catch (e2) {
+						error = e2 instanceof Error ? e2.message : String(e2);
+						toast.error(error);
+					}
+				} else {
+					error = null;
+				}
+			} else {
+				error = msg;
+				toast.error(msg);
+			}
+		} finally {
+			loading = false;
 		}
 	}
 
@@ -118,17 +176,17 @@
 </script>
 
 <div class="flex flex-col gap-6 p-4 md:p-6">
-	<h1 class="text-2xl font-bold">Import Sigil</h1>
+	<h1 class="text-2xl font-bold">Import</h1>
 
 	<Card>
 		<CardHeader>
 			<CardTitle class="flex items-center gap-2">
 				<FileInput class="h-5 w-5" />
-				Import identity from Sigil file
+				Import persona or sigil
 			</CardTitle>
 			<CardDescription>
-				Select a .sigil or identity.sigil file to import your identity. You can then save it as a
-				persona.
+				Select a .persona file (from SYR Export Persona) or .sigil file to import. .persona includes
+				profile, avatar, and banner. .sigil is a bare identity you can save as persona.
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="flex flex-col gap-4">
@@ -287,36 +345,63 @@
 			{:else}
 				<div class="space-y-4">
 					<div class="space-y-2">
-						<Label for="file-picker">Sigil file</Label>
+						<Label for="file-picker">File</Label>
 						<div class="flex gap-2">
-							<Button type="button" variant="outline" onclick={pickFile} disabled={loading}>
-								{selectedPath ? selectedPath.split(/[/\\]/).pop() : 'Select .sigil file'}
+							<Button
+								id="file-picker"
+								type="button"
+								variant="outline"
+								onclick={pickFile}
+								disabled={loading}
+							>
+								{selectedPath
+									? selectedPath.split(/[/\\]/).pop()
+									: 'Select .persona or .sigil file'}
 							</Button>
 						</div>
 					</div>
 
 					{#if selectedPath}
-						<div class="space-y-2">
-							<Label for="passphrase">Passphrase</Label>
-							<Input
-								id="passphrase"
-								type="password"
-								bind:value={passphrase}
-								placeholder="Enter passphrase"
-								disabled={loading}
-							/>
-						</div>
-						<div class="flex gap-2">
-							<Button onclick={importSigil} disabled={loading}>
-								{#if loading}
-									<Loader2 class="h-4 w-4 animate-spin" />
-									Importing…
-								{:else}
-									Import
-								{/if}
-							</Button>
+						{#if isPersonaFile}
+							<div class="flex gap-2">
+								<Button onclick={importPersona} disabled={loading}>
+									{#if loading}
+										<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+										Importing…
+									{:else}
+										Import persona
+									{/if}
+								</Button>
+								<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
+							</div>
+						{:else if isSigilFile}
+							<div class="space-y-2">
+								<Label for="passphrase">Passphrase</Label>
+								<Input
+									id="passphrase"
+									type="password"
+									bind:value={passphrase}
+									placeholder="Enter passphrase"
+									disabled={loading}
+								/>
+							</div>
+							<div class="flex gap-2">
+								<Button onclick={importSigil} disabled={loading || !passphrase.trim()}>
+									{#if loading}
+										<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+										Importing…
+									{:else}
+										Import
+									{/if}
+								</Button>
+								<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
+							</div>
+						{:else}
+							<p class="text-muted-foreground text-sm">
+								{unsupportedMessage}
+							</p>
 							<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
-						</div>
+						{/if}
 					{/if}
 				</div>
 

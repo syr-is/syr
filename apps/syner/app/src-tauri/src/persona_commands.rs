@@ -1,6 +1,8 @@
 //! Tauri commands for persona (local identity) management.
 
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use tauri::Manager;
 
@@ -11,6 +13,8 @@ use syr_crypto_core::{
 use syr_crypto_sigil::{create_sigil, decrypt_sigil, SigilObject};
 
 const CONFIG_FILENAME: &str = "config.json";
+const MAX_ARCHIVE_BYTES: usize = 20 * 1024 * 1024; // 20MB
+const MAX_ENTRY_BYTES: usize = 5 * 1024 * 1024; // 5MB per file
 #[derive(Debug, Serialize, Deserialize)]
 struct PersonaConfig {
     personas_base_path: Option<String>,
@@ -273,6 +277,189 @@ pub fn import_persona_from_sigil_cmd(
     )
     .map_err(|e| e.to_string())?;
     std::fs::write(persona_dir.join("identity.sigil"), &sigil_json).map_err(|e| e.to_string())?;
+
+    Ok(resolve_persona_asset_paths(&persona_dir, persona))
+}
+
+fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Path not found or invalid: {}", e))?;
+
+    if !canonical.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err("Path is not a regular file".to_string());
+    }
+
+    let ext = canonical
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or("File must have .persona extension")?;
+    if !ext.eq_ignore_ascii_case("persona") {
+        return Err("File must have .persona extension".to_string());
+    }
+
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let config_dir = app.path().config_dir().map_err(|e| e.to_string())?;
+    let personas_base = get_base_path(app)?;
+
+    let mut allowed_roots: Vec<PathBuf> = vec![app_data, config_dir, personas_base];
+    if let Some(doc) = dirs::document_dir() {
+        allowed_roots.push(doc);
+    }
+    if let Some(home) = dirs::home_dir() {
+        allowed_roots.push(home);
+    }
+
+    let canonical_roots: Vec<PathBuf> = allowed_roots
+        .iter()
+        .map(|root| root.canonicalize().unwrap_or_else(|_| root.clone()))
+        .collect();
+    let in_allowed = canonical_roots
+        .iter()
+        .any(|root| canonical.starts_with(root));
+
+    if !in_allowed {
+        return Err("Path not in allowed directory".to_string());
+    }
+
+    Ok(canonical)
+}
+
+#[tauri::command]
+pub fn import_persona_from_bundle_cmd(
+    app: tauri::AppHandle,
+    path: String,
+    replace_if_exists: bool,
+) -> Result<Persona, String> {
+    let path_buf = validate_persona_bundle_path(&app, Path::new(&path))?;
+
+    let file = File::open(&path_buf).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip: {}", e))?;
+
+    let mut persona_id: Option<String> = None;
+    let mut has_sigil = false;
+    let mut has_profile = false;
+    let mut entries_to_extract: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut cumulative_total_bytes: usize = 0;
+
+    for i in 0..archive.len() {
+        let entry = archive.by_index(i).map_err(|e| e.to_string())?;
+
+        let enclosed = entry
+            .enclosed_name()
+            .ok_or("Invalid persona bundle: path traversal detected")?;
+
+        let comps: Vec<_> = enclosed.components().collect();
+        if comps.iter().any(|c| !matches!(c, Component::Normal(_))) {
+            return Err("Invalid persona bundle: path traversal detected".to_string());
+        }
+        if comps.is_empty() {
+            continue;
+        }
+        let first = comps[0].as_os_str().to_string_lossy().into_owned();
+        if persona_id.is_none() {
+            persona_id = Some(first.clone());
+        }
+        let pid = persona_id.as_ref().unwrap();
+        if first != *pid {
+            return Err("Invalid persona bundle: inconsistent folder structure".to_string());
+        }
+        if comps.len() < 2 {
+            continue;
+        }
+        let suffix_path: PathBuf = comps[1..].iter().fold(PathBuf::new(), |mut p, c| {
+            p.push(c.as_os_str());
+            p
+        });
+        let suffix = suffix_path.to_string_lossy().into_owned();
+        if suffix == "identity.sigil" {
+            has_sigil = true;
+        } else if suffix == "profile.json" {
+            has_profile = true;
+        }
+
+        if entry.is_file() {
+            let mut buf = Vec::with_capacity((MAX_ENTRY_BYTES + 1).min(4096));
+            entry
+                .take((MAX_ENTRY_BYTES + 1) as u64)
+                .read_to_end(&mut buf)
+                .map_err(|e| e.to_string())?;
+            if buf.len() > MAX_ENTRY_BYTES {
+                return Err("Archive entry exceeds maximum size".to_string());
+            }
+            if cumulative_total_bytes + buf.len() > MAX_ARCHIVE_BYTES {
+                return Err("Archive exceeds maximum size".to_string());
+            }
+            cumulative_total_bytes += buf.len();
+            entries_to_extract.push((suffix, buf));
+        }
+    }
+
+    let persona_id = persona_id.ok_or("Persona bundle is empty".to_string())?;
+    validate_persona_id(&persona_id)?;
+
+    if !has_sigil {
+        return Err("Persona bundle must contain identity.sigil".to_string());
+    }
+    if !has_profile {
+        return Err("Persona bundle must contain profile.json".to_string());
+    }
+
+    let base = get_base_path(&app)?;
+    let persona_dir = base.join(&persona_id);
+    let staging_dir = base.join(format!("{}.tmp", persona_id));
+    let profile_path = staging_dir.join("profile.json");
+
+    // Match persona_exists_cmd: persona "exists" only when dir + profile.json present.
+    let persona_exists = persona_dir.exists() && persona_dir.join("profile.json").exists();
+
+    if persona_exists && !replace_if_exists {
+        return Err("Persona already exists".to_string());
+    }
+
+    // Extract to staging dir first; validate before replacing existing persona.
+    if staging_dir.exists() {
+        std::fs::remove_dir_all(&staging_dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::create_dir_all(&staging_dir).map_err(|e| e.to_string())?;
+
+    for (suffix, data) in entries_to_extract {
+        let dest = staging_dir.join(&suffix);
+        if !dest.starts_with(&staging_dir) {
+            let _ = std::fs::remove_dir_all(&staging_dir);
+            return Err("Invalid persona bundle: path escape detected".to_string());
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&dest, data).map_err(|e| e.to_string())?;
+    }
+
+    let content = std::fs::read_to_string(&profile_path).map_err(|e| {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        format!("Invalid profile: {}", e)
+    })?;
+    let persona: Persona = serde_json::from_str(&content).map_err(|e| {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        format!("Invalid profile: {}", e)
+    })?;
+
+    let backup_dir = base.join(format!("{}.old", persona_id));
+    if persona_dir.exists() {
+        if backup_dir.exists() {
+            std::fs::remove_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::rename(&persona_dir, &backup_dir).map_err(|e| e.to_string())?;
+    }
+    if let Err(e) = std::fs::rename(&staging_dir, &persona_dir) {
+        if backup_dir.exists() {
+            let _ = std::fs::rename(&backup_dir, &persona_dir);
+        }
+        return Err(e.to_string());
+    }
+    if backup_dir.exists() {
+        std::fs::remove_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    }
 
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }

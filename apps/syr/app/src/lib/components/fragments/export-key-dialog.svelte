@@ -5,17 +5,22 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
 	import { zip, strToU8 } from 'fflate';
+	import { decodePublicKey, deriveDid, personaIdFromPublicKey } from '@syr-is/crypto';
 	import { createSigil } from '@syr-is/crypto/sigil';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
 
+	export type ExportType = 'syr' | 'sigil' | 'persona';
+
 	let {
 		open = $bindable(false),
 		hasIdentity = false,
+		exportType = 'syr' as ExportType,
 		onSuccess
 	}: {
 		open?: boolean;
 		hasIdentity?: boolean;
+		exportType?: ExportType;
 		onSuccess?: () => void;
 	} = $props();
 
@@ -43,6 +48,67 @@
 		return true;
 	}
 
+	/** Sanitize API-provided asset filename to prevent path traversal in ZIP entries. */
+	function sanitizeAssetFilename(
+		raw: string | undefined,
+		personaId: string,
+		assetType: 'avatar' | 'banner'
+	): string {
+		const fallback = `persona-${personaId}-${assetType}.png`;
+		if (!raw || typeof raw !== 'string') return fallback;
+		const s = raw.trim();
+		if (!s || /[/\\]|\.\.|^\./.test(s)) return fallback;
+		const base = s.replace(/^.*[/\\]/, '');
+		if (!base || /\.\./.test(base) || !/^[a-zA-Z0-9._-]+$/.test(base)) return fallback;
+		return base;
+	}
+
+	function getDidShort(bundleSnapshot: AegisBundle | null): string {
+		if (!bundleSnapshot?.pub) return 'export';
+		try {
+			const raw = decodePublicKey(bundleSnapshot.pub);
+			const did = deriveDid(raw);
+			return did.slice(8, 20);
+		} catch {
+			return 'export';
+		}
+	}
+
+	const dialogTitle = $derived(
+		exportType === 'syr' ? 'Export SYR' : exportType === 'sigil' ? 'Export Sigil' : 'Export Persona'
+	);
+
+	const exportWarningCopy = $derived(
+		exportType === 'syr'
+			? {
+					heading:
+						'⚠️ You are about to download your full SYR backup (posts, assets, identity — including your ROOT PRIVATE KEY encrypted as Sigil).',
+					importHint: 'import this backup',
+					storeHint: 'Store the backup and passphrase in a secure, offline location.'
+				}
+			: exportType === 'sigil'
+				? {
+						heading:
+							'⚠️ You are about to download your Sigil file — an encrypted copy of your ROOT PRIVATE KEY.',
+						importHint: 'import this sigil',
+						storeHint: 'Store the Sigil and passphrase in a secure, offline location.'
+					}
+				: {
+						heading:
+							'⚠️ You are about to download your Persona (Sigil + profile + avatar/banner). The Sigil contains your encrypted ROOT PRIVATE KEY.',
+						importHint: 'import this persona',
+						storeHint: 'Store the persona bundle and passphrase in a secure, offline location.'
+					}
+	);
+
+	const exportCtaCopy = $derived(
+		exportType === 'syr'
+			? 'I understand, download backup'
+			: exportType === 'sigil'
+				? 'I understand, download sigil'
+				: 'I understand, download persona'
+	);
+
 	async function handleUnlock() {
 		if (!unlockPassword || unlockPassword.length < 1) return;
 
@@ -54,7 +120,6 @@
 			const b = data.data?.aegisBundle;
 			if (!b) throw new Error('No Aegis bundle found');
 
-			// Verify password by attempting to decrypt
 			await seedHandler.verify({ bundle: b, password: unlockPassword });
 
 			bundle = b;
@@ -84,9 +149,103 @@
 				bundle: b,
 				password: pwd,
 				action: async (seed) => {
+					const didShort = getDidShort(b);
+					const timestamp = Date.now();
+
+					if (exportType === 'sigil') {
+						const sigil = await createSigil(seed, passphrase);
+						const blob = new Blob([JSON.stringify(sigil, null, 2)], {
+							type: 'application/json'
+						});
+						const filename = `syr-sigil-${didShort}-${timestamp}.sigil`;
+						const url = URL.createObjectURL(blob);
+						const a = document.createElement('a');
+						a.href = url;
+						a.download = filename;
+						a.click();
+						URL.revokeObjectURL(url);
+						return;
+					}
+
+					if (exportType === 'persona') {
+						const dataRes = await fetch('/api/identity/export-persona-data');
+						if (!dataRes.ok) throw new Error('Failed to fetch export data');
+						const json = await dataRes.json();
+						const data = json?.data ?? json;
+						if (!data || typeof data !== 'object' || !data.identity) {
+							throw new Error('Invalid export payload: missing identity');
+						}
+
+						const sigil = await createSigil(seed, passphrase);
+						// Use sigil as single source of truth for identity-derived fields
+						const personaId = personaIdFromPublicKey(sigil.pub);
+						const pubRaw = decodePublicKey(sigil.pub);
+						const pubB64 = btoa(String.fromCharCode(...new Uint8Array(pubRaw)));
+						const did = deriveDid(pubRaw);
+
+						const avatarFilename = sanitizeAssetFilename(data.avatar_filename, personaId, 'avatar');
+						const bannerFilename = sanitizeAssetFilename(data.banner_filename, personaId, 'banner');
+
+						const profile = {
+							id: personaId,
+							did,
+							publicKey: pubB64,
+							displayName: data.identity.profile?.displayName ?? '',
+							bio: data.identity.profile?.bio ?? null,
+							avatarUrl: data.avatar_base64 ? `./${avatarFilename}` : null,
+							bannerUrl: data.banner_base64 ? `./${bannerFilename}` : null,
+							createdAt: data.identity.exportedAt ?? new Date().toISOString()
+						};
+
+						const zipFiles: Record<string, Uint8Array> = {};
+						zipFiles[`${personaId}/identity.sigil`] = strToU8(JSON.stringify(sigil, null, 2));
+						zipFiles[`${personaId}/profile.json`] = strToU8(JSON.stringify(profile, null, 2));
+						if (data.avatar_base64) {
+							zipFiles[`${personaId}/${avatarFilename}`] = Uint8Array.from(
+								atob(data.avatar_base64),
+								(c) => c.charCodeAt(0)
+							);
+						}
+						if (data.banner_base64) {
+							zipFiles[`${personaId}/${bannerFilename}`] = Uint8Array.from(
+								atob(data.banner_base64),
+								(c) => c.charCodeAt(0)
+							);
+						}
+
+						const zipped = await new Promise<Uint8Array>((resolve, reject) => {
+							zip(zipFiles, { level: 1 }, (err, out) => {
+								if (err) reject(err);
+								else resolve(out ?? new Uint8Array(0));
+							});
+						});
+
+						const filename = `syr-persona-${didShort}-${timestamp}.persona`;
+						const blob = new Blob([new Uint8Array(zipped)]);
+						const url = URL.createObjectURL(blob);
+						const a = document.createElement('a');
+						a.href = url;
+						a.download = filename;
+						a.click();
+						URL.revokeObjectURL(url);
+						return;
+					}
+
+					// exportType === 'syr'
 					const dataRes = await fetch('/api/identity/export-bundle-data');
 					if (!dataRes.ok) throw new Error('Failed to fetch export data');
-					const { data } = await dataRes.json();
+					const resJson = await dataRes.json();
+					const data = resJson?.data ?? resJson;
+					if (
+						!data ||
+						typeof data !== 'object' ||
+						!data.manifest ||
+						!data.identity ||
+						!Array.isArray(data.posts) ||
+						!Array.isArray(data.assets)
+					) {
+						throw new Error('Invalid export payload: missing manifest, identity, posts, or assets');
+					}
 
 					const sigil = await createSigil(seed, passphrase);
 
@@ -136,8 +295,7 @@
 						});
 					});
 
-					const didShort = data.manifest?.did?.slice(8, 20) ?? 'export';
-					const filename = `syr-export-${didShort}-${Date.now()}.zip`;
+					const filename = `syr-export-${didShort}-${timestamp}.syr`;
 					const blob = new Blob([new Uint8Array(zipped)]);
 					const url = URL.createObjectURL(blob);
 					const a = document.createElement('a');
@@ -148,7 +306,13 @@
 				}
 			});
 
-			toast.success('Identity exported — store the bundle and passphrase securely!');
+			toast.success(
+				exportType === 'syr'
+					? 'SYR backup exported — store it and your passphrase securely!'
+					: exportType === 'sigil'
+						? 'Sigil exported — store it and your passphrase securely!'
+						: 'Persona exported — store it and your passphrase securely!'
+			);
 			open = false;
 			passphrase = '';
 			confirmPassphrase = '';
@@ -166,7 +330,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Export identity</Dialog.Title>
+			<Dialog.Title>{dialogTitle}</Dialog.Title>
 			<Dialog.Description>
 				{#if step === 'unlock'}
 					<p class="text-sm text-muted-foreground">
@@ -175,15 +339,12 @@
 					</p>
 				{:else}
 					<div class="space-y-2 text-sm">
-						<p>
-							⚠️ You are about to download your full identity bundle (including your ROOT PRIVATE
-							KEY, encrypted as Sigil).
-						</p>
+						<p>{exportWarningCopy.heading}</p>
 						<ul class="list-inside list-disc space-y-1 text-muted-foreground">
 							<li>
-								Choose a strong passphrase (min 10 chars) — you will need it to import this bundle.
+								Choose a strong passphrase (min 10 chars) — you will need it to {exportWarningCopy.importHint}.
 							</li>
-							<li>Store the bundle and passphrase in a secure, offline location.</li>
+							<li>{exportWarningCopy.storeHint}</li>
 							<li>Anyone with both can fully impersonate your identity.</li>
 						</ul>
 					</div>
@@ -253,7 +414,7 @@
 						<Loader2 class="mr-2 h-4 w-4 animate-spin" />
 						Exporting...
 					{:else}
-						I understand, export identity
+						{exportCtaCopy}
 					{/if}
 				</Button>
 			{/if}
