@@ -72,7 +72,7 @@
 			</Button>
 			<Button variant="outline" href="/import">
 				<FileInput class="h-4 w-4" />
-				Import Sigil
+				Import Identity
 			</Button>
 		</div>
 	</div>
@@ -98,7 +98,7 @@
 				</p>
 				<div class="mt-4 flex gap-2">
 					<Button onclick={() => (createOpen = true)}>Create persona</Button>
-					<Button variant="outline" href="/import">Import Sigil</Button>
+					<Button variant="outline" href="/import">Import Identity</Button>
 				</div>
 			{:else}
 				<ul class="space-y-3">

@@ -22,6 +22,7 @@ pub fn run() {
             persona_commands::list_personas_cmd,
             persona_commands::create_persona_cmd,
             persona_commands::import_persona_from_sigil_cmd,
+            persona_commands::import_persona_from_bundle_cmd,
             persona_commands::update_persona_profile_cmd,
             persona_commands::delete_persona_cmd,
             persona_commands::decrypt_persona_sigil_cmd,
