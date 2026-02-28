@@ -71,7 +71,13 @@
 		}
 	}
 
-	const isPersonaFile = $derived(selectedPath?.toLowerCase().endsWith('.persona') ?? false);
+	const SUPPORTED_EXTENSIONS = ['persona', 'sigil'] as const;
+	const fileExt = $derived(selectedPath?.toLowerCase().split('.').pop() ?? null);
+	const isPersonaFile = $derived(fileExt === 'persona');
+	const isSigilFile = $derived(fileExt === 'sigil');
+	const unsupportedMessage = $derived(
+		`Unsupported file type. Please select a ${SUPPORTED_EXTENSIONS.map((e) => '.' + e).join(' or ')} file.`
+	);
 
 	async function importPersona() {
 		if (!selectedPath) return;
@@ -355,7 +361,7 @@
 								</Button>
 								<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
 							</div>
-						{:else}
+						{:else if isSigilFile}
 							<div class="space-y-2">
 								<Label for="passphrase">Passphrase</Label>
 								<Input
@@ -377,6 +383,11 @@
 								</Button>
 								<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
 							</div>
+						{:else}
+							<p class="text-muted-foreground text-sm">
+								{unsupportedMessage}
+							</p>
+							<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
 						{/if}
 					{/if}
 				</div>
