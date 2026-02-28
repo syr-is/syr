@@ -72,7 +72,14 @@
 	}
 
 	const SUPPORTED_EXTENSIONS = ['persona', 'sigil'] as const;
-	const fileExt = $derived(selectedPath?.toLowerCase().split('.').pop() ?? null);
+	const fileExt = $derived(
+		(() => {
+			const p = selectedPath?.toLowerCase();
+			if (!p) return null;
+			const lastDot = p.lastIndexOf('.');
+			return lastDot > 0 ? p.slice(lastDot + 1) : null;
+		})()
+	);
 	const isPersonaFile = $derived(fileExt === 'persona');
 	const isSigilFile = $derived(fileExt === 'sigil');
 	const unsupportedMessage = $derived(
