@@ -75,11 +75,25 @@
 	}
 
 	function connectHeartbeat() {
-		if (heartbeatSource) return;
-		const src = new EventSource('/api/auth/independent-login/heartbeat');
+		if (heartbeatSource || !synerChallenge) return;
+		const src = new EventSource(
+			`/api/auth/independent-login/heartbeat?challenge_id=${encodeURIComponent(synerChallenge.challenge_id)}`
+		);
 		heartbeatSource = src;
 		src.addEventListener('heartbeat', () => {
 			fetchChallenge(true);
+		});
+		src.addEventListener('verified', (e: MessageEvent) => {
+			try {
+				const { token } = JSON.parse(e.data || '{}');
+				if (token) {
+					disconnectHeartbeat();
+					window.location.href =
+						resolve('/auth/independent-callback') + `?token=${encodeURIComponent(token)}`;
+				}
+			} catch (_) {
+				/* ignore */
+			}
 		});
 		src.onerror = () => {
 			disconnectHeartbeat();
@@ -92,6 +106,8 @@
 
 	$effect(() => {
 		if (authTab === 'independent' && synerChallenge) {
+			// Reconnect when challenge_id changes (e.g. after heartbeat refresh)
+			disconnectHeartbeat();
 			connectHeartbeat();
 		} else {
 			disconnectHeartbeat();

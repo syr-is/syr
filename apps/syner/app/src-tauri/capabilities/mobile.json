@@ -5,6 +5,7 @@
   "platforms": ["iOS", "android"],
   "permissions": [
     "barcode-scanner:default",
-    "barcode-scanner:allow-open-app-settings"
+    "barcode-scanner:allow-open-app-settings",
+    "log:default"
   ]
 }

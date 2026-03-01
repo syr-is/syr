@@ -5,6 +5,7 @@ import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { userRepository } from '$lib/repositories/user.repository';
+import { allowedOrigins, cors } from '$lib/config';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
@@ -139,8 +140,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// Add CORS headers
+	// Handle CORS preflight (OPTIONS)
+	const origin = event.request.headers.get('origin');
+	const isAllowedOrigin = origin && allowedOrigins.includes(origin);
+	if (event.request.method === 'OPTIONS') {
+		return new Response(null, {
+			status: 204,
+			headers: {
+				'Access-Control-Allow-Origin': isAllowedOrigin ? origin : (allowedOrigins[0] ?? '*'),
+				'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+				'Access-Control-Max-Age': '86400',
+				...(cors.credentials && isAllowedOrigin
+					? { 'Access-Control-Allow-Credentials': 'true' }
+					: {})
+			}
+		});
+	}
+
 	const response = await resolve(event);
+
+	// Add CORS headers for cross-origin requests (e.g. Syner / http://tauri.localhost)
+	if (origin && isAllowedOrigin) {
+		response.headers.set('Access-Control-Allow-Origin', origin);
+		if (cors.credentials) response.headers.set('Access-Control-Allow-Credentials', 'true');
+	}
 
 	// Add security headers
 	response.headers.set('X-Content-Type-Options', 'nosniff');

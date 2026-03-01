@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { error as logError, info } from '@tauri-apps/plugin-log';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { get } from 'svelte/store';
@@ -64,20 +64,34 @@
 
 	async function fetchChallenge() {
 		if (!challengeId || !instanceUrl) return;
+		const base = instanceUrl.replace(/\/$/, '');
+		const url = `${base}/api/auth/independent-login/challenge/${challengeId}`;
+		info(`[independent-login] Fetching challenge: ${url}`);
 		try {
-			const base = instanceUrl.replace(/\/$/, '');
-			const res = await fetch(`${base}/api/auth/independent-login/challenge/${challengeId}`);
+			const res = await fetch(url);
+			info(`[independent-login] Challenge response status: ${res.status} ${res.statusText}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				error = data.error_description ?? 'Challenge expired or not found';
+				const errDesc = data.error_description ?? 'Challenge expired or not found';
+				error = errDesc;
+				logError(
+					`[independent-login] Challenge fetch failed: ${res.status} - ${JSON.stringify(data)}`
+				);
 				return;
 			}
 			const data = await res.json();
 			message = data.message;
 			domain = data.domain;
 			error = null;
+			info(`[independent-login] Challenge loaded for domain: ${domain}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch challenge';
+			const msg = e instanceof Error ? e.message : String(e);
+			const cause = e instanceof Error && e.cause ? String(e.cause) : '';
+			const stack = e instanceof Error ? e.stack : '';
+			logError(
+				`[independent-login] Challenge fetch error: ${msg}${cause ? ` (cause: ${cause})` : ''}${stack ? `\n${stack}` : ''}`
+			);
+			error = msg;
 		}
 	}
 
@@ -149,6 +163,9 @@
 		}
 		loading = true;
 		error = null;
+		const base = instanceUrl.replace(/\/$/, '');
+		const verifyUrl = `${base}/api/auth/independent-login/verify`;
+		info(`[independent-login] Signing challenge and verifying at ${verifyUrl}`);
 		try {
 			const payloadBytes = Array.from(new TextEncoder().encode(message));
 			const sigBytes = await invoke<number[]>('sign_payload', {
@@ -158,8 +175,8 @@
 			const signature = await invoke<string>('encode_multibase_cmd', {
 				bytes: sigBytes
 			});
-			const base = instanceUrl.replace(/\/$/, '');
-			const verifyRes = await fetch(`${base}/api/auth/independent-login/verify`, {
+			info(`[independent-login] Signature created, posting verify request`);
+			const verifyRes = await fetch(verifyUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -168,22 +185,30 @@
 					signature
 				})
 			});
+			info(`[independent-login] Verify response: ${verifyRes.status} ${verifyRes.statusText}`);
 			const verifyData = await verifyRes.json();
 			if (!verifyRes.ok) {
 				const errMsg = verifyData.error_description ?? 'Verification failed';
 				error = errMsg;
+				logError(
+					`[independent-login] Verify failed: ${verifyRes.status} - ${JSON.stringify(verifyData)}`
+				);
 				toast.error(errMsg);
 				return;
 			}
-			const token = verifyData.callback_token;
-			const callbackUrl = `${callbackBase}?token=${encodeURIComponent(token)}`;
-			await openUrl(callbackUrl);
-			toast.success('Sign in complete. Returning to browser.');
+			info(`[independent-login] Verification success`);
+			toast.success('Sign in complete. Check the browser where you scanned the QR.');
 			lockSession();
 			goto('/');
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-			toast.error(error);
+			const msg = e instanceof Error ? e.message : String(e);
+			const cause = e instanceof Error && e.cause ? String(e.cause) : '';
+			const stack = e instanceof Error ? e.stack : '';
+			logError(
+				`[independent-login] Sign/verify error: ${msg}${cause ? ` (cause: ${cause})` : ''}${stack ? `\n${stack}` : ''}`
+			);
+			error = msg;
+			toast.error(msg);
 		} finally {
 			loading = false;
 		}

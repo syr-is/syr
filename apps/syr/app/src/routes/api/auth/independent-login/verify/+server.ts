@@ -7,6 +7,7 @@ import {
 	deleteChallenge,
 	setCallbackToken
 } from '$lib/server/independent-login-store';
+import { notifyVerified } from '$lib/server/independent-login-broadcast';
 
 /**
  * POST /api/auth/independent-login/verify
@@ -44,6 +45,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 		const callbackToken = crypto.randomUUID();
 		await setCallbackToken(callbackToken, jwt);
+
+		// Notify SSE clients (login page with QR) so they complete login instead of opening on phone
+		notifyVerified(data.challenge_id, callbackToken);
 
 		return json({
 			success: true as const,

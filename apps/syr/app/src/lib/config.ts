@@ -74,20 +74,28 @@ function normalizeOrigin(url: string): string {
 	}
 }
 
+/** Tauri webview origin (Syner app) - always allowed for independent-login. */
+const TAURI_ORIGIN = 'http://tauri.localhost';
+
 /**
  * Allowed origins for CORS and independent-login challenge validation.
  * Uses ALLOWED_ORIGINS if set (comma-separated), otherwise [PUBLIC_URL].
+ * TAURI_ORIGIN is always included so Syner can reach the verify endpoint.
  */
 function allowedOriginsList(parsed: Config): string[] {
 	const raw = parsed.ALLOWED_ORIGINS?.trim();
+	let list: string[];
 	if (raw) {
-		const list = raw
+		list = raw
 			.split(',')
 			.map((o) => normalizeOrigin(o.trim()))
 			.filter(Boolean);
-		if (list.length > 0) return list;
+		if (list.length === 0) list = [normalizeOrigin(parsed.PUBLIC_URL)];
+	} else {
+		list = [normalizeOrigin(parsed.PUBLIC_URL)];
 	}
-	return [normalizeOrigin(parsed.PUBLIC_URL)];
+	if (!list.includes(TAURI_ORIGIN)) list.push(TAURI_ORIGIN);
+	return list;
 }
 
 /** Resolved config with CORS_ORIGIN always set (from PUBLIC_URL when not set). */

@@ -5,6 +5,17 @@ mod persona_commands;
 pub fn run() {
     let builder = {
         let b = tauri::Builder::default()
+            .plugin(
+                tauri_plugin_log::Builder::default()
+                    .target(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::Stdout,
+                    ))
+                    .target(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::Webview,
+                    ))
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )
             .plugin(tauri_plugin_fs::init())
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_opener::init())

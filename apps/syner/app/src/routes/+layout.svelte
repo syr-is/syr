@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Toaster } from '@syr-is/ui/sonner';
 	import { ModeWatcher } from 'mode-watcher';
 	import { SidebarProvider, SidebarTrigger, SidebarInset } from '@syr-is/ui/sidebar';
 	import { page } from '$app/state';
+	import { attachConsole } from '@tauri-apps/plugin-log';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import BottomBar from '$lib/components/bottom-bar.svelte';
 	import DeepLinkHandler from '$lib/components/deep-link-handler.svelte';
@@ -10,6 +12,10 @@
 	import '../app.css';
 
 	let { children } = $props();
+
+	onMount(() => {
+		attachConsole().catch(() => {});
+	});
 
 	const isMobile = new IsMobile();
 	let open = $state(true);
