@@ -17,21 +17,22 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Identity Model Specification
 
-| Requirement                       | Status          | Details                                                                                                                     |
-| --------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Root keypair generation (Ed25519) | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()` and `generateDeviceKeypair()` using `@noble/ed25519`.               |
-| DID derivation (`did:syr`)        | **Implemented** | `packages/crypto/src/encoding.ts` — `deriveDid()` produces `did:syr:z6Mk...` from Ed25519 public key.                       |
-| Identity independent of hosting   | **Implemented** | Identity is DID-based, derived from public key. Registry maps DID to provider.                                              |
-| Profile mutations signed          | **Partial**     | `verifySignedMutation()` exists in `identity.controller.ts` but is not yet enforced on all mutations.                       |
-| Identity exportable               | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets. |
-| Identity importable               | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                        |
-| Delegated device keys             | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.              |
-| Provider hosting                  | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` discovery endpoint missing.        |
-| Registry resolution               | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did` and `POST /update` with signature verification.                |
-| Identity-based login              | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.  |
-| Attestations / VCs                | **Partial**     | Type schemas exist in `packages/types/src/credentials.ts`. No API endpoints yet.                                            |
-| Layered identity assurance        | **Partial**     | Permissionless layer exists (any user can register). Social and legal layers missing.                                       |
-| Migration model                   | **Implemented** | Export-bundle + import endpoints enable full migration. Registry update to point to new provider.                           |
+| Requirement                        | Status          | Details                                                                                                                                                      |
+| ---------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Root keypair generation (Ed25519)  | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()` and `generateDeviceKeypair()` using `@noble/ed25519`.                                                |
+| DID derivation (`did:syr`)         | **Implemented** | `packages/crypto/src/encoding.ts` — `deriveDid()` produces `did:syr:z6Mk...` from Ed25519 public key.                                                        |
+| Identity independent of hosting    | **Implemented** | Identity is DID-based, derived from public key. Registry maps DID to provider.                                                                               |
+| Profile mutations signed           | **Partial**     | `verifySignedMutation()` exists in `identity.controller.ts` but is not yet enforced on all mutations.                                                        |
+| Identity exportable                | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets.                                  |
+| Identity importable                | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                                                         |
+| Delegated device keys              | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.                                               |
+| Provider hosting                   | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` discovery endpoint missing.                                         |
+| Registry resolution                | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did` and `POST /update` with signature verification.                                                 |
+| Identity-based login               | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.                                   |
+| Independent login (challenge-sign) | **Implemented** | `POST /api/auth/independent-login/challenge`, `POST /api/auth/independent-login/verify`, `/auth/independent-callback`. QR + syr:// deep link + Syner opener. |
+| Attestations / VCs                 | **Partial**     | Type schemas exist in `packages/types/src/credentials.ts`. No API endpoints yet.                                                                             |
+| Layered identity assurance         | **Partial**     | Permissionless layer exists (any user can register). Social and legal layers missing.                                                                        |
+| Migration model                    | **Implemented** | Export-bundle + import endpoints enable full migration. Registry update to point to new provider.                                                            |
 
 ---
 

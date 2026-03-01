@@ -330,6 +330,7 @@ Custom URL scheme: `syr://`
 | ------ | --------------------------------------------------------------- | ----------------------- |
 | Pair   | `syr://pair?code={code}&instance={url}`                         | Initiate device pairing |
 | Sign   | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}` | Open a signing request  |
+| Login  | `syr://login?challenge={id}&instance={url}&callback={url}`      | Independent login flow  |
 
 **Trusted-instance validation:** The `instance` URL from deep links MUST be validated against a user-configured trusted-instance whitelist before Syner connects. Syner MUST reject or prompt the user for any `instance` not on the trusted list. Canonicalize and percent-decode the URL before comparison. When an untrusted `instance` is encountered, Syner may: reject (refuse to connect), warn (show confirmation dialog), or prompt (ask user to add to whitelist). The chosen behavior should be documented in Syner's UX.
 

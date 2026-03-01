@@ -18,6 +18,9 @@ export * from './activitypub.js';
 // Identity-Based Auth types (replaces OAuth)
 export * from './identity-auth.js';
 
+// Independent Login (challenge-sign-verify)
+export * from './independent-login.js';
+
 // Event types
 export * from './events.js';
 

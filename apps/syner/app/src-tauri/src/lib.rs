@@ -3,10 +3,30 @@ mod persona_commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+    let builder = {
+        let b = tauri::Builder::default()
+            .plugin(tauri_plugin_fs::init())
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_opener::init())
+            .plugin(tauri_plugin_deep_link::init());
+        #[cfg(target_os = "android")]
+        let b = b.plugin(tauri_plugin_android_fs::init());
+        b
+    };
+
+    builder
+        .setup(|_app| {
+            #[cfg(mobile)]
+            {
+                _app.handle().plugin(tauri_plugin_barcode_scanner::init());
+            }
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = _app.deep_link().register_all();
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             crypto_commands::sign_payload,
             crypto_commands::decrypt_sigil_cmd,

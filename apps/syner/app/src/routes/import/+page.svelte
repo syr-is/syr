@@ -71,20 +71,35 @@
 		}
 	}
 
-	const SUPPORTED_EXTENSIONS = ['persona', 'sigil'] as const;
-	const fileExt = $derived(
-		(() => {
-			const p = selectedPath?.toLowerCase();
-			if (!p) return null;
-			const lastDot = p.lastIndexOf('.');
-			return lastDot > 0 ? p.slice(lastDot + 1) : null;
-		})()
-	);
-	const isPersonaFile = $derived(fileExt === 'persona');
-	const isSigilFile = $derived(fileExt === 'sigil');
-	const unsupportedMessage = $derived(
-		`Unsupported file type. Please select a ${SUPPORTED_EXTENSIONS.map((e) => '.' + e).join(' or ')} file.`
-	);
+	const _SUPPORTED_EXTENSIONS = ['persona', 'sigil'] as const;
+
+	/**
+	 * Path to send to backend. On Android, the dialog returns content URIs or encoded
+	 * paths that the backend handles via tauri-plugin-android-fs. Pass as-is.
+	 * On desktop, the dialog returns filesystem paths - also pass as-is.
+	 */
+	function pathForBackend(path: string): string {
+		return path;
+	}
+
+	/** Extract file extension robustly: handles URLs, content URIs, spaces, encoding. */
+	function getFileExtension(path: string | null): string | null {
+		if (!path) return null;
+		try {
+			const decoded = decodeURIComponent(path);
+			const segments = decoded.split(/[/\\]/);
+			const filename = segments[segments.length - 1] || '';
+			const lastDot = filename.lastIndexOf('.');
+			return lastDot > 0 ? filename.slice(lastDot + 1).toLowerCase() : null;
+		} catch {
+			return null;
+		}
+	}
+
+	const fileExt = $derived(getFileExtension(selectedPath));
+	const isPersonaFile = $derived(fileExt === 'persona' || fileExt === 'zip');
+	const isSigilFile = $derived(fileExt === 'sigil' || fileExt === 'json');
+	const _isUnknownType = $derived(!fileExt || (!isPersonaFile && !isSigilFile));
 
 	async function importPersona() {
 		if (!selectedPath) return;
@@ -92,7 +107,7 @@
 		error = null;
 		try {
 			await invoke('import_persona_from_bundle_cmd', {
-				path: selectedPath,
+				path: pathForBackend(selectedPath),
 				replaceIfExists: false
 			});
 			toast.success('Persona imported');
@@ -107,7 +122,7 @@
 				if (confirmed) {
 					try {
 						await invoke('import_persona_from_bundle_cmd', {
-							path: selectedPath,
+							path: pathForBackend(selectedPath),
 							replaceIfExists: true
 						});
 						toast.success('Persona replaced');
@@ -137,7 +152,9 @@
 		error = null;
 		result = null;
 		try {
-			const sigilJson = await invoke<string>('read_file_content_cmd', { path: selectedPath });
+			const sigilJson = await invoke<string>('read_file_content_cmd', {
+				path: pathForBackend(selectedPath)
+			});
 			const seed = await invoke<number[]>('decrypt_sigil_cmd', {
 				sigilJson,
 				passphrase: passphrase.trim()
@@ -398,8 +415,38 @@
 							</div>
 						{:else}
 							<p class="text-muted-foreground text-sm">
-								{unsupportedMessage}
+								File type unclear (extension missing or renamed). Try importing by type:
 							</p>
+							<div class="flex flex-col gap-4">
+								<div class="flex gap-2">
+									<Button onclick={importPersona} disabled={loading}>
+										{#if loading}
+											<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+											Importing…
+										{:else}
+											Import as persona
+										{/if}
+									</Button>
+								</div>
+								<div class="space-y-2">
+									<Label for="passphrase">Or import as sigil</Label>
+									<Input
+										id="passphrase"
+										type="password"
+										bind:value={passphrase}
+										placeholder="Enter passphrase"
+										disabled={loading}
+									/>
+									<Button onclick={importSigil} disabled={loading || !passphrase.trim()}>
+										{#if loading}
+											<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+											Importing…
+										{:else}
+											Import as sigil
+										{/if}
+									</Button>
+								</div>
+							</div>
 							<Button variant="outline" onclick={reset} disabled={loading}>Cancel</Button>
 						{/if}
 					{/if}
