@@ -52,8 +52,10 @@ Custom URL scheme: `syr://`
 | Login  | `syr://login?challenge={id}&instance={url}&callback={url}` | Independent login challenge |
 
 - `challenge` — Challenge ID from the server
-- `instance` — SYR instance base URL (e.g. `https://my.syr.app`)
-- `callback` — Base URL for redirect after verification (e.g. `https://my.syr.app/auth/independent-callback`)
+- `instance` — SYR instance base URL; **must be URL-encoded** (e.g. `encodeURIComponent`)
+- `callback` — Base URL for redirect after verification; **must be URL-encoded**
+
+**Example:** `instance=https%3A%2F%2Fmy.syr.app` and `callback=https%3A%2F%2Fmy.syr.app%2Fauth%2Findependent-callback`
 
 Syner opens via deep link, fetches challenge details, signs, and uses the opener plugin to redirect the browser to the callback URL with a one-time token.
 

@@ -46,10 +46,9 @@ export async function setCallbackToken(token: string, jwt: string): Promise<void
 
 /**
  * Retrieve and consume a callback token. Returns JWT or null.
+ * Uses atomic get-and-delete to prevent TOCTOU race (multiple callers receiving same JWT).
  */
 export async function consumeCallbackToken(token: string): Promise<string | null> {
-	const entry = await kvService.get<{ jwt: string }>(KV_CALLBACK_TYPE, token);
-	if (!entry) return null;
-	await kvService.delete(KV_CALLBACK_TYPE, token);
-	return entry.jwt;
+	const entry = await kvService.getAndDelete<{ jwt: string }>(KV_CALLBACK_TYPE, token);
+	return entry?.jwt ?? null;
 }

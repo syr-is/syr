@@ -6,6 +6,7 @@
   "permissions": [
     "barcode-scanner:default",
     "barcode-scanner:allow-open-app-settings",
+    "deep-link:default",
     "log:default"
   ]
 }

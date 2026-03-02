@@ -80,7 +80,7 @@
 						<Input
 							id="base-path"
 							bind:value={basePath}
-							placeholder="e.g. /path/to/syr-personas"
+							placeholder="Personas folder path…"
 							disabled={saving}
 						/>
 						<Button variant="outline" onclick={pickDirectory} disabled={saving}>

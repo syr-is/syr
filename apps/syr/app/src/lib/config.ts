@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 // Load .env from monorepo root (Vite envDir not honored for $env/dynamic/private when run from apps/syr/app)
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 loadDotenv({ path: join(rootDir, '.env') });
-loadDotenv({ path: join(rootDir, '.env.local'), override: false });
+loadDotenv({ path: join(rootDir, '.env.local'), override: true });
 
 /**
  * Configuration Schema
@@ -64,7 +64,7 @@ const ConfigSchema = z.object({
 
 type Config = z.infer<typeof ConfigSchema>;
 
-/** Normalize origin for comparison (strip trailing slash, lowercase) */
+/** Normalize origin for comparison (scheme + host + port only; no path/query/userinfo). */
 function normalizeOrigin(url: string): string {
 	try {
 		const u = new URL(url);
@@ -74,13 +74,14 @@ function normalizeOrigin(url: string): string {
 	}
 }
 
-/** Tauri webview origin (Syner app) - always allowed for independent-login. */
-const TAURI_ORIGIN = 'http://tauri.localhost';
+/** Exact allowed origins for CORS and independent-login. No substring matching. */
+const TAURI_ORIGIN = 'http://tauri.localhost' as const;
 
 /**
  * Allowed origins for CORS and independent-login challenge validation.
  * Uses ALLOWED_ORIGINS if set (comma-separated), otherwise [PUBLIC_URL].
  * TAURI_ORIGIN is always included so Syner can reach the verify endpoint.
+ * Validation uses exact string match (allowedOrigins.includes(origin)) - no substring checks.
  */
 function allowedOriginsList(parsed: Config): string[] {
 	const raw = parsed.ALLOWED_ORIGINS?.trim();
@@ -96,6 +97,12 @@ function allowedOriginsList(parsed: Config): string[] {
 	}
 	if (!list.includes(TAURI_ORIGIN)) list.push(TAURI_ORIGIN);
 	return list;
+}
+
+/** Check if origin is allowed. Uses exact match only (no substring). */
+export function isAllowedOrigin(origin: string, allowed: readonly string[]): boolean {
+	const normalized = normalizeOrigin(origin);
+	return allowed.some((a) => a === normalized);
 }
 
 /** Resolved config with CORS_ORIGIN always set (from PUBLIC_URL when not set). */

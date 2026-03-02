@@ -5,7 +5,7 @@ import {
 	IndependentLoginChallengeRequestSchema,
 	type IndependentLoginChallengeMessage
 } from '@syr-is/types';
-import { config, independentLogin, allowedOrigins } from '$lib/config';
+import { config, independentLogin, allowedOrigins, isAllowedOrigin } from '$lib/config';
 import { setChallenge } from '$lib/server/independent-login-store';
 
 /**
@@ -19,9 +19,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = IndependentLoginChallengeRequestSchema.parse(body);
 
-		const origin = new URL(data.origin);
-		const originStr = origin.origin;
-		if (!allowedOrigins.includes(originStr)) {
+		const originStr = new URL(data.origin).origin;
+		if (!isAllowedOrigin(originStr, allowedOrigins)) {
 			return json(
 				{ error: 'invalid_origin', error_description: 'Origin does not match instance' },
 				{ status: 403 }

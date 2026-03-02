@@ -4,6 +4,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { identityRepository } from '$lib/repositories/identity.repository';
+import { jwt } from '$lib/config';
 import { generateAccessToken } from '$lib/server/auth';
 import type { User } from '@syr-is/types';
 
@@ -120,7 +121,7 @@ export class IndependentLoginController {
 
 		return generateAccessToken(
 			{ userId: user.id.toString(), sessionId: session.id.toString() },
-			'7d'
+			jwt.expiresIn
 		);
 	}
 

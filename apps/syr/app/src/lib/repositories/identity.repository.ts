@@ -184,6 +184,8 @@ export class IdentityRepository extends BaseRepository<Identity> {
 		now: Date;
 	}): Promise<void> {
 		const { did, publicKey, userId, now } = params;
+		let createSucceeded = false;
+		let updateSucceeded = false;
 		try {
 			await this.db.query(
 				`CREATE identity SET
@@ -193,12 +195,18 @@ export class IdentityRepository extends BaseRepository<Identity> {
 					created_at = $now;`,
 				{ did, publicKey, userId, now }
 			);
+			createSucceeded = true;
 			await this.db.query(`UPDATE $userId SET did = $did;`, { userId, did });
+			updateSucceeded = true;
 		} catch (error) {
 			console.error('[identity.repository] Error during external identity creation:', error);
 			try {
-				await this.db.query(`DELETE identity WHERE did = $did;`, { did });
-				await this.db.query(`UPDATE $userId UNSET did;`, { userId });
+				if (createSucceeded) {
+					await this.db.query(`DELETE identity WHERE did = $did;`, { did });
+				}
+				if (updateSucceeded) {
+					await this.db.query(`UPDATE $userId UNSET did;`, { userId });
+				}
 			} catch (rollbackError) {
 				console.error('[identity.repository] Rollback failed:', rollbackError);
 			}

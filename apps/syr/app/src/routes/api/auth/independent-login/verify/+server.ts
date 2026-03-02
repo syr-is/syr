@@ -28,6 +28,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			);
 		}
 
+		// Consume challenge immediately to prevent replay. If verify fails, user must fetch new challenge.
+		await deleteChallenge(data.challenge_id);
+
 		// Future: if invite_code_required && !valid invite -> return invite_required
 		const user = await independentLoginController.verifyAndGetUser(
 			data.challenge_id,
@@ -36,8 +39,6 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			data.signature,
 			data.invite_code
 		);
-
-		await deleteChallenge(data.challenge_id);
 
 		const ip = getClientAddress?.() || request.headers.get('x-forwarded-for') || undefined;
 		const userAgent = request.headers.get('user-agent') || undefined;

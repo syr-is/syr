@@ -20,6 +20,7 @@
 		challenge_id: string;
 		deeplink_url: string;
 		expires_in: number;
+		expiresAt: number; // timestamp when challenge expires (for heartbeat refresh logic)
 		qrDataUrl: string;
 	} | null>(null);
 	let synerLoading = $state(false);
@@ -48,6 +49,7 @@
 				challenge_id: data.challenge_id,
 				deeplink_url: data.deeplink_url,
 				expires_in: data.expires_in,
+				expiresAt: Date.now() + data.expires_in * 1000,
 				qrDataUrl
 			};
 		} catch (e) {
@@ -81,6 +83,10 @@
 		);
 		heartbeatSource = src;
 		src.addEventListener('heartbeat', () => {
+			// Only refresh when current challenge expired or about to expire (30s buffer)
+			// Avoids dropping an in-progress sign-in when user is scanning/signing
+			if (!synerChallenge) return;
+			if (Date.now() < synerChallenge.expiresAt - 30_000) return;
 			fetchChallenge(true);
 		});
 		src.addEventListener('verified', (e: MessageEvent) => {

@@ -121,5 +121,6 @@ Page that exchanges the one-time token for a session cookie and redirects to `/`
 
 **Behavior**
 
+- Missing token → redirect to `/login?error=missing_token`
 - Valid token → set session cookie, redirect to `/`
 - Invalid/expired → redirect to `/login?error=expired`

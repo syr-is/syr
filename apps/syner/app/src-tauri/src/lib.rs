@@ -29,14 +29,14 @@ pub fn run() {
         .setup(|_app| {
             #[cfg(mobile)]
             {
-                _app.handle().plugin(tauri_plugin_barcode_scanner::init());
+                _app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
             }
             #[cfg(any(windows, target_os = "linux"))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
-                let _ = _app.deep_link().register_all();
+                _app.deep_link().register_all()?;
             }
-            Ok(())
+            Ok::<(), Box<dyn std::error::Error>>(())
         })
         .invoke_handler(tauri::generate_handler![
             crypto_commands::sign_payload,
