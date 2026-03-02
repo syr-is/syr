@@ -169,7 +169,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const response = await resolve(event);
 
-	response.headers.set('Vary', 'Origin');
+	const existingVary = response.headers.get('Vary') ?? '';
+	const varySet = new Set(
+		existingVary
+			.split(',')
+			.map((v) => v.trim())
+			.filter(Boolean)
+	);
+	varySet.add('Origin');
+	response.headers.set('Vary', [...varySet].join(', '));
 	// Add CORS headers for cross-origin requests (allowed origins from config)
 	if (origin && originAllowed) {
 		response.headers.set('Access-Control-Allow-Origin', origin);

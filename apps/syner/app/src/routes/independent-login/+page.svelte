@@ -14,11 +14,21 @@
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
 	import { toAvatarSrc, getInitials } from '$lib/utils';
+	import { validateInstanceUrl } from '$lib/utils/syr-url';
 	import type { Persona } from '$lib/types';
+
+	function redactErrorPayload(data: unknown): string {
+		if (!data || typeof data !== 'object') return String(data);
+		const o = data as Record<string, unknown>;
+		return JSON.stringify({
+			error: o.error,
+			error_description: o.error_description,
+			error_code: o.error_code
+		});
+	}
 
 	let challengeId = $state<string | null>(null);
 	let instanceUrl = $state<string | null>(null);
-	let callbackBase = $state<string | null>(null);
 	let message = $state<string | null>(null);
 	let domain = $state<string | null>(null);
 	let personas = $state<Persona[]>([]);
@@ -51,10 +61,11 @@
 		const url = page.url;
 		const c = url.searchParams.get('challenge');
 		const i = url.searchParams.get('instance');
-		const cb = url.searchParams.get('callback');
 		if (c) challengeId = c;
-		if (i) instanceUrl = i;
-		if (cb) callbackBase = cb;
+		if (i) {
+			const validated = validateInstanceUrl(i);
+			instanceUrl = validated ?? null;
+		}
 	});
 
 	$effect(() => {
@@ -76,7 +87,7 @@
 				const errDesc = data.error_description ?? 'Challenge expired or not found';
 				error = errDesc;
 				logError(
-					`[independent-login] Challenge fetch failed: ${res.status} - ${JSON.stringify(data)}`
+					`[independent-login] Challenge fetch failed: ${res.status} - ${redactErrorPayload(data)}`
 				);
 				return;
 			}
@@ -150,7 +161,7 @@
 	async function signAndVerify() {
 		const s = get(sessionSeed);
 		const persona = get(selectedPersona);
-		if (!challengeId || !instanceUrl || !callbackBase || !message) {
+		if (!challengeId || !instanceUrl || !message) {
 			error = 'Missing challenge data.';
 			return;
 		}
@@ -192,7 +203,7 @@
 				const errMsg = verifyData.error_description ?? 'Verification failed';
 				error = errMsg;
 				logError(
-					`[independent-login] Verify failed: ${verifyRes.status} - ${JSON.stringify(verifyData)}`
+					`[independent-login] Verify failed: ${verifyRes.status} - ${redactErrorPayload(verifyData)}`
 				);
 				toast.error(errMsg);
 				return;

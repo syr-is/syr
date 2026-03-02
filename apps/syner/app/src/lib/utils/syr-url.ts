@@ -21,6 +21,21 @@ function isValidUrlScheme(u: URL): boolean {
 }
 
 /**
+ * Validates an instance URL string. Returns normalized origin (scheme + host + port) or null.
+ * Allows https always; http only for localhost and private networks.
+ */
+export function validateInstanceUrl(raw: string): string | null {
+	try {
+		const u = new URL(raw);
+		if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+		if (!isValidUrlScheme(u)) return null;
+		return u.origin;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Parses a syr://login URL and extracts challenge, instance, and callback params.
  * Used for both deep-link handling and QR scan flow.
  * Validates instance and callback: must be valid URLs with safe scheme
@@ -37,8 +52,8 @@ export function parseSyrLoginUrl(
 		const callbackRaw = url.searchParams.get('callback');
 		if (!challenge || !instanceRaw || !callbackRaw) return null;
 
-		const instance = decodeURIComponent(instanceRaw);
-		const callback = decodeURIComponent(callbackRaw);
+		const instance = instanceRaw;
+		const callback = callbackRaw;
 
 		const instanceUrl = new URL(instance);
 		const callbackUrl = new URL(callback);
