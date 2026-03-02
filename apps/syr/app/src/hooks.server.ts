@@ -170,7 +170,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
 	response.headers.set('Vary', 'Origin');
-	// Add CORS headers for cross-origin requests (e.g. Syner / http://tauri.localhost)
+	// Add CORS headers for cross-origin requests (allowed origins from config)
 	if (origin && originAllowed) {
 		response.headers.set('Access-Control-Allow-Origin', origin);
 		if (cors.credentials) response.headers.set('Access-Control-Allow-Credentials', 'true');

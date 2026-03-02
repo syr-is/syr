@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
+	import { fetch } from '@tauri-apps/plugin-http';
 	import { error as logError, info } from '@tauri-apps/plugin-log';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';

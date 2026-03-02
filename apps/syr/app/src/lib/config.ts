@@ -74,29 +74,21 @@ function normalizeOrigin(url: string): string {
 	}
 }
 
-/** Exact allowed origins for CORS and independent-login. No substring matching. */
-const TAURI_ORIGIN = 'http://tauri.localhost' as const;
-
 /**
  * Allowed origins for CORS and independent-login challenge validation.
  * Uses ALLOWED_ORIGINS if set (comma-separated), otherwise [PUBLIC_URL].
- * TAURI_ORIGIN is always included so Syner can reach the verify endpoint.
  * Validation uses exact string match (allowedOrigins.includes(origin)) - no substring checks.
  */
 function allowedOriginsList(parsed: Config): string[] {
 	const raw = parsed.ALLOWED_ORIGINS?.trim();
-	let list: string[];
 	if (raw) {
-		list = raw
+		const list = raw
 			.split(',')
 			.map((o) => normalizeOrigin(o.trim()))
 			.filter(Boolean);
-		if (list.length === 0) list = [normalizeOrigin(parsed.PUBLIC_URL)];
-	} else {
-		list = [normalizeOrigin(parsed.PUBLIC_URL)];
+		return list.length > 0 ? list : [normalizeOrigin(parsed.PUBLIC_URL)];
 	}
-	if (!list.includes(TAURI_ORIGIN)) list.push(TAURI_ORIGIN);
-	return list;
+	return [normalizeOrigin(parsed.PUBLIC_URL)];
 }
 
 /** Check if origin is allowed. Uses exact match only (no substring). */

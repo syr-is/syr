@@ -25,6 +25,7 @@
 		"@tauri-apps/plugin-opener": "^2",
 		"@tauri-apps/plugin-barcode-scanner": "^2",
 		"@tauri-apps/plugin-deep-link": "^2",
+		"@tauri-apps/plugin-http": "^2",
 		"@tauri-apps/plugin-log": "^2",
 		"mode-watcher": "^1.1.0",
 		"svelte-sonner": "^1.0.5"
