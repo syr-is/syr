@@ -138,12 +138,52 @@ pub fn persona_exists_cmd(app: tauri::AppHandle, persona_id: String) -> Result<b
 
 const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
 
+#[allow(dead_code)]
 fn extension_from_path(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .filter(|e| IMAGE_EXTENSIONS.iter().any(|&ext| ext == e))
         .unwrap_or_else(|| "png".to_string())
+}
+
+/// Extracts image extension from path or content URI. Content URIs (e.g. on Android) don't parse via Path.
+fn extension_from_path_or_uri(s: &str) -> String {
+    let segments: Vec<_> = s.split(&['/', '\\'][..]).collect();
+    let last = segments.last().unwrap_or(&s);
+    let ext = last.rsplit('.').next().unwrap_or("").to_lowercase();
+    if IMAGE_EXTENSIONS.iter().any(|e| *e == ext) {
+        ext
+    } else {
+        "png".to_string()
+    }
+}
+
+/// Copies image from source to dest. On Android, source may be a content URI (uses android-fs).
+#[allow(unused_variables)]
+fn copy_image_from_source(
+    app: &tauri::AppHandle,
+    source_path: &str,
+    dest: &Path,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let file_path = convert_string_to_file_path(source_path);
+        let mut file = app
+            .android_fs()
+            .open_file(&file_path)
+            .map_err(|e| format!("Path not found or invalid: {}", e))?;
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut buf).map_err(|e| e.to_string())?;
+        std::fs::write(dest, buf).map_err(|e| e.to_string())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        std::fs::copy(source_path, dest)
+            .map_err(|e| e.to_string())
+            .map(|_| ())
+    }
 }
 
 fn resolve_relative_asset(persona_dir: &Path, url: Option<&String>) -> Option<String> {
@@ -540,13 +580,13 @@ pub fn save_persona_avatar_cmd(
     if !persona_dir.exists() {
         return Err("Persona not found".to_string());
     }
-    let ext = extension_from_path(Path::new(&source_path));
+    let ext = extension_from_path_or_uri(&source_path);
     let filename = format!("avatar.{}", ext);
     let relative_url = format!("./{}", filename);
 
     remove_asset_files(&persona_dir, "avatar");
     let dest = persona_dir.join(&filename);
-    std::fs::copy(&source_path, &dest).map_err(|e| e.to_string())?;
+    copy_image_from_source(&app, &source_path, &dest)?;
 
     let profile_path = persona_dir.join("profile.json");
     let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
@@ -569,13 +609,13 @@ pub fn save_persona_banner_cmd(
     if !persona_dir.exists() {
         return Err("Persona not found".to_string());
     }
-    let ext = extension_from_path(Path::new(&source_path));
+    let ext = extension_from_path_or_uri(&source_path);
     let filename = format!("banner.{}", ext);
     let relative_url = format!("./{}", filename);
 
     remove_asset_files(&persona_dir, "banner");
     let dest = persona_dir.join(&filename);
-    std::fs::copy(&source_path, &dest).map_err(|e| e.to_string())?;
+    copy_image_from_source(&app, &source_path, &dest)?;
 
     let profile_path = persona_dir.join("profile.json");
     let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
