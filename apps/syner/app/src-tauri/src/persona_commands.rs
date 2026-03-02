@@ -6,6 +6,9 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use tauri::Manager;
 
+#[cfg(target_os = "android")]
+use tauri_plugin_android_fs::{convert_string_to_file_path, AndroidFs, AndroidFsExt};
+
 use syr_crypto_core::{
     encoding::{derive_did, encode_multibase, ED25519_MULTICODEC_PREFIX},
     keys::{derive_public_key_from_seed, generate_root_keypair},
@@ -33,10 +36,12 @@ pub struct Persona {
     pub created_at: String,
 }
 
-fn default_personas_path() -> Result<PathBuf, String> {
-    dirs::document_dir()
+/// Default personas storage path. Uses app data dir (works on Android/iOS where document_dir is None).
+fn default_personas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())
         .map(|p| p.join("syr-personas"))
-        .ok_or_else(|| "Could not determine Documents directory".to_string())
 }
 
 fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -67,7 +72,7 @@ pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let config = load_config(app)?;
     match config.personas_base_path {
         Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
-        _ => default_personas_path(),
+        _ => default_personas_path(app),
     }
 }
 
@@ -290,12 +295,11 @@ fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<P
         return Err("Path is not a regular file".to_string());
     }
 
-    let ext = canonical
-        .extension()
-        .and_then(|e| e.to_str())
-        .ok_or("File must have .persona extension")?;
-    if !ext.eq_ignore_ascii_case("persona") {
-        return Err("File must have .persona extension".to_string());
+    // Accept .persona extension or validate by content (handles renamed files, filenames with spaces)
+    if let Some(ext) = canonical.extension().and_then(|e| e.to_str()) {
+        if !ext.eq_ignore_ascii_case("persona") && !ext.eq_ignore_ascii_case("zip") {
+            return Err("File must be a .persona bundle or .zip archive".to_string());
+        }
     }
 
     let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -325,15 +329,30 @@ fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<P
     Ok(canonical)
 }
 
+/// Opens a persona bundle file. On Android uses content URIs via android-fs; on desktop uses path validation.
+fn open_persona_bundle_file(app: &tauri::AppHandle, path: &str) -> Result<File, String> {
+    #[cfg(target_os = "android")]
+    {
+        let file_path = convert_string_to_file_path(path);
+        app.android_fs()
+            .open_file(&file_path)
+            .map_err(|e| format!("Path not found or invalid: {}", e))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let path_buf = validate_persona_bundle_path(app, Path::new(path))?;
+        File::open(&path_buf).map_err(|e| e.to_string())
+    }
+}
+
 #[tauri::command]
 pub fn import_persona_from_bundle_cmd(
     app: tauri::AppHandle,
     path: String,
     replace_if_exists: bool,
 ) -> Result<Persona, String> {
-    let path_buf = validate_persona_bundle_path(&app, Path::new(&path))?;
-
-    let file = File::open(&path_buf).map_err(|e| e.to_string())?;
+    let file = open_persona_bundle_file(&app, &path)?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip: {}", e))?;
 
     let mut persona_id: Option<String> = None;

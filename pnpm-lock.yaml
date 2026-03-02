@@ -260,12 +260,24 @@ importers:
       '@tauri-apps/api':
         specifier: ^2
         version: 2.10.1
+      '@tauri-apps/plugin-barcode-scanner':
+        specifier: ^2
+        version: 2.4.4
+      '@tauri-apps/plugin-deep-link':
+        specifier: ^2
+        version: 2.4.7
       '@tauri-apps/plugin-dialog':
         specifier: ^2
         version: 2.6.0
       '@tauri-apps/plugin-fs':
         specifier: ~2.4.5
         version: 2.4.5
+      '@tauri-apps/plugin-http':
+        specifier: ^2
+        version: 2.5.7
+      '@tauri-apps/plugin-log':
+        specifier: ^2
+        version: 2.8.0
       '@tauri-apps/plugin-opener':
         specifier: ^2
         version: 2.5.3
@@ -378,6 +390,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -393,6 +408,9 @@ importers:
       music-metadata:
         specifier: ^11.11.2
         version: 11.11.2
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       surrealdb:
         specifier: ^1.3.2
         version: 1.3.2(tslib@2.8.1)(typescript@5.9.3)(ws@8.18.3)
@@ -659,6 +677,9 @@ importers:
       '@eslint/js':
         specifier: ^9.36.0
         version: 9.37.0
+      '@internationalized/date':
+        specifier: ^3.10.0
+        version: 3.10.0
       '@lucide/svelte':
         specifier: ^0.564.0
         version: 0.564.0(svelte@5.51.0)
@@ -3436,11 +3457,23 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
+  '@tauri-apps/plugin-barcode-scanner@2.4.4':
+    resolution: {integrity: sha512-uXvyMI8UgQjSrGxzTU5isNoQarMGRxFmTmb4TsgiWZHf/g7LsIyAQCwoFShjax0fXCK5mdVKDOvlkfOr21fo6g==}
+
+  '@tauri-apps/plugin-deep-link@2.4.7':
+    resolution: {integrity: sha512-K0FQlLM6BoV7Ws2xfkh+Tnwi5VZVdkI4Vw/3AGLSf0Xvu2y86AMBzd9w/SpzKhw9ai2B6ES8di/OoGDCExkOzg==}
+
   '@tauri-apps/plugin-dialog@2.6.0':
     resolution: {integrity: sha512-q4Uq3eY87TdcYzXACiYSPhmpBA76shgmQswGkSVio4C82Sz2W4iehe9TnKYwbq7weHiL88Yw19XZm7v28+Micg==}
 
   '@tauri-apps/plugin-fs@2.4.5':
     resolution: {integrity: sha512-dVxWWGE6VrOxC7/jlhyE+ON/Cc2REJlM35R3PJX3UvFw2XwYhLGQVAIyrehenDdKjotipjYEVc4YjOl3qq90fA==}
+
+  '@tauri-apps/plugin-http@2.5.7':
+    resolution: {integrity: sha512-+F2lEH/c9b0zSsOXKq+5hZNcd9F4IIKCK1T17RqMwpCmVnx2aoqY8yIBccCd25HTYUb3j6NPVbRax/m00hKG8A==}
+
+  '@tauri-apps/plugin-log@2.8.0':
+    resolution: {integrity: sha512-a+7rOq3MJwpTOLLKbL8d0qGZ85hgHw5pNOWusA9o3cf7cEgtYHiGY/+O8fj8MvywQIGqFv0da2bYQDlrqLE7rw==}
 
   '@tauri-apps/plugin-opener@2.5.3':
     resolution: {integrity: sha512-CCcUltXMOfUEArbf3db3kCE7Ggy1ExBEBl51Ko2ODJ6GDYHRp1nSNlQm5uNCFY5k7/ufaK5Ib3Du/Zir19IYQQ==}
@@ -4307,6 +4340,9 @@ packages:
   cliui@5.0.0:
     resolution: {integrity: sha512-PYeGSEmmHM6zvoef2w8TPzlrnNpXIjTipYK780YswmIP9vjxmd6Y2a3CB2Ks6/AU8NHjZugXvo8w3oWM2qnwXA==}
 
+  cliui@6.0.0:
+    resolution: {integrity: sha512-t6wbgtoCXvAzst7QgXxJYqPt0usEfbgQdftEPbLL/cvv6HPE5VgvqCuAIDR0NgU52ds6rFwqrgakNLrHEjCbrQ==}
+
   clone@1.0.4:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
     engines: {node: '>=0.8'}
@@ -4706,11 +4742,18 @@ packages:
     resolution: {integrity: sha512-58lmxKSA4BNyLz+HHMUzlOEpg09FV+ev6ZMe3vJihgdxzgcwZ8VoEEPmALCZG9LmqfVoNMMKpttIYTVG6uDY7A==}
     engines: {node: '>=0.3.1'}
 
+  dijkstrajs@1.0.3:
+    resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
   dlv@1.1.3:
     resolution: {integrity: sha512-+HlytyjlPKnIG8XuRG8WvmBP8xs8P71y+SKKS6ZXWoEgLuePxtDoUEiH7WkdePWrQ5JBpE6aoVqfZfJUQkjXwA==}
 
   dompurify@3.3.1:
     resolution: {integrity: sha512-qkdCKzLNtrgPFP1Vo+98FRzJnBRGe4ffyCea9IwHB1fyxPOeNTHpLKYGd4Uk9xvNoH0ZoOjwZxNptyMwqrId1Q==}
+
+  dotenv@16.6.1:
+    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+    engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -5012,6 +5055,10 @@ packages:
   find-up@3.0.0:
     resolution: {integrity: sha512-1yD6RmLI1XBfxugvORwlck6f75tYL+iR0jqwsOrOxMZyGYqUuDhJ0l4AXdO1iX/FTs9cBAMEk1gWSEx1kSbylg==}
     engines: {node: '>=6'}
+
+  find-up@4.1.0:
+    resolution: {integrity: sha512-PpOwAdQ/YlXQ2vj8a3h8IipDuYRi3wceVQQGYWxNINccq40Anw7BlsEXCMbt1Zt+OLA6Fq9suIpIWD0OsnISlw==}
+    engines: {node: '>=8'}
 
   find-up@5.0.0:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
@@ -5675,6 +5722,10 @@ packages:
     resolution: {integrity: sha512-7AO748wWnIhNqAuaty2ZWHkQHRSNfPVIsPIfwEOWO22AmaoVrWavlOcMR5nzTLNYvp36X220/maaRsrec1G65A==}
     engines: {node: '>=6'}
 
+  locate-path@5.0.0:
+    resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
+    engines: {node: '>=8'}
+
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
@@ -6168,6 +6219,10 @@ packages:
     resolution: {integrity: sha512-x+12w/To+4GFfgJhBEpiDcLozRJGegY+Ei7/z0tSLkMmxGZNybVMSfWj9aJn8Z5Fc7dBUNJOOVgPv2H7IwulSQ==}
     engines: {node: '>=6'}
 
+  p-locate@4.1.0:
+    resolution: {integrity: sha512-R79ZZ/0wAxKGu3oYMlz8jy/kbhsNrS7SKZ7PxEHBgJ5+F2mtFW2fK2cOtBh1cHYkQsbzFV7I+EoRKe6Yt0oK7A==}
+    engines: {node: '>=8'}
+
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
@@ -6253,6 +6308,10 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
+
+  pngjs@5.0.0:
+    resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
+    engines: {node: '>=10.13.0'}
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -6466,6 +6525,11 @@ packages:
 
   pure-rand@6.1.0:
     resolution: {integrity: sha512-bVWawvoZoBYpp6yIoQtQXHZjmz35RSVHnUOTefl8Vcjr8snTPY1wnpSPMWekcFwbxI6gtmT7rSYPFvz71ldiOA==}
+
+  qrcode@1.5.4:
+    resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
+    engines: {node: '>=10.13.0'}
+    hasBin: true
 
   qs@6.15.0:
     resolution: {integrity: sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ==}
@@ -7805,12 +7869,20 @@ packages:
   yargs-parser@13.1.2:
     resolution: {integrity: sha512-3lbsNRf/j+A4QuSZfDRA7HRSfWrzO0YjqTJd5kjAq37Zep1CEgaYmrH9Q3GwPiB9cHyd1Y1UwggGhJGoxipbzg==}
 
+  yargs-parser@18.1.3:
+    resolution: {integrity: sha512-o50j0JeToy/4K6OZcaQmW6lyXXKhq7csREXcDwk2omFPJEwUNOVtJKvmDr9EI1fAJZUyZcRF7kxGBWmRXudrCQ==}
+    engines: {node: '>=6'}
+
   yargs-parser@21.1.1:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
 
   yargs@13.3.2:
     resolution: {integrity: sha512-AX3Zw5iPruN5ie6xGRIDgqkT+ZhnRlZMLMHAs8tg7nRruy2Nb+i5o9bwghAogtM08q1dpr2LVoS8KSTMYpWXUw==}
+
+  yargs@15.4.1:
+    resolution: {integrity: sha512-aePbxDmcYW++PaqBsJ+HYUFwCdv4LVvdnhBy78E57PIor8/OVvhMrADFFEDh8DHDFRv/O9i3lPhsENjO7QX0+A==}
+    engines: {node: '>=8'}
 
   yn@3.1.1:
     resolution: {integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==}
@@ -11475,11 +11547,27 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.10.0
       '@tauri-apps/cli-win32-x64-msvc': 2.10.0
 
+  '@tauri-apps/plugin-barcode-scanner@2.4.4':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
+  '@tauri-apps/plugin-deep-link@2.4.7':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
   '@tauri-apps/plugin-dialog@2.6.0':
     dependencies:
       '@tauri-apps/api': 2.10.1
 
   '@tauri-apps/plugin-fs@2.4.5':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
+  '@tauri-apps/plugin-http@2.5.7':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
+  '@tauri-apps/plugin-log@2.8.0':
     dependencies:
       '@tauri-apps/api': 2.10.1
 
@@ -12671,6 +12759,12 @@ snapshots:
       strip-ansi: 5.2.0
       wrap-ansi: 5.1.0
 
+  cliui@6.0.0:
+    dependencies:
+      string-width: 4.2.3
+      strip-ansi: 6.0.1
+      wrap-ansi: 6.2.0
+
   clone@1.0.4: {}
 
   clsx@2.1.1: {}
@@ -13064,12 +13158,16 @@ snapshots:
   diff@4.0.2:
     optional: true
 
+  dijkstrajs@1.0.3: {}
+
   dlv@1.1.3:
     optional: true
 
   dompurify@3.3.1:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
+
+  dotenv@16.6.1: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -13554,6 +13652,11 @@ snapshots:
   find-up@3.0.0:
     dependencies:
       locate-path: 3.0.0
+
+  find-up@4.1.0:
+    dependencies:
+      locate-path: 5.0.0
+      path-exists: 4.0.0
 
   find-up@5.0.0:
     dependencies:
@@ -14178,6 +14281,10 @@ snapshots:
     dependencies:
       p-locate: 3.0.0
       path-exists: 3.0.0
+
+  locate-path@5.0.0:
+    dependencies:
+      p-locate: 4.1.0
 
   locate-path@6.0.0:
     dependencies:
@@ -14908,6 +15015,10 @@ snapshots:
     dependencies:
       p-limit: 2.3.0
 
+  p-locate@4.1.0:
+    dependencies:
+      p-limit: 2.3.0
+
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
@@ -14979,6 +15090,8 @@ snapshots:
       pathe: 2.0.3
 
   pluralize@8.0.0: {}
+
+  pngjs@5.0.0: {}
 
   points-on-curve@0.2.0: {}
 
@@ -15166,6 +15279,12 @@ snapshots:
 
   pure-rand@6.1.0:
     optional: true
+
+  qrcode@1.5.4:
+    dependencies:
+      dijkstrajs: 1.0.3
+      pngjs: 5.0.0
+      yargs: 15.4.1
 
   qs@6.15.0:
     dependencies:
@@ -16976,6 +17095,11 @@ snapshots:
       camelcase: 5.3.1
       decamelize: 1.2.0
 
+  yargs-parser@18.1.3:
+    dependencies:
+      camelcase: 5.3.1
+      decamelize: 1.2.0
+
   yargs-parser@21.1.1: {}
 
   yargs@13.3.2:
@@ -16990,6 +17114,20 @@ snapshots:
       which-module: 2.0.1
       y18n: 4.0.3
       yargs-parser: 13.1.2
+
+  yargs@15.4.1:
+    dependencies:
+      cliui: 6.0.0
+      decamelize: 1.2.0
+      find-up: 4.1.0
+      get-caller-file: 2.0.5
+      require-directory: 2.1.1
+      require-main-filename: 2.0.0
+      set-blocking: 2.0.0
+      string-width: 4.2.3
+      which-module: 2.0.1
+      y18n: 4.0.3
+      yargs-parser: 18.1.3
 
   yn@3.1.1:
     optional: true

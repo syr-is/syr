@@ -174,6 +174,47 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	}
 
 	/**
+	 * Create an identity with external/Syner-managed key (no server-side private key, no delegation).
+	 * Used for independent login when DID is unknown - user proved key control via challenge signature.
+	 */
+	async createIdentityExternal(params: {
+		did: string;
+		publicKey: string;
+		userId: RecordId;
+		now: Date;
+	}): Promise<void> {
+		const { did, publicKey, userId, now } = params;
+		let createSucceeded = false;
+		let updateSucceeded = false;
+		try {
+			await this.db.query(
+				`CREATE identity SET
+					did = $did,
+					public_key = $publicKey,
+					user_id = $userId,
+					created_at = $now;`,
+				{ did, publicKey, userId, now }
+			);
+			createSucceeded = true;
+			await this.db.query(`UPDATE $userId SET did = $did;`, { userId, did });
+			updateSucceeded = true;
+		} catch (error) {
+			console.error('[identity.repository] Error during external identity creation:', error);
+			try {
+				if (createSucceeded) {
+					await this.db.query(`DELETE identity WHERE did = $did;`, { did });
+				}
+				if (updateSucceeded) {
+					await this.db.query(`UPDATE $userId UNSET did;`, { userId });
+				}
+			} catch (rollbackError) {
+				console.error('[identity.repository] Rollback failed:', rollbackError);
+			}
+			throw error;
+		}
+	}
+
+	/**
 	 * Create an identity with Aegis (password-protected encrypted seed).
 	 * Stores the Aegis bundle fields; no raw private key.
 	 */

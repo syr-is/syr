@@ -5,6 +5,7 @@ import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { userRepository } from '$lib/repositories/user.repository';
+import { allowedOrigins, cors, isAllowedOrigin } from '$lib/config';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
@@ -139,8 +140,49 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// Add CORS headers
+	// Handle CORS preflight (OPTIONS)
+	const origin = event.request.headers.get('origin');
+	const originAllowed = origin ? isAllowedOrigin(origin, allowedOrigins) : false;
+	if (event.request.method === 'OPTIONS') {
+		// Deny preflight when origin present but not allowed
+		if (origin && !originAllowed) {
+			return new Response(null, {
+				status: 403,
+				headers: {
+					Vary: 'Origin',
+					'Cache-Control': 'no-store'
+				}
+			});
+		}
+		return new Response(null, {
+			status: 204,
+			headers: {
+				Vary: 'Origin',
+				'Access-Control-Allow-Origin': originAllowed && origin ? origin : '*',
+				'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+				'Access-Control-Max-Age': '86400',
+				...(cors.credentials && originAllowed ? { 'Access-Control-Allow-Credentials': 'true' } : {})
+			}
+		});
+	}
+
 	const response = await resolve(event);
+
+	const existingVary = response.headers.get('Vary') ?? '';
+	const varySet = new Set(
+		existingVary
+			.split(',')
+			.map((v) => v.trim())
+			.filter(Boolean)
+	);
+	varySet.add('Origin');
+	response.headers.set('Vary', [...varySet].join(', '));
+	// Add CORS headers for cross-origin requests (allowed origins from config)
+	if (origin && originAllowed) {
+		response.headers.set('Access-Control-Allow-Origin', origin);
+		if (cors.credentials) response.headers.set('Access-Control-Allow-Credentials', 'true');
+	}
 
 	// Add security headers
 	response.headers.set('X-Content-Type-Options', 'nosniff');

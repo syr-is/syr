@@ -3,10 +3,42 @@ mod persona_commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+    let builder = {
+        let b = tauri::Builder::default()
+            .plugin(
+                tauri_plugin_log::Builder::default()
+                    .target(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::Stdout,
+                    ))
+                    .target(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::Webview,
+                    ))
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )
+            .plugin(tauri_plugin_fs::init())
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_opener::init())
+            .plugin(tauri_plugin_deep_link::init())
+            .plugin(tauri_plugin_http::init());
+        #[cfg(target_os = "android")]
+        let b = b.plugin(tauri_plugin_android_fs::init());
+        b
+    };
+
+    builder
+        .setup(|_app| {
+            #[cfg(mobile)]
+            {
+                _app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
+            }
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                _app.deep_link().register_all()?;
+            }
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })
         .invoke_handler(tauri::generate_handler![
             crypto_commands::sign_payload,
             crypto_commands::decrypt_sigil_cmd,

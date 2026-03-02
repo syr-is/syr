@@ -131,6 +131,23 @@ export class KvRepository {
 	}
 
 	/**
+	 * Atomically get a KV entry's value and delete it.
+	 * Prevents TOCTOU races where multiple callers could both read the same entry.
+	 */
+	async getAndDelete<T = unknown>(type: string, index: string): Promise<T | null> {
+		const recordId = createKvRecordId(type, index);
+		const result = await this.db.query<[KvEntry[]]>(`DELETE $recordId RETURN BEFORE`, { recordId });
+		const records = result[0] ?? [];
+		if (records.length === 0) return null;
+		const entry = this.validate(records[0]);
+		// Check expiry before returning
+		if (entry.expires_at && entry.expires_at < new Date()) {
+			return null;
+		}
+		return entry.value as T;
+	}
+
+	/**
 	 * Check if a KV entry exists
 	 */
 	async exists(type: string, index: string): Promise<boolean> {

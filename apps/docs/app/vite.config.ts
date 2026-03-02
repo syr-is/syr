@@ -21,6 +21,7 @@ const sidebarConfig = [
 			{ title: 'Export Formats (SYR, Sigil, Persona)', to: '/architecture/export' },
 			{ title: 'Aegis v1 (Custodial Identity)', to: '/architecture/aegis' },
 			{ title: 'Syner (Self-Custody Companion)', to: '/architecture/syner' },
+			{ title: 'Independent Login', to: '/architecture/independent-login' },
 			{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 			{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
 			{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }
@@ -32,6 +33,7 @@ const sidebarConfig = [
 		items: [
 			{ title: 'packages/types', to: '/reference/types' },
 			{ title: 'apps/syr', to: '/reference/app' },
+			{ title: 'Independent Login API', to: '/reference/independent-login-api' },
 			{ title: 'Spec-to-Implementation Map', to: '/reference/spec-mapping' }
 		]
 	},

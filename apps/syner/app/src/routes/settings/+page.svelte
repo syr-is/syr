@@ -67,7 +67,7 @@
 				Persona storage location
 			</CardTitle>
 			<CardDescription>
-				Configure where personas are stored on disk. Default: Documents/syr-personas
+				Configure where personas are stored on disk. Default: app data directory (syr-personas)
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
@@ -80,7 +80,7 @@
 						<Input
 							id="base-path"
 							bind:value={basePath}
-							placeholder="e.g. ~/Documents/syr-personas"
+							placeholder="Personas folder path…"
 							disabled={saving}
 						/>
 						<Button variant="outline" onclick={pickDirectory} disabled={saving}>

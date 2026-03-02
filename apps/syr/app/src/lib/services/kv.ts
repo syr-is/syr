@@ -55,6 +55,16 @@ export class KvService {
 	}
 
 	/**
+	 * Atomically get and delete a value. Prevents TOCTOU races.
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @returns The value if it existed and was not expired, null otherwise
+	 */
+	async getAndDelete<T = unknown>(type: string, index: string): Promise<T | null> {
+		return this.repository.getAndDelete<T>(type, index);
+	}
+
+	/**
 	 * Check if a key exists in the KV store
 	 * @param type - The category/type of the entry
 	 * @param index - The unique index within the type
