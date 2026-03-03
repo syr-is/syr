@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { subscribeImport } from '$lib/server/export-verify-broadcast';
 
+const HEARTBEAT_INTERVAL_MS = 30_000; // keepalive to prevent intermediaries dropping idle connections
 const MAX_CONNECTION_LIFETIME_MS = 120_000; // 2 min
 const MAX_CONNECTIONS_PER_IP = 3;
 
@@ -47,6 +48,7 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 		return new Response('Too many SSE connections', { status: 429 });
 	}
 
+	let intervalId: ReturnType<typeof setInterval> | undefined;
 	let lifetimeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let unsubscribe: (() => void) | undefined;
 	let cleaned = false;
@@ -56,6 +58,10 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 		if (cleaned) return;
 		cleaned = true;
 		releaseConnection(ip);
+		if (intervalId) {
+			clearInterval(intervalId);
+			intervalId = undefined;
+		}
 		if (lifetimeTimeoutId) {
 			clearTimeout(lifetimeTimeoutId);
 			lifetimeTimeoutId = undefined;
@@ -82,6 +88,9 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 				}
 			};
 
+			const sendHeartbeat = () => send('heartbeat', '{}');
+
+			intervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 			lifetimeTimeoutId = setTimeout(cleanup, MAX_CONNECTION_LIFETIME_MS);
 
 			if (challengeId) {

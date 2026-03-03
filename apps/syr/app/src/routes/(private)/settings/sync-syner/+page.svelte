@@ -16,6 +16,7 @@
 	let syncError = $state<string>('');
 	let qrDataUrl = $state<string | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let isPolling = false;
 
 	const needsImport = $derived(
 		data.user?.profile?.display_name &&
@@ -62,7 +63,14 @@
 		if (!needsImport) return;
 
 		pollInterval = setInterval(async () => {
-			await invalidateAll();
+			if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+			if (isPolling) return;
+			isPolling = true;
+			try {
+				await invalidateAll();
+			} finally {
+				isPolling = false;
+			}
 		}, 2000);
 
 		return () => {
