@@ -6,6 +6,7 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { userSessionStore } from '$lib/stores/user-session.svelte';
 	import { initCryptoWasm } from '@syr-is/crypto';
+	import { browser } from '$app/environment';
 	import '../app.css';
 
 	let { children, data } = $props();
@@ -13,7 +14,7 @@
 	// Initialize WASM crypto early (browser only; falls back to TS if unavailable)
 	initCryptoWasm();
 
-	if (data.user) userSessionStore.setUser(data.user);
+	if (browser && data.user) userSessionStore.setUser(data.user);
 
 	let open = $state(true);
 

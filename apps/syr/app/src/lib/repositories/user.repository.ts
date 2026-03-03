@@ -55,6 +55,10 @@ export class UserRepository extends BaseRepository<User> {
 		if (userRecordId.tb !== 'user') {
 			throw new Error('Invalid user ID: record must target user collection');
 		}
+		const idVal = userRecordId.id;
+		if (idVal === undefined || idVal === null || (typeof idVal === 'string' && !idVal.trim())) {
+			throw new Error('Invalid user ID: record id must be defined and non-empty');
+		}
 		const now = new Date();
 		const result = await this.db.merge(userRecordId, {
 			username: newUsername,

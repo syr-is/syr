@@ -58,6 +58,11 @@ export async function setExportToken(token: string, userId: string): Promise<voi
 	await kvService.set(KV_EXPORT_TOKEN, token, { user_id: userId }, TOKEN_TTL);
 }
 
+/** Validate token and return userId without consuming. Use consumeExportToken after success. */
+export function peekExportToken(token: string): Promise<string | null> {
+	return kvService.get<{ user_id: string }>(KV_EXPORT_TOKEN, token).then((e) => e?.user_id ?? null);
+}
+
 export function consumeExportToken(token: string): Promise<string | null> {
 	return kvService
 		.getAndDelete<{ user_id: string }>(KV_EXPORT_TOKEN, token)

@@ -60,16 +60,14 @@
 
 	let didFromUrl = $derived(page.url.searchParams.get('did'));
 
-	/** Explicitly typed for each block to avoid TS narrowing to never in conditional branches */
+	let latestFetchSeq = 0;
+
 	$effect(() => {
 		const url = page.url;
 		const c = url.searchParams.get('challenge');
 		const i = url.searchParams.get('instance');
-		if (c) challengeId = c;
-		if (i) {
-			const validated = validateInstanceUrl(i);
-			instanceUrl = validated ?? null;
-		}
+		challengeId = c || null;
+		instanceUrl = i ? (validateInstanceUrl(i) ?? null) : null;
 	});
 
 	$effect(() => {
@@ -80,9 +78,11 @@
 
 	async function fetchChallenge() {
 		if (!challengeId || !instanceUrl) return;
+		latestFetchSeq++;
+		const seq = latestFetchSeq;
 		const base = instanceUrl.replace(/\/$/, '');
 		const url = `${base}/api/identity/export-challenge/${challengeId}`;
-		info(`[export-verify] Fetching challenge: ${url}`);
+		info(`[export-verify] Fetching challenge`);
 		loadError = null;
 		message = null;
 		domain = null;
@@ -90,6 +90,7 @@
 		selected = null;
 		try {
 			const res = await fetch(url);
+			if (seq !== latestFetchSeq) return;
 			info(`[export-verify] Challenge response status: ${res.status} ${res.statusText}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
@@ -101,6 +102,7 @@
 				return;
 			}
 			const data = await res.json();
+			if (seq !== latestFetchSeq) return;
 			message = data.message;
 			domain = data.domain;
 			targetDid = didFromUrl ?? (typeof data.did === 'string' ? data.did : null) ?? null;
@@ -108,6 +110,7 @@
 			info(`[export-verify] Challenge loaded for domain: ${domain}`);
 
 			const list = await invoke<Persona[]>('list_personas_cmd').catch((): Persona[] => []);
+			if (seq !== latestFetchSeq) return;
 			personas = list ?? [];
 			if (targetDid) {
 				const match = personas.find((p) => p.did === targetDid);
@@ -120,6 +123,7 @@
 				}
 			}
 		} catch (e) {
+			if (seq !== latestFetchSeq) return;
 			const msg = e instanceof Error ? e.message : String(e);
 			const cause = e instanceof Error && e.cause ? String(e.cause) : '';
 			const stack = e instanceof Error ? e.stack : '';

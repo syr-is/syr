@@ -725,14 +725,25 @@ pub fn read_file_as_base64_cmd(
 
         #[cfg(not(target_os = "android"))]
         {
-            let meta = std::fs::metadata(&source_path).map_err(|e| e.to_string())?;
+            let mut file = std::fs::File::open(&source_path).map_err(|e| e.to_string())?;
+            let meta = file.metadata().map_err(|e| e.to_string())?;
             if meta.len() > MAX_ASSET_SIZE as u64 {
                 return Err(format!(
                     "File exceeds maximum size of {} bytes",
                     MAX_ASSET_SIZE
                 ));
             }
-            std::fs::read(&source_path).map_err(|e| e.to_string())?
+            let mut buf = Vec::new();
+            let n = std::io::Read::take(&mut file, MAX_ASSET_SIZE as u64 + 1)
+                .read_to_end(&mut buf)
+                .map_err(|e| e.to_string())?;
+            if n > MAX_ASSET_SIZE {
+                return Err(format!(
+                    "File exceeds maximum size of {} bytes",
+                    MAX_ASSET_SIZE
+                ));
+            }
+            buf
         }
     };
     let ext = extension_from_path_or_uri(&source_path);
