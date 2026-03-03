@@ -250,9 +250,7 @@
 		for (const asset of data.assets ?? []) {
 			if (asset.content_base64 && asset.zip_path) {
 				const safeKey = sanitizeZipPath(asset.zip_path);
-				zipFiles[safeKey] = Uint8Array.from(atob(asset.content_base64), (c) =>
-					c.charCodeAt(0)
-				);
+				zipFiles[safeKey] = Uint8Array.from(atob(asset.content_base64), (c) => c.charCodeAt(0));
 			}
 		}
 		const zipped = await new Promise<Uint8Array>((resolve, reject) => {

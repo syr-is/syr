@@ -2,10 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verify, decodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
-import {
-	ProfileSyncSignedPayloadSchema,
-	type ProfileSyncSignedPayload
-} from '@syr-is/types';
+import { ProfileSyncSignedPayloadSchema, type ProfileSyncSignedPayload } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
