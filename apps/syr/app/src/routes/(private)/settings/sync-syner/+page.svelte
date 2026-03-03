@@ -10,10 +10,6 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let syncToken = $state<string | null>(null);
-	let syncTokenLoading = $state(false);
-	let syncTokenAttempted = $state(false);
-	let syncError = $state<string>('');
 	let qrDataUrl = $state<string | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let isPolling = false;
@@ -23,44 +19,25 @@
 			/^il_[a-zA-Z0-9_-]+_\w{6}$/.test(data.user.profile.display_name)
 	);
 
-	async function fetchSyncToken() {
-		syncTokenAttempted = true;
-		syncTokenLoading = true;
-		syncError = '';
-		try {
-			const res = await fetch(resolve('/api/auth/independent-login/sync-token'), {
-				credentials: 'include'
-			});
-			const json = await res.json();
-			if (res.ok && json.sync_token) {
-				syncToken = json.sync_token;
-				const origin = typeof window !== 'undefined' ? window.location.origin : '';
-				const deeplink = `syr://sync-profile?instance=${encodeURIComponent(origin)}&sync_token=${encodeURIComponent(json.sync_token)}`;
-				qrDataUrl = await QRCode.toDataURL(deeplink, { width: 256, margin: 2 });
-			} else {
-				syncError = json?.error_description ?? json?.error ?? `Request failed: ${res.status}`;
-				qrDataUrl = null;
-				syncToken = null;
-			}
-		} catch (err) {
-			syncError = err instanceof Error ? err.message : 'Failed to fetch';
-			qrDataUrl = null;
-			syncToken = null;
-		} finally {
-			syncTokenLoading = false;
-		}
+	const hasDid = $derived(!!data.user?.did);
+
+	async function buildQr() {
+		if (!data.user?.did) return;
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		const deeplink = `syr://sync-profile?instance=${encodeURIComponent(origin)}&did=${encodeURIComponent(data.user.did)}`;
+		qrDataUrl = await QRCode.toDataURL(deeplink, { width: 256, margin: 2 });
 	}
 
-	// Auto-fetch QR when profile needs import; allow manual fetch anytime via Show QR code button
+	// Auto-show QR when profile needs import; user can also click Show QR code
 	$effect(() => {
-		if (needsImport && syncToken === null && !syncTokenLoading && !syncTokenAttempted) {
-			fetchSyncToken();
+		if (needsImport && hasDid && !qrDataUrl) {
+			buildQr();
 		}
 	});
 
-	// Poll for profile updates when import is pending
+	// Poll for profile updates when QR is displayed (user may sync from phone; sidebar updates automatically)
 	$effect(() => {
-		if (!needsImport) return;
+		if (!qrDataUrl) return;
 
 		pollInterval = setInterval(async () => {
 			if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
@@ -114,11 +91,11 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
-			{#if syncTokenLoading}
-				<p class="text-sm text-muted-foreground">Loading…</p>
-			{:else if syncError}
-				<p class="text-sm text-destructive">{syncError}</p>
-				<Button onclick={fetchSyncToken} disabled={syncTokenLoading}>Retry</Button>
+			{#if !hasDid}
+				<p class="text-sm text-muted-foreground">
+					Add an identity first. Go to Profile and sign in with Syner or import an identity.
+				</p>
+				<Button variant="outline" href={resolve('/settings/profile')}>Go to Profile</Button>
 			{:else if qrDataUrl}
 				<div class="flex flex-col items-center gap-4">
 					<img
@@ -131,7 +108,7 @@
 					<p class="text-center text-sm text-muted-foreground">
 						Open Syner and scan this code, or
 						<a
-							href={`syr://sync-profile?instance=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&sync_token=${encodeURIComponent(syncToken ?? '')}`}
+							href={`syr://sync-profile?instance=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&did=${encodeURIComponent(data.user?.did ?? '')}`}
 							class="font-medium text-primary underline"
 						>
 							open in Syner
@@ -139,10 +116,10 @@
 					</p>
 				</div>
 			{:else}
-				<Button onclick={fetchSyncToken} disabled={syncTokenLoading}>Show QR code</Button>
+				<Button onclick={buildQr}>Show QR code</Button>
 			{/if}
 
-			{#if needsImport}
+			{#if qrDataUrl}
 				<p class="text-sm text-muted-foreground">
 					Once Syner has synced your profile, this page will update automatically.
 				</p>

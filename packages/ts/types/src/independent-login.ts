@@ -109,3 +109,18 @@ export const IndependentLoginErrorResponseSchema = z.object({
 });
 
 export type IndependentLoginErrorResponse = z.infer<typeof IndependentLoginErrorResponseSchema>;
+
+/**
+ * Profile Sync signed payload (JCS canonical JSON, signed by persona private key).
+ * Proves control of the DID when Syner syncs profile to SYR.
+ */
+export const ProfileSyncSignedPayloadSchema = z.object({
+	action: z.literal('profile-sync'),
+	did: DidSyrSchema,
+	/** ISO-8601 when payload was created (replay protection: reject if > 5 min old) */
+	issued_at: z.string(),
+	display_name: z.string().max(100).optional(),
+	bio: z.string().max(500).optional()
+});
+
+export type ProfileSyncSignedPayload = z.infer<typeof ProfileSyncSignedPayloadSchema>;

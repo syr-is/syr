@@ -34,6 +34,11 @@ pub struct Persona {
     pub avatar_url: Option<String>,
     pub banner_url: Option<String>,
     pub created_at: String,
+    /// File mtime (Unix timestamp) for cache busting; not stored in profile.json
+    #[serde(skip, default)]
+    pub avatar_mtime: Option<i64>,
+    #[serde(skip, default)]
+    pub banner_mtime: Option<i64>,
 }
 
 /// Default personas storage path. Uses app data dir (works on Android/iOS where document_dir is None).
@@ -199,7 +204,10 @@ fn copy_image_from_source(
             .map_err(|e| format!("Path not found or invalid: {}", e))?;
         let mut buf = Vec::new();
         std::io::Read::read_to_end(&mut file, &mut buf).map_err(|e| e.to_string())?;
-        std::fs::write(dest, buf).map_err(|e| e.to_string())
+        let mut f = std::fs::File::create(dest).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut f, &buf).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     #[cfg(not(target_os = "android"))]
@@ -231,11 +239,29 @@ fn find_legacy_asset(persona_dir: &Path, prefix: &str) -> Option<String> {
     None
 }
 
+fn file_mtime(path: &Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .ok()?
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+}
+
 fn resolve_persona_asset_paths(persona_dir: &Path, mut persona: Persona) -> Persona {
     persona.avatar_url = resolve_relative_asset(persona_dir, persona.avatar_url.as_ref())
         .or_else(|| find_legacy_asset(persona_dir, "avatar"));
+    persona.avatar_mtime = persona
+        .avatar_url
+        .as_ref()
+        .and_then(|p| file_mtime(Path::new(p)));
+
     persona.banner_url = resolve_relative_asset(persona_dir, persona.banner_url.as_ref())
         .or_else(|| find_legacy_asset(persona_dir, "banner"));
+    persona.banner_mtime = persona
+        .banner_url
+        .as_ref()
+        .and_then(|p| file_mtime(Path::new(p)));
     persona
 }
 
@@ -288,6 +314,8 @@ pub fn create_persona_cmd(
         avatar_url: None,
         banner_url: None,
         created_at: created_at.clone(),
+        avatar_mtime: None,
+        banner_mtime: None,
     };
 
     let base = get_base_path(&app)?;
@@ -328,6 +356,8 @@ pub fn import_persona_from_sigil_cmd(
         avatar_url: None,
         banner_url: None,
         created_at: created_at.clone(),
+        avatar_mtime: None,
+        banner_mtime: None,
     };
 
     let base = get_base_path(&app)?;
@@ -659,6 +689,55 @@ pub fn delete_persona_cmd(app: tauri::AppHandle, persona_id: String) -> Result<(
         return Err("Persona not found".to_string());
     }
     std::fs::remove_dir_all(&persona_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_file_as_base64_cmd(
+    _app: tauri::AppHandle,
+    source_path: String,
+) -> Result<Option<(String, String)>, String> {
+    const MAX_ASSET_SIZE: usize = 5 * 1024 * 1024; // 5 MB
+    let bytes = {
+        #[cfg(target_os = "android")]
+        {
+            let file_path = convert_string_to_file_path(&source_path);
+            let mut file = _app
+                .android_fs()
+                .open_file(&file_path)
+                .map_err(|e| format!("Path not found or invalid: {}", e))?;
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut file, &mut buf).map_err(|e| e.to_string())?;
+            if buf.len() > MAX_ASSET_SIZE {
+                return Err(format!(
+                    "File exceeds maximum size of {} bytes",
+                    MAX_ASSET_SIZE
+                ));
+            }
+            buf
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            let meta = std::fs::metadata(&source_path).map_err(|e| e.to_string())?;
+            if meta.len() > MAX_ASSET_SIZE as u64 {
+                return Err(format!(
+                    "File exceeds maximum size of {} bytes",
+                    MAX_ASSET_SIZE
+                ));
+            }
+            std::fs::read(&source_path).map_err(|e| e.to_string())?
+        }
+    };
+    let ext = extension_from_path_or_uri(&source_path);
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "image/png",
+    };
+    use base64::Engine;
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(Some((base64_str, mime.to_string())))
 }
 
 #[tauri::command]

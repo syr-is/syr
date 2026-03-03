@@ -32,6 +32,13 @@ export class UserRepository extends BaseRepository<User> {
 	}
 
 	/**
+	 * Find user by DID
+	 */
+	async findByDid(did: string): Promise<User | null> {
+		return this.findOne({ did } as Partial<User>);
+	}
+
+	/**
 	 * Check if username exists
 	 */
 	async usernameExists(username: string): Promise<boolean> {

@@ -10,5 +10,7 @@ export type SelectedPersona = {
 	did: string;
 	avatarUrl?: string;
 	bannerUrl?: string;
+	avatarMtime?: number;
+	bannerMtime?: number;
 };
 export const selectedPersona = writable<SelectedPersona | null>(null);

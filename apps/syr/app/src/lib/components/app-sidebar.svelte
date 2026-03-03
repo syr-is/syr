@@ -7,8 +7,9 @@
 	import { resolve } from '$app/paths';
 	import NavUser from '$lib/components/nav-user.svelte';
 	import StorageUsage from '$lib/components/fragments/storage-usage.svelte';
+	import { userSessionStore } from '$lib/stores/user-session.svelte';
 
-	let { user }: { user?: App.Locals['user'] } = $props();
+	let user = $derived(userSessionStore.user);
 
 	async function handleLogout() {
 		try {

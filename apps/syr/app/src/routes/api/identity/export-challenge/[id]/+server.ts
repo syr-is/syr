@@ -36,7 +36,8 @@ export const GET: RequestHandler = async ({ params }) => {
 		{
 			message: challenge.message,
 			domain: challenge.domain,
-			expires_at: expiresAt
+			expires_at: expiresAt,
+			did: challenge.expected_did
 		},
 		{ headers: NO_STORE }
 	);

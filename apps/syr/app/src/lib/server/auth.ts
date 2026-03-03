@@ -80,38 +80,3 @@ export function getUserIdFromToken(authHeader: string | null): string | null {
 	const payload = verifyAccessToken(token);
 	return payload?.userId ?? null;
 }
-
-/**
- * Sync token payload for profile sync (Syner → SYR)
- */
-export interface SyncTokenPayload {
-	userId: string;
-	purpose: 'profile_sync';
-}
-
-/**
- * Generate a short-lived sync token for profile sync.
- * Used when Syner needs to POST profile/avatar/banner to SYR.
- */
-export function generateSyncToken(userId: string): string {
-	return jwt.sign({ userId, purpose: 'profile_sync' } as SyncTokenPayload, jwtConfig.secret, {
-		expiresIn: '5m',
-		issuer: 'syr',
-		audience: 'syr-profile-sync'
-	} as SignOptions);
-}
-
-/**
- * Verify sync token and return userId or null.
- */
-export function verifySyncToken(token: string): string | null {
-	try {
-		const decoded = jwt.verify(token, jwtConfig.secret, {
-			issuer: 'syr',
-			audience: 'syr-profile-sync'
-		}) as SyncTokenPayload;
-		return decoded?.purpose === 'profile_sync' ? decoded.userId : null;
-	} catch {
-		return null;
-	}
-}

@@ -382,7 +382,7 @@ export class UploadController {
 		}
 
 		const pathStr = pathSegments.join('/');
-		const key = `uploads/${did}/${pathStr}/${role}.${ext}`;
+		const key = `uploads/${did}/${pathStr}/${role}`;
 		const url = this.buildUrl(key);
 
 		const existing = await uploadRepository.findByCompositeId(did, localId);
@@ -395,12 +395,22 @@ export class UploadController {
 			}
 		}
 
+		if (existing && existing.key !== key) {
+			await s3Service.client.send(
+				new DeleteObjectCommand({
+					Bucket: s3.bucket,
+					Key: existing.key
+				})
+			);
+		}
+
 		await s3Service.client.send(
 			new PutObjectCommand({
 				Bucket: s3.bucket,
 				Key: key,
 				Body: buf,
-				ContentType: mimeType
+				ContentType: mimeType,
+				CacheControl: 'no-cache, max-age=0'
 			})
 		);
 

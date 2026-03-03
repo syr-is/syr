@@ -4,6 +4,7 @@
 	import { SidebarProvider, SidebarTrigger, SidebarInset } from '@syr-is/ui/sidebar';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { userSessionStore } from '$lib/stores/user-session.svelte';
 	import { initCryptoWasm } from '@syr-is/crypto';
 	import '../app.css';
 
@@ -17,6 +18,9 @@
 	$effect(() => {
 		if (!data.user) {
 			authStore.logout();
+			userSessionStore.clearUser();
+		} else {
+			userSessionStore.setUser(data.user);
 		}
 	});
 </script>
@@ -25,7 +29,7 @@
 <Toaster />
 
 <SidebarProvider bind:open class="h-full">
-	<AppSidebar user={data.user} />
+	<AppSidebar />
 	<SidebarInset class="flex h-full flex-col overflow-hidden">
 		<header class="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
 			<SidebarTrigger />

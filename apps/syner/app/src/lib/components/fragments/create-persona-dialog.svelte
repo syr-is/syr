@@ -8,10 +8,11 @@
 	import { Textarea } from '@syr-is/ui/textarea';
 	import { toast } from 'svelte-sonner';
 	import { Image } from '@lucide/svelte';
+	import PickedFileImage from '$lib/components/picked-file-image.svelte';
 	import type { Persona } from '$lib/types';
 
 	const IMAGE_FILTERS = [
-		{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] },
+		{ name: 'Images', extensions: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
 		{ name: 'All files', extensions: ['*'] }
 	];
 
@@ -38,9 +39,9 @@
 			title: 'Select image',
 			filters: IMAGE_FILTERS
 		});
-		if (file && typeof file === 'string') return file;
-		if (Array.isArray(file) && file.length > 0) return file[0];
-		return null;
+		// Ensure single file: take first only (Android may return array despite multiple: false)
+		const paths = file == null ? null : Array.isArray(file) ? file : [file];
+		return paths && paths.length > 0 ? paths[0] : null;
 	}
 
 	async function handleCreate() {
@@ -56,16 +57,18 @@
 				bio: bio.trim() || null,
 				passphrase
 			});
-			if (avatarPath) {
+			const avatarSource = typeof avatarPath === 'string' && avatarPath.trim() ? avatarPath : null;
+			const bannerSource = typeof bannerPath === 'string' && bannerPath.trim() ? bannerPath : null;
+			if (avatarSource) {
 				await invoke('save_persona_avatar_cmd', {
 					personaId: persona.id,
-					sourcePath: avatarPath
+					sourcePath: avatarSource
 				});
 			}
-			if (bannerPath) {
+			if (bannerSource) {
 				await invoke('save_persona_banner_cmd', {
 					personaId: persona.id,
-					sourcePath: bannerPath
+					sourcePath: bannerSource
 				});
 			}
 			openState = false;
@@ -137,6 +140,14 @@
 			<div class="grid grid-cols-2 gap-4">
 				<div class="space-y-2">
 					<Label>Avatar (optional)</Label>
+					{#if avatarPath}
+						<PickedFileImage
+							sourcePath={avatarPath}
+							{displayName}
+							variant="avatar"
+							class="h-16 w-16"
+						/>
+					{/if}
 					<Button
 						type="button"
 						variant="outline"
@@ -153,6 +164,9 @@
 				</div>
 				<div class="space-y-2">
 					<Label>Banner (optional)</Label>
+					{#if bannerPath}
+						<PickedFileImage sourcePath={bannerPath} variant="banner" class="h-16" />
+					{/if}
 					<Button
 						type="button"
 						variant="outline"

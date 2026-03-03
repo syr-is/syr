@@ -6,10 +6,9 @@
 	import { selectedPersona } from '$lib/stores/session';
 	import { Button } from '@syr-is/ui/button';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
-	import * as Avatar from '@syr-is/ui/avatar';
 	import { toast } from 'svelte-sonner';
 	import { Users, Plus, FileInput, PenLine, Trash2, Pencil } from '@lucide/svelte';
-	import { toAvatarSrc, getInitials } from '$lib/utils';
+	import PersonaImage from '$lib/components/persona-image.svelte';
 	import CreatePersonaDialog from '$lib/components/fragments/create-persona-dialog.svelte';
 	import EditPersonaDialog from '$lib/components/fragments/edit-persona-dialog.svelte';
 	import type { Persona } from '$lib/types';
@@ -108,19 +107,24 @@
 								? ''
 								: 'bg-muted/50'} hover:bg-muted/50"
 						>
-							{#if toAvatarSrc(persona.bannerUrl)}
-								<div
-									class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
-									style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
-								></div>
+							{#if persona.bannerUrl}
+								<PersonaImage
+									personaId={persona.id}
+									role="banner"
+									mtime={persona.bannerMtime}
+									variant="banner"
+									class="absolute inset-0 bg-cover bg-center"
+								/>
 							{/if}
 							<div class="relative z-10 flex items-center gap-4 p-4">
-								<Avatar.Root class="h-12 w-12 shrink-0">
-									{#if toAvatarSrc(persona.avatarUrl)}
-										<Avatar.Image src={toAvatarSrc(persona.avatarUrl)!} alt={persona.displayName} />
-									{/if}
-									<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
-								</Avatar.Root>
+								<PersonaImage
+									personaId={persona.id}
+									role="avatar"
+									mtime={persona.avatarMtime}
+									displayName={persona.displayName}
+									variant="avatar"
+									class="h-12 w-12 shrink-0"
+								/>
 								<div class="min-w-0 flex-1">
 									<p class="font-medium">{persona.displayName}</p>
 									<p class="text-muted-foreground truncate font-mono text-xs">{persona.did}</p>
@@ -139,7 +143,9 @@
 												displayName: persona.displayName,
 												did: persona.did,
 												avatarUrl: persona.avatarUrl,
-												bannerUrl: persona.bannerUrl
+												bannerUrl: persona.bannerUrl,
+												avatarMtime: persona.avatarMtime,
+												bannerMtime: persona.bannerMtime
 											});
 											goto('/sign');
 										}}
@@ -163,9 +169,27 @@
 	<EditPersonaDialog
 		bind:open={editOpen}
 		persona={editPersona}
-		onSuccess={() => {
+		onSuccess={async () => {
+			const editedId = editPersona?.id;
 			editPersona = null;
-			loadPersonas();
+			await loadPersonas();
+			if (editedId) {
+				const current = get(selectedPersona);
+				if (current?.id === editedId) {
+					const updated = personas.find((p: Persona) => p.id === editedId);
+					if (updated) {
+						selectedPersona.set({
+							id: updated.id,
+							displayName: updated.displayName,
+							did: updated.did,
+							avatarUrl: updated.avatarUrl,
+							bannerUrl: updated.bannerUrl,
+							avatarMtime: updated.avatarMtime,
+							bannerMtime: updated.bannerMtime
+						});
+					}
+				}
+			}
 		}}
 	/>
 </div>

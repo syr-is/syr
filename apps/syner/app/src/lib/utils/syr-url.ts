@@ -71,7 +71,9 @@ export function parseSyrLoginUrl(
  * Parses a syr://export URL.
  * Used for export and import verification (scan QR to sign challenge).
  */
-export function parseSyrExportUrl(urlStr: string): { challenge: string; instance: string } | null {
+export function parseSyrExportUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
 	try {
 		const url = new URL(urlStr);
 		if (url.protocol !== 'syr:' || url.hostname !== 'export') return null;
@@ -80,7 +82,8 @@ export function parseSyrExportUrl(urlStr: string): { challenge: string; instance
 		if (!challenge || !instanceRaw) return null;
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
-		return { challenge, instance: instanceRaw };
+		const did = url.searchParams.get('did') ?? undefined;
+		return { challenge, instance: instanceRaw, ...(did ? { did } : {}) };
 	} catch {
 		// ignore
 	}
@@ -90,19 +93,18 @@ export function parseSyrExportUrl(urlStr: string): { challenge: string; instance
 /**
  * Parses a syr://sync-profile URL.
  * Used when onboarding page shows QR for "Import from Syner".
+ * Requires instance and did (no JWT).
  */
-export function parseSyrSyncProfileUrl(
-	urlStr: string
-): { instance: string; sync_token: string } | null {
+export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did: string } | null {
 	try {
 		const url = new URL(urlStr);
 		if (url.protocol !== 'syr:' || url.hostname !== 'sync-profile') return null;
 		const instanceRaw = url.searchParams.get('instance');
-		const syncToken = url.searchParams.get('sync_token');
-		if (!instanceRaw || !syncToken) return null;
+		const did = url.searchParams.get('did');
+		if (!instanceRaw || !did) return null;
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
-		return { instance: instanceRaw, sync_token: syncToken };
+		return { instance: instanceRaw, did };
 	} catch {
 		return null;
 	}

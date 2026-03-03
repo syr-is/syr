@@ -10,9 +10,10 @@
 	import { FileInput, Loader2, Image } from '@lucide/svelte';
 	import { get } from 'svelte/store';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
+	import PickedFileImage from '$lib/components/picked-file-image.svelte';
 
 	const IMAGE_FILTERS = [
-		{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] },
+		{ name: 'Images', extensions: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
 		{ name: 'All files', extensions: ['*'] }
 	];
 
@@ -42,9 +43,9 @@
 			title: 'Select image',
 			filters: IMAGE_FILTERS
 		});
-		if (file && typeof file === 'string') return file;
-		if (Array.isArray(file) && file.length > 0) return file[0];
-		return null;
+		// Ensure single file: take first only (Android may return array despite multiple: false)
+		const paths = file == null ? null : Array.isArray(file) ? file : [file];
+		return paths && paths.length > 0 ? paths[0] : null;
 	}
 
 	function bytesToBase64(bytes: number[]): string {
@@ -230,6 +231,14 @@
 							<div class="grid grid-cols-2 gap-4">
 								<div class="space-y-2">
 									<Label>Avatar (optional)</Label>
+									{#if saveAvatarPath}
+										<PickedFileImage
+											sourcePath={saveAvatarPath}
+											displayName={saveDisplayName}
+											variant="avatar"
+											class="h-16 w-16"
+										/>
+									{/if}
 									<Button
 										type="button"
 										variant="outline"
@@ -246,6 +255,9 @@
 								</div>
 								<div class="space-y-2">
 									<Label>Banner (optional)</Label>
+									{#if saveBannerPath}
+										<PickedFileImage sourcePath={saveBannerPath} variant="banner" class="h-16" />
+									{/if}
 									<Button
 										type="button"
 										variant="outline"
@@ -302,16 +314,24 @@
 													bio: saveBio.trim() || null
 												}
 											);
-											if (saveAvatarPath) {
+											const avatarSource =
+												typeof saveAvatarPath === 'string' && saveAvatarPath.trim()
+													? saveAvatarPath
+													: null;
+											const bannerSource =
+												typeof saveBannerPath === 'string' && saveBannerPath.trim()
+													? saveBannerPath
+													: null;
+											if (avatarSource) {
 												await invoke('save_persona_avatar_cmd', {
 													personaId: persona.id,
-													sourcePath: saveAvatarPath
+													sourcePath: avatarSource
 												});
 											}
-											if (saveBannerPath) {
+											if (bannerSource) {
 												await invoke('save_persona_banner_cmd', {
 													personaId: persona.id,
-													sourcePath: saveBannerPath
+													sourcePath: bannerSource
 												});
 											}
 											passphraseForSave = '';

@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 		expected_did: identity.did
 	});
 
-	const deeplinkUrl = `syr://export?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}`;
+	const deeplinkUrl = `syr://export?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&did=${encodeURIComponent(identity.did)}`;
 
 	return json({
 		challenge_id: challengeId,

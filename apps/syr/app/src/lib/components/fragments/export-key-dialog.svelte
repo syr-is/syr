@@ -252,7 +252,7 @@
 		a.href = url;
 		a.download = filename;
 		a.click();
-		URL.revokeObjectURL(url);
+		setTimeout(() => URL.revokeObjectURL(url), 1000);
 		toast.success('SYR data backup exported — keys stay in Syner.');
 	}
 
@@ -310,7 +310,7 @@
 						a.href = url;
 						a.download = filename;
 						a.click();
-						URL.revokeObjectURL(url);
+						setTimeout(() => URL.revokeObjectURL(url), 1000);
 						return;
 					}
 
@@ -374,7 +374,7 @@
 						a.href = url;
 						a.download = filename;
 						a.click();
-						URL.revokeObjectURL(url);
+						setTimeout(() => URL.revokeObjectURL(url), 1000);
 						return;
 					}
 
@@ -449,7 +449,7 @@
 					a.href = url;
 					a.download = filename;
 					a.click();
-					URL.revokeObjectURL(url);
+					setTimeout(() => URL.revokeObjectURL(url), 1000);
 				}
 			});
 

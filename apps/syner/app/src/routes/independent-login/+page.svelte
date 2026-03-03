@@ -6,14 +6,13 @@
 	import { goto } from '$app/navigation';
 	import { get } from 'svelte/store';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
-	import * as Avatar from '@syr-is/ui/avatar';
 	import { Button } from '@syr-is/ui/button';
+	import PersonaImage from '$lib/components/persona-image.svelte';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
 	import { Loader2, LogIn, Lock } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
-	import { toAvatarSrc, getInitials } from '$lib/utils';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
 	import { syncProfileToSyr } from '$lib/sync-profile';
 	import type { Persona } from '$lib/types';
@@ -142,7 +141,9 @@
 				displayName: selected.displayName,
 				did: selected.did,
 				avatarUrl: selected.avatarUrl,
-				bannerUrl: selected.bannerUrl
+				bannerUrl: selected.bannerUrl,
+				avatarMtime: selected.avatarMtime,
+				bannerMtime: selected.bannerMtime
 			});
 			passphrase = '';
 			toast.success('Persona unlocked');
@@ -217,13 +218,34 @@
 			}
 			info(`[independent-login] Verification success`);
 
-			if (verifyData.sync_token && selected) {
+			if (selected && s) {
 				try {
+					await loadPersonas();
+					const fresh = personas.find((p) => p.id === selected?.id) ?? selected;
+					selected = fresh;
+					const payload = {
+						action: 'profile-sync' as const,
+						did: fresh.did,
+						issued_at: new Date().toISOString(),
+						...(fresh.displayName ? { display_name: fresh.displayName } : {}),
+						...(fresh.bio ? { bio: fresh.bio } : {})
+					};
+					const signedPayload = await invoke<string>('canonicalize_cmd', {
+						objJson: JSON.stringify(payload)
+					});
+					const payloadBytes = Array.from(new TextEncoder().encode(signedPayload));
+					const sigBytes = await invoke<number[]>('sign_payload', {
+						payload: payloadBytes,
+						privateKeyBase64: s
+					});
+					const signature = await invoke<string>('encode_multibase_cmd', {
+						bytes: sigBytes
+					});
 					await syncProfileToSyr(
 						instanceUrl.replace(/\/$/, ''),
-						verifyData.sync_token,
-						selected.id,
-						{ displayName: selected.displayName, bio: selected.bio }
+						fresh.id,
+						{ displayName: fresh.displayName, bio: fresh.bio, did: fresh.did },
+						{ signature, signedPayload }
 					);
 				} catch (e) {
 					logError(`[independent-login] Profile sync failed: ${e}`);
@@ -296,12 +318,14 @@
 										: ''}"
 									onclick={() => (selected = p)}
 								>
-									<Avatar.Root class="h-10 w-10 shrink-0">
-										{#if toAvatarSrc(p.avatarUrl)}
-											<Avatar.Image src={toAvatarSrc(p.avatarUrl)!} alt={p.displayName} />
-										{/if}
-										<Avatar.Fallback>{getInitials(p.displayName)}</Avatar.Fallback>
-									</Avatar.Root>
+									<PersonaImage
+										personaId={p.id}
+										role="avatar"
+										mtime={p.avatarMtime}
+										displayName={p.displayName}
+										variant="avatar"
+										class="h-10 w-10 shrink-0"
+									/>
 									<div class="min-w-0 flex-1">
 										<p class="font-medium">{p.displayName}</p>
 										<p class="text-muted-foreground truncate font-mono text-xs">{p.did}</p>

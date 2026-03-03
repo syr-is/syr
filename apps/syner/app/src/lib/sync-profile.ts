@@ -4,14 +4,18 @@ import { fetch } from '@tauri-apps/plugin-http';
 /**
  * Sync persona profile (display_name, bio, avatar, banner) to SYR provisioner.
  * Uses tauri-plugin-http fetch so requests succeed in Tauri/WebView (avoids CORS/fetch failures).
+ * Auth: Ed25519 signature over payload (no JWT). Server looks up user by DID.
  */
 export async function syncProfileToSyr(
 	instanceBase: string,
-	syncToken: string,
 	personaId: string,
-	persona: { displayName: string; bio?: string }
+	persona: { displayName: string; bio?: string; did: string },
+	options: { signature: string; signedPayload: string }
 ): Promise<void> {
 	const formData = new FormData();
+	formData.set('did', persona.did);
+	formData.set('signature', options.signature);
+	formData.set('signed_payload', options.signedPayload);
 	if (persona.displayName) formData.set('display_name', persona.displayName);
 	if (persona.bio) formData.set('bio', persona.bio);
 
@@ -40,17 +44,11 @@ export async function syncProfileToSyr(
 	const base = instanceBase.replace(/\/$/, '');
 	const res = await fetch(`${base}/api/auth/independent-login/profile-sync`, {
 		method: 'POST',
-		headers: { Authorization: `Bearer ${syncToken}` },
 		body: formData
 	});
 	if (!res.ok) {
 		const err = await res.json().catch(() => ({}));
-		const msg = err.error_description ?? err.message ?? `Profile sync failed: ${res.status}`;
-		if (res.status === 401) {
-			throw new Error(
-				'Sync link expired or invalid. Scan the QR code again from SYR Settings → Sync with Syner.'
-			);
-		}
+		const msg = err.message ?? `Profile sync failed: ${res.status}`;
 		throw new Error(msg);
 	}
 }

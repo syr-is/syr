@@ -1,42 +1,113 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySyncToken } from '$lib/server/auth';
+import { verify, decodeMultibase } from '@syr-is/crypto';
+import { parseDid } from '@syr-is/did';
+import { ProfileSyncSignedPayloadSchema } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_BANNER_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * GET /api/auth/independent-login/profile-sync
+ *
+ * Deprecated: DID is now included in the QR. Returns 410 Gone.
+ */
+export const GET: RequestHandler = async () => {
+	throw error(410, {
+		code: 'GONE',
+		message: 'DID is now included in the sync-profile URL. Scan the QR from SYR Settings.'
+	});
+};
 
 /**
  * POST /api/auth/independent-login/profile-sync
  *
  * Sync profile (display_name, bio, avatar, banner) from Syner.
- * Auth: Authorization: Bearer <sync_token> or ?token=<sync_token>
+ * Auth: Ed25519 signature over payload (no JWT). Server looks up user by DID.
  */
-export const POST: RequestHandler = async ({ request, url }) => {
-	const token =
-		request.headers
-			.get('Authorization')
-			?.replace(/^Bearer\s+/i, '')
-			.trim() || url.searchParams.get('token');
-	if (!token) {
-		throw error(401, { code: 'UNAUTHORIZED', message: 'Missing sync token' });
-	}
-
-	const userId = verifySyncToken(token);
-	if (!userId) {
-		throw error(401, { code: 'UNAUTHORIZED', message: 'Invalid or expired sync token' });
-	}
-
-	const user = await userRepository.findById(userId);
-	if (!user) {
-		throw error(404, { code: 'NOT_FOUND', message: 'User not found' });
-	}
-
+export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const formData = await request.formData();
+		const requestDid = formData.get('did');
+		if (typeof requestDid !== 'string' || !requestDid.trim()) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Profile sync requires did'
+			});
+		}
+		const did = requestDid.trim();
+
+		const user = await userRepository.findByDid(did);
+		if (!user) {
+			throw error(403, {
+				code: 'FORBIDDEN',
+				message: 'No SYR account found for this identity'
+			});
+		}
+		if (!user.did) {
+			throw error(403, {
+				code: 'FORBIDDEN',
+				message: 'Profile sync requires an identity (DID) on the SYR account'
+			});
+		}
+
+		const userId = user.id;
+
+		const signature = formData.get('signature');
+		const signedPayloadStr = formData.get('signed_payload');
+		if (
+			typeof signature !== 'string' ||
+			!signature.trim() ||
+			typeof signedPayloadStr !== 'string' ||
+			!signedPayloadStr.trim()
+		) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message:
+					'Profile sync requires signature and signed_payload (proves control of persona private key)'
+			});
+		}
+
+		let parsedPayload: { action: string; did: string; issued_at: string };
+		try {
+			const parsed = ProfileSyncSignedPayloadSchema.parse(JSON.parse(signedPayloadStr));
+			parsedPayload = parsed;
+		} catch {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Invalid signed_payload format'
+			});
+		}
+		if (parsedPayload.action !== 'profile-sync' || parsedPayload.did !== did) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Signed payload must match request (action=profile-sync, did)'
+			});
+		}
+		const issuedAt = new Date(parsedPayload.issued_at).getTime();
+		if (isNaN(issuedAt) || Date.now() - issuedAt > SIGNATURE_MAX_AGE_MS) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: 'Signed payload expired or invalid timestamp (max 5 minutes)'
+			});
+		}
+
+		const parsedDid = parseDid(did);
+		const signatureBytes = decodeMultibase(signature.trim());
+		const messageBytes = new TextEncoder().encode(signedPayloadStr);
+		const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
+		if (!isValid) {
+			throw error(403, {
+				code: 'FORBIDDEN',
+				message: 'Invalid signature: must sign with persona private key'
+			});
+		}
+
 		const displayName = formData.get('display_name');
 		const bio = formData.get('bio');
 		const avatarFile = formData.get('avatar');
@@ -70,11 +141,12 @@ export const POST: RequestHandler = async ({ request, url }) => {
 				});
 			}
 			const buf = await avatarFile.arrayBuffer();
-			updates.avatar_url = await uploadController.uploadProfileAsset(user, 'avatar', {
+			const baseUrl = await uploadController.uploadProfileAsset(user, 'avatar', {
 				buffer: buf,
 				name: avatarFile.name,
 				type: avatarFile.type
 			});
+			updates.avatar_url = baseUrl;
 		}
 
 		if (bannerFile instanceof File && bannerFile.size > 0) {
@@ -91,11 +163,12 @@ export const POST: RequestHandler = async ({ request, url }) => {
 				});
 			}
 			const buf = await bannerFile.arrayBuffer();
-			updates.banner_url = await uploadController.uploadProfileAsset(user, 'banner', {
+			const baseUrl = await uploadController.uploadProfileAsset(user, 'banner', {
 				buffer: buf,
 				name: bannerFile.name,
 				type: bannerFile.type
 			});
+			updates.banner_url = baseUrl;
 		}
 
 		let profile = await profileRepository.findByUserId(userId);

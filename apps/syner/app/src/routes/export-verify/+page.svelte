@@ -6,14 +6,13 @@
 	import { goto } from '$app/navigation';
 	import { get } from 'svelte/store';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
-	import * as Avatar from '@syr-is/ui/avatar';
 	import { Button } from '@syr-is/ui/button';
+	import PersonaImage from '$lib/components/persona-image.svelte';
+	import ExportVerifyPersonaSelector from '$lib/components/fragments/export-verify-persona-selector.svelte';
 	import { Input } from '@syr-is/ui/input';
-	import { Label } from '@syr-is/ui/label';
-	import { Loader2, ShieldCheck } from '@lucide/svelte';
+	import { Loader2, Lock, ShieldCheck } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
-	import { toAvatarSrc, getInitials } from '$lib/utils';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
 	import type { Persona } from '$lib/types';
 
@@ -31,8 +30,10 @@
 	let instanceUrl = $state<string | null>(null);
 	let message = $state<string | null>(null);
 	let domain = $state<string | null>(null);
+	let targetDid = $state<string | null>(null);
 	let personas = $state<Persona[]>([]);
 	let selected = $state<Persona | null>(null);
+	let loadError = $state<string | null>(null);
 	let passphrase = $state('');
 	let loading = $state(false);
 	let unlockLoading = $state(false);
@@ -57,6 +58,9 @@
 		!!seedValue && !!personaValue && !!selected && personaValue.id === selected.id
 	);
 
+	let didFromUrl = $derived(page.url.searchParams.get('did'));
+
+	/** Explicitly typed for each block to avoid TS narrowing to never in conditional branches */
 	$effect(() => {
 		const url = page.url;
 		const c = url.searchParams.get('challenge');
@@ -79,6 +83,9 @@
 		const base = instanceUrl.replace(/\/$/, '');
 		const url = `${base}/api/identity/export-challenge/${challengeId}`;
 		info(`[export-verify] Fetching challenge: ${url}`);
+		loadError = null;
+		targetDid = null;
+		selected = null;
 		try {
 			const res = await fetch(url);
 			info(`[export-verify] Challenge response status: ${res.status} ${res.statusText}`);
@@ -94,8 +101,22 @@
 			const data = await res.json();
 			message = data.message;
 			domain = data.domain;
+			targetDid = didFromUrl ?? (typeof data.did === 'string' ? data.did : null) ?? null;
 			error = null;
 			info(`[export-verify] Challenge loaded for domain: ${domain}`);
+
+			const list = await invoke<Persona[]>('list_personas_cmd').catch((): Persona[] => []);
+			personas = list ?? [];
+			if (targetDid) {
+				const match = personas.find((p) => p.did === targetDid);
+				if (match) {
+					selected = match;
+				} else {
+					loadError =
+						'Profile not found on this device. Import the identity that matches your SYR account.';
+					toast.error(loadError);
+				}
+			}
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			const cause = e instanceof Error && e.cause ? String(e.cause) : '';
@@ -108,14 +129,16 @@
 	}
 
 	$effect(() => {
-		loadPersonas();
+		if (!challengeId || !instanceUrl) {
+			loadPersonas();
+		}
 	});
 
 	async function loadPersonas() {
 		try {
 			personas = await invoke<Persona[]>('list_personas_cmd');
 		} catch {
-			personas = [];
+			personas = [] as Persona[];
 		}
 	}
 
@@ -139,7 +162,9 @@
 				displayName: selected.displayName,
 				did: selected.did,
 				avatarUrl: selected.avatarUrl,
-				bannerUrl: selected.bannerUrl
+				bannerUrl: selected.bannerUrl,
+				avatarMtime: selected.avatarMtime,
+				bannerMtime: selected.bannerMtime
 			});
 			passphrase = '';
 			toast.success('Persona unlocked');
@@ -248,67 +273,76 @@
 				<Button variant="outline" class="mt-4" href="/">Back to Personas</Button>
 			</CardContent>
 		</Card>
+	{:else if loadError}
+		<Card>
+			<CardContent class="pt-6">
+				<p class="text-destructive text-sm">{loadError}</p>
+				<Button variant="outline" class="mt-4" href="/">Back to Personas</Button>
+			</CardContent>
+		</Card>
 	{:else if message && domain}
 		<Card>
 			<CardHeader>
 				<CardTitle>Verify identity for {domain}</CardTitle>
 				<CardDescription>
-					Sign the challenge below to prove you control this identity. Used for export or import.
+					Unlock your persona to sign the challenge. Used for export or import.
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
 				{#if personas.length === 0}
 					<p class="text-muted-foreground text-sm">No personas. Create or import one first.</p>
 					<Button variant="outline" href="/">Go to Personas</Button>
-				{:else}
-					<div class="space-y-2">
-						<Label>Select persona</Label>
-						<div class="flex flex-col gap-2">
-							{#each personas as p (p.id)}
-								<button
-									type="button"
-									class="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-3 text-left transition-colors {selected?.id ===
-									p.id
-										? 'border-primary bg-muted/50'
-										: ''}"
-									onclick={() => (selected = p)}
-								>
-									<Avatar.Root class="h-10 w-10 shrink-0">
-										{#if toAvatarSrc(p.avatarUrl)}
-											<Avatar.Image src={toAvatarSrc(p.avatarUrl)!} alt={p.displayName} />
-										{/if}
-										<Avatar.Fallback>{getInitials(p.displayName)}</Avatar.Fallback>
-									</Avatar.Root>
-									<div class="min-w-0 flex-1">
-										<p class="font-medium">{p.displayName}</p>
-										<p class="text-muted-foreground truncate font-mono text-xs">{p.did}</p>
-									</div>
-								</button>
-							{/each}
+				{:else if selected}
+					<div class="border-border flex items-center gap-3 rounded-lg border p-3">
+						<PersonaImage
+							personaId={selected.id}
+							role="avatar"
+							mtime={selected.avatarMtime}
+							displayName={selected.displayName}
+							variant="avatar"
+							class="h-12 w-12 shrink-0"
+						/>
+						<div class="min-w-0 flex-1">
+							<p class="font-medium">{selected.displayName}</p>
+							<p class="text-muted-foreground truncate font-mono text-xs">{selected.did}</p>
 						</div>
 					</div>
 
-					{#if selected}
-						{#if hasUnlockedPersona}
-							<div class="flex items-center gap-2">
-								<span class="text-muted-foreground text-sm">Unlocked: {selected.displayName}</span>
-								<Button variant="ghost" size="sm" onclick={lockSession}>Lock</Button>
-							</div>
-						{:else}
-							<div class="flex gap-2">
-								<Input
-									type="password"
-									placeholder="Passphrase"
-									bind:value={passphrase}
-									disabled={unlockLoading}
-								/>
-								<Button onclick={unlockPersona} disabled={unlockLoading || !passphrase.trim()}>
-									{unlockLoading ? 'Unlocking…' : 'Unlock'}
-								</Button>
-							</div>
-						{/if}
+					{#if hasUnlockedPersona}
+						<div class="flex items-center gap-2">
+							<span class="text-muted-foreground text-sm">Unlocked: {selected.displayName}</span>
+							<Button variant="ghost" size="sm" onclick={lockSession}>
+								<Lock class="h-4 w-4" />
+								Lock
+							</Button>
+						</div>
+					{:else}
+						<div class="flex gap-2">
+							<Input
+								type="password"
+								placeholder="Passphrase"
+								bind:value={passphrase}
+								disabled={unlockLoading}
+							/>
+							<Button onclick={unlockPersona} disabled={unlockLoading || !passphrase.trim()}>
+								{unlockLoading ? 'Unlocking…' : 'Unlock'}
+							</Button>
+						</div>
 					{/if}
 
+					<div class="flex gap-2 pt-2">
+						<Button onclick={signAndVerify} disabled={loading || !hasUnlockedPersona}>
+							{#if loading}
+								<Loader2 class="h-4 w-4 animate-spin" />
+								Verifying…
+							{:else}
+								Sign and verify
+							{/if}
+						</Button>
+						<Button variant="outline" href="/">Cancel</Button>
+					</div>
+				{:else}
+					<ExportVerifyPersonaSelector {personas} {selected} onSelect={(p) => (selected = p)} />
 					<div class="flex gap-2 pt-2">
 						<Button onclick={signAndVerify} disabled={loading || !selected || !hasUnlockedPersona}>
 							{#if loading}
