@@ -1,6 +1,7 @@
 import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { identityController } from '$lib/controllers/identity.controller';
+import { consumeExportToken } from '$lib/server/export-verify-store';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
 import { postRepository } from '$lib/repositories/post.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
@@ -17,16 +18,22 @@ const MAX_EXPORT_ASSET_BYTES = 500 * 1024 * 1024; // 500 MB total asset bytes
  * GET /api/identity/export-bundle-data
  *
  * Returns manifest, identity, posts, and assets (no key) for client-side export.
- * The client creates Sigil from seed (decrypted in browser), assembles zip with identity.sigil,
- * and downloads.
+ * Auth: session (locals.user) or one-time export_token query param (from Syner verification).
  */
-export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.user) {
+export const GET: RequestHandler = async ({ locals, url }) => {
+	let userId: string | null = locals.user?.id ?? null;
+	const exportToken = url.searchParams.get('export_token');
+	if (exportToken) {
+		userId = await consumeExportToken(exportToken);
+		if (!userId) {
+			throw error(403, { code: 'INVALID_TOKEN', message: 'Export token invalid or expired' });
+		}
+	}
+	if (!userId) {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
 	try {
-		const userId = locals.user.id;
 		const identityBundle = await identityController.exportIdentity(userId);
 		const did = identityBundle.did;
 

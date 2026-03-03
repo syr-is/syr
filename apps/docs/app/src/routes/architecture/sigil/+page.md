@@ -245,6 +245,8 @@ STEPS:
   5. Store seed in secure device storage (e.g., Keychain).
 ```
 
+> **Note:** SYR supports both Sigil-based import (full backup with keys) and signature-based import (data-only backup). The latter does not use Sigil; the user proves key control by signing a challenge in Syner. See [Import](/architecture/import).
+
 ---
 
 ## 10. Transport Formats

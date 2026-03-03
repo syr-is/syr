@@ -1,0 +1,47 @@
+import { kvService } from '$lib/services/kv';
+
+const INSTANCE_CONFIG_TYPE = 'instance_config';
+const KEY_PROFILE_SYNC_ASSET_PATH = 'default_profile_sync_asset_upload_path';
+const KEY_USERNAME_CHANGE_COOLDOWN_DAYS = 'username_change_cooldown_days';
+const DEFAULT_PATH = ['me', 'profile', 'public'];
+const DEFAULT_USERNAME_COOLDOWN_DAYS = 7;
+
+/**
+ * Get the profile sync asset upload path from instance config.
+ * Path is relative to uploads/{did}/. Returns folder name segments.
+ * Default: ['me', 'profile', 'public'] when unset or invalid.
+ */
+export async function getProfileSyncAssetUploadPath(): Promise<string[]> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_PROFILE_SYNC_ASSET_PATH);
+	if (typeof val === 'string' && val.trim()) {
+		const segments = val
+			.split('/')
+			.map((s) => s.trim())
+			.filter(Boolean);
+		if (segments.length > 0 && segments.every((s) => /^[a-zA-Z0-9_-]+$/.test(s))) {
+			return segments;
+		}
+	}
+	return DEFAULT_PATH;
+}
+
+/**
+ * Get the number of days that must pass before a user can change their username again.
+ * Default: 7 when unset or invalid.
+ */
+export async function getUsernameChangeCooldownDays(): Promise<number> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_USERNAME_CHANGE_COOLDOWN_DAYS);
+	if (val != null) {
+		const n = parseInt(String(val), 10);
+		if (!isNaN(n) && n >= 1 && n <= 365) return n;
+	}
+	return DEFAULT_USERNAME_COOLDOWN_DAYS;
+}
+
+export {
+	INSTANCE_CONFIG_TYPE,
+	KEY_PROFILE_SYNC_ASSET_PATH,
+	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
+	DEFAULT_PATH,
+	DEFAULT_USERNAME_COOLDOWN_DAYS
+};

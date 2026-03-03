@@ -8,6 +8,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { QueryOptions, Upload, UploadCreate, User } from '@syr-is/types';
 import { stringToRecordId, extractLocalId, extractDid } from '@syr-is/types';
+import { getProfileSyncAssetUploadPath } from '$lib/instance-config';
 import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
@@ -352,6 +353,90 @@ export class UploadController {
 
 	async getUpload(id: RecordId | string): Promise<Upload | null> {
 		return uploadRepository.findById(id);
+	}
+
+	/**
+	 * Upload a profile asset (avatar or banner) from server-received bytes.
+	 * Used by profile-sync endpoint when Syner POSTs multipart.
+	 * Uses instance config path (default: me/profile/public) so assets are publicly accessible.
+	 */
+	async uploadProfileAsset(
+		user: User,
+		role: 'avatar' | 'banner',
+		file: { buffer: ArrayBuffer; name: string; type: string }
+	): Promise<string> {
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to upload profile assets');
+		}
+		const did = user.did;
+		const buf = Buffer.from(file.buffer);
+		const size = buf.length;
+		const mimeType = file.type || 'image/png';
+		const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType.replace('image/', '') || 'png';
+		const localId = `profile-${role}`;
+
+		const pathSegments = await getProfileSyncAssetUploadPath();
+		const leafFolder = await folderRepository.createHierarchy(user.id, pathSegments);
+		if (!leafFolder) {
+			throw new Error('Failed to create profile assets folder hierarchy');
+		}
+
+		const pathStr = pathSegments.join('/');
+		const key = `uploads/${did}/${pathStr}/${role}.${ext}`;
+		const url = this.buildUrl(key);
+
+		const existing = await uploadRepository.findByCompositeId(did, localId);
+		const deltaBytes = existing ? size - existing.size : size;
+
+		if (deltaBytes > 0) {
+			const storageCheck = await fileStoreUsageController.canUpload(user.id, deltaBytes);
+			if (!storageCheck.allowed) {
+				throw new Error(storageCheck.message || 'Storage limit exceeded');
+			}
+		}
+
+		await s3Service.client.send(
+			new PutObjectCommand({
+				Bucket: s3.bucket,
+				Key: key,
+				Body: buf,
+				ContentType: mimeType
+			})
+		);
+
+		const now = new Date();
+		const uploadData = {
+			key,
+			owner_id: user.id,
+			folder_id: leafFolder.id,
+			filename: file.name || `${role}.${ext}`,
+			mime_type: mimeType,
+			size,
+			url,
+			status: 'completed' as const,
+			is_public: true,
+			created_at: now,
+			updated_at: now
+		};
+
+		if (existing) {
+			await uploadRepository.update(existing.id, uploadData);
+			const usageDelta = size - existing.size;
+			if (usageDelta !== 0) {
+				if (usageDelta > 0) {
+					await fileStoreUsageController.addUsage(user.id, usageDelta, true);
+				} else {
+					await fileStoreUsageController.subtractUsage(user.id, -usageDelta);
+				}
+			}
+		} else {
+			await uploadRepository.createWithExplicitId(did, localId, uploadData);
+			if (size > 0) {
+				await fileStoreUsageController.addUsage(user.id, size, true);
+			}
+		}
+
+		return url;
 	}
 
 	/**

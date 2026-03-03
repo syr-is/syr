@@ -2,10 +2,17 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { config } from '$lib/config';
 import { consumeCallbackToken } from '$lib/server/independent-login-store';
+import { verifyAccessToken } from '$lib/server/auth';
+import { profileRepository } from '$lib/repositories/profile.repository';
+
+/** Profile needs onboarding when display_name is auto-generated (il_xxx pattern). */
+function needsOnboarding(displayName: string | null | undefined): boolean {
+	return !!displayName && /^il_[a-zA-Z0-9_-]+_\w{6}$/.test(displayName);
+}
 
 /**
  * Callback page for independent login.
- * Exchanges one-time token for session cookie and redirects to home.
+ * Exchanges one-time token for session cookie and redirects to home or onboarding.
  */
 export const load: PageServerLoad = async ({ url, cookies }) => {
 	const token = url.searchParams.get('token');
@@ -25,6 +32,14 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		sameSite: 'strict',
 		maxAge: 60 * 60 * 24 * 7 // 7 days
 	});
+
+	const payload = verifyAccessToken(jwt);
+	if (payload) {
+		const profile = await profileRepository.findByUserId(payload.userId);
+		if (profile && needsOnboarding(profile.display_name)) {
+			throw redirect(302, '/settings/sync-syner');
+		}
+	}
 
 	throw redirect(302, '/');
 };

@@ -22,7 +22,8 @@ export class IndependentLoginController {
 		did: string,
 		message: string,
 		signature: string,
-		_inviteCode?: string
+		_inviteCode?: string,
+		profileData?: { display_name?: string; bio?: string }
 	): Promise<User> {
 		const parsedDid = parseDid(did);
 		const publicKeyBytes = parsedDid.publicKey;
@@ -58,7 +59,10 @@ export class IndependentLoginController {
 
 		let profile;
 		try {
-			profile = await profileRepository.createByUserId(user.id);
+			profile = await profileRepository.createByUserId(user.id, {
+				display_name: profileData?.display_name,
+				bio: profileData?.bio
+			});
 		} catch (err) {
 			await userRepository.delete(user.id);
 			throw err;

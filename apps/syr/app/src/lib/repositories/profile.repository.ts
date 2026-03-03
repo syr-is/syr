@@ -18,7 +18,10 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	protected tableName = 'profile';
 	protected schema = ProfileSchema;
 
-	async createByUserId(userId: RecordId | string): Promise<Profile | null> {
+	async createByUserId(
+		userId: RecordId | string,
+		overrides?: { display_name?: string; bio?: string }
+	): Promise<Profile | null> {
 		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 		const user = await userRepository.findById(userRecordId);
 		if (!user) {
@@ -26,9 +29,13 @@ export class ProfileRepository extends BaseRepository<Profile> {
 		}
 		const result = await this.db.create<Profile, ProfileCreate>(this.tableName, {
 			user_id: userRecordId,
-			display_name: user.username
+			display_name: overrides?.display_name ?? user.username
 		});
-		return result[0] as Profile | null;
+		const profile = result[0] as Profile | null;
+		if (profile && overrides?.bio !== undefined) {
+			return (await this.mergeByUserId(userRecordId, { bio: overrides.bio })) ?? profile;
+		}
+		return profile;
 	}
 
 	/**

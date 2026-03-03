@@ -205,12 +205,14 @@
 							<DropdownMenu.Item onclick={() => openExportIdentityDialog('syr')}>
 								Export SYR
 							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => openExportIdentityDialog('sigil')}>
-								Export Sigil
-							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => openExportIdentityDialog('persona')}>
-								Export Persona
-							</DropdownMenu.Item>
+							{#if data.hasAegis}
+								<DropdownMenu.Item onclick={() => openExportIdentityDialog('sigil')}>
+									Export Sigil
+								</DropdownMenu.Item>
+								<DropdownMenu.Item onclick={() => openExportIdentityDialog('persona')}>
+									Export Persona
+								</DropdownMenu.Item>
+							{/if}
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				</div>
@@ -219,17 +221,25 @@
 					<p class="font-medium">Export methods</p>
 					<ul class="space-y-1.5 text-muted-foreground">
 						<li>
-							<strong class="text-foreground">Export SYR</strong> — Complete backup (.syr file). All
-							posts, assets, manifest, and identity. Use for full migration or reclaim identity in SYR.
+							<strong class="text-foreground">Export SYR</strong> —
+							{#if data.hasAegis}
+								Complete backup (.syr file). All posts, assets, manifest, and identity. Use for full
+								migration or reclaim identity in SYR.
+							{:else}
+								Data backup (.syr file). Profile, posts, and assets. Verify with Syner to download.
+								Keys stay in Syner.
+							{/if}
 						</li>
-						<li>
-							<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup (.sigil
-							file). Single encrypted file. Use for key recovery or minimal backup.
-						</li>
-						<li>
-							<strong class="text-foreground">Export Persona</strong> — Syner-readable profile (.persona
-							file). Sigil, profile.json, avatar, banner. Open in Syner to import.
-						</li>
+						{#if data.hasAegis}
+							<li>
+								<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup
+								(.sigil file). Single encrypted file. Use for key recovery or minimal backup.
+							</li>
+							<li>
+								<strong class="text-foreground">Export Persona</strong> — Syner-readable profile (.persona
+								file). Sigil, profile.json, avatar, banner. Open in Syner to import.
+							</li>
+						{/if}
 					</ul>
 				</div>
 
@@ -460,6 +470,7 @@
 <ExportKeyDialog
 	bind:open={exportIdentityDialogOpen}
 	hasIdentity={data.hasIdentity}
+	hasAegis={data.hasAegis ?? false}
 	exportType={exportTypeForDialog}
 	onSuccess={invalidateAll}
 />

@@ -5,7 +5,7 @@
 	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
 	import PanelLeftIcon from '@lucide/svelte/icons/panel-left';
 
-	let { children } = $props();
+	let { data, children } = $props();
 	const isMobile = new IsMobile();
 	let settingsNavOpen = $state(false);
 
@@ -21,7 +21,7 @@
 		<aside class="hidden w-64 shrink-0 border-r bg-background md:block">
 			<div class="px-4 py-4">
 				<h2 class="mb-3 text-sm font-semibold text-muted-foreground">Settings</h2>
-				<SettingsNav />
+				<SettingsNav user={data?.user} />
 			</div>
 		</aside>
 	{/if}
@@ -50,7 +50,7 @@
 				</Sheet.Header>
 				<div class="flex h-full flex-col px-4 py-4">
 					<h2 class="mb-3 text-sm font-semibold text-muted-foreground">Settings</h2>
-					<SettingsNav />
+					<SettingsNav user={data?.user} />
 				</div>
 			</Sheet.Content>
 		</Sheet.Root>

@@ -15,6 +15,7 @@
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
 	import { toAvatarSrc, getInitials } from '$lib/utils';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
+	import { syncProfileToSyr } from '$lib/sync-profile';
 	import type { Persona } from '$lib/types';
 
 	function redactErrorPayload(data: unknown): string {
@@ -194,7 +195,13 @@
 				body: JSON.stringify({
 					challenge_id: challengeId,
 					did: persona.did,
-					signature
+					signature,
+					profile: selected
+						? {
+								display_name: selected.displayName,
+								bio: selected.bio ?? undefined
+							}
+						: undefined
 				})
 			});
 			info(`[independent-login] Verify response: ${verifyRes.status} ${verifyRes.statusText}`);
@@ -209,6 +216,21 @@
 				return;
 			}
 			info(`[independent-login] Verification success`);
+
+			if (verifyData.sync_token && selected) {
+				try {
+					await syncProfileToSyr(
+						instanceUrl.replace(/\/$/, ''),
+						verifyData.sync_token,
+						selected.id,
+						{ displayName: selected.displayName, bio: selected.bio }
+					);
+				} catch (e) {
+					logError(`[independent-login] Profile sync failed: ${e}`);
+					// Non-fatal; user can sync from onboarding
+				}
+			}
+
 			toast.success('Sign in complete. Check the browser where you scanned the QR.');
 			lockSession();
 			goto('/');

@@ -30,7 +30,8 @@ export const UserSchema = BaseEntitySchema.extend({
 		),
 	password_hash: z.string(),
 	did: DidSyrSchema.optional(), // Optional for backward compat; set during identity creation
-	role: UserRoleSchema.default('USER') // Instance-level role for access control
+	role: UserRoleSchema.default('USER'), // Instance-level role for access control
+	username_last_updated: TimestampSchema.optional() // When username was last changed; null = never changed, allow first update
 });
 
 export type User = z.infer<typeof UserSchema>;

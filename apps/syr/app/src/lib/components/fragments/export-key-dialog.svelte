@@ -9,17 +9,20 @@
 	import { createSigil } from '@syr-is/crypto/sigil';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
+	import QRCode from 'qrcode';
 
 	export type ExportType = 'syr' | 'sigil' | 'persona';
 
 	let {
 		open = $bindable(false),
 		hasIdentity = false,
+		hasAegis = true,
 		exportType = 'syr' as ExportType,
 		onSuccess
 	}: {
 		open?: boolean;
 		hasIdentity?: boolean;
+		hasAegis?: boolean;
 		exportType?: ExportType;
 		onSuccess?: () => void;
 	} = $props();
@@ -29,18 +32,40 @@
 	let confirmPassphrase = $state('');
 	let unlockPassword = $state('');
 	let bundle = $state<AegisBundle | null>(null);
-	let step = $state<'unlock' | 'export'>('unlock');
+	let step = $state<'unlock' | 'export' | 'verify'>('unlock');
+	// Independent SYR: verify step
+	let exportChallenge = $state<{
+		challenge_id: string;
+		deeplink_url: string;
+		expires_in: number;
+		qrDataUrl: string;
+	} | null>(null);
+	let exportHeartbeatSource: EventSource | null = null;
+
+	const isIndependentSyr = $derived(!hasAegis && exportType === 'syr');
 
 	$effect(() => {
 		if (open) {
-			if (!bundle) {
+			if (isIndependentSyr) {
+				step = 'verify';
+				exportChallenge = null;
+			} else if (!bundle) {
 				step = 'unlock';
 			}
 		} else {
 			bundle = null;
 			unlockPassword = '';
+			exportChallenge = null;
+			disconnectExportHeartbeat();
 		}
 	});
+
+	function disconnectExportHeartbeat() {
+		if (exportHeartbeatSource) {
+			exportHeartbeatSource.close();
+			exportHeartbeatSource = null;
+		}
+	}
 
 	function canExport(): boolean {
 		if (passphrase !== confirmPassphrase) return false;
@@ -108,6 +133,128 @@
 				? 'I understand, download sigil'
 				: 'I understand, download persona'
 	);
+
+	async function handleVerifyWithSyner() {
+		if (!hasIdentity || !isIndependentSyr) return;
+		exporting = true;
+		exportChallenge = null;
+		try {
+			const res = await fetch('/api/identity/export-challenge', { method: 'POST' });
+			const data = await res.json();
+			if (!res.ok)
+				throw new Error(data.error_description ?? data.message ?? 'Failed to create challenge');
+			const qrDataUrl = await QRCode.toDataURL(data.deeplink_url, { width: 256, margin: 2 });
+			exportChallenge = {
+				challenge_id: data.challenge_id,
+				deeplink_url: data.deeplink_url,
+				expires_in: data.expires_in,
+				qrDataUrl
+			};
+			const src = new EventSource(
+				`/api/identity/export-heartbeat?challenge_id=${encodeURIComponent(data.challenge_id)}`
+			);
+			exportHeartbeatSource = src;
+			src.addEventListener('verified', async (e: MessageEvent) => {
+				try {
+					const payload = JSON.parse(e.data || '{}');
+					const token = payload.export_token;
+					if (!token) return;
+					disconnectExportHeartbeat();
+					await downloadDataOnlySyr(token);
+					open = false;
+					exportChallenge = null;
+					onSuccess?.();
+				} catch (err) {
+					toast.error(err instanceof Error ? err.message : 'Export failed');
+				} finally {
+					exporting = false;
+				}
+			});
+			src.onerror = () => {
+				disconnectExportHeartbeat();
+				exporting = false;
+			};
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to create challenge');
+		} finally {
+			if (!exportChallenge) exporting = false;
+		}
+	}
+
+	async function downloadDataOnlySyr(exportToken: string) {
+		const res = await fetch(
+			`/api/identity/export-bundle-data?export_token=${encodeURIComponent(exportToken)}`
+		);
+		if (!res.ok) throw new Error('Failed to fetch export data');
+		const resJson = await res.json();
+		const data = resJson?.data ?? resJson;
+		if (
+			!data ||
+			typeof data !== 'object' ||
+			!data.manifest ||
+			!data.identity ||
+			!Array.isArray(data.posts) ||
+			!Array.isArray(data.assets)
+		) {
+			throw new Error('Invalid export payload: missing manifest, identity, posts, or assets');
+		}
+		const didShort = data.identity.did?.slice(8, 20) ?? 'export';
+		const timestamp = Date.now();
+		const zipFiles: Record<string, Uint8Array> = {};
+		zipFiles['manifest.json'] = strToU8(JSON.stringify(data.manifest, null, 2));
+		zipFiles['identity.json'] = strToU8(JSON.stringify(data.identity, null, 2));
+		zipFiles['posts.json'] = strToU8(JSON.stringify(data.posts, null, 2));
+		zipFiles['assets.json'] = strToU8(
+			JSON.stringify(
+				{
+					assets: data.assets.map(
+						(a: {
+							zip_path: string;
+							local_id: string;
+							filename: string;
+							mime_type: string;
+							size: number;
+							sha256?: string;
+						}) => ({
+							zip_path: a.zip_path,
+							local_id: a.local_id,
+							filename: a.filename,
+							mime_type: a.mime_type,
+							size: a.size,
+							sha256: a.sha256
+						})
+					)
+				},
+				null,
+				2
+			)
+		);
+		zipFiles['pinned_posts.json'] = strToU8(
+			JSON.stringify(data.pinned_posts ?? { post_ids: [] }, null, 2)
+		);
+		for (const asset of data.assets ?? []) {
+			if (asset.content_base64 && asset.zip_path) {
+				zipFiles[asset.zip_path] = Uint8Array.from(atob(asset.content_base64), (c) =>
+					c.charCodeAt(0)
+				);
+			}
+		}
+		const zipped = await new Promise<Uint8Array>((resolve, reject) => {
+			zip(zipFiles, { level: 1 }, (err, out) => {
+				if (err) reject(err);
+				else resolve(out ?? new Uint8Array(0));
+			});
+		});
+		const filename = `syr-export-${didShort}-${timestamp}.syr`;
+		const blob = new Blob([new Uint8Array(zipped)]);
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		URL.revokeObjectURL(url);
+		toast.success('SYR data backup exported — keys stay in Syner.');
+	}
 
 	async function handleUnlock() {
 		if (!unlockPassword || unlockPassword.length < 1) return;
@@ -332,7 +479,13 @@
 		<Dialog.Header>
 			<Dialog.Title>{dialogTitle}</Dialog.Title>
 			<Dialog.Description>
-				{#if step === 'unlock'}
+				{#if isIndependentSyr}
+					<p class="text-sm text-muted-foreground">
+						You are about to download your SYR data backup (profile, posts, assets). Your keys are
+						managed in Syner — this backup does not include them. Scan the QR or open the link with
+						Syner to verify.
+					</p>
+				{:else if step === 'unlock'}
 					<p class="text-sm text-muted-foreground">
 						Enter your account password to unlock your identity. The seed was encrypted at login and
 						needs to be decrypted before export.
@@ -352,7 +505,32 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
-			{#if step === 'unlock'}
+			{#if isIndependentSyr}
+				{#if exportChallenge}
+					<div class="flex flex-col items-center gap-4">
+						<img
+							src={exportChallenge.qrDataUrl}
+							alt="Scan with Syner"
+							class="h-64 w-64 rounded-lg border"
+						/>
+						<a
+							href={exportChallenge.deeplink_url}
+							class="text-sm text-primary underline hover:no-underline"
+						>
+							Open in Syner
+						</a>
+						<p class="text-xs text-muted-foreground">
+							Scan or open link, then sign the challenge in Syner. The download will start
+							automatically.
+						</p>
+					</div>
+				{:else}
+					<p class="text-sm text-muted-foreground">
+						Click below to generate a QR code. Scan it with Syner to verify you control this
+						identity.
+					</p>
+				{/if}
+			{:else if step === 'unlock'}
 				<div class="space-y-2">
 					<label for="unlock-password" class="text-sm font-medium"
 						>Password (to unlock identity)</label
@@ -399,7 +577,27 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)} disabled={exporting}>Cancel</Button>
-			{#if step === 'unlock'}
+			{#if isIndependentSyr}
+				{#if !exportChallenge}
+					<Button onclick={handleVerifyWithSyner} disabled={exporting}>
+						{#if exporting}
+							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							Creating...
+						{:else}
+							Verify with Syner
+						{/if}
+					</Button>
+				{:else}
+					<Button disabled={exporting}>
+						{#if exporting}
+							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							Downloading...
+						{:else}
+							Waiting for Syner...
+						{/if}
+					</Button>
+				{/if}
+			{:else if step === 'unlock'}
 				<Button onclick={handleUnlock} disabled={exporting || !unlockPassword}>
 					{#if exporting}
 						<Loader2 class="mr-2 h-4 w-4 animate-spin" />

@@ -60,6 +60,7 @@ pub fn run() {
             persona_commands::decrypt_persona_sigil_cmd,
             persona_commands::save_persona_avatar_cmd,
             persona_commands::save_persona_banner_cmd,
+            persona_commands::read_persona_asset_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

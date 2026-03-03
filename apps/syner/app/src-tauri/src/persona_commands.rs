@@ -159,6 +159,30 @@ fn extension_from_path_or_uri(s: &str) -> String {
     }
 }
 
+/// Reads file bytes from source. On Android, source may be a content URI (uses android-fs).
+#[allow(dead_code)]
+fn read_file_bytes_from_source(
+    _app: &tauri::AppHandle,
+    source_path: &str,
+) -> Result<Vec<u8>, String> {
+    #[cfg(target_os = "android")]
+    {
+        let file_path = convert_string_to_file_path(source_path);
+        let mut file = _app
+            .android_fs()
+            .open_file(&file_path)
+            .map_err(|e| format!("Path not found or invalid: {}", e))?;
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut buf).map_err(|e| e.to_string())?;
+        Ok(buf)
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        std::fs::read(source_path).map_err(|e| e.to_string())
+    }
+}
+
 /// Copies image from source to dest. On Android, source may be a content URI (uses android-fs).
 #[allow(unused_variables)]
 fn copy_image_from_source(
@@ -635,6 +659,48 @@ pub fn delete_persona_cmd(app: tauri::AppHandle, persona_id: String) -> Result<(
         return Err("Persona not found".to_string());
     }
     std::fs::remove_dir_all(&persona_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_persona_asset_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+    role: String,
+) -> Result<Option<(String, String)>, String> {
+    if role != "avatar" && role != "banner" {
+        return Err("role must be 'avatar' or 'banner'".to_string());
+    }
+    validate_persona_id(&persona_id)?;
+    let base = get_base_path(&app)?;
+    let persona_dir = base.join(&persona_id);
+    if !persona_dir.exists() {
+        return Err("Persona not found".to_string());
+    }
+    let profile_path = persona_dir.join("profile.json");
+    let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
+    let persona: Persona = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let resolved = resolve_persona_asset_paths(&persona_dir, persona);
+    let path = if role == "avatar" {
+        resolved.avatar_url
+    } else {
+        resolved.banner_url
+    };
+    let path = match path {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+    // Persona assets are always in app dir (filesystem path), not content URIs
+    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read asset: {}", e))?;
+    use base64::Engine;
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let ext = extension_from_path_or_uri(&path);
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "image/png",
+    };
+    Ok(Some((base64_str, mime.to_string())))
 }
 
 #[tauri::command]

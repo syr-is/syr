@@ -1,6 +1,6 @@
 import type { RecordId } from 'surrealdb';
 import { BaseRepository } from './base.repository';
-import { UserSchema, type User } from '@syr-is/types';
+import { UserSchema, stringToRecordId, type User } from '@syr-is/types';
 
 /**
  * User Repository
@@ -37,6 +37,21 @@ export class UserRepository extends BaseRepository<User> {
 	async usernameExists(username: string): Promise<boolean> {
 		const user = await this.findByUsername(username);
 		return user !== null;
+	}
+
+	/**
+	 * Update username and set username_last_updated to now.
+	 * Caller must validate cooldown and uniqueness.
+	 */
+	async updateUsername(userId: RecordId | string, newUsername: string): Promise<User | null> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const now = new Date();
+		const result = await this.db.merge(userRecordId, {
+			username: newUsername,
+			username_last_updated: now,
+			updated_at: now
+		});
+		return result as User | null;
 	}
 }
 
