@@ -25,6 +25,11 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		throw redirect(302, '/login?error=expired');
 	}
 
+	const payload = verifyAccessToken(jwt);
+	if (!payload) {
+		throw redirect(302, '/login?error=invalid_token');
+	}
+
 	cookies.set('session', jwt, {
 		path: '/',
 		httpOnly: true,
@@ -33,18 +38,15 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		maxAge: 60 * 60 * 24 * 7 // 7 days
 	});
 
-	const payload = verifyAccessToken(jwt);
-	if (payload) {
-		try {
-			const profile = await profileRepository.findByUserId(payload.userId);
-			if (profile && needsOnboarding(profile.display_name)) {
-				throw redirect(302, '/settings/sync-syner');
-			}
-		} catch (err) {
-			if (isRedirect(err)) throw err;
-			console.error('Onboarding check failed:', err);
-			// fail-open: continue to redirect to /
+	try {
+		const profile = await profileRepository.findByUserId(payload.userId);
+		if (profile && needsOnboarding(profile.display_name)) {
+			throw redirect(302, '/settings/sync-syner');
 		}
+	} catch (err) {
+		if (isRedirect(err)) throw err;
+		console.error('Onboarding check failed:', err);
+		// fail-open: continue to redirect to /
 	}
 
 	throw redirect(302, '/');

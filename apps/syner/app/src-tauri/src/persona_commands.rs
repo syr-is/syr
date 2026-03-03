@@ -697,6 +697,15 @@ pub fn read_persona_asset_cmd(
     if !canonical_path.starts_with(&canonical_persona_dir) {
         return Ok(None);
     }
+    const MAX_ASSET_SIZE: u64 = 5 * 1024 * 1024; // 5 MB
+    let meta = std::fs::metadata(&canonical_path)
+        .map_err(|e| format!("Failed to read asset metadata: {}", e))?;
+    if meta.len() > MAX_ASSET_SIZE {
+        return Err(format!(
+            "Asset exceeds maximum size of {} bytes",
+            MAX_ASSET_SIZE
+        ));
+    }
     // Persona assets are always in app dir (filesystem path), not content URIs
     let bytes =
         std::fs::read(&canonical_path).map_err(|e| format!("Failed to read asset: {}", e))?;

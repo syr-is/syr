@@ -13,6 +13,7 @@
 	let syncToken = $state<string | null>(null);
 	let syncTokenLoading = $state(false);
 	let syncTokenAttempted = $state(false);
+	let syncError = $state<string>('');
 	let qrDataUrl = $state<string | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -24,6 +25,7 @@
 	async function fetchSyncToken() {
 		syncTokenAttempted = true;
 		syncTokenLoading = true;
+		syncError = '';
 		try {
 			const res = await fetch(resolve('/api/auth/independent-login/sync-token'), {
 				credentials: 'include'
@@ -34,7 +36,15 @@
 				const origin = typeof window !== 'undefined' ? window.location.origin : '';
 				const deeplink = `syr://sync-profile?instance=${encodeURIComponent(origin)}&sync_token=${encodeURIComponent(json.sync_token)}`;
 				qrDataUrl = await QRCode.toDataURL(deeplink, { width: 256, margin: 2 });
+			} else {
+				syncError = json?.error_description ?? json?.error ?? `Request failed: ${res.status}`;
+				qrDataUrl = null;
+				syncToken = null;
 			}
+		} catch (err) {
+			syncError = err instanceof Error ? err.message : 'Failed to fetch';
+			qrDataUrl = null;
+			syncToken = null;
 		} finally {
 			syncTokenLoading = false;
 		}
@@ -96,6 +106,9 @@
 		<CardContent class="space-y-4">
 			{#if syncTokenLoading}
 				<p class="text-sm text-muted-foreground">Loading…</p>
+			{:else if syncError}
+				<p class="text-sm text-destructive">{syncError}</p>
+				<Button onclick={fetchSyncToken} disabled={syncTokenLoading}>Retry</Button>
 			{:else if qrDataUrl}
 				<div class="flex flex-col items-center gap-4">
 					<img

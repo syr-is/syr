@@ -53,8 +53,18 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		const parsedDid = parseDid(data.did);
-		const signatureBytes = decodeMultibase(data.signature);
+		let parsedDid;
+		let signatureBytes;
+		try {
+			parsedDid = parseDid(data.did);
+			signatureBytes = decodeMultibase(data.signature);
+		} catch {
+			return json(
+				{ error: 'invalid_request', error_description: 'Malformed DID or signature format' },
+				{ status: 400 }
+			);
+		}
+
 		const messageBytes = new TextEncoder().encode(challenge.message);
 
 		const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
@@ -94,6 +104,9 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ error: 'invalid_request', error_description: 'Invalid verify request' },
 				{ status: 400 }
 			);
+		}
+		if (err instanceof SyntaxError) {
+			return json({ error: 'invalid_request', error_description: 'Invalid JSON' }, { status: 400 });
 		}
 		console.error('Export/import verify error:', err);
 		return json(

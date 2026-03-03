@@ -8,8 +8,11 @@ const connectionsByIp = new Map<string, number>();
 
 function getClientIp(request: Request): string {
 	const forwarded = request.headers.get('x-forwarded-for');
-	if (forwarded) return forwarded.split(',')[0]?.trim() ?? `unknown-${crypto.randomUUID()}`;
-	return `unknown-${crypto.randomUUID()}`;
+	if (forwarded) {
+		const first = forwarded.split(',')[0]?.trim();
+		return first || 'unknown';
+	}
+	return 'unknown';
 }
 
 function tryAcquireConnection(ip: string): boolean {
@@ -31,12 +34,19 @@ function releaseConnection(ip: string): void {
  * SSE stream — waits for import verification. Sends "verified" with import_token when Syner signs.
  */
 export const GET: RequestHandler = async ({ request, url, getClientAddress }) => {
+	const challengeId = url.searchParams.get('challenge_id');
+	if (!challengeId?.trim()) {
+		return new Response(JSON.stringify({ error: 'missing_challenge_id' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const ip = getClientAddress?.() ?? getClientIp(request);
 	if (!tryAcquireConnection(ip)) {
 		return new Response('Too many SSE connections', { status: 429 });
 	}
 
-	const challengeId = url.searchParams.get('challenge_id');
 	let lifetimeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let unsubscribe: (() => void) | undefined;
 	let cleaned = false;

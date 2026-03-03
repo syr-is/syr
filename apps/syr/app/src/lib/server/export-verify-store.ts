@@ -7,7 +7,7 @@ const KV_EXPORT_TOKEN = 'identity_export_token';
 const KV_IMPORT_TOKEN = 'identity_import_token';
 
 const CHALLENGE_TTL = independentLogin.challengeTtl;
-const TOKEN_TTL = 60;
+const TOKEN_TTL = independentLogin.callbackTokenTtl;
 
 export type VerifyPurpose = 'export' | 'import';
 
