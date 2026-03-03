@@ -686,14 +686,23 @@ pub fn read_persona_asset_cmd(
         resolved.banner_url
     };
     let path = match path {
-        Some(p) => p,
+        Some(p) => std::path::PathBuf::from(p),
         None => return Ok(None),
     };
+    // Prevent path traversal: canonicalize and ensure path stays inside persona_dir
+    let canonical_persona_dir =
+        std::fs::canonicalize(&persona_dir).map_err(|e| format!("Invalid persona dir: {}", e))?;
+    let canonical_path =
+        std::fs::canonicalize(&path).map_err(|e| format!("Invalid asset path: {}", e))?;
+    if !canonical_path.starts_with(&canonical_persona_dir) {
+        return Ok(None);
+    }
     // Persona assets are always in app dir (filesystem path), not content URIs
-    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read asset: {}", e))?;
+    let bytes =
+        std::fs::read(&canonical_path).map_err(|e| format!("Failed to read asset: {}", e))?;
     use base64::Engine;
     let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    let ext = extension_from_path_or_uri(&path);
+    let ext = extension_from_path_or_uri(&canonical_path.to_string_lossy());
     let mime = match ext.as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",

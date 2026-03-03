@@ -4,10 +4,8 @@ import { z } from 'zod';
 import { verify, decodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
 import {
-	getExportChallenge,
-	getImportChallenge,
-	deleteExportChallenge,
-	deleteImportChallenge,
+	consumeExportChallenge,
+	consumeImportChallenge,
 	setExportToken,
 	setImportToken,
 	type ImportChallengeData
@@ -32,12 +30,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = VerifyRequestSchema.parse(body);
 
-		// Try export challenge first
-		let challenge = await getExportChallenge(data.challenge_id);
+		// Atomically consume export challenge first, then import
+		let challenge = await consumeExportChallenge(data.challenge_id);
 		let purpose: 'export' | 'import' = 'export';
 
 		if (!challenge) {
-			challenge = await getImportChallenge(data.challenge_id);
+			challenge = await consumeImportChallenge(data.challenge_id);
 			purpose = 'import';
 		}
 
@@ -68,7 +66,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (purpose === 'export') {
-			await deleteExportChallenge(data.challenge_id);
 			const exportToken = crypto.randomUUID();
 			// We need user_id - export challenge has expected_did, we need to look up user by did
 			const { identityRepository } = await import('$lib/repositories/identity.repository');
@@ -83,7 +80,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			notifyExportVerified(data.challenge_id, exportToken);
 			return json({ success: true as const, export_token: exportToken });
 		} else {
-			await deleteImportChallenge(data.challenge_id);
 			const importToken = crypto.randomUUID();
 			await setImportToken(importToken, {
 				user_id: (challenge as ImportChallengeData).user_id,

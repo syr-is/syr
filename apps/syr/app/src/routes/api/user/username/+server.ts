@@ -62,6 +62,6 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			throw error(404, { code: 'NOT_FOUND', message: msg });
 		}
 
-		throw error(400, { code: 'BAD_REQUEST', message: msg });
+		throw error(500, { code: 'INTERNAL_ERROR', message: msg });
 	}
 };

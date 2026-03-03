@@ -17,5 +17,5 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	const syncToken = generateSyncToken(locals.user.id);
-	return json({ sync_token: syncToken });
+	return json({ sync_token: syncToken }, { headers: { 'Cache-Control': 'no-store' } });
 };

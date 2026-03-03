@@ -6,6 +6,8 @@ import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_BANNER_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /**
  * POST /api/auth/independent-login/profile-sync
@@ -55,6 +57,12 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		}
 
 		if (avatarFile instanceof File && avatarFile.size > 0) {
+			if (avatarFile.size > MAX_AVATAR_BYTES) {
+				throw error(413, {
+					code: 'PAYLOAD_TOO_LARGE',
+					message: `Avatar must be under ${MAX_AVATAR_BYTES / 1024 / 1024} MB`
+				});
+			}
 			if (!IMAGE_TYPES.includes(avatarFile.type)) {
 				throw error(400, {
 					code: 'VALIDATION_ERROR',
@@ -70,6 +78,12 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		}
 
 		if (bannerFile instanceof File && bannerFile.size > 0) {
+			if (bannerFile.size > MAX_BANNER_BYTES) {
+				throw error(413, {
+					code: 'PAYLOAD_TOO_LARGE',
+					message: `Banner must be under ${MAX_BANNER_BYTES / 1024 / 1024} MB`
+				});
+			}
 			if (!IMAGE_TYPES.includes(bannerFile.type)) {
 				throw error(400, {
 					code: 'VALIDATION_ERROR',

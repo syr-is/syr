@@ -47,6 +47,11 @@ export async function deleteExportChallenge(id: string): Promise<void> {
 	await kvService.delete(KV_EXPORT_CHALLENGE, id);
 }
 
+/** Atomically get and delete export challenge. Prevents concurrent replay. */
+export async function consumeExportChallenge(id: string): Promise<ExportChallengeData | null> {
+	return kvService.getAndDelete<ExportChallengeData>(KV_EXPORT_CHALLENGE, id);
+}
+
 // --- Export token ---
 
 export async function setExportToken(token: string, userId: string): Promise<void> {
@@ -78,6 +83,11 @@ export async function getImportChallenge(id: string): Promise<ImportChallengeDat
 
 export async function deleteImportChallenge(id: string): Promise<void> {
 	await kvService.delete(KV_IMPORT_CHALLENGE, id);
+}
+
+/** Atomically get and delete import challenge. Prevents concurrent replay. */
+export async function consumeImportChallenge(id: string): Promise<ImportChallengeData | null> {
+	return kvService.getAndDelete<ImportChallengeData>(KV_IMPORT_CHALLENGE, id);
 }
 
 // --- Import token ---

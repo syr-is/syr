@@ -85,6 +85,8 @@
 		<Card.Content class="space-y-4">
 			<div class="flex gap-2">
 				<Input
+					id="profile-sync-asset-path"
+					aria-label="Profile sync asset path"
 					bind:value={profileSyncAssetPath}
 					placeholder="me/profile/public"
 					class="font-mono"
@@ -103,7 +105,15 @@
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			<div class="flex gap-2">
-				<Input bind:value={usernameCooldownDays} type="number" min={1} max={365} placeholder="7" />
+				<Input
+					id="username-cooldown-days"
+					aria-label="Username change cooldown days"
+					bind:value={usernameCooldownDays}
+					type="number"
+					min={1}
+					max={365}
+					placeholder="7"
+				/>
 				<Button onclick={saveUsernameCooldown} disabled={cooldownLoading}>
 					{cooldownLoading ? 'Saving…' : 'Save'}
 				</Button>

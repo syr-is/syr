@@ -29,7 +29,10 @@ export abstract class BaseRepository<T> {
 			// Transform date fields (created_at, updated_at, etc.)
 			for (const [key, value] of Object.entries(transformed)) {
 				if (
-					(key === 'created_at' || key === 'updated_at' || key.endsWith('_at')) &&
+					(key === 'created_at' ||
+						key === 'updated_at' ||
+						key === 'username_last_updated' ||
+						key.endsWith('_at')) &&
 					typeof value === 'string'
 				) {
 					// Check if it's an ISO date string

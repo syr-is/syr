@@ -8,8 +8,8 @@ const connectionsByIp = new Map<string, number>();
 
 function getClientIp(request: Request): string {
 	const forwarded = request.headers.get('x-forwarded-for');
-	if (forwarded) return forwarded.split(',')[0]?.trim() ?? 'unknown';
-	return 'unknown';
+	if (forwarded) return forwarded.split(',')[0]?.trim() ?? `unknown-${crypto.randomUUID()}`;
+	return `unknown-${crypto.randomUUID()}`;
 }
 
 function tryAcquireConnection(ip: string): boolean {

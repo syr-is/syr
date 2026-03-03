@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, isRedirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { config } from '$lib/config';
 import { consumeCallbackToken } from '$lib/server/independent-login-store';
@@ -35,9 +35,15 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 
 	const payload = verifyAccessToken(jwt);
 	if (payload) {
-		const profile = await profileRepository.findByUserId(payload.userId);
-		if (profile && needsOnboarding(profile.display_name)) {
-			throw redirect(302, '/settings/sync-syner');
+		try {
+			const profile = await profileRepository.findByUserId(payload.userId);
+			if (profile && needsOnboarding(profile.display_name)) {
+				throw redirect(302, '/settings/sync-syner');
+			}
+		} catch (err) {
+			if (isRedirect(err)) throw err;
+			console.error('Onboarding check failed:', err);
+			// fail-open: continue to redirect to /
 		}
 	}
 

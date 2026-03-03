@@ -12,6 +12,7 @@
 
 	let syncToken = $state<string | null>(null);
 	let syncTokenLoading = $state(false);
+	let syncTokenAttempted = $state(false);
 	let qrDataUrl = $state<string | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -21,6 +22,7 @@
 	);
 
 	async function fetchSyncToken() {
+		syncTokenAttempted = true;
 		syncTokenLoading = true;
 		try {
 			const res = await fetch(resolve('/api/auth/independent-login/sync-token'), {
@@ -38,9 +40,9 @@
 		}
 	}
 
-	// Auto-fetch QR when profile needs import; allow manual fetch anytime
+	// Auto-fetch QR when profile needs import; allow manual fetch anytime via Show QR code button
 	$effect(() => {
-		if (needsImport && syncToken === null && !syncTokenLoading) {
+		if (needsImport && syncToken === null && !syncTokenLoading && !syncTokenAttempted) {
 			fetchSyncToken();
 		}
 	});

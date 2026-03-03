@@ -20,8 +20,30 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const body = await request.json();
-	const { did } = ImportChallengeRequestSchema.parse(body);
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch (e) {
+		if (e instanceof SyntaxError) {
+			throw error(400, {
+				code: 'INVALID_REQUEST',
+				message: 'Invalid JSON body'
+			});
+		}
+		throw e;
+	}
+	let did: string;
+	try {
+		({ did } = ImportChallengeRequestSchema.parse(body));
+	} catch (e) {
+		if (e instanceof z.ZodError) {
+			throw error(400, {
+				code: 'INVALID_REQUEST',
+				message: 'Invalid request: did must be a valid did:syr DID'
+			});
+		}
+		throw error(500, { code: 'INTERNAL_ERROR', message: 'Unexpected error' });
+	}
 
 	const challengeId = crypto.randomUUID();
 	const now = new Date();
