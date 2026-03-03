@@ -68,6 +68,8 @@
 			isPolling = true;
 			try {
 				await invalidateAll();
+			} catch (err) {
+				console.error('Poll invalidate failed:', err);
 			} finally {
 				isPolling = false;
 			}
