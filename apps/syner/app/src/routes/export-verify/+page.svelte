@@ -84,6 +84,8 @@
 		const url = `${base}/api/identity/export-challenge/${challengeId}`;
 		info(`[export-verify] Fetching challenge: ${url}`);
 		loadError = null;
+		message = null;
+		domain = null;
 		targetDid = null;
 		selected = null;
 		try {

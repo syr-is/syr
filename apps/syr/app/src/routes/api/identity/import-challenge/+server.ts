@@ -1,12 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
+import { DidSyrSchema } from '@syr-is/types';
 import { canonicalize } from '@syr-is/crypto';
 import { config, independentLogin } from '$lib/config';
 import { setImportChallenge } from '$lib/server/export-verify-store';
 
 const ImportChallengeRequestSchema = z.object({
-	did: z.string().startsWith('did:syr:')
+	did: DidSyrSchema
 });
 
 /**

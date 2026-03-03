@@ -13,7 +13,7 @@
 	import PickedFileImage from '$lib/components/picked-file-image.svelte';
 
 	const IMAGE_FILTERS = [
-		{ name: 'Images', extensions: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
+		{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] },
 		{ name: 'All files', extensions: ['*'] }
 	];
 

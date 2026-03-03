@@ -706,12 +706,19 @@ pub fn read_file_as_base64_cmd(
                 .open_file(&file_path)
                 .map_err(|e| format!("Path not found or invalid: {}", e))?;
             let mut buf = Vec::new();
-            std::io::Read::read_to_end(&mut file, &mut buf).map_err(|e| e.to_string())?;
-            if buf.len() > MAX_ASSET_SIZE {
-                return Err(format!(
-                    "File exceeds maximum size of {} bytes",
-                    MAX_ASSET_SIZE
-                ));
+            let mut chunk = [0u8; 64 * 1024]; // 64 KB
+            loop {
+                let n = std::io::Read::read(&mut file, &mut chunk).map_err(|e| e.to_string())?;
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.len() > MAX_ASSET_SIZE {
+                    return Err(format!(
+                        "File exceeds maximum size of {} bytes",
+                        MAX_ASSET_SIZE
+                    ));
+                }
             }
             buf
         }

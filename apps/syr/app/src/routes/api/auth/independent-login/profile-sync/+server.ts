@@ -2,7 +2,10 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verify, decodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
-import { ProfileSyncSignedPayloadSchema } from '@syr-is/types';
+import {
+	ProfileSyncSignedPayloadSchema,
+	type ProfileSyncSignedPayload
+} from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
@@ -73,10 +76,9 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		let parsedPayload: { action: string; did: string; issued_at: string };
+		let parsedPayload: ProfileSyncSignedPayload;
 		try {
-			const parsed = ProfileSyncSignedPayloadSchema.parse(JSON.parse(signedPayloadStr));
-			parsedPayload = parsed;
+			parsedPayload = ProfileSyncSignedPayloadSchema.parse(JSON.parse(signedPayloadStr));
 		} catch {
 			throw error(400, {
 				code: 'VALIDATION_ERROR',
@@ -90,7 +92,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 		const issuedAt = new Date(parsedPayload.issued_at).getTime();
-		if (isNaN(issuedAt) || Date.now() - issuedAt > SIGNATURE_MAX_AGE_MS) {
+		const age = Date.now() - issuedAt;
+		if (isNaN(issuedAt) || age < 0 || age > SIGNATURE_MAX_AGE_MS) {
 			throw error(400, {
 				code: 'VALIDATION_ERROR',
 				message: 'Signed payload expired or invalid timestamp (max 5 minutes)'
@@ -108,8 +111,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		const displayName = formData.get('display_name');
-		const bio = formData.get('bio');
 		const avatarFile = formData.get('avatar');
 		const bannerFile = formData.get('banner');
 
@@ -120,11 +121,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			banner_url?: string;
 		} = {};
 
-		if (typeof displayName === 'string' && displayName.trim()) {
-			updates.display_name = displayName.trim().slice(0, 100);
+		if (typeof parsedPayload.display_name === 'string' && parsedPayload.display_name.trim()) {
+			updates.display_name = parsedPayload.display_name.trim().slice(0, 100);
 		}
-		if (typeof bio === 'string') {
-			updates.bio = bio.slice(0, 500);
+		if (typeof parsedPayload.bio === 'string') {
+			updates.bio = parsedPayload.bio.slice(0, 500);
 		}
 
 		if (avatarFile instanceof File && avatarFile.size > 0) {

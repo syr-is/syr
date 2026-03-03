@@ -52,6 +52,9 @@ export class UserRepository extends BaseRepository<User> {
 	 */
 	async updateUsername(userId: RecordId | string, newUsername: string): Promise<User | null> {
 		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		if (userRecordId.tb !== 'user') {
+			throw new Error('Invalid user ID: record must target user collection');
+		}
 		const now = new Date();
 		const result = await this.db.merge(userRecordId, {
 			username: newUsername,

@@ -175,6 +175,7 @@
 			error = 'Select and unlock a persona.';
 			return;
 		}
+		const snapshotSelected = selected;
 		loading = true;
 		error = null;
 		const base = instanceUrl.replace(/\/$/, '');
@@ -197,10 +198,10 @@
 					challenge_id: challengeId,
 					did: persona.did,
 					signature,
-					profile: selected
+					profile: snapshotSelected
 						? {
-								display_name: selected.displayName,
-								bio: selected.bio ?? undefined
+								display_name: snapshotSelected.displayName,
+								bio: snapshotSelected.bio ?? undefined
 							}
 						: undefined
 				})
@@ -218,11 +219,10 @@
 			}
 			info(`[independent-login] Verification success`);
 
-			if (selected && s) {
+			if (snapshotSelected && s) {
 				try {
 					await loadPersonas();
-					const fresh = personas.find((p) => p.id === selected?.id) ?? selected;
-					selected = fresh;
+					const fresh = personas.find((p) => p.id === snapshotSelected.id) ?? snapshotSelected;
 					const payload = {
 						action: 'profile-sync' as const,
 						did: fresh.did,

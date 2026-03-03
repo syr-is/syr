@@ -18,25 +18,30 @@
 	let dataUrl = $state<string | null>(null);
 	let error = $state(false);
 
+	let loadCounter = 0;
+
 	$effect(() => {
 		if (!sourcePath) {
+			loadCounter++;
 			dataUrl = null;
 			error = false;
 			return;
 		}
+		loadCounter++;
+		const token = loadCounter;
 		dataUrl = null;
 		error = false;
 		invoke<[string, string] | null>('read_file_as_base64_cmd', {
 			sourcePath
 		})
 			.then((result) => {
-				if (result) {
+				if (token === loadCounter && result) {
 					const [base64, mime] = result;
 					dataUrl = `data:${mime};base64,${base64}`;
 				}
 			})
 			.catch(() => {
-				error = true;
+				if (token === loadCounter) error = true;
 			});
 	});
 </script>

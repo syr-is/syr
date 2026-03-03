@@ -28,6 +28,7 @@
 			error = false;
 			return;
 		}
+		let cancelled = false;
 		// Refetch when mtime changes (file was updated)
 		void mtime;
 		dataUrl = null;
@@ -37,14 +38,17 @@
 			role
 		})
 			.then((result) => {
-				if (result) {
+				if (!cancelled && result) {
 					const [base64, mime] = result;
 					dataUrl = `data:${mime};base64,${base64}`;
 				}
 			})
 			.catch(() => {
-				error = true;
+				if (!cancelled) error = true;
 			});
+		return () => {
+			cancelled = true;
+		};
 	});
 </script>
 

@@ -395,15 +395,6 @@ export class UploadController {
 			}
 		}
 
-		if (existing && existing.key !== key) {
-			await s3Service.client.send(
-				new DeleteObjectCommand({
-					Bucket: s3.bucket,
-					Key: existing.key
-				})
-			);
-		}
-
 		await s3Service.client.send(
 			new PutObjectCommand({
 				Bucket: s3.bucket,
@@ -413,6 +404,15 @@ export class UploadController {
 				CacheControl: 'no-cache, max-age=0'
 			})
 		);
+
+		if (existing && existing.key !== key) {
+			await s3Service.client.send(
+				new DeleteObjectCommand({
+					Bucket: s3.bucket,
+					Key: existing.key
+				})
+			);
+		}
 
 		const now = new Date();
 		const uploadData = {
@@ -430,7 +430,6 @@ export class UploadController {
 		};
 
 		if (existing) {
-			await uploadRepository.update(existing.id, uploadData);
 			const usageDelta = size - existing.size;
 			if (usageDelta !== 0) {
 				if (usageDelta > 0) {
@@ -439,11 +438,13 @@ export class UploadController {
 					await fileStoreUsageController.subtractUsage(user.id, -usageDelta);
 				}
 			}
+			const { created_at: _omit, ...updatePayload } = uploadData;
+			await uploadRepository.update(existing.id, updatePayload);
 		} else {
-			await uploadRepository.createWithExplicitId(did, localId, uploadData);
 			if (size > 0) {
 				await fileStoreUsageController.addUsage(user.id, size, true);
 			}
+			await uploadRepository.createWithExplicitId(did, localId, uploadData);
 		}
 
 		return url;

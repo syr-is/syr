@@ -13,6 +13,8 @@
 	// Initialize WASM crypto early (browser only; falls back to TS if unavailable)
 	initCryptoWasm();
 
+	if (data.user) userSessionStore.setUser(data.user);
+
 	let open = $state(true);
 
 	$effect(() => {

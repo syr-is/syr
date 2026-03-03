@@ -165,6 +165,7 @@
 					exportChallenge = null;
 					onSuccess?.();
 				} catch (err) {
+					exportChallenge = null;
 					toast.error(err instanceof Error ? err.message : 'Export failed');
 				} finally {
 					exporting = false;
@@ -172,6 +173,7 @@
 			});
 			src.onerror = () => {
 				disconnectExportHeartbeat();
+				exportChallenge = null;
 				exporting = false;
 			};
 		} catch (err) {
@@ -182,9 +184,11 @@
 	}
 
 	async function downloadDataOnlySyr(exportToken: string) {
-		const res = await fetch(
-			`/api/identity/export-bundle-data?export_token=${encodeURIComponent(exportToken)}`
-		);
+		const res = await fetch('/api/identity/export-bundle-data', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ export_token: exportToken })
+		});
 		if (!res.ok) throw new Error('Failed to fetch export data');
 		const resJson = await res.json();
 		const data = resJson?.data ?? resJson;
@@ -232,9 +236,21 @@
 		zipFiles['pinned_posts.json'] = strToU8(
 			JSON.stringify(data.pinned_posts ?? { post_ids: [] }, null, 2)
 		);
+		function sanitizeZipPath(raw: string): string {
+			let p = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+			const segments = p.split('/').filter((s) => s !== '.' && s !== '');
+			const out: string[] = [];
+			for (const seg of segments) {
+				if (seg === '..') continue; // Drop traversal
+				out.push(seg);
+			}
+			const joined = out.join('/');
+			return joined || `assets/${raw.split('/').pop() || 'asset'}`;
+		}
 		for (const asset of data.assets ?? []) {
 			if (asset.content_base64 && asset.zip_path) {
-				zipFiles[asset.zip_path] = Uint8Array.from(atob(asset.content_base64), (c) =>
+				const safeKey = sanitizeZipPath(asset.zip_path);
+				zipFiles[safeKey] = Uint8Array.from(atob(asset.content_base64), (c) =>
 					c.charCodeAt(0)
 				);
 			}
