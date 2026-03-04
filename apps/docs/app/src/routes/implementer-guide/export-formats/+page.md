@@ -14,15 +14,15 @@ Full or data-only identity backup. Two variants: **full** (includes `identity.si
 
 ### Structure
 
-| Path | Description |
-|------|-------------|
-| `manifest.json` | Export metadata: `version`, `did`, `exportedAt`, `postCount`, `assetCount` |
-| `identity.json` | `IdentityExportBundle`: `did`, `publicKey`, `profile`, `delegatedKeys` |
-| `identity.sigil` | Optional. Encrypted seed (PIEF v1); present for full backup, absent for data-only |
-| `posts.json` | All posts |
-| `assets.json` | Asset manifest |
-| `pinned_posts.json` | Pinned post IDs |
-| `assets/` | Binary assets (images, etc.) |
+| Path                | Description                                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `manifest.json`     | Export metadata: `version`, `did`, `exportedAt`, `postCount`, `assetCount`        |
+| `identity.json`     | `IdentityExportBundle`: `did`, `publicKey`, `profile`, `delegatedKeys`            |
+| `identity.sigil`    | Optional. Encrypted seed (PIEF v1); present for full backup, absent for data-only |
+| `posts.json`        | All posts                                                                         |
+| `assets.json`       | Asset manifest                                                                    |
+| `pinned_posts.json` | Pinned post IDs                                                                   |
+| `assets/`           | Binary assets (images, etc.)                                                      |
 
 ### API
 
@@ -45,21 +45,21 @@ See [Sigil v1 spec](/architecture/sigil):
 
 ```json
 {
-  "v": 1,
-  "kdf": {
-    "name": "argon2id",
-    "salt": "<base64url>",
-    "mem": 65536,
-    "it": 3,
-    "par": 1
-  },
-  "enc": {
-    "name": "aes-256-gcm",
-    "nonce": "<base64url>",
-    "ct": "<base64url>",
-    "tag": "<base64url>"
-  },
-  "pub": "<multibase-ed25519-public-key>"
+	"v": 1,
+	"kdf": {
+		"name": "argon2id",
+		"salt": "<base64url>",
+		"mem": 65536,
+		"it": 3,
+		"par": 1
+	},
+	"enc": {
+		"name": "aes-256-gcm",
+		"nonce": "<base64url>",
+		"ct": "<base64url>",
+		"tag": "<base64url>"
+	},
+	"pub": "<multibase-ed25519-public-key>"
 }
 ```
 
@@ -96,14 +96,14 @@ Syner-readable profile export. Used to import identity into Syner desktop app.
 
 ```json
 {
-  "id": "<persona_id>",
-  "did": "<did>",
-  "publicKey": "<base64>",
-  "displayName": "<string>",
-  "bio": "<string>",
-  "avatarUrl": "./avatar.png",
-  "bannerUrl": "./banner.png",
-  "createdAt": "<ISO8601>"
+	"id": "<persona_id>",
+	"did": "<did>",
+	"publicKey": "<base64>",
+	"displayName": "<string>",
+	"bio": "<string>",
+	"avatarUrl": "./avatar.png",
+	"bannerUrl": "./banner.png",
+	"createdAt": "<ISO8601>"
 }
 ```
 

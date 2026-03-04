@@ -70,9 +70,9 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Sigil & Aegis Specifications
 
-| Requirement                | Status          | Details                                                                                                                      |
-| -------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Aegis custodial generation | **Partial**     | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis). |
+| Requirement                | Status          | Details                                                                                                                                       |
+| -------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aegis custodial generation | **Partial**     | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis).                  |
 | Sigil export format        | **Implemented** | [Sigil v1](/architecture/sigil) spec in `packages/rust/syr-crypto-sigil` and `packages/ts/crypto`. Export-key-dialog produces `.sigil` files. |
 
 ---
@@ -107,9 +107,9 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Syner (Self-Custody Companion)
 
-| Requirement                    | Status          | Details                                                                                                                                              |
-| ------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Syner native app (Tauri v2)    | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. Phase 3 goals (platform keystores, pairing) are enhancements. |
+| Requirement                 | Status          | Details                                                                                                                                             |
+| --------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Syner native app (Tauri v2) | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. Phase 3 goals (platform keystores, pairing) are enhancements. |
 
 ---
 

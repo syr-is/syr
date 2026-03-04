@@ -37,23 +37,23 @@ sequenceDiagram
 
 ### APIs
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/api/auth/independent-login/challenge` | POST | No | Create challenge. Body: `{ origin }`. Returns `challenge_id`, `message`, `deeplink_url`, `expires_in`. |
-| `/api/auth/independent-login/challenge/:id` | GET | No | Fetch challenge for Syner. Returns `message`, `domain`, `expires_at`. |
-| `/api/auth/independent-login/verify` | POST | No | Verify signature. Body: `{ challenge_id, did, signature, profile? }`. Returns `callback_token`. |
-| `/api/auth/independent-login/heartbeat` | GET | No | SSE stream; emits `verified` with `callback_token` when Syner verifies. |
-| `/auth/independent-callback` | GET | No | Page. Query `?token=` exchanges callback token for session cookie, redirects to `/`. |
+| Endpoint                                    | Method | Auth | Purpose                                                                                                |
+| ------------------------------------------- | ------ | ---- | ------------------------------------------------------------------------------------------------------ |
+| `/api/auth/independent-login/challenge`     | POST   | No   | Create challenge. Body: `{ origin }`. Returns `challenge_id`, `message`, `deeplink_url`, `expires_in`. |
+| `/api/auth/independent-login/challenge/:id` | GET    | No   | Fetch challenge for Syner. Returns `message`, `domain`, `expires_at`.                                  |
+| `/api/auth/independent-login/verify`        | POST   | No   | Verify signature. Body: `{ challenge_id, did, signature, profile? }`. Returns `callback_token`.        |
+| `/api/auth/independent-login/heartbeat`     | GET    | No   | SSE stream; emits `verified` with `callback_token` when Syner verifies.                                |
+| `/auth/independent-callback`                | GET    | No   | Page. Query `?token=` exchanges callback token for session cookie, redirects to `/`.                   |
 
 ### Message format (JCS canonical)
 
 ```json
 {
-  "domain": "my.syr.app",
-  "nonce": "uuid",
-  "action": "login",
-  "issued_at": "2026-03-01T12:00:00.000Z",
-  "expires_at": "2026-03-01T12:02:00.000Z"
+	"domain": "my.syr.app",
+	"nonce": "uuid",
+	"action": "login",
+	"issued_at": "2026-03-01T12:00:00.000Z",
+	"expires_at": "2026-03-01T12:02:00.000Z"
 }
 ```
 
@@ -61,10 +61,10 @@ sequenceDiagram
 
 ```json
 {
-  "challenge_id": "uuid",
-  "did": "did:syr:z6Mk...",
-  "signature": "z...",
-  "profile": { "display_name": "...", "bio": "..." }
+	"challenge_id": "uuid",
+	"did": "did:syr:z6Mk...",
+	"signature": "z...",
+	"profile": { "display_name": "...", "bio": "..." }
 }
 ```
 
@@ -89,12 +89,12 @@ Authenticated user wants to export; must prove key control via Syner for data-on
 
 ### APIs
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/api/identity/export-challenge` | POST | Yes | Create export challenge. Returns `challenge_id`, `message`, `deeplink_url`, `expires_in`. |
-| `/api/identity/export-challenge/:id` | GET | No | Fetch challenge (unified endpoint for export and import). |
-| `/api/identity/export-verify` | POST | No | Verify signature. Body: `{ challenge_id, did, signature }`. Returns `export_token` or `import_token`. |
-| `/api/identity/export-heartbeat` | GET | No | SSE; emits when export verified. |
+| Endpoint                             | Method | Auth | Purpose                                                                                               |
+| ------------------------------------ | ------ | ---- | ----------------------------------------------------------------------------------------------------- |
+| `/api/identity/export-challenge`     | POST   | Yes  | Create export challenge. Returns `challenge_id`, `message`, `deeplink_url`, `expires_in`.             |
+| `/api/identity/export-challenge/:id` | GET    | No   | Fetch challenge (unified endpoint for export and import).                                             |
+| `/api/identity/export-verify`        | POST   | No   | Verify signature. Body: `{ challenge_id, did, signature }`. Returns `export_token` or `import_token`. |
+| `/api/identity/export-heartbeat`     | GET    | No   | SSE; emits when export verified.                                                                      |
 
 ### Message format
 
@@ -120,11 +120,11 @@ User has data-only .syr (no identity.sigil). Must prove key control via Syner to
 
 ### APIs
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/api/identity/import-challenge` | POST | Yes | Create import challenge. Body: `{ did }`. |
-| `/api/identity/export-challenge/:id` | GET | No | Fetch challenge (shared with export). |
-| `/api/identity/export-verify` | POST | No | Verify signature. Server returns `import_token` when challenge was import. |
-| `/api/identity/import-heartbeat` | GET | No | SSE; emits when import verified. |
+| Endpoint                             | Method | Auth | Purpose                                                                    |
+| ------------------------------------ | ------ | ---- | -------------------------------------------------------------------------- |
+| `/api/identity/import-challenge`     | POST   | Yes  | Create import challenge. Body: `{ did }`.                                  |
+| `/api/identity/export-challenge/:id` | GET    | No   | Fetch challenge (shared with export).                                      |
+| `/api/identity/export-verify`        | POST   | No   | Verify signature. Server returns `import_token` when challenge was import. |
+| `/api/identity/import-heartbeat`     | GET    | No   | SSE; emits when import verified.                                           |
 
 The **verify** endpoint is shared: the server distinguishes export vs import by challenge type (export challenge vs import challenge).

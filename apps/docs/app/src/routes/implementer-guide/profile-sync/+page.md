@@ -18,15 +18,15 @@ Profile sync allows Syner to push profile data (display name, bio, avatar, banne
 
 ## Request Fields
 
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `did` | Yes | string | User DID |
-| `signature` | Yes | string | Multibase-encoded Ed25519 signature of `signed_payload` |
-| `signed_payload` | Yes | string | JCS canonical JSON string that was signed |
-| `display_name` | No | string | Display name (max 100 chars) |
-| `bio` | No | string | Bio (max 500 chars) |
-| `avatar` | No | file | Avatar image |
-| `banner` | No | file | Banner image |
+| Field            | Required | Type   | Description                                             |
+| ---------------- | -------- | ------ | ------------------------------------------------------- |
+| `did`            | Yes      | string | User DID                                                |
+| `signature`      | Yes      | string | Multibase-encoded Ed25519 signature of `signed_payload` |
+| `signed_payload` | Yes      | string | JCS canonical JSON string that was signed               |
+| `display_name`   | No       | string | Display name (max 100 chars)                            |
+| `bio`            | No       | string | Bio (max 500 chars)                                     |
+| `avatar`         | No       | file   | Avatar image                                            |
+| `banner`         | No       | file   | Banner image                                            |
 
 ---
 
@@ -36,21 +36,21 @@ The payload must be JCS canonical JSON (RFC 8785). Structure:
 
 ```json
 {
-  "action": "profile-sync",
-  "did": "did:syr:z6Mk...",
-  "issued_at": "2026-03-01T12:00:00.000Z",
-  "display_name": "Alice",
-  "bio": "Optional bio text"
+	"action": "profile-sync",
+	"did": "did:syr:z6Mk...",
+	"issued_at": "2026-03-01T12:00:00.000Z",
+	"display_name": "Alice",
+	"bio": "Optional bio text"
 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `action` | Yes | Must be `"profile-sync"` |
-| `did` | Yes | User DID |
-| `issued_at` | Yes | ISO-8601 timestamp. Replay protection: server rejects if older than 5 minutes. |
-| `display_name` | No | Max 100 characters |
-| `bio` | No | Max 500 characters |
+| Field          | Required | Description                                                                    |
+| -------------- | -------- | ------------------------------------------------------------------------------ |
+| `action`       | Yes      | Must be `"profile-sync"`                                                       |
+| `did`          | Yes      | User DID                                                                       |
+| `issued_at`    | Yes      | ISO-8601 timestamp. Replay protection: server rejects if older than 5 minutes. |
+| `display_name` | No       | Max 100 characters                                                             |
+| `bio`          | No       | Max 500 characters                                                             |
 
 ---
 

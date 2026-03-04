@@ -10,11 +10,11 @@ All SYR-compatible flows use the `syr://` custom URL scheme for deep links. Web 
 
 ## URL Patterns
 
-| Action | Host | URL Pattern | Params | Use |
-|--------|------|-------------|--------|-----|
-| Login | `login` | `syr://login?challenge=&instance=&callback=` | All required | Independent login |
-| Export/Import | `export` | `syr://export?challenge=&instance=&did=` | `did` optional for import | Export or import verification |
-| Sync Profile | `sync-profile` | `syr://sync-profile?instance=&did=` | Both required | Profile sync from Syner |
+| Action        | Host           | URL Pattern                                  | Params                    | Use                           |
+| ------------- | -------------- | -------------------------------------------- | ------------------------- | ----------------------------- |
+| Login         | `login`        | `syr://login?challenge=&instance=&callback=` | All required              | Independent login             |
+| Export/Import | `export`       | `syr://export?challenge=&instance=&did=`     | `did` optional for import | Export or import verification |
+| Sync Profile  | `sync-profile` | `syr://sync-profile?instance=&did=`          | Both required             | Profile sync from Syner       |
 
 ---
 
@@ -34,11 +34,11 @@ Reference: [syr-url.ts](https://github.com/syr-is/syr/blob/main/apps/syner/app/s
 
 **Params:**
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| `challenge` | Yes | Challenge ID from `POST /api/auth/independent-login/challenge` |
-| `instance` | Yes | SYR instance base URL (must be URL-encoded) |
-| `callback` | Yes | Callback URL for redirect after verification (must be URL-encoded, same origin as instance) |
+| Param       | Required | Description                                                                                 |
+| ----------- | -------- | ------------------------------------------------------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from `POST /api/auth/independent-login/challenge`                              |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded)                                                 |
+| `callback`  | Yes      | Callback URL for redirect after verification (must be URL-encoded, same origin as instance) |
 
 **Example:**
 
@@ -54,11 +54,11 @@ syr://login?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%
 
 **Params:**
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| `challenge` | Yes | Challenge ID from export or import challenge API |
-| `instance` | Yes | SYR instance base URL (must be URL-encoded) |
-| `did` | No | User DID (required for export; optional for import — Syner selects persona) |
+| Param       | Required | Description                                                                 |
+| ----------- | -------- | --------------------------------------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from export or import challenge API                            |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded)                                 |
+| `did`       | No       | User DID (required for export; optional for import — Syner selects persona) |
 
 **Example (export):**
 
@@ -74,10 +74,10 @@ syr://export?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F
 
 **Params:**
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| `instance` | Yes | SYR instance base URL (must be URL-encoded) |
-| `did` | Yes | User DID |
+| Param      | Required | Description                                 |
+| ---------- | -------- | ------------------------------------------- |
+| `instance` | Yes      | SYR instance base URL (must be URL-encoded) |
+| `did`      | Yes      | User DID                                    |
 
 **Example:**
 
