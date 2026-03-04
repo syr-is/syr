@@ -12,7 +12,12 @@ import type { IdentityExportManifest, ExportedPost, Post, Upload } from '@syr-is
 import { extractLocalId } from '@syr-is/types';
 
 const MAX_EXPORT_RECORDS = 10_000;
-const MAX_EXPORT_ASSET_BYTES = 500 * 1024 * 1024; // 500 MB total asset bytes
+const MAX_EXPORT_ASSET_BYTES = 500 * 1024 * 1024; // 500 MB total base64 asset bytes in export
+
+/** Base64 encoding expands bytes by 4/3 (plus padding). Used to enforce export size limit. */
+function base64Size(rawBytes: number): number {
+	return Math.ceil((rawBytes * 4) / 3);
+}
 
 type ExportBundleResult = {
 	manifest: IdentityExportManifest;
@@ -68,7 +73,8 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 
 	for (const upload of uploads) {
 		if (!upload.key) continue;
-		if (totalAssetBytes + upload.size > MAX_EXPORT_ASSET_BYTES) {
+		const estimatedBase64Size = base64Size(upload.size);
+		if (totalAssetBytes + estimatedBase64Size > MAX_EXPORT_ASSET_BYTES) {
 			skippedAssets.push({
 				zip_path: `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`,
 				url: upload.url,
@@ -92,7 +98,8 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 				continue;
 			}
 			const bytes = await resp.Body.transformToByteArray();
-			if (totalAssetBytes + bytes.length > MAX_EXPORT_ASSET_BYTES) {
+			const assetBase64Size = base64Size(bytes.length);
+			if (totalAssetBytes + assetBase64Size > MAX_EXPORT_ASSET_BYTES) {
 				skippedAssets.push({
 					zip_path: zipPath,
 					url: upload.url,
@@ -100,7 +107,7 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 				});
 				continue;
 			}
-			totalAssetBytes += bytes.length;
+			totalAssetBytes += assetBase64Size;
 			const base64 = Buffer.from(bytes).toString('base64');
 			exportedAssets.push({
 				zip_path: zipPath,
@@ -207,8 +214,19 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const { userId, tokenToConsume } = await resolveUserId(locals, exportToken);
 
 	try {
+		if (tokenToConsume) {
+			const consumed = await consumeExportToken(tokenToConsume);
+			if (!consumed) {
+				return json(
+					{
+						status: 'error',
+						error: { code: 'TOKEN_ALREADY_USED', message: 'Export token was already used' }
+					},
+					{ status: 409 }
+				);
+			}
+		}
 		const result = await buildIdentityExport(userId);
-		if (tokenToConsume) await consumeExportToken(tokenToConsume);
 		return json({
 			status: 'success',
 			data: {
@@ -254,8 +272,19 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const { userId, tokenToConsume } = await resolveUserId(locals, exportToken);
 
 	try {
+		if (tokenToConsume) {
+			const consumed = await consumeExportToken(tokenToConsume);
+			if (!consumed) {
+				return json(
+					{
+						status: 'error',
+						error: { code: 'TOKEN_ALREADY_USED', message: 'Export token was already used' }
+					},
+					{ status: 409 }
+				);
+			}
+		}
 		const result = await buildIdentityExport(userId);
-		if (tokenToConsume) await consumeExportToken(tokenToConsume);
 		return json({
 			status: 'success',
 			data: {
