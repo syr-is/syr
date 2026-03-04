@@ -2,15 +2,26 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
-	import { parseSyrLoginUrl } from '$lib/utils/syr-url';
+	import { parseSyrLoginUrl, parseSyrSyncProfileUrl, parseSyrExportUrl } from '$lib/utils/syr-url';
 
-	function navigateToScanConfirm(params: {
-		challenge: string;
-		instance: string;
-		callback: string;
-	}) {
-		const q = new URLSearchParams(params);
-		goto(`/scan-confirm?${q.toString()}`);
+	function handleUrl(url: string) {
+		const loginParsed = parseSyrLoginUrl(url);
+		if (loginParsed) {
+			const q = new URLSearchParams(loginParsed);
+			goto(`/scan-confirm?${q.toString()}`);
+			return;
+		}
+		const exportParsed = parseSyrExportUrl(url);
+		if (exportParsed) {
+			const q = new URLSearchParams(exportParsed);
+			goto(`/export-verify?${q.toString()}`);
+			return;
+		}
+		const syncParsed = parseSyrSyncProfileUrl(url);
+		if (syncParsed) {
+			const q = new URLSearchParams(syncParsed);
+			goto(`/sync-profile?${q.toString()}`);
+		}
 	}
 
 	onMount(() => {
@@ -18,19 +29,13 @@
 		getCurrent()
 			.then((urls) => {
 				const first = urls?.[0];
-				if (first) {
-					const parsed = parseSyrLoginUrl(first);
-					if (parsed) navigateToScanConfirm(parsed);
-				}
+				if (first) handleUrl(first);
 			})
 			.catch(() => {});
 
 		onOpenUrl((urls) => {
 			const first = urls?.[0];
-			if (first) {
-				const parsed = parseSyrLoginUrl(first);
-				if (parsed) navigateToScanConfirm(parsed);
-			}
+			if (first) handleUrl(first);
 		})
 			.then((fn) => {
 				unsub = fn;

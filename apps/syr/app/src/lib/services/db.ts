@@ -90,6 +90,11 @@ class DatabaseService {
 				DEFINE INDEX IF NOT EXISTS idx_user_did ON TABLE user COLUMNS did UNIQUE;
 			`);
 
+			// Username change cooldown tracking
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS username_last_updated ON TABLE user TYPE option<datetime>;
+			`);
+
 			// Define index for profile lookup by user_id
 			await db.query(`
 				DEFINE INDEX IF NOT EXISTS profile_user_id ON TABLE profile COLUMNS user_id UNIQUE;

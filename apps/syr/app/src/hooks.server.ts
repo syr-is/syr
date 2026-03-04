@@ -1,6 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { dbService } from '$lib/services/db';
 import { ensureS3Setup } from '$lib/services/s3-setup';
+import { kvService } from '$lib/services/kv';
 import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
@@ -37,13 +38,25 @@ async function initializeS3() {
 	return s3SetupPromise;
 }
 
+/** Interval for cleaning expired KV entries (challenges, callback tokens, etc.). Runs every 2 min. */
+const KV_CLEANUP_INTERVAL_MS = 120_000;
+
 // Initialize on module load (run in parallel; they don't depend on each other)
 Promise.all([initializeDatabase(), initializeS3()])
-	.then(() => {
-		// Registry outbox jobs require client-side signing (server no longer has key).
-		// Jobs stay pending; client polls GET /api/identity/pending-registry-jobs and
-		// submits signatures via POST /api/identity/registry-sign.
-		// registryOutboxService.start(); — disabled
+	.then(async () => {
+		// Clean up expired KV entries (independent login challenges, identity auth, callback tokens)
+		const runCleanup = async () => {
+			try {
+				const removed = await kvService.cleanup();
+				if (removed > 0) {
+					console.debug(`[kv] Cleaned ${removed} expired entries`);
+				}
+			} catch (e) {
+				console.error('[kv] Cleanup failed:', e);
+			}
+		};
+		await runCleanup(); // Initial cleanup on startup
+		setInterval(runCleanup, KV_CLEANUP_INTERVAL_MS);
 	})
 	.catch(console.error);
 

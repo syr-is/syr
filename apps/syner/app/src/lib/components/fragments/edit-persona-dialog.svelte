@@ -2,18 +2,18 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import * as Dialog from '@syr-is/ui/dialog';
-	import * as Avatar from '@syr-is/ui/avatar';
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
 	import { Textarea } from '@syr-is/ui/textarea';
 	import { toast } from 'svelte-sonner';
 	import { Image } from '@lucide/svelte';
-	import { toAvatarSrc, getInitials } from '$lib/utils';
+	import PersonaImage from '$lib/components/persona-image.svelte';
+	import PickedFileImage from '$lib/components/picked-file-image.svelte';
 	import type { Persona } from '$lib/types';
 
 	const IMAGE_FILTERS = [
-		{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] },
+		{ name: 'Images', extensions: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
 		{ name: 'All files', extensions: ['*'] }
 	];
 
@@ -41,9 +41,9 @@
 			title: 'Select image',
 			filters: IMAGE_FILTERS
 		});
-		if (file && typeof file === 'string') return file;
-		if (Array.isArray(file) && file.length > 0) return file[0];
-		return null;
+		// Ensure single file: take first only (Android may return array despite multiple: false)
+		const paths = file == null ? null : Array.isArray(file) ? file : [file];
+		return paths && paths.length > 0 ? paths[0] : null;
 	}
 
 	async function handleSave() {
@@ -51,25 +51,29 @@
 		loading = true;
 		error = null;
 		try {
+			// Save avatar/banner assets FIRST so files are written to persona folder before profile update.
+			// Pass only string paths; picker may return array on Android - ensure we use first item.
+			const avatarSource = typeof avatarPath === 'string' && avatarPath.trim() ? avatarPath : null;
+			const bannerSource = typeof bannerPath === 'string' && bannerPath.trim() ? bannerPath : null;
+
+			if (avatarSource) {
+				await invoke('save_persona_avatar_cmd', {
+					personaId: persona.id,
+					sourcePath: avatarSource
+				});
+			}
+			if (bannerSource) {
+				await invoke('save_persona_banner_cmd', {
+					personaId: persona.id,
+					sourcePath: bannerSource
+				});
+			}
+			// Update profile text fields only - do NOT pass avatarUrl/bannerUrl to avoid overwriting.
 			await invoke('update_persona_profile_cmd', {
 				personaId: persona.id,
 				displayName: displayName.trim(),
-				bio: bio.trim() === '' ? '' : bio.trim(),
-				avatarUrl: null,
-				bannerUrl: null
+				bio: bio.trim() === '' ? '' : bio.trim()
 			});
-			if (avatarPath) {
-				await invoke('save_persona_avatar_cmd', {
-					personaId: persona.id,
-					sourcePath: avatarPath
-				});
-			}
-			if (bannerPath) {
-				await invoke('save_persona_banner_cmd', {
-					personaId: persona.id,
-					sourcePath: bannerPath
-				});
-			}
 			openState = false;
 			await onSuccess?.();
 			toast.success('Persona updated');
@@ -125,15 +129,23 @@
 					<div class="space-y-2">
 						<Label>Avatar</Label>
 						<div class="flex flex-col gap-2">
-							<Avatar.Root class="h-16 w-16">
-								{#if toAvatarSrc(avatarPath ?? persona.avatarUrl)}
-									<Avatar.Image
-										src={toAvatarSrc(avatarPath ?? persona.avatarUrl)!}
-										alt={persona.displayName}
-									/>
-								{/if}
-								<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
-							</Avatar.Root>
+							{#if avatarPath}
+								<PickedFileImage
+									sourcePath={avatarPath}
+									displayName={persona.displayName}
+									variant="avatar"
+									class="h-16 w-16"
+								/>
+							{:else}
+								<PersonaImage
+									personaId={persona.id}
+									role="avatar"
+									mtime={persona.avatarMtime}
+									displayName={persona.displayName}
+									variant="avatar"
+									class="h-16 w-16"
+								/>
+							{/if}
 							<Button
 								type="button"
 								variant="outline"
@@ -152,14 +164,16 @@
 					<div class="space-y-2">
 						<Label>Banner</Label>
 						<div class="flex flex-col gap-2">
-							{#if toAvatarSrc(bannerPath ?? persona.bannerUrl)}
-								<div class="h-16 overflow-hidden rounded border">
-									<img
-										src={toAvatarSrc(bannerPath ?? persona.bannerUrl)!}
-										alt="Banner"
-										class="h-full w-full object-cover"
-									/>
-								</div>
+							{#if bannerPath}
+								<PickedFileImage sourcePath={bannerPath} variant="banner" class="h-16" />
+							{:else if persona.bannerUrl}
+								<PersonaImage
+									personaId={persona.id}
+									role="banner"
+									mtime={persona.bannerMtime}
+									variant="banner"
+									class="h-16 overflow-hidden rounded border"
+								/>
 							{/if}
 							<Button
 								type="button"

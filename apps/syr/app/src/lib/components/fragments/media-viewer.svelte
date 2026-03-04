@@ -22,7 +22,7 @@
 
 	// Map MediaDisplayMode to ViewMode (they overlap for gallery/masonry/carousel)
 	// Writable for bind:mode; init from defaultMode only — do not sync from prop (would override user toggle)
-	let currentMode = $state<ViewMode>(defaultMode as ViewMode);
+	let currentMode = $state<ViewMode>((() => defaultMode ?? 'masonry')() as ViewMode);
 
 	// Gallery preview modal state
 	let previewOpen = $state(false);

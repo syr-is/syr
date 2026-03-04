@@ -12,7 +12,7 @@
 	import { ArrowLeft } from '@lucide/svelte';
 	import { Button } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
-	import { parseSyrLoginUrl } from '$lib/utils/syr-url';
+	import { parseSyrLoginUrl, parseSyrSyncProfileUrl, parseSyrExportUrl } from '$lib/utils/syr-url';
 
 	let _scanning = $state(true);
 	let cancelled = $state(false);
@@ -47,13 +47,25 @@
 
 				if (result) {
 					const content = typeof result === 'string' ? result : result.content;
-					const parsed = parseSyrLoginUrl(content);
-					if (parsed) {
-						const q = new URLSearchParams(parsed);
+					const loginParsed = parseSyrLoginUrl(content);
+					if (loginParsed) {
+						const q = new URLSearchParams(loginParsed);
 						goto(`/scan-confirm?${q.toString()}`);
 					} else {
-						toast.error('Not a SYR login QR code');
-						goto('/');
+						const exportParsed = parseSyrExportUrl(content);
+						if (exportParsed) {
+							const q = new URLSearchParams(exportParsed);
+							goto(`/export-verify?${q.toString()}`);
+						} else {
+							const syncParsed = parseSyrSyncProfileUrl(content);
+							if (syncParsed) {
+								const q = new URLSearchParams(syncParsed);
+								goto(`/sync-profile?${q.toString()}`);
+							} else {
+								toast.error('Not a recognized SYR QR code');
+								goto('/');
+							}
+						}
 					}
 				} else {
 					goto('/');

@@ -66,3 +66,46 @@ export function parseSyrLoginUrl(
 	}
 	return null;
 }
+
+/**
+ * Parses a syr://export URL.
+ * Used for export and import verification (scan QR to sign challenge).
+ */
+export function parseSyrExportUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'export') return null;
+		const challenge = url.searchParams.get('challenge');
+		const instanceRaw = url.searchParams.get('instance');
+		if (!challenge || !instanceRaw) return null;
+		const instanceUrl = new URL(instanceRaw);
+		if (!isValidUrlScheme(instanceUrl)) return null;
+		const did = url.searchParams.get('did') ?? undefined;
+		return { challenge, instance: instanceRaw, ...(did ? { did } : {}) };
+	} catch {
+		// ignore
+	}
+	return null;
+}
+
+/**
+ * Parses a syr://sync-profile URL.
+ * Used when onboarding page shows QR for "Import from Syner".
+ * Requires instance and did (no JWT).
+ */
+export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did: string } | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'sync-profile') return null;
+		const instanceRaw = url.searchParams.get('instance');
+		const did = url.searchParams.get('did');
+		if (!instanceRaw || !did) return null;
+		const instanceUrl = new URL(instanceRaw);
+		if (!isValidUrlScheme(instanceUrl)) return null;
+		return { instance: instanceRaw, did };
+	} catch {
+		return null;
+	}
+}

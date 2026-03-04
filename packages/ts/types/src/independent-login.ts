@@ -65,7 +65,14 @@ export const IndependentLoginVerifyRequestSchema = z.object({
 	/** Multibase-encoded Ed25519 signature of the message */
 	signature: z.string(),
 	/** Optional invite code for future invite-only mode */
-	invite_code: z.string().optional()
+	invite_code: z.string().optional(),
+	/** Optional profile data from Syner persona */
+	profile: z
+		.object({
+			display_name: z.string().min(1).max(100).optional(),
+			bio: z.string().max(500).optional()
+		})
+		.optional()
 });
 
 export type IndependentLoginVerifyRequest = z.infer<typeof IndependentLoginVerifyRequestSchema>;
@@ -78,7 +85,9 @@ export const IndependentLoginVerifyResponseSchema = z.object({
 	/** Whether verification succeeded */
 	success: z.literal(true),
 	/** One-time token to exchange for session via callback URL */
-	callback_token: z.string()
+	callback_token: z.string(),
+	/** Short-lived token for profile sync (new users or incomplete profile) */
+	sync_token: z.string().optional()
 });
 
 export type IndependentLoginVerifyResponse = z.infer<typeof IndependentLoginVerifyResponseSchema>;
@@ -100,3 +109,18 @@ export const IndependentLoginErrorResponseSchema = z.object({
 });
 
 export type IndependentLoginErrorResponse = z.infer<typeof IndependentLoginErrorResponseSchema>;
+
+/**
+ * Profile Sync signed payload (JCS canonical JSON, signed by persona private key).
+ * Proves control of the DID when Syner syncs profile to SYR.
+ */
+export const ProfileSyncSignedPayloadSchema = z.object({
+	action: z.literal('profile-sync'),
+	did: DidSyrSchema,
+	/** ISO-8601 when payload was created (replay protection: reject if > 5 min old) */
+	issued_at: z.string(),
+	display_name: z.string().max(100).optional(),
+	bio: z.string().max(500).optional()
+});
+
+export type ProfileSyncSignedPayload = z.infer<typeof ProfileSyncSignedPayloadSchema>;

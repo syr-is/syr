@@ -6,7 +6,6 @@ import {
 	type Upload
 } from '@syr-is/types';
 import { BaseRepository } from './base.repository';
-
 const MAX_PAGE = 500;
 
 export interface FindByDidPageOptions {
@@ -99,6 +98,15 @@ export class UploadRepository extends BaseRepository<Upload> {
 				: null;
 
 		return { uploads, nextCursor };
+	}
+
+	/**
+	 * Find an upload by composite ID (did + localId).
+	 * Used for profile asset upsert (profile-avatar, profile-banner).
+	 */
+	async findByCompositeId(did: string, localId: string): Promise<Upload | null> {
+		const recordId = recordIdFromDidAndLocal(this.tableName, did, localId);
+		return this.findById(recordId);
 	}
 }
 

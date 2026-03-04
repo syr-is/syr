@@ -1,5 +1,7 @@
 import { profileRepository } from '$lib/repositories/profile.repository';
-import type { ProfileUpdate, Profile } from '@syr-is/types';
+import { userRepository } from '$lib/repositories/user.repository';
+import { getUsernameChangeCooldownDays } from '$lib/instance-config';
+import type { ProfileUpdate, Profile, User } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
 export interface UpdateProfileResponse {
@@ -36,6 +38,40 @@ export class UserController {
 		return {
 			profile: updatedProfile
 		};
+	}
+
+	/**
+	 * Update username with cooldown check.
+	 * Cooldown days from instance config; null username_last_updated = allow first change.
+	 */
+	async updateUsername(userId: RecordId | string, newUsername: string): Promise<User> {
+		const user = await userRepository.findById(userId);
+		if (!user) throw new Error('User not found');
+
+		if (newUsername === user.username) {
+			throw new Error('Username unchanged');
+		}
+
+		const cooldownDays = await getUsernameChangeCooldownDays();
+		const lastUpdated = user.username_last_updated;
+
+		if (lastUpdated) {
+			const msPerDay = 24 * 60 * 60 * 1000;
+			const elapsedMs = Date.now() - lastUpdated.getTime();
+			if (elapsedMs < cooldownDays * msPerDay) {
+				const daysLeft = Math.ceil((cooldownDays * msPerDay - elapsedMs) / msPerDay);
+				throw new Error(
+					`You can change your username again in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+				);
+			}
+		}
+
+		const taken = await userRepository.usernameExists(newUsername);
+		if (taken) throw new Error('Username is already taken');
+
+		const updated = await userRepository.updateUsername(userId, newUsername);
+		if (!updated) throw new Error('Failed to update username');
+		return updated;
 	}
 }
 

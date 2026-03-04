@@ -1,15 +1,16 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
-	import * as Avatar from '@syr-is/ui/avatar';
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
 	import { Textarea } from '@syr-is/ui/textarea';
-	import { PenLine, Loader2, Lock } from '@lucide/svelte';
+	import { Loader, PenLine, Lock } from '@lucide/svelte';
+	import PersonaUnlockForm from '$lib/components/fragments/persona-unlock-form.svelte';
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
-	import { toAvatarSrc, getInitials } from '$lib/utils';
+	import PersonaImage from '$lib/components/persona-image.svelte';
 
 	let payload = $state('');
 	let pastedKey = $state('');
@@ -26,6 +27,8 @@
 		did: string;
 		avatarUrl?: string;
 		bannerUrl?: string;
+		avatarMtime?: number;
+		bannerMtime?: number;
 	} | null>(null);
 
 	$effect(() => {
@@ -66,6 +69,7 @@
 		}
 		unlockLoading = true;
 		error = null;
+		await tick();
 		try {
 			const seed = await invoke<number[]>('decrypt_persona_sigil_cmd', {
 				personaId: persona.id,
@@ -143,19 +147,24 @@
 				? ''
 				: 'bg-muted/50'}"
 		>
-			{#if persona?.bannerUrl && toAvatarSrc(persona.bannerUrl)}
-				<div
-					class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
-					style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
-				></div>
+			{#if persona?.bannerUrl}
+				<PersonaImage
+					personaId={persona.id}
+					role="banner"
+					mtime={persona.bannerMtime}
+					variant="banner"
+					class="absolute inset-0 bg-cover bg-center"
+				/>
 			{/if}
 			{#if persona}
-				<Avatar.Root class="relative z-10 h-8 w-8 shrink-0">
-					{#if toAvatarSrc(persona.avatarUrl)}
-						<Avatar.Image src={toAvatarSrc(persona.avatarUrl)!} alt={persona.displayName} />
-					{/if}
-					<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
-				</Avatar.Root>
+				<PersonaImage
+					personaId={persona.id}
+					role="avatar"
+					mtime={persona.avatarMtime}
+					displayName={persona.displayName}
+					variant="avatar"
+					class="relative z-10 h-8 w-8 shrink-0"
+				/>
 			{/if}
 			<span class="text-muted-foreground relative z-10 flex-1">
 				{seedFromStore
@@ -175,34 +184,36 @@
 				? ''
 				: 'bg-muted/50'}"
 		>
-			{#if toAvatarSrc(persona.bannerUrl)}
-				<div
-					class="absolute inset-0 [mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] bg-cover bg-center [mask-size:cover] [-webkit-mask-image:linear-gradient(to_right,rgba(0,0,0,0.5),transparent)] [-webkit-mask-size:cover]"
-					style="background-image: url('{toAvatarSrc(persona.bannerUrl)}')"
-				></div>
+			{#if persona.bannerUrl}
+				<PersonaImage
+					personaId={persona.id}
+					role="banner"
+					mtime={persona.bannerMtime}
+					variant="banner"
+					class="absolute inset-0 bg-cover bg-center"
+				/>
 			{/if}
 			<div class="relative z-10 flex items-center gap-3">
-				<Avatar.Root class="h-12 w-12 shrink-0">
-					{#if toAvatarSrc(persona.avatarUrl)}
-						<Avatar.Image src={toAvatarSrc(persona.avatarUrl)!} alt={persona.displayName} />
-					{/if}
-					<Avatar.Fallback>{getInitials(persona.displayName)}</Avatar.Fallback>
-				</Avatar.Root>
+				<PersonaImage
+					personaId={persona.id}
+					role="avatar"
+					mtime={persona.avatarMtime}
+					displayName={persona.displayName}
+					variant="avatar"
+					class="h-12 w-12 shrink-0"
+				/>
 				<div class="min-w-0 flex-1">
 					<p class="text-sm font-medium">Sign with: {persona.displayName}</p>
 					<p class="text-muted-foreground truncate font-mono text-xs">{persona.did}</p>
 				</div>
 			</div>
 			<div class="relative z-10 flex gap-2">
-				<Input
-					type="password"
+				<PersonaUnlockForm
+					bind:passphrase={personaPassphrase}
+					loading={unlockLoading}
+					onUnlock={unlockPersona}
 					placeholder="Passphrase to unlock"
-					bind:value={personaPassphrase}
-					disabled={unlockLoading}
 				/>
-				<Button onclick={unlockPersona} disabled={unlockLoading || !personaPassphrase.trim()}>
-					{unlockLoading ? 'Unlocking…' : 'Unlock'}
-				</Button>
 			</div>
 		</div>
 	{/if}
@@ -262,7 +273,7 @@
 			<div class="flex gap-2">
 				<Button onclick={signPayload} disabled={loading || !effectiveKey}>
 					{#if loading}
-						<Loader2 class="h-4 w-4 animate-spin" />
+						<Loader class="h-4 w-4 animate-spin" />
 						Signing…
 					{:else}
 						Sign

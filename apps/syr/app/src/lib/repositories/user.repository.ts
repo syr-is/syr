@@ -1,6 +1,6 @@
 import type { RecordId } from 'surrealdb';
 import { BaseRepository } from './base.repository';
-import { UserSchema, type User } from '@syr-is/types';
+import { UserSchema, stringToRecordId, type User } from '@syr-is/types';
 
 /**
  * User Repository
@@ -32,11 +32,40 @@ export class UserRepository extends BaseRepository<User> {
 	}
 
 	/**
+	 * Find user by DID
+	 */
+	async findByDid(did: string): Promise<User | null> {
+		return this.findOne({ did } as Partial<User>);
+	}
+
+	/**
 	 * Check if username exists
 	 */
 	async usernameExists(username: string): Promise<boolean> {
 		const user = await this.findByUsername(username);
 		return user !== null;
+	}
+
+	/**
+	 * Update username and set username_last_updated to now.
+	 * Caller must validate cooldown and uniqueness.
+	 */
+	async updateUsername(userId: RecordId | string, newUsername: string): Promise<User | null> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		if (userRecordId.tb !== 'user') {
+			throw new Error('Invalid user ID: record must target user collection');
+		}
+		const idVal = userRecordId.id;
+		if (idVal === undefined || idVal === null || (typeof idVal === 'string' && !idVal.trim())) {
+			throw new Error('Invalid user ID: record id must be defined and non-empty');
+		}
+		const now = new Date();
+		const result = await this.db.merge(userRecordId, {
+			username: newUsername,
+			username_last_updated: now,
+			updated_at: now
+		});
+		return result as User | null;
 	}
 }
 

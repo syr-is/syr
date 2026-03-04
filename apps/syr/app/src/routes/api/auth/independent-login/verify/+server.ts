@@ -37,7 +37,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			data.did,
 			challenge.message,
 			data.signature,
-			data.invite_code
+			data.invite_code,
+			data.profile
 		);
 
 		const ip = getClientAddress?.() || request.headers.get('x-forwarded-for') || undefined;

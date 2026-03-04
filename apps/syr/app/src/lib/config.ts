@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { config as loadDotenv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isOriginAllowed as isOriginAllowedUtils } from '@syr-is/utils';
 
 // Load .env from monorepo root (Vite envDir not honored for $env/dynamic/private when run from apps/syr/app)
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
@@ -91,10 +92,12 @@ function allowedOriginsList(parsed: Config): string[] {
 	return [normalizeOrigin(parsed.PUBLIC_URL)];
 }
 
-/** Check if origin is allowed. Uses exact match only (no substring). */
+/**
+ * Check if origin is allowed. Uses exact match; in development, also allows RFC 1918 LAN
+ * patterns (10.x, 172.16-31.x, 192.168.x, localhost) via @syr-is/utils.
+ */
 export function isAllowedOrigin(origin: string, allowed: readonly string[]): boolean {
-	const normalized = normalizeOrigin(origin);
-	return allowed.some((a) => a === normalized);
+	return isOriginAllowedUtils(origin, allowed, config.NODE_ENV);
 }
 
 /** Resolved config with CORS_ORIGIN always set (from PUBLIC_URL when not set). */

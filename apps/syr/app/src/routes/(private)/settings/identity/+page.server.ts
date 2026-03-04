@@ -4,6 +4,7 @@ import { registryRepository } from '$lib/repositories/registry.repository';
 import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { redirect } from '@sveltejs/kit';
 import { stringToRecordId } from '@syr-is/types';
+import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
@@ -25,6 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		hasIdentity,
+		hasAegis: identity ? !!buildAegisBundleFromIdentity(identity) : false,
 		did: identity?.did ?? null,
 		delegatedKeys,
 		registries: registries.map((r) => ({

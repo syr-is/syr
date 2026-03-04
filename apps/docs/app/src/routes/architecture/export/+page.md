@@ -6,6 +6,8 @@ title: Export Formats — SYR, Sigil, Persona
 
 The SYR web application supports three export methods, each with a purpose-specific file extension for app association and user clarity.
 
+The `.syr` format has two variants: **full** (includes Sigil, for Aegis users) and **data-only** (no Sigil, for independent users). See Section 4.
+
 ---
 
 ## 1. File Extensions Overview
@@ -14,9 +16,9 @@ The SYR web application supports three export methods, each with a purpose-speci
 | ---------- | -------------- | -------- | ------------------------------------------------- |
 | `.sigil`   | JSON (PIEF v1) | —        | Bare minimum identity; key recovery               |
 | `.persona` | ZIP            | Syner    | Syner-readable profile; import into Syner desktop |
-| `.syr`     | ZIP            | SYR web  | Full backup; reclaim identity in SYR              |
+| `.syr`     | ZIP            | SYR web  | Full or data backup; reclaim identity in SYR      |
 
-All three include the root identity seed encrypted as **Sigil** (PIEF v1). See [Sigil v1](/architecture/sigil) for the cryptographic specification.
+The `.sigil` and `.persona` exports always include the root identity seed encrypted as **Sigil** (PIEF v1). The `.syr` export may or may not include Sigil depending on the user's identity type. See [Sigil v1](/architecture/sigil) for the cryptographic specification.
 
 ---
 
@@ -69,7 +71,16 @@ All three include the root identity seed encrypted as **Sigil** (PIEF v1). See [
 
 ## 4. Export SYR (`.syr`)
 
-**Contents:** ZIP archive with full identity backup:
+**Contents:** ZIP archive with identity backup. Two variants:
+
+### Variants
+
+| Variant       | identity.sigil | Source                           | Use case                                           |
+| ------------- | -------------- | -------------------------------- | -------------------------------------------------- |
+| **Full**      | Present        | Aegis users (password unlock)    | Complete backup; reclaim identity with keys in SYR |
+| **Data-only** | Absent         | Independent users (Syner verify) | Profile, posts, assets; keys stay in Syner         |
+
+**Full .syr** includes:
 
 ```
 manifest.json      # Export metadata (version, did, exportedAt, postCount, assetCount)
@@ -81,11 +92,13 @@ pinned_posts.json # Pinned post IDs
 assets/            # Binary assets (images, etc.)
 ```
 
+**Data-only .syr** includes the same except **identity.sigil** is omitted. Independent users (keys managed in Syner) verify via Syner challenge-sign flow; no Sigil is produced.
+
 **Filename pattern:** `syr-export-{didShort}-{timestamp}.syr`
 
-**Use case:** Complete backup. Full migration. Reclaim identity in SYR web app.
+**Use case:** Complete backup (full) or profile/data backup (data-only). Reclaim identity in SYR web app.
 
-**Import:** Use SYR's Import identity dialog. Accepts `.syr` or `.zip` files. Requires export passphrase and new account password.
+**Import:** Use SYR's [Import identity](/architecture/import) dialog. For full .syr: export passphrase and new account password. For data-only: verify with Syner.
 
 ---
 
@@ -93,6 +106,10 @@ assets/            # Binary assets (images, etc.)
 
 - **Export Sigil** — Single `.sigil` file. Minimal. Key recovery.
 - **Export Persona** — `.persona` zip. Syner-readable. Profile + assets.
-- **Export SYR** — `.syr` zip. Full backup. Reclaim in SYR.
+- **Export SYR** — `.syr` zip. Full backup (with Sigil) or data-only (no Sigil). Reclaim in SYR.
 
-All exports require the user to unlock their identity (account password) and set an export passphrase. The seed is encrypted client-side as Sigil before download.
+**Aegis users** (keys stored server-side): Unlock with account password, set export passphrase; seed encrypted as Sigil. Export SYR includes identity.sigil.
+
+**Independent users** (keys in Syner): Verify via Syner challenge-sign. Export SYR is data-only (no identity.sigil).
+
+See [Import](/architecture/import) for how to restore each variant.

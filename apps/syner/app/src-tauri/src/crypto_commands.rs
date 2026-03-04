@@ -27,10 +27,15 @@ pub fn sign_payload(payload: Vec<u8>, private_key_base64: String) -> Result<Vec<
 }
 
 #[tauri::command]
-pub fn decrypt_sigil_cmd(sigil_json: String, passphrase: String) -> Result<Vec<u8>, String> {
-    let obj: SigilObject = serde_json::from_str(&sigil_json).map_err(|e| e.to_string())?;
-    let seed = decrypt_sigil(&obj, &passphrase)?;
-    Ok(seed.as_ref().to_vec())
+pub async fn decrypt_sigil_cmd(sigil_json: String, passphrase: String) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let obj: SigilObject = serde_json::from_str(&sigil_json).map_err(|e| e.to_string())?;
+        let seed = decrypt_sigil(&obj, &passphrase)?;
+        Ok(seed.as_ref().to_vec())
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(std::convert::identity)
 }
 
 #[tauri::command]

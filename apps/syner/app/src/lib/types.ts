@@ -7,4 +7,7 @@ export type Persona = {
 	avatarUrl?: string;
 	bannerUrl?: string;
 	createdAt: string;
+	/** File mtime (Unix timestamp) for cache busting */
+	avatarMtime?: number;
+	bannerMtime?: number;
 };

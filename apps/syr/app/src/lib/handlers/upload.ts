@@ -1,4 +1,5 @@
 import { storageEvents } from '$lib/stores/storage-events.svelte';
+import { computeSha256Hex } from '@syr-is/utils';
 
 /**
  * Upload handler for file uploads
@@ -19,9 +20,7 @@ export async function handleFileUpload(file: File, options?: UploadOptions): Pro
 	try {
 		// Calculate SHA256 hash of the file
 		const arrayBuffer = await file.arrayBuffer();
-		const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+		const sha256 = await computeSha256Hex(arrayBuffer);
 
 		// Determine endpoint based on options
 		const endpoint = options?.post_id ? '/api/uploads/post-assets' : '/api/uploads';

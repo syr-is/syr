@@ -1,31 +1,79 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import * as Sidebar from '@syr-is/ui/sidebar';
+	import { User, Smartphone, Key, Monitor, Settings } from 'lucide-svelte';
 
-	const items = [
-		{ title: 'Profile', href: '/settings/profile' },
-		{ title: 'Identity', href: '/settings/identity' },
-		{ title: 'Sessions', href: '/settings/sessions' }
+	type NavItem = { title: string; href: string; icon: typeof User };
+	const userItems: NavItem[] = [
+		{ title: 'Profile', href: '/settings/profile', icon: User },
+		{ title: 'Sync with Syner', href: '/settings/sync-syner', icon: Smartphone },
+		{ title: 'Identity', href: '/settings/identity', icon: Key },
+		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor }
 	];
 
+	const instanceItems: NavItem[] = [
+		{ title: 'Instance config', href: '/settings/instance-config', icon: Settings }
+	];
+
+	let { user }: { user?: { role?: string } | null } = $props();
+
 	let currentPath = $derived(page.url.pathname);
-	const isActive = (href: string) => {
+	const isActive = (href: string): boolean => {
 		const norm = (s: string) => (s.endsWith('/') ? s.slice(0, -1) : s);
 		return norm(currentPath) === norm(href);
 	};
 </script>
 
-<nav class="space-y-1">
-	{#each items as item (item.href)}
-		<a
-			href={item.href}
-			class="block rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground {isActive(
-				item.href
-			)
-				? 'bg-accent text-accent-foreground'
-				: 'text-muted-foreground'}"
-			aria-current={isActive(item.href) ? 'page' : undefined}
-		>
-			{item.title}
-		</a>
-	{/each}
+<nav class="flex flex-col gap-4">
+	<Sidebar.Group>
+		<Sidebar.GroupLabel>Account</Sidebar.GroupLabel>
+		<Sidebar.GroupContent>
+			<Sidebar.Menu>
+				{#each userItems as item (item.href)}
+					{@const Icon = item.icon}
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton isActive={isActive(item.href)}>
+							{#snippet child({ props })}
+								<a
+									href={item.href}
+									{...props}
+									aria-current={isActive(item.href) ? 'page' : undefined}
+								>
+									<Icon class="h-4 w-4 shrink-0" />
+									<span>{item.title}</span>
+								</a>
+							{/snippet}
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				{/each}
+			</Sidebar.Menu>
+		</Sidebar.GroupContent>
+	</Sidebar.Group>
+
+	{#if user?.role === 'ADMIN'}
+		<Sidebar.Group>
+			<Sidebar.GroupLabel>Instance</Sidebar.GroupLabel>
+			<Sidebar.GroupContent>
+				<Sidebar.Menu>
+					{#each instanceItems as item (item.href)}
+						{@const Icon = item.icon}
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton isActive={isActive(item.href)}>
+								{#snippet child({ props })}
+									<a
+										href={item.href}
+										{...props}
+										aria-current={isActive(item.href) ? 'page' : undefined}
+									>
+										<Icon class="h-4 w-4 shrink-0" />
+										<span>{item.title}</span>
+									</a>
+								{/snippet}
+							</Sidebar.MenuButton>
+						</Sidebar.MenuItem>
+					{/each}
+				</Sidebar.Menu>
+			</Sidebar.GroupContent>
+		</Sidebar.Group>
+	{/if}
 </nav>

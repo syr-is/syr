@@ -19,6 +19,7 @@ const sidebarConfig = [
 			{ title: 'Key Hierarchy & Delegation v0.1', to: '/architecture/key-hierarchy-delegation' },
 			{ title: 'Sigil v1 (Export Format)', to: '/architecture/sigil' },
 			{ title: 'Export Formats (SYR, Sigil, Persona)', to: '/architecture/export' },
+			{ title: 'Identity Import', to: '/architecture/import' },
 			{ title: 'Aegis v1 (Custodial Identity)', to: '/architecture/aegis' },
 			{ title: 'Syner (Self-Custody Companion)', to: '/architecture/syner' },
 			{ title: 'Independent Login', to: '/architecture/independent-login' },

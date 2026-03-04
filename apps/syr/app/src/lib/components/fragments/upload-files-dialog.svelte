@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
+	import { computeSha256Hex } from '@syr-is/utils';
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
@@ -37,9 +38,7 @@
 
 				// Calculate SHA256 hash
 				const arrayBuffer = await file.arrayBuffer();
-				const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-				const hashArray = Array.from(new Uint8Array(hashBuffer));
-				const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+				const sha256 = await computeSha256Hex(arrayBuffer);
 
 				// Get signed URL
 				const response = await fetch('/api/uploads', {

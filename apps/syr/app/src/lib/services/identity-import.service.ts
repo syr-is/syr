@@ -182,6 +182,98 @@ export async function validateBundle(
 }
 
 /**
+ * Validate bundle for data-only import (no Sigil/Aegis). Checks manifest/identity match, DID not exists.
+ */
+export async function validateBundleForDataOnlyImport(parsed: ParsedBundle): Promise<string> {
+	const { manifest, identity } = parsed;
+
+	if (manifest.did !== identity.did) {
+		throw error(400, {
+			code: 'DID_MISMATCH',
+			message: 'Manifest DID does not match identity DID'
+		});
+	}
+
+	try {
+		const parsedDid = parseDid(identity.did);
+		const pubKeyFromDid = parsedDid.publicKey;
+		const pubKeyFromBundle = decodePublicKey(identity.publicKey);
+
+		if (!constantTimeEqual(pubKeyFromDid, pubKeyFromBundle)) {
+			throw error(400, {
+				code: 'KEY_MISMATCH',
+				message: 'Public key in bundle does not match the DID'
+			});
+		}
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		throw error(400, {
+			code: 'IMPORT_FAILED',
+			message: 'Failed to validate DID/public key'
+		});
+	}
+
+	const existingDid = await identityRepository.findByDid(identity.did);
+	if (existingDid) {
+		throw error(409, {
+			code: 'DID_EXISTS',
+			message: 'An identity with this DID already exists on this instance'
+		});
+	}
+
+	return identity.did;
+}
+
+/**
+ * Create identity (external, no Aegis), profile, and delegated keys. Mutates ctx.
+ */
+export async function importIdentityAndProfileExternal(
+	ctx: ImportContext,
+	parsed: ParsedBundle
+): Promise<void> {
+	const { identity } = parsed;
+
+	await identityRepository.createIdentityExternal({
+		did: ctx.did,
+		publicKey: identity.publicKey,
+		userId: stringToRecordId.decode(ctx.userId),
+		now: new Date()
+	});
+
+	await userRepository.updateDid(stringToRecordId.decode(ctx.userId), ctx.did);
+
+	ctx.createdProfile = await profileRepository.createByUserId(ctx.userId);
+	await profileRepository.mergeByUserId(ctx.userId, {
+		display_name: identity.profile.displayName,
+		bio: identity.profile.bio ?? undefined,
+		avatar_url: identity.profile.avatarUrl ?? undefined,
+		banner_url: identity.profile.bannerUrl ?? undefined
+	});
+
+	for (const dk of identity.delegatedKeys) {
+		const canonicalDelegation = canonicalize({
+			did: ctx.did,
+			delegate: dk.publicKey,
+			scope: dk.scope,
+			createdAt: dk.createdAt,
+			...(dk.expiresAt ? { expiresAt: dk.expiresAt } : {})
+		});
+		const created = await delegatedKeyRepository.createDelegatedKey({
+			did: ctx.did,
+			publicKey: dk.publicKey,
+			scope: dk.scope,
+			createdAt: new Date(dk.createdAt),
+			expiresAt: dk.expiresAt ? new Date(dk.expiresAt) : undefined,
+			signature: dk.signature,
+			canonicalDelegation
+		});
+		if (dk.revokedAt) {
+			await delegatedKeyRepository.revoke(created.id);
+		}
+	}
+}
+
+/**
  * Create identity, profile, and delegated keys. Mutates ctx.
  */
 export async function importIdentityAndProfile(

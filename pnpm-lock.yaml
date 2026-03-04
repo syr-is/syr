@@ -387,6 +387,9 @@ importers:
       '@syr-is/ui':
         specifier: workspace:*
         version: link:../../../packages/ts/ui
+      '@syr-is/utils':
+        specifier: workspace:*
+        version: link:../../../packages/ts/utils
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -746,6 +749,31 @@ importers:
       vite:
         specifier: ^7.1.7
         version: 7.3.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.1)(terser@5.46.0)(yaml@2.8.2)
+
+  packages/ts/utils:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^1.7.0
+        version: 1.8.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.36.0
+        version: 9.37.0
+      eslint:
+        specifier: ^9.36.0
+        version: 9.37.0(jiti@2.6.1)
+      eslint-config-prettier:
+        specifier: ^10.1.8
+        version: 10.1.8(eslint@9.37.0(jiti@2.6.1))
+      prettier:
+        specifier: ^3.6.2
+        version: 3.6.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.44.1
+        version: 8.46.0(eslint@9.37.0(jiti@2.6.1))(typescript@5.9.3)
 
 packages:
 
@@ -2573,6 +2601,10 @@ packages:
         optional: true
       class-validator:
         optional: true
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@node-rs/argon2-android-arm-eabi@2.0.2':
     resolution: {integrity: sha512-DV/H8p/jt40lrao5z5g6nM9dPNPGEHL+aK6Iy/og+dbL503Uj0AHLqj1Hk9aVUSCNnsDdUEKp4TVMi0YakDYKw==}
@@ -10478,6 +10510,8 @@ snapshots:
       swagger-ui-dist: 5.31.0
     optionalDependencies:
       class-validator: 0.14.2
+
+  '@noble/hashes@1.8.0': {}
 
   '@node-rs/argon2-android-arm-eabi@2.0.2':
     optional: true
