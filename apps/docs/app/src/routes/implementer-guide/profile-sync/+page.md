@@ -67,7 +67,16 @@ The payload must be JCS canonical JSON (RFC 8785). Structure:
 ## Response
 
 - **200**: Profile updated.
-- **4xx/5xx**: Error with `error` and `error_description` fields.
+- **4xx/5xx**: Structured errors with `code` (machine-readable) and `message` (human-readable). The profile-sync handler uses this contract.
+
+**Error example:**
+
+```json
+{
+	"code": "VALIDATION_ERROR",
+	"message": "Profile sync requires did"
+}
+```
 
 ---
 

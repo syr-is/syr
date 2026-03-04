@@ -42,7 +42,7 @@ Reference: [syr-url.ts](https://github.com/syr-is/syr/blob/main/apps/syner/app/s
 
 **Example:**
 
-```
+```text
 syr://login?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%2Fmy.syr.app&callback=https%3A%2F%2Fmy.syr.app%2Fauth%2Findependent-callback
 ```
 
@@ -62,7 +62,7 @@ syr://login?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%
 
 **Example (export):**
 
-```
+```text
 syr://export?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%2Fmy.syr.app&did=did%3Asyr%3Az6Mk...
 ```
 
@@ -81,7 +81,7 @@ syr://export?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F
 
 **Example:**
 
-```
+```text
 syr://sync-profile?instance=https%3A%2F%2Fmy.syr.app&did=did%3Asyr%3Az6Mk...
 ```
 

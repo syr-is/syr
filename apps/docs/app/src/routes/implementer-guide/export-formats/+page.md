@@ -26,8 +26,10 @@ Full or data-only identity backup. Two variants: **full** (includes `identity.si
 
 ### API
 
-- **GET** `/api/identity/export-bundle-data` — Requires session auth.
-- **POST** `/api/identity/export-bundle-data` — Requires `export_token` (from [export verification](/implementer-guide/challenge-sign-flows)).
+- **GET** `/api/identity/export-bundle-data` — Accepts session auth or `export_token` as a query parameter (`?export_token=...`).
+- **POST** `/api/identity/export-bundle-data` — Accepts session auth or `export_token` in the JSON body (`{ "export_token": "..." }`).
+
+Both handlers use `resolveUserId(locals, exportToken)` for authentication: session (`locals.user`) takes precedence when present; otherwise a valid `export_token` (from [export verification](/implementer-guide/challenge-sign-flows)) is accepted.
 
 ### Filename pattern
 
