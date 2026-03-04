@@ -89,6 +89,7 @@
 		domain = null;
 		targetDid = null;
 		selected = null;
+		error = null;
 		try {
 			const res = await fetch(url);
 			if (seq !== latestFetchSeq) return;
