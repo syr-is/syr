@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { fetch } from '@tauri-apps/plugin-http';
 	import { error as logError, info } from '@tauri-apps/plugin-log';
@@ -8,9 +9,9 @@
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
 	import { Button } from '@syr-is/ui/button';
 	import PersonaImage from '$lib/components/persona-image.svelte';
-	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
-	import { Loader2, LogIn, Lock } from '@lucide/svelte';
+	import { Loader, LogIn, Lock } from '@lucide/svelte';
+	import PersonaUnlockForm from '$lib/components/fragments/persona-unlock-form.svelte';
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
@@ -130,6 +131,7 @@
 		}
 		unlockLoading = true;
 		error = null;
+		await tick();
 		try {
 			const seed = await invoke<number[]>('decrypt_persona_sigil_cmd', {
 				personaId: selected.id,
@@ -345,24 +347,14 @@
 								</Button>
 							</div>
 						{:else}
-							<div class="flex gap-2">
-								<Input
-									type="password"
-									placeholder="Passphrase"
-									bind:value={passphrase}
-									disabled={unlockLoading}
-								/>
-								<Button onclick={unlockPersona} disabled={unlockLoading || !passphrase.trim()}>
-									{unlockLoading ? 'Unlocking…' : 'Unlock'}
-								</Button>
-							</div>
+							<PersonaUnlockForm bind:passphrase loading={unlockLoading} onUnlock={unlockPersona} />
 						{/if}
 					{/if}
 
 					<div class="flex gap-2 pt-2">
 						<Button onclick={signAndVerify} disabled={loading || !selected || !hasUnlockedPersona}>
 							{#if loading}
-								<Loader2 class="h-4 w-4 animate-spin" />
+								<Loader class="h-4 w-4 animate-spin" />
 								Signing in…
 							{:else}
 								Sign in

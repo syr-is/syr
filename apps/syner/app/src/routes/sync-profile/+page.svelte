@@ -1,15 +1,15 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { invoke } from '@tauri-apps/api/core';
 	import { get } from 'svelte/store';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
 	import { Button } from '@syr-is/ui/button';
-	import { Input } from '@syr-is/ui/input';
-	import { Label } from '@syr-is/ui/label';
 	import { toast } from 'svelte-sonner';
 	import { Lock } from '@lucide/svelte';
 	import PersonaImage from '$lib/components/persona-image.svelte';
+	import PersonaUnlockForm from '$lib/components/fragments/persona-unlock-form.svelte';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
 	import { syncProfileToSyr } from '$lib/sync-profile';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
@@ -101,6 +101,7 @@
 		}
 		unlockLoading = true;
 		error = null;
+		await tick();
 		try {
 			const seed = await invoke<number[]>('decrypt_persona_sigil_cmd', {
 				personaId: selected.id,
@@ -242,20 +243,13 @@
 
 				{#if !hasUnlockedPersona}
 					<div class="space-y-2">
-						<Label for="passphrase">Passphrase to unlock persona</Label>
-						<div class="flex gap-2">
-							<Input
-								id="passphrase"
-								type="password"
-								placeholder="Enter passphrase"
-								bind:value={passphrase}
-								onkeydown={(e) => e.key === 'Enter' && unlockPersona()}
-								disabled={unlockLoading}
-							/>
-							<Button onclick={unlockPersona} disabled={unlockLoading || !passphrase.trim()}>
-								{unlockLoading ? 'Unlocking…' : 'Unlock'}
-							</Button>
-						</div>
+						<PersonaUnlockForm
+							bind:passphrase
+							loading={unlockLoading}
+							onUnlock={unlockPersona}
+							label="Passphrase to unlock persona"
+							placeholder="Enter passphrase"
+						/>
 						{#if error}
 							<p class="text-destructive text-sm">{error}</p>
 						{/if}

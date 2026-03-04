@@ -819,7 +819,7 @@ pub fn read_persona_asset_cmd(
 }
 
 #[tauri::command]
-pub fn decrypt_persona_sigil_cmd(
+pub async fn decrypt_persona_sigil_cmd(
     app: tauri::AppHandle,
     persona_id: String,
     passphrase: String,
@@ -830,8 +830,15 @@ pub fn decrypt_persona_sigil_cmd(
     if !sigil_path.exists() {
         return Err("Persona not found".to_string());
     }
-    let content = std::fs::read_to_string(&sigil_path).map_err(|e| e.to_string())?;
-    let obj: SigilObject = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    let seed = decrypt_sigil(&obj, &passphrase)?;
-    Ok(seed.as_ref().to_vec())
+    let path = sigil_path.clone();
+    let pass = passphrase.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let obj: SigilObject = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        let seed = decrypt_sigil(&obj, &pass)?;
+        Ok(seed.as_ref().to_vec())
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(std::convert::identity)
 }

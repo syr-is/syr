@@ -8,7 +8,8 @@ import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
-const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes (reject too old)
+const CLOCK_SKEW_TOLERANCE_MS = 2 * 60 * 1000; // 2 minutes (allow client clock ahead)
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_BANNER_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -90,7 +91,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		const issuedAt = new Date(parsedPayload.issued_at).getTime();
 		const age = Date.now() - issuedAt;
-		if (isNaN(issuedAt) || age < 0 || age > SIGNATURE_MAX_AGE_MS) {
+		if (isNaN(issuedAt) || age < -CLOCK_SKEW_TOLERANCE_MS || age > SIGNATURE_MAX_AGE_MS) {
+			console.warn('[profile-sync] Timestamp validation failed', {
+				issued_at: parsedPayload.issued_at,
+				issuedAt,
+				ageMs: age,
+				serverNow: Date.now()
+			});
 			throw error(400, {
 				code: 'VALIDATION_ERROR',
 				message: 'Signed payload expired or invalid timestamp (max 5 minutes)'
