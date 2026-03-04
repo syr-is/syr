@@ -6,6 +6,8 @@ title: Independent Login API
 
 API contract for the challenge-sign-verify independent login flow.
 
+For full flow context, diagrams, and implementer guidance, see the [Implementer Guide: Challenge-Sign Flows](/implementer-guide/challenge-sign-flows).
+
 ---
 
 ## POST /api/auth/independent-login/challenge

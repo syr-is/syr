@@ -39,13 +39,24 @@ No platform owns you. If your instance disappears, you export your identity bund
 
 ---
 
+## Syr vs Passkeys: Passport vs Visa
+
+Syr provides a **portable global identity** — like a passport. One DID that follows you across instances, providers, and apps. Passkeys, by contrast, provide **per-app credentials** — like visas. Each site gets its own proof of access.
+
+- **Syr** = "This is who I am." One identity, many places.
+- **Passkeys** = "I'm allowed into this app." Many credentials, one per destination.
+
+Syr is worth exploring if you want identity ownership and portability, not just smoother login. See the [Implementer Guide](/implementer-guide) to build interoperable Syner and SYR platforms.
+
+---
+
 ## High-Level Architecture
 
 ```mermaid
 flowchart TD
     Operator["Instance Operator"] -->|hosts| SYR["SYR Instance"]
     SYR -->|generates| RootKey["Root Keypair (Ed25519)"]
-    SynerApp["Syner Native App"] -.->|"self-custody keys (future)"| RootKey
+    SynerApp["Syner Native App"] -.->|"self-custody keys"| RootKey
     RootKey -->|derives| DID["did:syr:z6Mkt..."]
     DID -->|registered at| Registry["Registry"]
     Registry -->|resolves to| SYR
@@ -64,7 +75,7 @@ flowchart TD
 
 Every Syr identity starts with an **Ed25519 keypair**. In the current phase, keys are **generated server-side** by the SYR instance and stored encrypted at rest. The public key is encoded as a multibase string and embedded in the DID identifier. This keypair is the ultimate trust anchor for everything: hosting decisions, delegated keys, signed actions, and migrations.
 
-Users can **export their full identity** (keys, posts, assets) as a portable zip bundle. In the future, **Syner** — a cross-platform native companion app — will enable users to generate and manage their root keys on their own devices using platform-native secure keystores, making Syner-managed identity the canonical self-custody method.
+Users can **export their full identity** (keys, posts, assets) as a portable zip bundle. **Syner** — a cross-platform Tauri native companion app — enables users to generate and manage their root keys on their own devices. Syner-managed identity is the canonical self-custody method; server-managed keys remain available for users who prefer managed hosting.
 
 ### Posts as Identity
 
@@ -148,7 +159,7 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 | **Phase 0.5** | Testing & hardening                    | In progress |
 | Phase 1       | Registry & provider portability        | Planned     |
 | Phase 2       | Verifiable credentials & enhanced auth | Planned     |
-| Phase 3       | Federation & Syner native app          | Planned     |
+| Phase 3       | Federation & Syner enhancements        | Planned     |
 | Phase 4       | Backend migration & observability      | Planned     |
 | Phase 5       | Production hardening                   | Planned     |
 
@@ -160,7 +171,7 @@ See the full [Roadmap](/roadmap) for details on each phase.
 
 - Read the [Identity Model specification](/architecture/identity-model) for the full technical design.
 - Refer to [Sigil (Export Format)](/architecture/sigil) and [Aegis (Custodial Identity)](/architecture/aegis) for the export and custodial specs.
-- Consult the [Phase 0 Blueprint](/implementation/phase-0-blueprint) for implementation details.
+- Consult the [Implementer Guide](/implementer-guide) to build interoperable Syner and SYR platforms.
 - Review the [Syner Specification](/architecture/syner) for the native companion app design.
 - Check the [Roadmap](/roadmap) for the full implementation timeline.
 - Browse the [Reference](/reference/types) section for current codebase documentation.
