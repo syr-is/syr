@@ -8,7 +8,21 @@ const sidebarConfig = [
 	{
 		title: 'Introduction',
 		collapsible: true,
-		items: [{ title: 'What is Syr?', to: '/introduction' }]
+		items: [
+			{ title: 'What is Syr?', to: '/introduction' },
+			{ title: 'Roadmap', to: '/roadmap' }
+		]
+	},
+	{
+		title: 'Implementer Guide',
+		collapsible: true,
+		items: [
+			{ title: 'Integration Overview', to: '/implementer-guide' },
+			{ title: 'syr:// Scheme and QR Exchange', to: '/implementer-guide/scheme-and-qr' },
+			{ title: 'Export Formats and Data Structures', to: '/implementer-guide/export-formats' },
+			{ title: 'Challenge-Sign Flows', to: '/implementer-guide/challenge-sign-flows' },
+			{ title: 'Profile Sync API', to: '/implementer-guide/profile-sync' }
+		]
 	},
 	{
 		title: 'Architecture',
@@ -63,6 +77,8 @@ const config = defineConfig({
 				sidebar: {
 					'/': sidebarConfig,
 					'/introduction/': sidebarConfig,
+					'/roadmap/': sidebarConfig,
+					'/implementer-guide/': sidebarConfig,
 					'/architecture/': sidebarConfig,
 					'/reference/': sidebarConfig,
 					'/implementation/': sidebarConfig

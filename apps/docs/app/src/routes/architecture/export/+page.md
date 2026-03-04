@@ -20,6 +20,8 @@ The `.syr` format has two variants: **full** (includes Sigil, for Aegis users) a
 
 The `.sigil` and `.persona` exports always include the root identity seed encrypted as **Sigil** (PIEF v1). The `.syr` export may or may not include Sigil depending on the user's identity type. See [Sigil v1](/architecture/sigil) for the cryptographic specification.
 
+For implementer details and API contracts, see [Implementer Guide: Export Formats](/implementer-guide/export-formats).
+
 ---
 
 ## 2. Export Sigil (`.sigil`)

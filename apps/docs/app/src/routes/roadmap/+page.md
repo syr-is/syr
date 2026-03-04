@@ -25,6 +25,8 @@ The foundation phase. Establishes the cryptographic identity model and core data
 - Registry server with signature-verified hosting records
 - Multi-tenancy foundations (tenant CRUD, identity scoping)
 - Zod v4 schema validation across all shared packages
+- **Syner** native app (Tauri v2): personas, Sigil storage, independent login, export/import verification, profile sync
+- **Sigil** export format (PIEF v1) — `.sigil` files for portable key backup
 
 **Remaining:**
 
@@ -43,6 +45,7 @@ Stabilize the foundation before adding new features.
 - Unit tests for all shared packages (93 tests across crypto, did, resolver, types)
 - CI pipeline with per-package path-filtered test jobs
 - Persistent identity-auth challenge store (KV-backed, replaces in-memory Map)
+- Sigil export format implemented in export-key-dialog and `@syr-is/crypto` / `syr-crypto-sigil`
 
 **Remaining:**
 
@@ -82,9 +85,9 @@ Add credential exchange and richer authentication.
 
 ---
 
-## Phase 3: Federation & Syner
+## Phase 3: Federation & Syner Enhancements
 
-Full SYR-to-SYR federation and native application support.
+Full SYR-to-SYR federation and Syner enhancements. Core Syner app is implemented (Phase 0).
 
 **Goals:**
 
@@ -92,7 +95,7 @@ Full SYR-to-SYR federation and native application support.
 - HTTP Signature verification for incoming federation requests
 - WebFinger discovery endpoint
 - Outbox delivery queue with retry logic
-- **Syner**: Cross-platform Tauri v2 native application
+- **Syner enhancements** (core app exists: personas, independent login, export-verify, profile sync):
   - Platform-native secure keystore (Keychain, DPAPI, libsecret, Android Keystore)
   - SSE-based signing bridge with SYR web app
   - Deep link fallback for platforms without background process support

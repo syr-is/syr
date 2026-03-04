@@ -70,10 +70,10 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Sigil & Aegis Specifications
 
-| Requirement                | Status      | Details                                                                                                                      |
-| -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Aegis custodial generation | **Partial** | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis). |
-| Sigil export format        | **Planned** | Target format for portable identity export. Current implementation uses PKCS#8 PEM. See [Sigil v1](/architecture/sigil).     |
+| Requirement                | Status          | Details                                                                                                                                       |
+| -------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aegis custodial generation | **Partial**     | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis).                  |
+| Sigil export format        | **Implemented** | [Sigil v1](/architecture/sigil) spec in `packages/rust/syr-crypto-sigil` and `packages/ts/crypto`. Export-key-dialog produces `.sigil` files. |
 
 ---
 
@@ -102,6 +102,14 @@ This page maps each requirement from the architecture specifications to the curr
 | `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.        |
 | Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store. |
 | TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                          |
+
+---
+
+## Syner (Self-Custody Companion)
+
+| Requirement                 | Status          | Details                                                                                                                                             |
+| --------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Syner native app (Tauri v2) | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. Phase 3 goals (platform keystores, pairing) are enhancements. |
 
 ---
 
