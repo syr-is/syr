@@ -35,9 +35,9 @@ pub struct Persona {
     pub banner_url: Option<String>,
     pub created_at: String,
     /// File mtime (Unix timestamp) for cache busting; not stored in profile.json
-    #[serde(skip, default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_mtime: Option<i64>,
-    #[serde(skip, default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub banner_mtime: Option<i64>,
 }
 

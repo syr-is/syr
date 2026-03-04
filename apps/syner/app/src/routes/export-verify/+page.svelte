@@ -95,6 +95,7 @@
 			info(`[export-verify] Challenge response status: ${res.status} ${res.statusText}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
+				if (seq !== latestFetchSeq) return;
 				const errDesc = data.error_description ?? 'Challenge expired or not found';
 				error = errDesc;
 				logError(

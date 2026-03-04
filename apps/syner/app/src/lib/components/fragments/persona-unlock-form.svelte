@@ -33,7 +33,7 @@
 				{placeholder}
 				bind:value={passphrase}
 				disabled={loading}
-				onkeydown={(e) => e.key === 'Enter' && onUnlock()}
+				onkeydown={(e) => e.key === 'Enter' && !loading && !!passphrase.trim() && onUnlock()}
 			/>
 			<Button onclick={onUnlock} disabled={loading || !passphrase.trim()}>
 				{#if loading}
@@ -51,7 +51,7 @@
 			{placeholder}
 			bind:value={passphrase}
 			disabled={loading}
-			onkeydown={(e) => e.key === 'Enter' && onUnlock()}
+			onkeydown={(e) => e.key === 'Enter' && !loading && !!passphrase.trim() && onUnlock()}
 		/>
 		<Button onclick={onUnlock} disabled={loading || !passphrase.trim()}>
 			{#if loading}
