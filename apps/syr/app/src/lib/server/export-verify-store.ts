@@ -152,6 +152,13 @@ export async function setDeleteAegisToken(token: string, data: { user_id: string
 	await kvService.set(KV_DELETE_AEGIS_TOKEN, token, data, TOKEN_TTL);
 }
 
+/** Validate token and return userId without consuming. Use consumeDeleteAegisToken after success. */
+export function peekDeleteAegisToken(token: string): Promise<string | null> {
+	return kvService
+		.get<{ user_id: string }>(KV_DELETE_AEGIS_TOKEN, token)
+		.then((e) => e?.user_id ?? null);
+}
+
 export function consumeDeleteAegisToken(token: string): Promise<string | null> {
 	return kvService
 		.getAndDelete<{ user_id: string }>(KV_DELETE_AEGIS_TOKEN, token)

@@ -21,6 +21,7 @@
 	let unlockPassword = $state('');
 	let bundle = $state<AegisBundle | null>(null);
 	let deleting = $state(false);
+	let isLoadingBundle = $state(false);
 
 	let synerChallenge = $state<{
 		challenge_id: string;
@@ -36,6 +37,7 @@
 			unlockPassword = '';
 			bundle = null;
 			synerChallenge = null;
+			isLoadingBundle = false;
 			disconnectHeartbeat();
 		}
 	});
@@ -48,17 +50,19 @@
 	}
 
 	async function handleVerifyWithPassword() {
-		step = 'unlock';
-		// Pre-fetch bundle so we have it for the unlock step
+		isLoadingBundle = true;
 		try {
 			const res = await fetch('/api/identity/aegis-bundle');
 			if (!res.ok) throw new Error('Failed to fetch identity');
 			const data = await res.json();
 			bundle = data.data?.aegisBundle ?? null;
 			if (!bundle) throw new Error('No Aegis bundle found');
+			step = 'unlock';
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to fetch identity');
 			step = 'warning';
+		} finally {
+			isLoadingBundle = false;
 		}
 	}
 
@@ -104,6 +108,8 @@
 				disconnectHeartbeat();
 				synerChallenge = null;
 				deleting = false;
+				step = 'warning';
+				toast.error('Connection lost. Please try again.');
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to create challenge');
@@ -257,9 +263,16 @@
 		</div>
 		<Dialog.Footer>
 			{#if step === 'warning'}
-				<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
-				<Button variant="destructive" onclick={handleVerifyWithPassword}>
-					Unlock with password
+				<Button variant="outline" onclick={() => (open = false)} disabled={isLoadingBundle}>
+					Cancel
+				</Button>
+				<Button variant="destructive" onclick={handleVerifyWithPassword} disabled={isLoadingBundle}>
+					{#if isLoadingBundle}
+						<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+						Loading...
+					{:else}
+						Unlock with password
+					{/if}
 				</Button>
 				<Button variant="destructive" onclick={handleVerifyWithSyner}>Sign with Syner</Button>
 			{:else}
@@ -268,7 +281,7 @@
 					<Button
 						variant="destructive"
 						onclick={handleUnlock}
-						disabled={deleting || !unlockPassword}
+						disabled={deleting || !unlockPassword || !bundle}
 					>
 						{#if deleting}
 							<Loader2 class="mr-2 h-4 w-4 animate-spin" />

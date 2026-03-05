@@ -7,7 +7,9 @@ import { identityRepository } from '$lib/repositories/identity.repository';
 import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import { stringToRecordId } from '@syr-is/types';
 import {
+	getDeleteAegisChallenge,
 	consumeDeleteAegisChallenge,
+	peekDeleteAegisToken,
 	consumeDeleteAegisToken
 } from '$lib/server/export-verify-store';
 
@@ -55,13 +57,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Try Syner path first (token)
 	const synerParsed = SynerRequestSchema.safeParse(body);
 	if (synerParsed.success) {
-		const tokenUserId = await consumeDeleteAegisToken(synerParsed.data.delete_aegis_token);
+		const tokenUserId = await peekDeleteAegisToken(synerParsed.data.delete_aegis_token);
 		if (!tokenUserId || tokenUserId !== locals.user.id) {
 			throw error(403, {
 				code: 'INVALID_TOKEN',
 				message: 'Invalid or expired delete-aegis token'
 			});
 		}
+		await consumeDeleteAegisToken(synerParsed.data.delete_aegis_token);
 		await identityRepository.removeAegisByUserId(userId);
 		return json({ success: true, message: 'Aegis removed' });
 	}
@@ -77,7 +80,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const { challenge_id, signature } = inAppParsed.data;
-	const challenge = await consumeDeleteAegisChallenge(challenge_id);
+	const challenge = await getDeleteAegisChallenge(challenge_id);
 	if (!challenge) {
 		throw error(410, {
 			code: 'CHALLENGE_EXPIRED',
@@ -128,6 +131,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	await consumeDeleteAegisChallenge(challenge_id);
 	await identityRepository.removeAegisByUserId(userId);
 	return json({ success: true, message: 'Aegis removed' });
 };
