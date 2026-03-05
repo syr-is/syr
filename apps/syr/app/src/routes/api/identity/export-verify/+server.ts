@@ -6,11 +6,18 @@ import { parseDid } from '@syr-is/did';
 import {
 	consumeExportChallenge,
 	consumeImportChallenge,
+	consumeDeleteAegisChallenge,
 	setExportToken,
 	setImportToken,
-	type ImportChallengeData
+	setDeleteAegisToken,
+	type ImportChallengeData,
+	type DeleteAegisChallengeData
 } from '$lib/server/export-verify-store';
-import { notifyExportVerified, notifyImportVerified } from '$lib/server/export-verify-broadcast';
+import {
+	notifyExportVerified,
+	notifyImportVerified,
+	notifyDeleteAegisVerified
+} from '$lib/server/export-verify-broadcast';
 
 const VerifyRequestSchema = z.object({
 	challenge_id: z.string().uuid(),
@@ -30,13 +37,17 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = VerifyRequestSchema.parse(body);
 
-		// Atomically consume export challenge first, then import
+		// Atomically consume export challenge first, then import, then delete-aegis
 		let challenge = await consumeExportChallenge(data.challenge_id);
-		let purpose: 'export' | 'import' = 'export';
+		let purpose: 'export' | 'import' | 'delete_aegis' = 'export';
 
 		if (!challenge) {
 			challenge = await consumeImportChallenge(data.challenge_id);
 			purpose = 'import';
+		}
+		if (!challenge) {
+			challenge = await consumeDeleteAegisChallenge(data.challenge_id);
+			purpose = 'delete_aegis';
 		}
 
 		if (!challenge) {
@@ -89,6 +100,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			await setExportToken(exportToken, identity.user_id.toString());
 			notifyExportVerified(data.challenge_id, exportToken);
 			return json({ success: true as const, export_token: exportToken });
+		} else if (purpose === 'delete_aegis') {
+			const deleteAegisToken = crypto.randomUUID();
+			await setDeleteAegisToken(deleteAegisToken, {
+				user_id: (challenge as DeleteAegisChallengeData).user_id
+			});
+			notifyDeleteAegisVerified(data.challenge_id, deleteAegisToken);
+			return json({ success: true as const, delete_aegis_token: deleteAegisToken });
 		} else {
 			const importToken = crypto.randomUUID();
 			await setImportToken(importToken, {

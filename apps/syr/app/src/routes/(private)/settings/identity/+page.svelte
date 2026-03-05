@@ -14,6 +14,7 @@
 	import * as DropdownMenu from '@syr-is/ui/dropdown-menu';
 	import ExportKeyDialog from '$lib/components/fragments/export-key-dialog.svelte';
 	import ImportIdentityDialog from '$lib/components/fragments/import-identity-dialog.svelte';
+	import DeleteAegisDialog from '$lib/components/fragments/delete-aegis-dialog.svelte';
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
 	import { Input } from '@syr-is/ui/input';
 	import { Loader2, ChevronDown } from 'lucide-svelte';
@@ -34,6 +35,7 @@
 	let keyToRevoke = $state<string | null>(null);
 	let cancelJobDialogOpen = $state(false);
 	let jobToCancel = $state<string | null>(null);
+	let deleteAegisDialogOpen = $state(false);
 	let unlockPassword = $state('');
 	let unlockingForSync = $state(false);
 
@@ -242,6 +244,27 @@
 						{/if}
 					</ul>
 				</div>
+
+				{#if data.hasAegis}
+					<div
+						class="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/20"
+					>
+						<p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+							Remove server-stored key
+						</p>
+						<p class="text-xs text-muted-foreground">
+							Delete Aegis removes your encrypted key backup from the server. Only do this after
+							exporting your Sigil or Persona. You will need Syner to sign actions afterward.
+						</p>
+						<button
+							class={buttonVariants({ variant: 'destructive', size: 'sm' })}
+							onclick={() => (deleteAegisDialogOpen = true)}
+							disabled={deleteAegisDialogOpen}
+						>
+							Delete Aegis
+						</button>
+					</div>
+				{/if}
 
 				{#if data.delegatedKeys?.length}
 					<div class="space-y-2">
@@ -476,6 +499,8 @@
 />
 
 <ImportIdentityDialog bind:open={importIdentityDialogOpen} onSuccess={invalidateAll} />
+
+<DeleteAegisDialog bind:open={deleteAegisDialogOpen} onSuccess={invalidateAll} />
 
 <CancelOutboxJobDialog
 	bind:open={cancelJobDialogOpen}

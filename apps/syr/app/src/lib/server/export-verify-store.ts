@@ -3,8 +3,10 @@ import { kvService } from '$lib/services/kv';
 
 const KV_EXPORT_CHALLENGE = 'identity_export_challenge';
 const KV_IMPORT_CHALLENGE = 'identity_import_challenge';
+const KV_DELETE_AEGIS_CHALLENGE = 'identity_delete_aegis_challenge';
 const KV_EXPORT_TOKEN = 'identity_export_token';
 const KV_IMPORT_TOKEN = 'identity_import_token';
+const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
 
 const CHALLENGE_TTL = independentLogin.challengeTtl;
 const TOKEN_TTL = independentLogin.callbackTokenTtl;
@@ -108,4 +110,57 @@ export function consumeImportToken(
 	token: string
 ): Promise<{ user_id: string; did: string } | null> {
 	return kvService.getAndDelete<{ user_id: string; did: string }>(KV_IMPORT_TOKEN, token);
+}
+
+// --- Delete Aegis challenge ---
+
+export interface DeleteAegisChallengeData {
+	message: string;
+	domain: string;
+	expected_did: string;
+	user_id: string;
+	created_at: number;
+}
+
+export async function setDeleteAegisChallenge(
+	id: string,
+	data: Omit<DeleteAegisChallengeData, 'created_at'>
+): Promise<void> {
+	const full: DeleteAegisChallengeData = {
+		...data,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_DELETE_AEGIS_CHALLENGE, id, full, CHALLENGE_TTL);
+}
+
+export async function getDeleteAegisChallenge(
+	id: string
+): Promise<DeleteAegisChallengeData | null> {
+	return kvService.get<DeleteAegisChallengeData>(KV_DELETE_AEGIS_CHALLENGE, id);
+}
+
+/** Atomically get and delete delete-aegis challenge. Prevents concurrent replay. */
+export async function consumeDeleteAegisChallenge(
+	id: string
+): Promise<DeleteAegisChallengeData | null> {
+	return kvService.getAndDelete<DeleteAegisChallengeData>(KV_DELETE_AEGIS_CHALLENGE, id);
+}
+
+// --- Delete Aegis token ---
+
+export async function setDeleteAegisToken(token: string, data: { user_id: string }): Promise<void> {
+	await kvService.set(KV_DELETE_AEGIS_TOKEN, token, data, TOKEN_TTL);
+}
+
+/** Validate token and return userId without consuming. Use consumeDeleteAegisToken after success. */
+export function peekDeleteAegisToken(token: string): Promise<string | null> {
+	return kvService
+		.get<{ user_id: string }>(KV_DELETE_AEGIS_TOKEN, token)
+		.then((e) => e?.user_id ?? null);
+}
+
+export function consumeDeleteAegisToken(token: string): Promise<string | null> {
+	return kvService
+		.getAndDelete<{ user_id: string }>(KV_DELETE_AEGIS_TOKEN, token)
+		.then((entry) => entry?.user_id ?? null);
 }
