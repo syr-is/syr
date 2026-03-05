@@ -1,7 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { independentLogin } from '$lib/config';
-import { getExportChallenge, getImportChallenge } from '$lib/server/export-verify-store';
+import {
+	getExportChallenge,
+	getImportChallenge,
+	getDeleteAegisChallenge
+} from '$lib/server/export-verify-store';
 
 /**
  * GET /api/identity/export-challenge/:id
@@ -17,6 +21,9 @@ export const GET: RequestHandler = async ({ params }) => {
 	let challenge = await getExportChallenge(id);
 	if (!challenge) {
 		challenge = await getImportChallenge(id);
+	}
+	if (!challenge) {
+		challenge = await getDeleteAegisChallenge(id);
 	}
 	if (!challenge) {
 		return json(

@@ -5,6 +5,7 @@
 
 const exportSubscribers = new Map<string, Set<(token: string) => void>>();
 const importSubscribers = new Map<string, Set<(token: string) => void>>();
+const deleteAegisSubscribers = new Map<string, Set<(token: string) => void>>();
 
 export function subscribeExport(
 	challengeId: string,
@@ -63,5 +64,35 @@ export function notifyImportVerified(challengeId: string, importToken: string): 
 			}
 		}
 		importSubscribers.delete(challengeId);
+	}
+}
+
+export function subscribeDeleteAegis(
+	challengeId: string,
+	callback: (token: string) => void
+): () => void {
+	let set = deleteAegisSubscribers.get(challengeId);
+	if (!set) {
+		set = new Set();
+		deleteAegisSubscribers.set(challengeId, set);
+	}
+	set.add(callback);
+	return () => {
+		set?.delete(callback);
+		if (set?.size === 0) deleteAegisSubscribers.delete(challengeId);
+	};
+}
+
+export function notifyDeleteAegisVerified(challengeId: string, deleteAegisToken: string): void {
+	const set = deleteAegisSubscribers.get(challengeId);
+	if (set) {
+		for (const cb of set) {
+			try {
+				cb(deleteAegisToken);
+			} catch (e) {
+				console.error('[export-verify-broadcast] delete-aegis callback error:', e);
+			}
+		}
+		deleteAegisSubscribers.delete(challengeId);
 	}
 }

@@ -60,6 +60,29 @@ export class IdentityRepository extends BaseRepository<Identity> {
 		await this.db.query('DELETE identity WHERE did = $did', { did });
 	}
 
+	/** Aegis fields to unset when removing custodial key storage */
+	private static readonly AEGIS_FIELDS = [
+		'aegis_salt',
+		'aegis_nonce',
+		'aegis_ct',
+		'aegis_tag',
+		'aegis_kdf_mem',
+		'aegis_kdf_it',
+		'aegis_kdf_par'
+	] as const;
+
+	/**
+	 * Remove Aegis (encrypted seed) from identity. Identity becomes independent;
+	 * user must use Syner for signing. Does nothing if identity has no Aegis.
+	 */
+	async removeAegisByUserId(userId: string | RecordId): Promise<void> {
+		const identity = await this.findByUserId(userId);
+		if (!identity) return;
+		await this.updateWithUnset(identity.id, {} as Partial<Identity>, [
+			...IdentityRepository.AEGIS_FIELDS
+		]);
+	}
+
 	/**
 	 * Find identity by DID within a specific tenant scope
 	 */
