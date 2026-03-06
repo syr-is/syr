@@ -151,13 +151,13 @@ Aegis users can remove the server-stored encrypted seed after exporting. **Delet
 
 ### APIs
 
-| Endpoint                                | Method | Auth | Purpose                                                                                          |
-| --------------------------------------- | ------ | ---- | ------------------------------------------------------------------------------------------------ |
-| `/api/identity/delete-aegis-challenge`  | POST   | Yes  | Create delete-aegis challenge. Identity must have Aegis. Returns `challenge_id`, `message`, `deeplink_url`. |
-| `/api/identity/export-challenge/:id`    | GET    | No   | Fetch challenge (shared — Syner uses same URL for export, import, delete-aegis).                 |
-| `/api/identity/export-verify`           | POST   | No   | Verify signature. Returns `delete_aegis_token` when challenge was delete-aegis.                  |
-| `/api/identity/delete-aegis-heartbeat` | GET    | Yes  | SSE; emits `delete_aegis_verified` with token when Syner signs. Requires challenge ownership.    |
-| `/api/identity/delete-aegis`            | POST   | Yes  | Body: `{ delete_aegis_token }`. Verifies token, removes Aegis fields from identity.              |
+| Endpoint                               | Method | Auth | Purpose                                                                                                     |
+| -------------------------------------- | ------ | ---- | ----------------------------------------------------------------------------------------------------------- |
+| `/api/identity/delete-aegis-challenge` | POST   | Yes  | Create delete-aegis challenge. Identity must have Aegis. Returns `challenge_id`, `message`, `deeplink_url`. |
+| `/api/identity/export-challenge/:id`   | GET    | No   | Fetch challenge (shared — Syner uses same URL for export, import, delete-aegis).                            |
+| `/api/identity/export-verify`          | POST   | No   | Verify signature. Returns `delete_aegis_token` when challenge was delete-aegis.                             |
+| `/api/identity/delete-aegis-heartbeat` | GET    | Yes  | SSE; emits `delete_aegis_verified` with token when Syner signs. Requires challenge ownership.               |
+| `/api/identity/delete-aegis`           | POST   | Yes  | Body: `{ delete_aegis_token }`. Verifies token, removes Aegis fields from identity.                         |
 
 ### Message format
 
