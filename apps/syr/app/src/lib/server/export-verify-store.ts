@@ -5,8 +5,10 @@ const KV_EXPORT_CHALLENGE = 'identity_export_challenge';
 const KV_IMPORT_CHALLENGE = 'identity_import_challenge';
 const KV_DELETE_AEGIS_CHALLENGE = 'identity_delete_aegis_challenge';
 const KV_DELETE_ACCOUNT_CHALLENGE = 'identity_delete_account_challenge';
+const KV_IMPORT_CHALLENGE_PUBLIC = 'identity_import_challenge_public';
 const KV_EXPORT_TOKEN = 'identity_export_token';
 const KV_IMPORT_TOKEN = 'identity_import_token';
+const KV_PUBLIC_IMPORT_TOKEN = 'identity_public_import_token';
 const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
 const KV_DELETE_ACCOUNT_TOKEN = 'identity_delete_account_token';
 
@@ -97,6 +99,42 @@ export async function deleteImportChallenge(id: string): Promise<void> {
 /** Atomically get and delete import challenge. Prevents concurrent replay. */
 export async function consumeImportChallenge(id: string): Promise<ImportChallengeData | null> {
 	return kvService.getAndDelete<ImportChallengeData>(KV_IMPORT_CHALLENGE, id);
+}
+
+// --- Public import challenge (no auth, for migration flow) ---
+
+export interface PublicImportChallengeData {
+	message: string;
+	domain: string;
+	expected_did: string;
+	created_at: number;
+}
+
+export async function setPublicImportChallenge(
+	id: string,
+	data: Omit<PublicImportChallengeData, 'created_at'>
+): Promise<void> {
+	const full: PublicImportChallengeData = {
+		...data,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_IMPORT_CHALLENGE_PUBLIC, id, full, CHALLENGE_TTL);
+}
+
+export async function consumePublicImportChallenge(
+	id: string
+): Promise<PublicImportChallengeData | null> {
+	return kvService.getAndDelete<PublicImportChallengeData>(KV_IMPORT_CHALLENGE_PUBLIC, id);
+}
+
+// --- Public import token (did-only, for register-with-import) ---
+
+export async function setPublicImportToken(token: string, data: { did: string }): Promise<void> {
+	await kvService.set(KV_PUBLIC_IMPORT_TOKEN, token, data, TOKEN_TTL);
+}
+
+export async function consumePublicImportToken(token: string): Promise<{ did: string } | null> {
+	return kvService.getAndDelete<{ did: string }>(KV_PUBLIC_IMPORT_TOKEN, token);
 }
 
 // --- Import token ---

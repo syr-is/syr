@@ -93,9 +93,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			await importIdentityAndProfileExternal(ctx, parsed);
 			const { postsImported, assetsImported, importedZipPaths } = await importPostsAndAssets(
 				ctx,
-				parsed
+				parsed,
+				{ verifySignatures: false }
 			);
-			const standaloneAssetsImported = await importStandaloneAssets(ctx, parsed, importedZipPaths);
+			const standaloneAssetsImported = await importStandaloneAssets(ctx, parsed, importedZipPaths, {
+				verifySignatures: false
+			});
 			const pinnedRestored = await restorePinnedPosts(ctx, parsed);
 			return json({
 				status: 'success',
@@ -109,6 +112,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		} catch (err) {
 			if (err && typeof err === 'object' && 'status' in err) {
 				throw err;
+			}
+			const msg = err instanceof Error ? err.message : '';
+			if (msg.includes('unsigned or tampered')) {
+				throw error(400, {
+					code: 'INVALID_IMPORT',
+					message: 'Backup contains unsigned or tampered data.'
+				});
 			}
 			console.error('Identity import error:', err);
 			await rollbackImport(ctx);
@@ -183,6 +193,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err;
+		}
+		const msg = err instanceof Error ? err.message : '';
+		if (msg.includes('unsigned or tampered')) {
+			throw error(400, {
+				code: 'INVALID_IMPORT',
+				message: 'Backup contains unsigned or tampered data.'
+			});
 		}
 		console.error('Identity import error:', err);
 		await rollbackImport(ctx);

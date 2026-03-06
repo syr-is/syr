@@ -4,11 +4,15 @@
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
-	import { unzipSync, strFromU8 } from 'fflate';
+	import { unzipSync, strFromU8, zip, strToU8 } from 'fflate';
 	import { decryptSigil } from '@syr-is/crypto/sigil';
 	import { createAegisBundle } from '@syr-is/crypto/aegis';
+	import { decodePublicKey, deriveDid } from '@syr-is/crypto';
+	import { buildDidDocument } from '@syr-is/did';
+	import { signAsset } from '$lib/services/bundle-signature-verification';
 	import type { SigilObject } from '@syr-is/crypto/sigil';
 	import QRCode from 'qrcode';
+	import { ulid } from '@syr-is/types';
 
 	let {
 		open = $bindable(false),
@@ -23,8 +27,9 @@
 	let exportPassphrase = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
-	// Data-only import (no Sigil)
+	// Data-only import (no Sigil) — only for .syr
 	let hasSigil = $state<boolean | null>(null);
+	let fileType = $state<'syr' | 'persona' | 'sigil' | null>(null);
 	let importChallenge = $state<{
 		challenge_id: string;
 		deeplink_url: string;
@@ -57,18 +62,48 @@
 		const f = (e.target as HTMLInputElement).files?.[0];
 		bundleFile = f ?? null;
 		hasSigil = null;
+		fileType = null;
 		importChallenge = null;
 		importToken = null;
 		disconnectImportHeartbeat();
 		if (!f) return;
 		try {
+			const ext = f.name.toLowerCase().split('.').pop() ?? '';
+			if (ext === 'sigil' || ext === 'json') {
+				const text = await f.text();
+				const json = JSON.parse(text);
+				if (json && typeof json.v === 'number' && json.kdf && json.enc && json.pub) {
+					hasSigil = true;
+					fileType = 'sigil';
+				} else {
+					toast.error('Invalid Sigil file');
+				}
+				return;
+			}
 			const arrayBuffer = await f.arrayBuffer();
 			const zipBytes = new Uint8Array(arrayBuffer);
 			const files = unzipSync(zipBytes);
-			hasSigil = !!files['identity.sigil'];
-		} catch {
+			const hasRootSigil = !!files['identity.sigil'];
+			const hasSyrStructure =
+				!!files['manifest.json'] && !!files['identity.json'] && !!files['posts.json'];
+			const personaEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
+			const hasProfileJson = Object.keys(files).some((k) => k.endsWith('/profile.json'));
+			const hasPersonaStructure = !!personaEntry && hasProfileJson;
+			if (hasSyrStructure) {
+				fileType = 'syr';
+				hasSigil = hasRootSigil;
+			} else if (hasPersonaStructure) {
+				fileType = 'persona';
+				hasSigil = true;
+			} else {
+				hasSigil = null;
+				fileType = null;
+				toast.error('Unrecognized file format. Expected .syr, .persona, or .sigil.');
+			}
+		} catch (err) {
 			hasSigil = null;
-			toast.error('Could not read bundle file');
+			fileType = null;
+			toast.error(err instanceof SyntaxError ? 'Invalid JSON' : 'Could not read bundle file');
 		}
 	}
 
@@ -130,13 +165,211 @@
 		}
 	}
 
+	async function buildSyntheticBundleAndImport(
+		sigil: SigilObject,
+		seed: Uint8Array,
+		identityBundle: {
+			did: string;
+			publicKey: string;
+			profile: { displayName: string; bio?: string; avatarUrl?: string; bannerUrl?: string };
+			didDocument: Record<string, unknown>;
+			delegatedKeys: unknown[];
+			exportedAt: string;
+		},
+		sigilBytes: Uint8Array,
+		assetEntries: Array<{ zipPath: string; data: Uint8Array; filename: string; mimeType: string }>
+	): Promise<void> {
+		const assetsWithSignatures = [];
+		for (const a of assetEntries) {
+			const localId = ulid();
+			const unsigned = {
+				local_id: localId,
+				filename: a.filename,
+				mime_type: a.mimeType,
+				size: a.data.length,
+				zip_path: a.zipPath
+			};
+			const signed = await signAsset(identityBundle.did, unsigned, seed);
+			assetsWithSignatures.push({
+				...signed,
+				content_base64: undefined
+			});
+		}
+		const manifest = {
+			version: 1 as const,
+			did: identityBundle.did,
+			exportedAt: new Date().toISOString(),
+			postCount: 0,
+			assetCount: assetEntries.length
+		};
+		const zipFiles: Record<string, Uint8Array> = {};
+		zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
+		zipFiles['identity.json'] = strToU8(
+			JSON.stringify(
+				{
+					...identityBundle,
+					privateKey: undefined
+				},
+				null,
+				2
+			)
+		);
+		zipFiles['posts.json'] = strToU8(JSON.stringify([]));
+		zipFiles['identity.sigil'] = sigilBytes;
+		zipFiles['assets.json'] = strToU8(
+			JSON.stringify(
+				{
+					assets: assetsWithSignatures.map(({ signature, ...a }) => ({ ...a, signature }))
+				},
+				null,
+				2
+			)
+		);
+		for (const a of assetEntries) {
+			zipFiles[a.zipPath] = a.data;
+		}
+		const zipped = await new Promise<Uint8Array>((resolve, reject) => {
+			zip(zipFiles, { level: 1 }, (err, out) => {
+				if (err) reject(err);
+				else resolve(out ?? new Uint8Array(0));
+			});
+		});
+		const bundleBlob = new Blob([zipped as BlobPart], { type: 'application/zip' });
+		const bundleFile = new File([bundleBlob], 'synthetic-import.syr');
+		const aegisBundle = await createAegisBundle(seed, newPassword);
+		const formData = new FormData();
+		formData.append('bundle', bundleFile);
+		formData.append('aegisBundle', JSON.stringify(aegisBundle));
+		const res = await fetch('/api/identity/import', { method: 'POST', body: formData });
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}));
+			throw new Error(err?.error?.message ?? err?.message ?? 'Import failed');
+		}
+	}
+
 	async function handleImport() {
 		if (!canImport() || !bundleFile) return;
 
 		importing = true;
 		try {
 			if (hasSigil === true) {
-				// Full import with Sigil
+				if (fileType === 'sigil') {
+					// Bare .sigil file
+					const text = await bundleFile.text();
+					const sigil: SigilObject = JSON.parse(text);
+					const seed = await decryptSigil(sigil, exportPassphrase);
+					const pubRaw = decodePublicKey(sigil.pub);
+					const did = deriveDid(pubRaw);
+					const didDocument = buildDidDocument({
+						did,
+						publicKeyMultibase: sigil.pub
+					}) as unknown as Record<string, unknown>;
+					const identityBundle = {
+						did,
+						publicKey: sigil.pub,
+						didDocument,
+						delegatedKeys: [],
+						profile: { displayName: 'Imported Identity', bio: undefined as string | undefined },
+						exportedAt: new Date().toISOString()
+					};
+					const sigilBytes = strToU8(JSON.stringify(sigil, null, 2));
+					await buildSyntheticBundleAndImport(sigil, seed, identityBundle, sigilBytes, []);
+					toast.success('Identity imported successfully!');
+					open = false;
+					bundleFile = null;
+					exportPassphrase = '';
+					newPassword = '';
+					confirmPassword = '';
+					hasSigil = null;
+					fileType = null;
+					onSuccess?.();
+					return;
+				}
+				if (fileType === 'persona') {
+					// .persona file
+					const arrayBuffer = await bundleFile.arrayBuffer();
+					const zipBytes = new Uint8Array(arrayBuffer);
+					const files = unzipSync(zipBytes);
+					const sigilEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
+					const profileEntry = Object.keys(files).find((k) => k.endsWith('/profile.json'));
+					if (!sigilEntry || !profileEntry || !files[sigilEntry] || !files[profileEntry]) {
+						throw new Error('Invalid persona: missing identity.sigil or profile.json');
+					}
+					const sigil: SigilObject = JSON.parse(strFromU8(files[sigilEntry]));
+					const profile = JSON.parse(strFromU8(files[profileEntry]));
+					const seed = await decryptSigil(sigil, exportPassphrase);
+					const pubRaw = decodePublicKey(sigil.pub);
+					const did = deriveDid(pubRaw);
+					const didDocument = buildDidDocument({
+						did,
+						publicKeyMultibase: sigil.pub
+					}) as unknown as Record<string, unknown>;
+					const avatarPath = profile.avatarUrl?.replace('./', '');
+					const bannerPath = profile.bannerUrl?.replace('./', '');
+					const personaDir = sigilEntry.replace('/identity.sigil', '');
+					const assetEntries: Array<{
+						zipPath: string;
+						data: Uint8Array;
+						filename: string;
+						mimeType: string;
+					}> = [];
+					if (avatarPath) {
+						const fullPath = `${personaDir}/${avatarPath}`;
+						const data = files[fullPath];
+						if (data) {
+							assetEntries.push({
+								zipPath: `assets/${avatarPath}`,
+								data,
+								filename: avatarPath,
+								mimeType: 'image/png'
+							});
+						}
+					}
+					if (bannerPath && bannerPath !== avatarPath) {
+						const fullPath = `${personaDir}/${bannerPath}`;
+						const data = files[fullPath];
+						if (data) {
+							assetEntries.push({
+								zipPath: `assets/${bannerPath}`,
+								data,
+								filename: bannerPath,
+								mimeType: 'image/png'
+							});
+						}
+					}
+					const identityBundle = {
+						did,
+						publicKey: sigil.pub,
+						didDocument,
+						delegatedKeys: [],
+						profile: {
+							displayName: profile.displayName ?? 'Imported Identity',
+							bio: profile.bio,
+							avatarUrl: avatarPath ? `assets/${avatarPath}` : undefined,
+							bannerUrl: bannerPath ? `assets/${bannerPath}` : undefined
+						},
+						exportedAt: profile.createdAt ?? new Date().toISOString()
+					};
+					const sigilBytes = strToU8(JSON.stringify(sigil, null, 2));
+					await buildSyntheticBundleAndImport(
+						sigil,
+						seed,
+						identityBundle,
+						sigilBytes,
+						assetEntries
+					);
+					toast.success('Identity imported successfully!');
+					open = false;
+					bundleFile = null;
+					exportPassphrase = '';
+					newPassword = '';
+					confirmPassword = '';
+					hasSigil = null;
+					fileType = null;
+					onSuccess?.();
+					return;
+				}
+				// fileType === 'syr' — Full .syr import with Sigil
 				const arrayBuffer = await bundleFile.arrayBuffer();
 				const zipBytes = new Uint8Array(arrayBuffer);
 				const files = unzipSync(zipBytes);
@@ -173,6 +406,7 @@
 				newPassword = '';
 				confirmPassword = '';
 				hasSigil = null;
+				fileType = null;
 				onSuccess?.();
 			} else if (hasSigil === false && importToken) {
 				// Data-only import with token
@@ -194,6 +428,7 @@
 				open = false;
 				bundleFile = null;
 				hasSigil = null;
+				fileType = null;
 				importChallenge = null;
 				importToken = null;
 				onSuccess?.();
@@ -232,18 +467,20 @@
 							identity.
 						</p>
 					{:else}
-						<p>Restore your identity from an exported backup (.syr or .zip).</p>
+						<p>Restore from .syr (full/data-only), .persona, or .sigil backup.</p>
 					{/if}
 				</div>
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
 			<div class="space-y-2">
-				<label for="import-bundle" class="text-sm font-medium">Bundle (.syr or .zip file)</label>
+				<label for="import-bundle" class="text-sm font-medium"
+					>Bundle (.syr, .persona, .sigil, or .zip)</label
+				>
 				<Input
 					id="import-bundle"
 					type="file"
-					accept=".syr,.zip"
+					accept=".syr,.zip,.persona,.sigil,.json"
 					onchange={onFileSelect}
 					disabled={importing}
 				/>

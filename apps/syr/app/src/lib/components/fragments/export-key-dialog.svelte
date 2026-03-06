@@ -7,6 +7,7 @@
 	import { zip, strToU8 } from 'fflate';
 	import { decodePublicKey, deriveDid, personaIdFromPublicKey } from '@syr-is/crypto';
 	import { createSigil } from '@syr-is/crypto/sigil';
+	import { signPost, signAsset } from '$lib/services/bundle-signature-verification';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
 	import QRCode from 'qrcode';
@@ -409,31 +410,45 @@
 					}
 
 					const sigil = await createSigil(seed, passphrase);
+					const did = data.identity.did;
+
+					// Sign each post and its assets
+					const signedPosts = await Promise.all(
+						data.posts.map((p: Record<string, unknown>) =>
+							signPost(did, p as Parameters<typeof signPost>[1], seed)
+						)
+					);
+
+					// Sign standalone assets
+					const signedAssets = await Promise.all(
+						data.assets.map(
+							(a: {
+								zip_path: string;
+								local_id: string;
+								filename: string;
+								mime_type: string;
+								size: number;
+								sha256?: string;
+							}) => signAsset(did, a, seed)
+						)
+					);
 
 					const zipFiles: Record<string, Uint8Array> = {};
 					zipFiles['manifest.json'] = strToU8(JSON.stringify(data.manifest, null, 2));
 					zipFiles['identity.json'] = strToU8(JSON.stringify(data.identity, null, 2));
-					zipFiles['posts.json'] = strToU8(JSON.stringify(data.posts, null, 2));
+					zipFiles['posts.json'] = strToU8(JSON.stringify(signedPosts, null, 2));
 					zipFiles['assets.json'] = strToU8(
 						JSON.stringify(
 							{
-								assets: data.assets.map(
-									(a: {
-										zip_path: string;
-										local_id: string;
-										filename: string;
-										mime_type: string;
-										size: number;
-										sha256?: string;
-									}) => ({
-										zip_path: a.zip_path,
-										local_id: a.local_id,
-										filename: a.filename,
-										mime_type: a.mime_type,
-										size: a.size,
-										sha256: a.sha256
-									})
-								)
+								assets: signedAssets.map((a) => ({
+									zip_path: a.zip_path,
+									local_id: a.local_id,
+									filename: a.filename,
+									mime_type: a.mime_type,
+									size: a.size,
+									sha256: a.sha256,
+									signature: a.signature
+								}))
 							},
 							null,
 							2

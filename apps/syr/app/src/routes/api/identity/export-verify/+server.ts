@@ -6,10 +6,12 @@ import { parseDid } from '@syr-is/did';
 import {
 	consumeExportChallenge,
 	consumeImportChallenge,
+	consumePublicImportChallenge,
 	consumeDeleteAegisChallenge,
 	consumeDeleteAccountChallenge,
 	setExportToken,
 	setImportToken,
+	setPublicImportToken,
 	setDeleteAegisToken,
 	setDeleteAccountToken,
 	type ImportChallengeData,
@@ -41,13 +43,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = VerifyRequestSchema.parse(body);
 
-		// Atomically consume export challenge first, then import, then delete-aegis, then delete-account
+		// Atomically consume export challenge first, then import, then public import, then delete-aegis, then delete-account
 		let challenge = await consumeExportChallenge(data.challenge_id);
-		let purpose: 'export' | 'import' | 'delete_aegis' | 'delete_account' = 'export';
+		let purpose: 'export' | 'import' | 'import_public' | 'delete_aegis' | 'delete_account' =
+			'export';
 
 		if (!challenge) {
 			challenge = await consumeImportChallenge(data.challenge_id);
 			purpose = 'import';
+		}
+		if (!challenge) {
+			challenge = await consumePublicImportChallenge(data.challenge_id);
+			purpose = 'import_public';
 		}
 		if (!challenge) {
 			challenge = await consumeDeleteAegisChallenge(data.challenge_id);
@@ -122,6 +129,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 			notifyDeleteAccountVerified(data.challenge_id, deleteAccountToken);
 			return json({ success: true as const, delete_account_token: deleteAccountToken });
+		} else if (purpose === 'import_public') {
+			const importToken = crypto.randomUUID();
+			await setPublicImportToken(importToken, { did: data.did });
+			notifyImportVerified(data.challenge_id, importToken);
+			return json({ success: true as const, import_token: importToken });
 		} else {
 			const importToken = crypto.randomUUID();
 			await setImportToken(importToken, {

@@ -233,10 +233,29 @@ const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/i);
 export const AssetZipPathSchema = z.string().regex(/^assets\/(?!.*\.\.)[^\0]+$/);
 
 /**
+ * Exported asset (inline in post or in assets.json).
+ * Signature: JCS canonical of { did, local_id, filename, mime_type, size, zip_path, sha256? } signed with root key.
+ */
+export const ExportedAssetSchema = z.object({
+	local_id: UlidSchema,
+	filename: z.string(),
+	mime_type: z.string(),
+	size: z.number().int().nonnegative(),
+	sha256: z.string().optional(),
+	/** Path within the zip's assets/ directory */
+	zip_path: AssetZipPathSchema,
+	/** Multibase-encoded Ed25519 signature. Required for full backup; optional for data-only (legacy). */
+	signature: z.string().min(1).optional()
+});
+
+export type ExportedAsset = z.infer<typeof ExportedAssetSchema>;
+
+/**
  * Exported Post Schema
  * A post in the portable export format (no RecordId, uses string IDs).
  * `local_id` is the ULID portion of the composite record ID, preserved
  * so the same composite key can be recreated on import.
+ * Signature: JCS canonical of post payload (excluding signature) signed with root key.
  */
 export const ExportedPostSchema = z.object({
 	local_id: UlidSchema,
@@ -250,19 +269,9 @@ export const ExportedPostSchema = z.object({
 	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
 	status: z.enum(['draft', 'completed']).default('draft'),
 	created_at: z.string().datetime(),
-	assets: z
-		.array(
-			z.object({
-				local_id: UlidSchema,
-				filename: z.string(),
-				mime_type: z.string(),
-				size: z.number().int().nonnegative(),
-				sha256: z.string().optional(),
-				/** Path within the zip's assets/ directory */
-				zip_path: AssetZipPathSchema
-			})
-		)
-		.optional()
+	/** Multibase-encoded Ed25519 signature. Required for full backup; optional for data-only (legacy). */
+	signature: z.string().min(1).optional(),
+	assets: z.array(ExportedAssetSchema).optional()
 });
 
 export type ExportedPost = z.infer<typeof ExportedPostSchema>;

@@ -120,6 +120,15 @@
 						Sign in
 					</a>
 				</p>
+				<p class="text-center text-sm text-muted-foreground">
+					<a
+						href={resolve('/migrate')}
+						data-sveltekit-preload-data
+						class="font-medium text-primary underline-offset-4 hover:underline"
+					>
+						Migrating?
+					</a>
+				</p>
 			</Card.Footer>
 		</form>
 	</Card.Root>
