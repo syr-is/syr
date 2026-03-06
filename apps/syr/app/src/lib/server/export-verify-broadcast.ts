@@ -6,6 +6,7 @@
 const exportSubscribers = new Map<string, Set<(token: string) => void>>();
 const importSubscribers = new Map<string, Set<(token: string) => void>>();
 const deleteAegisSubscribers = new Map<string, Set<(token: string) => void>>();
+const deleteAccountSubscribers = new Map<string, Set<(token: string) => void>>();
 
 export function subscribeExport(
 	challengeId: string,
@@ -94,5 +95,35 @@ export function notifyDeleteAegisVerified(challengeId: string, deleteAegisToken:
 			}
 		}
 		deleteAegisSubscribers.delete(challengeId);
+	}
+}
+
+export function subscribeDeleteAccount(
+	challengeId: string,
+	callback: (token: string) => void
+): () => void {
+	let set = deleteAccountSubscribers.get(challengeId);
+	if (!set) {
+		set = new Set();
+		deleteAccountSubscribers.set(challengeId, set);
+	}
+	set.add(callback);
+	return () => {
+		set?.delete(callback);
+		if (set?.size === 0) deleteAccountSubscribers.delete(challengeId);
+	};
+}
+
+export function notifyDeleteAccountVerified(challengeId: string, deleteAccountToken: string): void {
+	const set = deleteAccountSubscribers.get(challengeId);
+	if (set) {
+		for (const cb of set) {
+			try {
+				cb(deleteAccountToken);
+			} catch (e) {
+				console.error('[export-verify-broadcast] delete-account callback error:', e);
+			}
+		}
+		deleteAccountSubscribers.delete(challengeId);
 	}
 }

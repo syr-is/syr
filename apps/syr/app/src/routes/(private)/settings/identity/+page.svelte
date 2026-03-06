@@ -15,6 +15,7 @@
 	import ExportKeyDialog from '$lib/components/fragments/export-key-dialog.svelte';
 	import ImportIdentityDialog from '$lib/components/fragments/import-identity-dialog.svelte';
 	import DeleteAegisDialog from '$lib/components/fragments/delete-aegis-dialog.svelte';
+	import DeleteAccountDialog from '$lib/components/fragments/delete-account-dialog.svelte';
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
 	import { Input } from '@syr-is/ui/input';
 	import { Loader2, ChevronDown } from 'lucide-svelte';
@@ -36,6 +37,7 @@
 	let cancelJobDialogOpen = $state(false);
 	let jobToCancel = $state<string | null>(null);
 	let deleteAegisDialogOpen = $state(false);
+	let deleteAccountDialogOpen = $state(false);
 	let unlockPassword = $state('');
 	let unlockingForSync = $state(false);
 
@@ -475,6 +477,25 @@
 			</Card.Root>
 		{/if}
 	{/if}
+
+	<!-- Danger zone: Delete account -->
+	<Card.Root class="border-red-200 dark:border-red-800">
+		<Card.Header>
+			<Card.Title class="text-red-600 dark:text-red-400">Danger zone</Card.Title>
+			<Card.Description>
+				Permanently delete your account and all data. This cannot be undone.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<button
+				class={buttonVariants({ variant: 'destructive' })}
+				onclick={() => (deleteAccountDialogOpen = true)}
+				disabled={deleteAccountDialogOpen}
+			>
+				Delete account
+			</button>
+		</Card.Content>
+	</Card.Root>
 </div>
 
 <RemoveRegistryDialog
@@ -502,6 +523,8 @@
 <ImportIdentityDialog bind:open={importIdentityDialogOpen} onSuccess={invalidateAll} />
 
 <DeleteAegisDialog bind:open={deleteAegisDialogOpen} onSuccess={invalidateAll} />
+
+<DeleteAccountDialog bind:open={deleteAccountDialogOpen} onSuccess={invalidateAll} />
 
 <CancelOutboxJobDialog
 	bind:open={cancelJobDialogOpen}

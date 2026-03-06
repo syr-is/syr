@@ -162,3 +162,53 @@ Aegis users can remove the server-stored encrypted seed after exporting. **Delet
 ### Message format
 
 Same structure as export, but `action: "delete_aegis"`.
+
+---
+
+## Delete Account Verification
+
+Permanently deletes the user's account and all data (profile, posts, uploads, sessions, identity, etc.). **Requires signed verification** via either Syner (challenge-sign) or Aegis (password unlock).
+
+### Flow
+
+**Syner path (identity with keys in Syner):**
+
+1. User clicks "Delete account" in settings.
+2. Web app calls **POST** `/api/account/delete-challenge` (auth required, no body).
+3. Server returns `challenge_id`, `message`, `deeplink_url`.
+4. User scans QR (`syr://export?...`) with Syner.
+5. Syner fetches **GET** `/api/identity/export-challenge/:id` (shared endpoint).
+6. Syner signs and POSTs to **POST** `/api/identity/export-verify`.
+7. Server returns `delete_account_token`.
+8. Web app subscribes to **GET** `/api/account/delete-heartbeat?challenge_id=...` (auth required).
+9. On SSE event `delete_account_verified`, web app calls **POST** `/api/account/delete` with `{ delete_account_token }`.
+10. Server performs cascade deletion, returns success.
+
+**Aegis path (identity with server-stored encrypted key):**
+
+1. User clicks "Delete account", chooses "Verify with password".
+2. Web app calls **POST** `/api/account/delete-challenge` with `{ password }`.
+3. Server verifies password, decrypts Aegis, issues `delete_account_token` immediately.
+4. Web app calls **POST** `/api/account/delete` with `{ delete_account_token }`.
+5. Server performs cascade deletion.
+
+**Password-only path (users with no identity):**
+
+1. User has no identity (e.g. never completed onboarding).
+2. Web app calls **POST** `/api/account/delete-challenge` with `{ password }`.
+3. Server verifies password against user record, issues `delete_account_token`.
+4. Web app calls **POST** `/api/account/delete`.
+
+### APIs
+
+| Endpoint                             | Method | Auth | Purpose                                                                                                                                  |
+| ------------------------------------ | ------ | ---- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/account/delete-challenge`      | POST   | Yes  | Create challenge or verify password. Body: `{ password? }`. Aegis/no-identity: returns `delete_account_token`. Syner: returns challenge. |
+| `/api/identity/export-challenge/:id` | GET    | No   | Fetch challenge (shared — Syner uses same URL for export, import, delete-aegis, delete-account).                                         |
+| `/api/identity/export-verify`        | POST   | No   | Verify signature. Returns `delete_account_token` when challenge was delete-account.                                                      |
+| `/api/account/delete-heartbeat`      | GET    | Yes  | SSE; emits `delete_account_verified` with token when Syner signs. Requires challenge ownership.                                          |
+| `/api/account/delete`                | POST   | Yes  | Body: `{ delete_account_token }`. Performs cascade deletion of all user data.                                                            |
+
+### Message format
+
+Same structure as export, but `action: "delete_account"`.
