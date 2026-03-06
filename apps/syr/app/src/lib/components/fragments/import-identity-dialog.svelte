@@ -14,6 +14,19 @@
 	import QRCode from 'qrcode';
 	import { ulid } from '@syr-is/types';
 
+	function inferMimeType(filename: string): string {
+		const ext = filename.toLowerCase().split('.').pop() ?? '';
+		const map: Record<string, string> = {
+			png: 'image/png',
+			jpg: 'image/jpeg',
+			jpeg: 'image/jpeg',
+			gif: 'image/gif',
+			webp: 'image/webp',
+			svg: 'image/svg+xml'
+		};
+		return map[ext] ?? 'application/octet-stream';
+	}
+
 	let {
 		open = $bindable(false),
 		onSuccess
@@ -58,6 +71,18 @@
 		}
 	}
 
+	function resetImportState() {
+		bundleFile = null;
+		exportPassphrase = '';
+		newPassword = '';
+		confirmPassword = '';
+		hasSigil = null;
+		fileType = null;
+		importChallenge = null;
+		importToken = null;
+		disconnectImportHeartbeat();
+	}
+
 	async function onFileSelect(e: Event) {
 		const f = (e.target as HTMLInputElement).files?.[0];
 		bundleFile = f ?? null;
@@ -71,12 +96,25 @@
 			const ext = f.name.toLowerCase().split('.').pop() ?? '';
 			if (ext === 'sigil' || ext === 'json') {
 				const text = await f.text();
-				const json = JSON.parse(text);
-				if (json && typeof json.v === 'number' && json.kdf && json.enc && json.pub) {
+				let json: unknown;
+				try {
+					json = JSON.parse(text);
+				} catch {
+					toast.error(ext === 'sigil' ? 'Invalid Sigil file' : 'Invalid JSON');
+					return;
+				}
+				if (
+					json &&
+					typeof json === 'object' &&
+					'v' in json &&
+					'kdf' in json &&
+					'enc' in json &&
+					'pub' in json
+				) {
 					hasSigil = true;
 					fileType = 'sigil';
 				} else {
-					toast.error('Invalid Sigil file');
+					toast.error(ext === 'sigil' ? 'Invalid Sigil file' : 'File is not a Sigil');
 				}
 				return;
 			}
@@ -204,34 +242,22 @@
 		};
 		const zipFiles: Record<string, Uint8Array> = {};
 		zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
-		zipFiles['identity.json'] = strToU8(
-			JSON.stringify(
-				{
-					...identityBundle,
-					privateKey: undefined
-				},
-				null,
-				2
-			)
-		);
+		const { privateKey: _pk, ...identityWithoutPrivateKey } = identityBundle as Record<
+			string,
+			unknown
+		> & { privateKey?: unknown };
+		zipFiles['identity.json'] = strToU8(JSON.stringify(identityWithoutPrivateKey, null, 2));
 		zipFiles['posts.json'] = strToU8(JSON.stringify([]));
 		zipFiles['identity.sigil'] = sigilBytes;
-		zipFiles['assets.json'] = strToU8(
-			JSON.stringify(
-				{
-					assets: assetsWithSignatures.map(({ signature, ...a }) => ({ ...a, signature }))
-				},
-				null,
-				2
-			)
-		);
+		zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: assetsWithSignatures }, null, 2));
 		for (const a of assetEntries) {
 			zipFiles[a.zipPath] = a.data;
 		}
 		const zipped = await new Promise<Uint8Array>((resolve, reject) => {
 			zip(zipFiles, { level: 1 }, (err, out) => {
 				if (err) reject(err);
-				else resolve(out ?? new Uint8Array(0));
+				else if (out === undefined) reject(new Error('Zip produced no output'));
+				else resolve(out);
 			});
 		});
 		const bundleBlob = new Blob([zipped as BlobPart], { type: 'application/zip' });
@@ -275,13 +301,8 @@
 					const sigilBytes = strToU8(JSON.stringify(sigil, null, 2));
 					await buildSyntheticBundleAndImport(sigil, seed, identityBundle, sigilBytes, []);
 					toast.success('Identity imported successfully!');
+					resetImportState();
 					open = false;
-					bundleFile = null;
-					exportPassphrase = '';
-					newPassword = '';
-					confirmPassword = '';
-					hasSigil = null;
-					fileType = null;
 					onSuccess?.();
 					return;
 				}
@@ -321,7 +342,7 @@
 								zipPath: `assets/${avatarPath}`,
 								data,
 								filename: avatarPath,
-								mimeType: 'image/png'
+								mimeType: inferMimeType(avatarPath)
 							});
 						}
 					}
@@ -333,7 +354,7 @@
 								zipPath: `assets/${bannerPath}`,
 								data,
 								filename: bannerPath,
-								mimeType: 'image/png'
+								mimeType: inferMimeType(bannerPath)
 							});
 						}
 					}
@@ -359,13 +380,8 @@
 						assetEntries
 					);
 					toast.success('Identity imported successfully!');
+					resetImportState();
 					open = false;
-					bundleFile = null;
-					exportPassphrase = '';
-					newPassword = '';
-					confirmPassword = '';
-					hasSigil = null;
-					fileType = null;
 					onSuccess?.();
 					return;
 				}
@@ -400,13 +416,8 @@
 				}
 
 				toast.success('Identity imported successfully!');
+				resetImportState();
 				open = false;
-				bundleFile = null;
-				exportPassphrase = '';
-				newPassword = '';
-				confirmPassword = '';
-				hasSigil = null;
-				fileType = null;
 				onSuccess?.();
 			} else if (hasSigil === false && importToken) {
 				// Data-only import with token
@@ -425,12 +436,8 @@
 				}
 
 				toast.success('Identity imported successfully! Keys remain in Syner.');
+				resetImportState();
 				open = false;
-				bundleFile = null;
-				hasSigil = null;
-				fileType = null;
-				importChallenge = null;
-				importToken = null;
 				onSuccess?.();
 			}
 		} catch (err) {
@@ -565,7 +572,16 @@
 			{/if}
 		</div>
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (open = false)} disabled={importing}>Cancel</Button>
+			<Button
+				variant="outline"
+				onclick={() => {
+					resetImportState();
+					open = false;
+				}}
+				disabled={importing}
+			>
+				Cancel
+			</Button>
 			{#if hasSigil === false && !importToken}
 				<Button onclick={handleVerifyWithSyner} disabled={importing || !bundleFile}>
 					{#if importing}

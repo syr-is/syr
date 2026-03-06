@@ -127,12 +127,16 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 	return { files, manifest, identity, posts };
 }
 
+export type ValidateBundleOpts = { allowExistingDid?: boolean };
+
 /**
- * Validate bundle: DID match, public key match, Aegis bundle match, no duplicate DID on instance.
+ * Validate bundle: DID match, public key match, Aegis bundle match.
+ * When allowExistingDid is true, skips the DID_EXISTS check (for sync of own backup).
  */
 export async function validateBundle(
 	parsed: ParsedBundle,
-	aegisBundle: AegisBundle
+	aegisBundle: AegisBundle,
+	opts: ValidateBundleOpts = {}
 ): Promise<string> {
 	const { manifest, identity } = parsed;
 
@@ -169,21 +173,27 @@ export async function validateBundle(
 		});
 	}
 
-	const existingDid = await identityRepository.findByDid(identity.did);
-	if (existingDid) {
-		throw error(409, {
-			code: 'DID_EXISTS',
-			message: 'An identity with this DID already exists on this instance'
-		});
+	if (!opts.allowExistingDid) {
+		const existingDid = await identityRepository.findByDid(identity.did);
+		if (existingDid) {
+			throw error(409, {
+				code: 'DID_EXISTS',
+				message: 'An identity with this DID already exists on this instance'
+			});
+		}
 	}
 
 	return identity.did;
 }
 
 /**
- * Validate bundle for data-only import (no Sigil/Aegis). Checks manifest/identity match, DID not exists.
+ * Validate bundle for data-only import (no Sigil/Aegis). Checks manifest/identity match.
+ * When allowExistingDid is true, skips the DID_EXISTS check (for sync of own backup).
  */
-export async function validateBundleForDataOnlyImport(parsed: ParsedBundle): Promise<string> {
+export async function validateBundleForDataOnlyImport(
+	parsed: ParsedBundle,
+	opts: ValidateBundleOpts = {}
+): Promise<string> {
 	const { manifest, identity } = parsed;
 
 	if (manifest.did !== identity.did) {
@@ -212,12 +222,14 @@ export async function validateBundleForDataOnlyImport(parsed: ParsedBundle): Pro
 		});
 	}
 
-	const existingDid = await identityRepository.findByDid(identity.did);
-	if (existingDid) {
-		throw error(409, {
-			code: 'DID_EXISTS',
-			message: 'An identity with this DID already exists on this instance'
-		});
+	if (!opts.allowExistingDid) {
+		const existingDid = await identityRepository.findByDid(identity.did);
+		if (existingDid) {
+			throw error(409, {
+				code: 'DID_EXISTS',
+				message: 'An identity with this DID already exists on this instance'
+			});
+		}
 	}
 
 	return identity.did;
@@ -363,11 +375,11 @@ export async function importPostsAndAssets(
 		const mediaUrls: string[] = [];
 		if (post.assets) {
 			for (const asset of post.assets) {
-				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset);
-				}
 				const assetData = files[asset.zip_path];
-				if (!assetData) continue;
+				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (opts.verifySignatures) {
+					await verifyAssetSignature(ctx.did, asset, assetData);
+				}
 
 				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
 
@@ -456,12 +468,12 @@ export async function importStandaloneAssets(
 
 		let assetsImported = 0;
 		for (const asset of parsedAssets.assets) {
-			if (opts.verifySignatures) {
-				await verifyAssetSignature(ctx.did, asset);
-			}
 			if (importedZipPaths.has(asset.zip_path)) continue;
 			const assetData = files[asset.zip_path];
-			if (!assetData) continue;
+			if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+			if (opts.verifySignatures) {
+				await verifyAssetSignature(ctx.did, asset, assetData);
+			}
 
 			const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
 			try {
@@ -556,14 +568,7 @@ export async function syncPostsAndProfileFromBundle(
 ): Promise<{ postsImported: number; assetsImported: number; profileUpdated: boolean }> {
 	const { identity, files, posts } = parsed;
 
-	// Merge profile
-	await profileRepository.mergeByUserId(ctx.userId, {
-		display_name: identity.profile.displayName,
-		bio: identity.profile.bio ?? undefined,
-		avatar_url: identity.profile.avatarUrl ?? undefined,
-		banner_url: identity.profile.bannerUrl ?? undefined
-	});
-
+	const zipPathToUrl: Record<string, string> = {};
 	const importedZipPaths = new Set<string>();
 	let postsImported = 0;
 	let assetsImported = 0;
@@ -580,14 +585,15 @@ export async function syncPostsAndProfileFromBundle(
 		const mediaUrls: string[] = [];
 		if (post.assets) {
 			for (const asset of post.assets) {
-				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset);
-				}
 				const assetData = files[asset.zip_path];
-				if (!assetData) continue;
+				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (opts.verifySignatures) {
+					await verifyAssetSignature(ctx.did, asset, assetData);
+				}
 
 				const existingUpload = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
 				if (existingUpload?.url) {
+					zipPathToUrl[asset.zip_path] = existingUpload.url;
 					mediaUrls.push(existingUpload.url);
 					continue;
 				}
@@ -604,6 +610,7 @@ export async function syncPostsAndProfileFromBundle(
 					);
 					ctx.uploadedS3Keys.push(s3Key);
 					const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
+					zipPathToUrl[asset.zip_path] = url;
 					await uploadRepository.createWithExplicitId(ctx.did, asset.local_id, {
 						key: s3Key,
 						owner_id: stringToRecordId.decode(ctx.userId),
@@ -656,14 +663,17 @@ export async function syncPostsAndProfileFromBundle(
 				.object({ assets: z.array(StandaloneAssetSchema) })
 				.parse(JSON.parse(strFromU8(assetsPayload)));
 			for (const asset of parsedAssets.assets) {
-				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset);
-				}
 				if (importedZipPaths.has(asset.zip_path)) continue;
 				const assetData = files[asset.zip_path];
-				if (!assetData) continue;
+				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (opts.verifySignatures) {
+					await verifyAssetSignature(ctx.did, asset, assetData);
+				}
 				const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-				if (existing) continue;
+				if (existing?.url) {
+					zipPathToUrl[asset.zip_path] = existing.url;
+					continue;
+				}
 				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
 				try {
 					await s3Service.client.send(
@@ -676,6 +686,7 @@ export async function syncPostsAndProfileFromBundle(
 					);
 					ctx.uploadedS3Keys.push(s3Key);
 					const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
+					zipPathToUrl[asset.zip_path] = url;
 					await uploadRepository.createWithExplicitId(ctx.did, asset.local_id, {
 						key: s3Key,
 						owner_id: stringToRecordId.decode(ctx.userId),
@@ -698,6 +709,63 @@ export async function syncPostsAndProfileFromBundle(
 			// Ignore malformed assets.json
 		}
 	}
+
+	const resolveAssetUrl = async (path: string | undefined): Promise<string | undefined> => {
+		if (!path) return undefined;
+		if (zipPathToUrl[path] != null) return zipPathToUrl[path];
+		if (path.startsWith('http://') || path.startsWith('https://')) return path;
+		const allAssets = [
+			...posts.flatMap((p) => p.assets ?? []),
+			...(files['assets.json']
+				? (() => {
+						try {
+							const parsed = z
+								.object({ assets: z.array(StandaloneAssetSchema) })
+								.parse(JSON.parse(strFromU8(files['assets.json'])));
+							return parsed.assets;
+						} catch {
+							return [];
+						}
+					})()
+				: [])
+		];
+		const asset = allAssets.find((a) => a.zip_path === path);
+		if (asset) {
+			const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
+			if (existing?.url) {
+				zipPathToUrl[path] = existing.url;
+				return existing.url;
+			}
+		}
+		return undefined;
+	};
+
+	const avatarResolved = await resolveAssetUrl(identity.profile.avatarUrl ?? undefined);
+	const bannerResolved = await resolveAssetUrl(identity.profile.bannerUrl ?? undefined);
+	const avatarUrl =
+		avatarResolved ??
+		(identity.profile.avatarUrl?.startsWith('assets/')
+			? undefined
+			: (identity.profile.avatarUrl ?? undefined));
+	const bannerUrl =
+		bannerResolved ??
+		(identity.profile.bannerUrl?.startsWith('assets/')
+			? undefined
+			: (identity.profile.bannerUrl ?? undefined));
+
+	const profileUpdates: {
+		display_name?: string;
+		bio?: string;
+		avatar_url?: string;
+		banner_url?: string;
+	} = {
+		display_name: identity.profile.displayName,
+		bio: identity.profile.bio ?? undefined
+	};
+	if (avatarUrl != null) profileUpdates.avatar_url = avatarUrl;
+	if (bannerUrl != null) profileUpdates.banner_url = bannerUrl;
+
+	await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
 
 	return { postsImported, assetsImported, profileUpdated: true };
 }

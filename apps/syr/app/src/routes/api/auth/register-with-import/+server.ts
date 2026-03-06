@@ -40,7 +40,14 @@ const PasswordSchema = z
  * Body: multipart/form-data with username, display_name, password, bundle (file),
  * and EITHER aegisBundle (JSON) OR import_token (for data-only .syr).
  */
-export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+export const POST: RequestHandler = async ({ request, cookies, getClientAddress, locals }) => {
+	if (locals.user) {
+		throw error(403, {
+			code: 'ALREADY_AUTHENTICATED',
+			message: 'You are already signed in. Cannot create a second account.'
+		});
+	}
+
 	const formData = await request.formData();
 	const username = formData.get('username');
 	const display_name = formData.get('display_name');
@@ -182,9 +189,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			throw new Error('Missing aegisBundle for full import');
 		}
 
-		const signingOpts = useDataOnlyImport
-			? { verifySignatures: false }
-			: { verifySignatures: true };
+		const signingOpts = { verifySignatures: true };
 		const { postsImported, assetsImported, importedZipPaths } = await importPostsAndAssets(
 			ctx,
 			parsed,
@@ -226,6 +231,11 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		}
 		console.error('Register-with-import error:', err);
 		await rollbackImport(ctx);
+		try {
+			await sessionRepository.delete(session.id);
+		} catch (e) {
+			console.error('Rollback: failed to delete session', e);
+		}
 		try {
 			await userRepository.delete(user.id);
 		} catch (e) {

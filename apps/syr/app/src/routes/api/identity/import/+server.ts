@@ -115,6 +115,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 			const msg = err instanceof Error ? err.message : '';
 			if (msg.includes('unsigned or tampered')) {
+				await rollbackImport(ctx);
 				throw error(400, {
 					code: 'INVALID_IMPORT',
 					message: 'Backup contains unsigned or tampered data.'
@@ -196,6 +197,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		const msg = err instanceof Error ? err.message : '';
 		if (msg.includes('unsigned or tampered')) {
+			await rollbackImport(ctx);
 			throw error(400, {
 				code: 'INVALID_IMPORT',
 				message: 'Backup contains unsigned or tampered data.'

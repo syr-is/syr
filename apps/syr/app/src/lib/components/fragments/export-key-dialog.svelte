@@ -410,7 +410,10 @@
 					}
 
 					const sigil = await createSigil(seed, passphrase);
-					const did = data.identity.did;
+					const did = data.identity?.did;
+					if (!did || typeof did !== 'string') {
+						throw new Error('Invalid export payload: missing or invalid identity DID');
+					}
 
 					// Sign each post and its assets
 					const signedPosts = await Promise.all(

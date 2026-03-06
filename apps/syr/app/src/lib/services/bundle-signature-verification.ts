@@ -1,13 +1,14 @@
 import { canonicalize, verify, sign, decodeMultibase, encodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
+import { computeSha256Hex } from '@syr-is/utils';
 import type { ExportedPost, ExportedAsset } from '@syr-is/types';
 
-/** Post fields for signing (excludes signature and assets — assets are signed separately). */
+/** Post fields for signing (excludes signature; assets included when present to bind post to asset list). */
 export function buildPostPayload(
 	did: string,
-	post: Omit<ExportedPost, 'signature' | 'assets'>
+	post: Omit<ExportedPost, 'signature'>
 ): Record<string, unknown> {
-	return {
+	const payload: Record<string, unknown> = {
 		did,
 		local_id: post.local_id,
 		type: post.type,
@@ -21,6 +22,10 @@ export function buildPostPayload(
 		status: post.status,
 		created_at: post.created_at
 	};
+	if (post.assets != null && post.assets.length > 0) {
+		payload.assets = post.assets.map((a) => ({ zip_path: a.zip_path, local_id: a.local_id }));
+	}
+	return payload;
 }
 
 /** Asset fields for signing (excludes signature). */
@@ -100,11 +105,38 @@ export async function verifyPostSignature(did: string, post: ExportedPost): Prom
 
 /**
  * Verify an asset's signature against the bundle's DID public key.
- * Rejects (throws) on invalid or missing signature.
+ * When fileBytes is provided, also validates blob size and SHA-256 against signed values.
+ * Rejects (throws) on invalid or missing signature, missing file, size mismatch, or hash mismatch.
  */
-export async function verifyAssetSignature(did: string, asset: ExportedAsset): Promise<void> {
+export async function verifyAssetSignature(
+	did: string,
+	asset: ExportedAsset,
+	fileBytes: Uint8Array
+): Promise<void> {
 	if (!asset.signature || typeof asset.signature !== 'string') {
 		throw new Error('Backup contains unsigned or tampered data');
+	}
+	if (fileBytes == null || fileBytes.byteLength === 0) {
+		throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+	}
+	if (fileBytes.byteLength !== asset.size) {
+		throw new Error(
+			`Asset ${asset.zip_path} size mismatch: expected ${asset.size}, got ${fileBytes.byteLength}`
+		);
+	}
+	if (asset.sha256 != null) {
+		const buf: ArrayBuffer =
+			fileBytes.byteOffset === 0 && fileBytes.byteLength === fileBytes.buffer.byteLength
+				? (fileBytes.buffer as ArrayBuffer)
+				: (fileBytes.buffer.slice(
+						fileBytes.byteOffset,
+						fileBytes.byteOffset + fileBytes.byteLength
+					) as ArrayBuffer);
+		const computed = await computeSha256Hex(buf);
+		const expected = asset.sha256.toLowerCase();
+		if (computed.toLowerCase() !== expected) {
+			throw new Error(`Asset ${asset.zip_path} hash mismatch`);
+		}
 	}
 	const parsedDid = parseDid(did);
 	const payload = buildAssetPayload(did, asset);

@@ -64,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				message: 'Token does not match current user'
 			});
 		}
-		did = await validateBundleForDataOnlyImport(parsed);
+		did = await validateBundleForDataOnlyImport(parsed, { allowExistingDid: true });
 		if (parsed.identity.did !== tokenData.did) {
 			throw error(400, {
 				code: 'DID_MISMATCH',
@@ -91,7 +91,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 			throw error(400, { code: 'INVALID_AEGIS', message: 'Invalid aegisBundle JSON' });
 		}
-		did = await validateBundle(parsed, aegisBundle);
+		did = await validateBundle(parsed, aegisBundle, { allowExistingDid: true });
 	}
 
 	if (did !== identity.did) {
@@ -111,7 +111,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		pinnedPostsRestored: false
 	};
 
-	const signingOpts = useDataOnlyImport ? { verifySignatures: false } : { verifySignatures: true };
+	const signingOpts = { verifySignatures: true };
 	try {
 		const result = await syncPostsAndProfileFromBundle(ctx, parsed, signingOpts);
 		return json({
