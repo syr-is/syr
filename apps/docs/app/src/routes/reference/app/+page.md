@@ -213,11 +213,11 @@ All API routes are under `src/routes/api/`.
 
 Permanently deletes the user's account and all data (profile, posts, uploads, sessions, identity, etc.). Requires signed verification via Syner (challenge-sign) or Aegis (password). See [Challenge-Sign Flows](/implementer-guide/challenge-sign-flows#Delete-Account-Verification) for the full flow.
 
-| Method | Path                           | Description                                                                 |
-| ------ | ------------------------------ | --------------------------------------------------------------------------- |
-| `POST` | `/api/account/delete-challenge`| Create challenge (Syner) or verify password (Aegis). Body: `{ password? }`.  |
-| `GET`  | `/api/account/delete-heartbeat`| SSE; emits `delete_account_verified` with token when Syner signs.          |
-| `POST` | `/api/account/delete`          | Perform deletion. Body: `{ delete_account_token }`.                         |
+| Method | Path                            | Description                                                                 |
+| ------ | ------------------------------- | --------------------------------------------------------------------------- |
+| `POST` | `/api/account/delete-challenge` | Create challenge (Syner) or verify password (Aegis). Body: `{ password? }`. |
+| `GET`  | `/api/account/delete-heartbeat` | SSE; emits `delete_account_verified` with token when Syner signs.           |
+| `POST` | `/api/account/delete`           | Perform deletion. Body: `{ delete_account_token }`.                         |
 
 ---
 
@@ -355,15 +355,15 @@ The application uses **shadcn-svelte** (Svelte port of shadcn/ui) for its compon
 
 ### Custom Components (`src/lib/components/fragments/`)
 
-| Component                                | Purpose                                    |
-| ---------------------------------------- | ------------------------------------------ |
-| `new-post.svelte`                        | Post creation form (blog/media)            |
-| `post-preview.svelte`                    | Post card preview                          |
-| `media-upload-zone.svelte`               | Drag-and-drop upload area                  |
-| `media-preview-modal.svelte`             | Full-screen media viewer                   |
-| `file-card.svelte` / `file-table.svelte` | File listing views                         |
-| `folder-card.svelte`                     | Folder display                             |
-| `storage-usage.svelte`                   | Storage quota display                      |
-| `view-mode-toggle.svelte`                | Grid/table view switcher                   |
-| Various dialogs                          | Create/delete/rename/move/share operations |
-| `delete-account-dialog.svelte`           | Account deletion (Syner or password verification)    |
+| Component                                | Purpose                                           |
+| ---------------------------------------- | ------------------------------------------------- |
+| `new-post.svelte`                        | Post creation form (blog/media)                   |
+| `post-preview.svelte`                    | Post card preview                                 |
+| `media-upload-zone.svelte`               | Drag-and-drop upload area                         |
+| `media-preview-modal.svelte`             | Full-screen media viewer                          |
+| `file-card.svelte` / `file-table.svelte` | File listing views                                |
+| `folder-card.svelte`                     | Folder display                                    |
+| `storage-usage.svelte`                   | Storage quota display                             |
+| `view-mode-toggle.svelte`                | Grid/table view switcher                          |
+| Various dialogs                          | Create/delete/rename/move/share operations        |
+| `delete-account-dialog.svelte`           | Account deletion (Syner or password verification) |

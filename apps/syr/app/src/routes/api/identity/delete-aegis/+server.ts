@@ -4,10 +4,7 @@ import { z } from 'zod';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import { stringToRecordId } from '@syr-is/types';
-import {
-	consumeDeleteAegisToken,
-	setDeleteAegisToken
-} from '$lib/server/export-verify-store';
+import { consumeDeleteAegisToken, setDeleteAegisToken } from '$lib/server/export-verify-store';
 
 const DeleteAegisRequestSchema = z.object({
 	delete_aegis_token: z.string().uuid()
