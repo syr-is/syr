@@ -55,7 +55,7 @@ The flow is **challenge-sign-verify**:
 | ----------------------------------------------------------------------- | --------------------------------------------------- |
 | [syr:// Scheme and QR Exchange](/implementer-guide/scheme-and-qr)       | Deep link patterns, QR generation, validation rules |
 | [Export Formats and Data Structures](/implementer-guide/export-formats) | .syr, .sigil, .persona formats and API contracts    |
-| [Challenge-Sign Flows](/implementer-guide/challenge-sign-flows)         | Independent login, export verify, import verify     |
+| [Challenge-Sign Flows](/implementer-guide/challenge-sign-flows)         | Independent login, export verify, import verify, delete account |
 | [Profile Sync API](/implementer-guide/profile-sync)                     | Syncing profile from Syner to SYR                   |
 
 ---

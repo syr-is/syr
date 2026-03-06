@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import { stringToRecordId } from '@syr-is/types';
-import { peekDeleteAegisToken, consumeDeleteAegisToken } from '$lib/server/export-verify-store';
+import {
+	consumeDeleteAegisToken,
+	setDeleteAegisToken
+} from '$lib/server/export-verify-store';
 
 const DeleteAegisRequestSchema = z.object({
 	delete_aegis_token: z.string().uuid()
@@ -52,14 +55,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	const tokenUserId = await peekDeleteAegisToken(parsed.data.delete_aegis_token);
+	const tokenUserId = await consumeDeleteAegisToken(parsed.data.delete_aegis_token);
 	if (!tokenUserId || tokenUserId !== locals.user.id) {
 		throw error(403, {
 			code: 'INVALID_TOKEN',
 			message: 'Invalid or expired delete-aegis token'
 		});
 	}
-	await consumeDeleteAegisToken(parsed.data.delete_aegis_token);
-	await identityRepository.removeAegisByUserId(userId);
+	try {
+		await identityRepository.removeAegisByUserId(userId);
+	} catch (_e) {
+		// Compensating action: restore token so user can retry without Syner
+		await setDeleteAegisToken(parsed.data.delete_aegis_token, { user_id: locals.user.id });
+		throw error(500, {
+			code: 'REMOVE_AEGIS_FAILED',
+			message: 'Failed to remove Aegis — please try again'
+		});
+	}
 	return json({ success: true, message: 'Aegis removed' });
 };

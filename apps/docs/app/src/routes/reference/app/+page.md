@@ -209,6 +209,16 @@ All API routes are under `src/routes/api/`.
 | `DELETE` | `/api/session/[id]`              | Revoke specific session                |
 | `POST`   | `/api/session/invalidate-others` | Invalidate all sessions except current |
 
+### Account Deletion
+
+Permanently deletes the user's account and all data (profile, posts, uploads, sessions, identity, etc.). Requires signed verification via Syner (challenge-sign) or Aegis (password). See [Challenge-Sign Flows](/implementer-guide/challenge-sign-flows#Delete-Account-Verification) for the full flow.
+
+| Method | Path                           | Description                                                                 |
+| ------ | ------------------------------ | --------------------------------------------------------------------------- |
+| `POST` | `/api/account/delete-challenge`| Create challenge (Syner) or verify password (Aegis). Body: `{ password? }`.  |
+| `GET`  | `/api/account/delete-heartbeat`| SSE; emits `delete_account_verified` with token when Syner signs.          |
+| `POST` | `/api/account/delete`          | Perform deletion. Body: `{ delete_account_token }`.                         |
+
 ---
 
 ## Database Layer
@@ -299,6 +309,7 @@ src/routes/
     posts/               # Post management
     settings/            # Settings layout with sub-nav
       profile/           # Profile settings
+      identity/         # Identity, registries, delete account
       sessions/          # Session management
     uploads/             # File management
   api/                   # API endpoints (see above)
@@ -355,3 +366,4 @@ The application uses **shadcn-svelte** (Svelte port of shadcn/ui) for its compon
 | `storage-usage.svelte`                   | Storage quota display                      |
 | `view-mode-toggle.svelte`                | Grid/table view switcher                   |
 | Various dialogs                          | Create/delete/rename/move/share operations |
+| `delete-account-dialog.svelte`           | Account deletion (Syner or password verification)    |
