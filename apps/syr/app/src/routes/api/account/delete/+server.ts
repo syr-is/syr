@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { peekDeleteAccountToken, consumeDeleteAccountToken } from '$lib/server/export-verify-store';
+import { consumeDeleteAccountToken } from '$lib/server/export-verify-store';
 import { deleteAccount } from '$lib/services/account-deletion.service';
 
 const DeleteAccountRequestSchema = z.object({
@@ -36,7 +36,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	const tokenUserId = await peekDeleteAccountToken(parsed.data.delete_account_token);
+	const tokenUserId = await consumeDeleteAccountToken(parsed.data.delete_account_token);
 	if (!tokenUserId || tokenUserId !== locals.user.id) {
 		throw error(403, {
 			code: 'INVALID_TOKEN',
@@ -44,7 +44,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	await consumeDeleteAccountToken(parsed.data.delete_account_token);
 	await deleteAccount(locals.user.id);
 
 	return json({ success: true, message: 'Account deleted' });

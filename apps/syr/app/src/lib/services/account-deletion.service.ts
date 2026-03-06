@@ -34,18 +34,30 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		.catch((e) => console.warn('[account-deletion] Failed to delete file_store_usage:', e));
 
 	// 2. Outbox
-	await outboxRepository.deleteByUserId(recordId);
+	try {
+		await outboxRepository.deleteByUserId(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete outbox:', e);
+	}
 
 	// 3. Registry (by DID)
 	if (did) {
-		const regs = await registryRepository.findByDid(did);
-		for (const r of regs) {
-			await registryRepository.removeRegistry(r.id);
+		try {
+			const regs = await registryRepository.findByDid(did);
+			for (const r of regs) {
+				await registryRepository.removeRegistry(r.id);
+			}
+		} catch (e) {
+			console.warn('[account-deletion] Failed to delete registry entries:', e);
 		}
 	}
 
 	// 4. Sessions
-	await sessionRepository.deleteByUserId(recordId);
+	try {
+		await sessionRepository.deleteByUserId(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete sessions:', e);
+	}
 
 	// 5. Folders + uploads + S3 (folders owned by user)
 	const rootFolders = await folderRepository.findByParent(recordId, null);
@@ -106,8 +118,16 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 
 	// 8. Delegated keys, identity
 	if (did) {
-		await delegatedKeyRepository.deleteByDid(did);
-		await identityRepository.deleteByDid(did);
+		try {
+			await delegatedKeyRepository.deleteByDid(did);
+		} catch (e) {
+			console.warn('[account-deletion] Failed to delete delegated keys:', e);
+		}
+		try {
+			await identityRepository.deleteByDid(did);
+		} catch (e) {
+			console.warn('[account-deletion] Failed to delete identity:', e);
+		}
 	}
 
 	// 9. Profile
@@ -121,5 +141,14 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 	}
 
 	// 10. User
-	await userRepository.delete(recordId);
+	try {
+		await userRepository.delete(recordId);
+	} catch (e) {
+		console.error('[account-deletion] CRITICAL: Failed to delete user', {
+			userId: String(recordId),
+			error: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined
+		});
+		throw e;
+	}
 }

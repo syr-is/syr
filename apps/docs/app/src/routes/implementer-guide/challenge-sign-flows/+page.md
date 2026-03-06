@@ -197,7 +197,8 @@ Permanently deletes the user's account and all data (profile, posts, uploads, se
 1. User has no identity (e.g. never completed onboarding).
 2. Web app calls **POST** `/api/account/delete-challenge` with `{ password }`.
 3. Server verifies password against user record, issues `delete_account_token`.
-4. Web app calls **POST** `/api/account/delete`.
+4. Web app calls **POST** `/api/account/delete` with `{ delete_account_token }`.
+5. Server performs cascade deletion, returns success.
 
 ### APIs
 
