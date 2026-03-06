@@ -7,16 +7,20 @@ import {
 	consumeExportChallenge,
 	consumeImportChallenge,
 	consumeDeleteAegisChallenge,
+	consumeDeleteAccountChallenge,
 	setExportToken,
 	setImportToken,
 	setDeleteAegisToken,
+	setDeleteAccountToken,
 	type ImportChallengeData,
-	type DeleteAegisChallengeData
+	type DeleteAegisChallengeData,
+	type DeleteAccountChallengeData
 } from '$lib/server/export-verify-store';
 import {
 	notifyExportVerified,
 	notifyImportVerified,
-	notifyDeleteAegisVerified
+	notifyDeleteAegisVerified,
+	notifyDeleteAccountVerified
 } from '$lib/server/export-verify-broadcast';
 
 const VerifyRequestSchema = z.object({
@@ -37,9 +41,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = VerifyRequestSchema.parse(body);
 
-		// Atomically consume export challenge first, then import, then delete-aegis
+		// Atomically consume export challenge first, then import, then delete-aegis, then delete-account
 		let challenge = await consumeExportChallenge(data.challenge_id);
-		let purpose: 'export' | 'import' | 'delete_aegis' = 'export';
+		let purpose: 'export' | 'import' | 'delete_aegis' | 'delete_account' = 'export';
 
 		if (!challenge) {
 			challenge = await consumeImportChallenge(data.challenge_id);
@@ -48,6 +52,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!challenge) {
 			challenge = await consumeDeleteAegisChallenge(data.challenge_id);
 			purpose = 'delete_aegis';
+		}
+		if (!challenge) {
+			challenge = await consumeDeleteAccountChallenge(data.challenge_id);
+			purpose = 'delete_account';
 		}
 
 		if (!challenge) {
@@ -107,6 +115,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 			notifyDeleteAegisVerified(data.challenge_id, deleteAegisToken);
 			return json({ success: true as const, delete_aegis_token: deleteAegisToken });
+		} else if (purpose === 'delete_account') {
+			const deleteAccountToken = crypto.randomUUID();
+			await setDeleteAccountToken(deleteAccountToken, {
+				user_id: (challenge as DeleteAccountChallengeData).user_id
+			});
+			notifyDeleteAccountVerified(data.challenge_id, deleteAccountToken);
+			return json({ success: true as const, delete_account_token: deleteAccountToken });
 		} else {
 			const importToken = crypto.randomUUID();
 			await setImportToken(importToken, {

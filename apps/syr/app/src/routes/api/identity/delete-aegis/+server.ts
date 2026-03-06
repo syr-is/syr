@@ -1,24 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { verify, decodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import { stringToRecordId } from '@syr-is/types';
-import {
-	getDeleteAegisChallenge,
-	consumeDeleteAegisChallenge,
-	peekDeleteAegisToken,
-	consumeDeleteAegisToken
-} from '$lib/server/export-verify-store';
+import { consumeDeleteAegisToken, setDeleteAegisToken } from '$lib/server/export-verify-store';
 
-const InAppRequestSchema = z.object({
-	challenge_id: z.string().uuid(),
-	signature: z.string().min(1)
-});
-
-const SynerRequestSchema = z.object({
+const DeleteAegisRequestSchema = z.object({
 	delete_aegis_token: z.string().uuid()
 });
 
@@ -26,7 +14,8 @@ const SynerRequestSchema = z.object({
  * POST /api/identity/delete-aegis
  *
  * Removes Aegis (server-stored encrypted seed) from the authenticated user's identity.
- * Requires signature verification: either in-app (challenge_id + signature) or Syner (delete_aegis_token).
+ * Requires delete_aegis_token from Syner verification (user must sign challenge with Syner
+ * to prove they have backed up their keys).
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) {
@@ -54,84 +43,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, { code: 'INVALID_JSON', message: 'Invalid JSON body' });
 	}
 
-	// Try Syner path first (token)
-	const synerParsed = SynerRequestSchema.safeParse(body);
-	if (synerParsed.success) {
-		const tokenUserId = await peekDeleteAegisToken(synerParsed.data.delete_aegis_token);
-		if (!tokenUserId || tokenUserId !== locals.user.id) {
-			throw error(403, {
-				code: 'INVALID_TOKEN',
-				message: 'Invalid or expired delete-aegis token'
-			});
-		}
-		await consumeDeleteAegisToken(synerParsed.data.delete_aegis_token);
-		await identityRepository.removeAegisByUserId(userId);
-		return json({ success: true, message: 'Aegis removed' });
-	}
-
-	// In-app path: challenge_id + signature
-	const inAppParsed = InAppRequestSchema.safeParse(body);
-	if (!inAppParsed.success) {
+	const parsed = DeleteAegisRequestSchema.safeParse(body);
+	if (!parsed.success) {
 		throw error(400, {
 			code: 'VALIDATION_ERROR',
-			message: 'Provide either delete_aegis_token (Syner) or challenge_id + signature (in-app)',
-			details: JSON.parse(JSON.stringify(inAppParsed.error.issues))
+			message: 'Missing or invalid delete_aegis_token — sign with Syner to obtain token',
+			details: JSON.parse(JSON.stringify(parsed.error.issues))
 		});
 	}
 
-	const { challenge_id, signature } = inAppParsed.data;
-	const challenge = await getDeleteAegisChallenge(challenge_id);
-	if (!challenge) {
-		throw error(410, {
-			code: 'CHALLENGE_EXPIRED',
-			message: 'Challenge not found or expired'
-		});
-	}
-
-	if (challenge.user_id !== locals.user.id) {
+	const tokenUserId = await consumeDeleteAegisToken(parsed.data.delete_aegis_token);
+	if (!tokenUserId || tokenUserId !== locals.user.id) {
 		throw error(403, {
-			code: 'FORBIDDEN',
-			message: 'Challenge does not match authenticated user'
+			code: 'INVALID_TOKEN',
+			message: 'Invalid or expired delete-aegis token'
 		});
 	}
-
-	if (challenge.expected_did !== identity.did) {
-		throw error(403, {
-			code: 'DID_MISMATCH',
-			message: 'Challenge DID does not match identity'
-		});
-	}
-
-	let signatureBytes: Uint8Array;
 	try {
-		signatureBytes = decodeMultibase(signature);
-	} catch {
-		throw error(400, {
-			code: 'INVALID_SIGNATURE',
-			message: 'Malformed signature format'
-		});
-	}
-
-	const messageBytes = new TextEncoder().encode(challenge.message);
-	let parsedDid;
-	try {
-		parsedDid = parseDid(identity.did);
-	} catch {
+		await identityRepository.removeAegisByUserId(userId);
+	} catch (_e) {
+		// Compensating action: restore token so user can retry without Syner
+		await setDeleteAegisToken(parsed.data.delete_aegis_token, { user_id: locals.user.id });
 		throw error(500, {
-			code: 'SERVER_ERROR',
-			message: 'Invalid identity DID'
+			code: 'REMOVE_AEGIS_FAILED',
+			message: 'Failed to remove Aegis — please try again'
 		});
 	}
-
-	const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
-	if (!isValid) {
-		throw error(403, {
-			code: 'INVALID_SIGNATURE',
-			message: 'Signature verification failed'
-		});
-	}
-
-	await consumeDeleteAegisChallenge(challenge_id);
-	await identityRepository.removeAegisByUserId(userId);
 	return json({ success: true, message: 'Aegis removed' });
 };

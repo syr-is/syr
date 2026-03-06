@@ -4,9 +4,11 @@ import { kvService } from '$lib/services/kv';
 const KV_EXPORT_CHALLENGE = 'identity_export_challenge';
 const KV_IMPORT_CHALLENGE = 'identity_import_challenge';
 const KV_DELETE_AEGIS_CHALLENGE = 'identity_delete_aegis_challenge';
+const KV_DELETE_ACCOUNT_CHALLENGE = 'identity_delete_account_challenge';
 const KV_EXPORT_TOKEN = 'identity_export_token';
 const KV_IMPORT_TOKEN = 'identity_import_token';
 const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
+const KV_DELETE_ACCOUNT_TOKEN = 'identity_delete_account_token';
 
 const CHALLENGE_TTL = independentLogin.challengeTtl;
 const TOKEN_TTL = independentLogin.callbackTokenTtl;
@@ -162,5 +164,61 @@ export function peekDeleteAegisToken(token: string): Promise<string | null> {
 export function consumeDeleteAegisToken(token: string): Promise<string | null> {
 	return kvService
 		.getAndDelete<{ user_id: string }>(KV_DELETE_AEGIS_TOKEN, token)
+		.then((entry) => entry?.user_id ?? null);
+}
+
+// --- Delete Account challenge ---
+
+export interface DeleteAccountChallengeData {
+	message: string;
+	domain: string;
+	expected_did: string;
+	user_id: string;
+	created_at: number;
+}
+
+export async function setDeleteAccountChallenge(
+	id: string,
+	data: Omit<DeleteAccountChallengeData, 'created_at'>
+): Promise<void> {
+	const full: DeleteAccountChallengeData = {
+		...data,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_DELETE_ACCOUNT_CHALLENGE, id, full, CHALLENGE_TTL);
+}
+
+export async function getDeleteAccountChallenge(
+	id: string
+): Promise<DeleteAccountChallengeData | null> {
+	return kvService.get<DeleteAccountChallengeData>(KV_DELETE_ACCOUNT_CHALLENGE, id);
+}
+
+/** Atomically get and delete delete-account challenge. Prevents concurrent replay. */
+export async function consumeDeleteAccountChallenge(
+	id: string
+): Promise<DeleteAccountChallengeData | null> {
+	return kvService.getAndDelete<DeleteAccountChallengeData>(KV_DELETE_ACCOUNT_CHALLENGE, id);
+}
+
+// --- Delete Account token ---
+
+export async function setDeleteAccountToken(
+	token: string,
+	data: { user_id: string }
+): Promise<void> {
+	await kvService.set(KV_DELETE_ACCOUNT_TOKEN, token, data, TOKEN_TTL);
+}
+
+/** Validate token and return userId without consuming. Use consumeDeleteAccountToken after success. */
+export function peekDeleteAccountToken(token: string): Promise<string | null> {
+	return kvService
+		.get<{ user_id: string }>(KV_DELETE_ACCOUNT_TOKEN, token)
+		.then((e) => e?.user_id ?? null);
+}
+
+export function consumeDeleteAccountToken(token: string): Promise<string | null> {
+	return kvService
+		.getAndDelete<{ user_id: string }>(KV_DELETE_ACCOUNT_TOKEN, token)
 		.then((entry) => entry?.user_id ?? null);
 }

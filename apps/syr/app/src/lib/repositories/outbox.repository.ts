@@ -159,6 +159,13 @@ class OutboxRepository {
 	}
 
 	/**
+	 * Delete all outbox jobs for a user.
+	 */
+	async deleteByUserId(userId: RecordId): Promise<void> {
+		await this.db.query(`DELETE FROM outbox WHERE user_id = $userId`, { userId });
+	}
+
+	/**
 	 * Find all outbox jobs for a user.
 	 */
 	async findByUser(userId: RecordId): Promise<OutboxEntry[]> {

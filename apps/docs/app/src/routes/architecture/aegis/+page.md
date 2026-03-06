@@ -240,6 +240,23 @@ After migration:
 
 ---
 
+## 9.1 Delete Aegis (Remove Server Copy)
+
+To remove the server-stored encrypted seed after export, the user **MUST** prove they have backed up their keys. SYR requires **Syner verification** — signing a challenge with a key imported from Sigil or Persona — before allowing deletion. Password-based deletion is **not** supported, because it does not prove the key exists outside the server.
+
+### Flow
+
+1. User exports Sigil or Persona, imports into Syner.
+2. User requests "Delete Aegis" in SYR.
+3. Server creates a challenge with `action: "delete_aegis"`.
+4. User scans QR with Syner; Syner signs the challenge.
+5. Server verifies signature, returns `delete_aegis_token`.
+6. Web app submits token; server removes Aegis fields.
+
+See [Challenge-Sign Flows — Delete Aegis Verification](/implementer-guide/challenge-sign-flows#Delete-Aegis-Verification) for API details.
+
+---
+
 ## 10. Multi-Device Access (Custodial Phase)
 
 Two supported models:
