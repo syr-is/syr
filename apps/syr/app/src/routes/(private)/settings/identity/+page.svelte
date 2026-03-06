@@ -253,8 +253,9 @@
 							Remove server-stored key
 						</p>
 						<p class="text-xs text-muted-foreground">
-							Delete Aegis removes your encrypted key backup from the server. Only do this after
-							exporting your Sigil or Persona. You will need Syner to sign actions afterward.
+							Delete Aegis removes your encrypted key backup from the server. Export your Sigil or
+							Persona and import into Syner first — you must sign with Syner to prove you have
+							backed up your keys. You will need Syner for signing afterward.
 						</p>
 						<button
 							class={buttonVariants({ variant: 'destructive', size: 'sm' })}

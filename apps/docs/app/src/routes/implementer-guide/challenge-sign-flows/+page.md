@@ -128,3 +128,37 @@ User has data-only .syr (no identity.sigil). Must prove key control via Syner to
 | `/api/identity/import-heartbeat`     | GET    | No   | SSE; emits when import verified.                                           |
 
 The **verify** endpoint is shared: the server distinguishes export vs import by challenge type (export challenge vs import challenge).
+
+---
+
+## Delete Aegis Verification
+
+Aegis users can remove the server-stored encrypted seed after exporting. **Deletion requires Syner verification** to prove the user has backed up their keys (Sigil or Persona imported into Syner). Password-based deletion is not supported — signing with Syner ensures the key exists outside the server before removal.
+
+### Flow
+
+1. User exports Sigil or Persona, imports into Syner.
+2. In SYR web app, user clicks "Delete Aegis" on identity settings.
+3. Web app calls **POST** `/api/identity/delete-aegis-challenge` (auth required).
+4. Server returns `challenge_id`, `message`, `deeplink_url`.
+5. User scans QR (`syr://export?...`) with Syner.
+6. Syner fetches **GET** `/api/identity/export-challenge/:id` (same endpoint as export/import).
+7. Syner signs and POSTs to **POST** `/api/identity/export-verify`.
+8. Server returns `delete_aegis_token`.
+9. Web app subscribes to **GET** `/api/identity/delete-aegis-heartbeat?challenge_id=...` (auth required).
+10. On SSE event `delete_aegis_verified`, web app calls **POST** `/api/identity/delete-aegis` with `{ delete_aegis_token }`.
+11. Server verifies token ownership, removes Aegis fields, returns success.
+
+### APIs
+
+| Endpoint                                | Method | Auth | Purpose                                                                                          |
+| --------------------------------------- | ------ | ---- | ------------------------------------------------------------------------------------------------ |
+| `/api/identity/delete-aegis-challenge`  | POST   | Yes  | Create delete-aegis challenge. Identity must have Aegis. Returns `challenge_id`, `message`, `deeplink_url`. |
+| `/api/identity/export-challenge/:id`    | GET    | No   | Fetch challenge (shared — Syner uses same URL for export, import, delete-aegis).                 |
+| `/api/identity/export-verify`           | POST   | No   | Verify signature. Returns `delete_aegis_token` when challenge was delete-aegis.                  |
+| `/api/identity/delete-aegis-heartbeat` | GET    | Yes  | SSE; emits `delete_aegis_verified` with token when Syner signs. Requires challenge ownership.    |
+| `/api/identity/delete-aegis`            | POST   | Yes  | Body: `{ delete_aegis_token }`. Verifies token, removes Aegis fields from identity.              |
+
+### Message format
+
+Same structure as export, but `action: "delete_aegis"`.

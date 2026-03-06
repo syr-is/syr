@@ -73,6 +73,7 @@ This page maps each requirement from the architecture specifications to the curr
 | Requirement                | Status          | Details                                                                                                                                       |
 | -------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Aegis custodial generation | **Partial**     | Server-side seed generation, Argon2 + AES-GCM encryption in identity creation. Target spec: [Aegis v1](/architecture/aegis).                  |
+| Aegis deletion             | **Implemented** | `POST /api/identity/delete-aegis`. Requires Syner verification (challenge-sign) to prove user has backed up keys. See [challenge-sign-flows](/implementer-guide/challenge-sign-flows#Delete-Aegis-Verification). |
 | Sigil export format        | **Implemented** | [Sigil v1](/architecture/sigil) spec in `packages/rust/syr-crypto-sigil` and `packages/ts/crypto`. Export-key-dialog produces `.sigil` files. |
 
 ---
