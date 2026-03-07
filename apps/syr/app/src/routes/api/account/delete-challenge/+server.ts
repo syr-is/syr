@@ -3,9 +3,8 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { canonicalize } from '@syr-is/crypto';
 import { config, independentLogin } from '$lib/config';
-import { identityController } from '$lib/controllers/identity.controller';
 import { userRepository } from '$lib/repositories/user.repository';
-import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
+import { getIdentityContext } from '$lib/server/identity-context';
 import { seedHandler } from '$lib/services/seed-handler';
 import { verifyPassword } from '$lib/server/auth';
 import { setDeleteAccountChallenge, setDeleteAccountToken } from '$lib/server/export-verify-store';
@@ -36,13 +35,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const parsed = DeleteChallengeBodySchema.safeParse(body);
 	const password = parsed.success ? parsed.data.password : undefined;
 
-	const identity = await identityController.getIdentity(locals.user.id);
-	const aegisBundle = identity ? buildAegisBundleFromIdentity(identity) : null;
+	const ctx = await getIdentityContext(locals.user.id);
 
 	// Aegis path: password provided → verify decryption (proves key control), return token
-	if (aegisBundle && password) {
+	if (ctx.aegisBundle && password) {
 		try {
-			await seedHandler.verify({ bundle: aegisBundle, password });
+			await seedHandler.verify({ bundle: ctx.aegisBundle, password });
 			const deleteAccountToken = crypto.randomUUID();
 			await setDeleteAccountToken(deleteAccountToken, { user_id: locals.user.id });
 			return json({
@@ -57,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Users with no identity: password-only verification
-	if (!identity && password) {
+	if (!ctx.identity && password) {
 		const user = await userRepository.findById(locals.user.id);
 		if (!user) {
 			throw error(404, { code: 'USER_NOT_FOUND', message: 'User not found' });
@@ -75,7 +73,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Syner path: user has identity (with or without Aegis) but no password → create challenge
-	if (identity) {
+	if (ctx.identity) {
 		const challengeId = crypto.randomUUID();
 		const now = new Date();
 		const expiresAt = new Date(now.getTime() + independentLogin.challengeTtl * 1000);
@@ -92,11 +90,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await setDeleteAccountChallenge(challengeId, {
 			message,
 			domain: messageObj.domain,
-			expected_did: identity.did,
+			expected_did: ctx.identity.did,
 			user_id: locals.user.id
 		});
 
-		const deeplinkUrl = `syr://export?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&did=${encodeURIComponent(identity.did)}`;
+		const deeplinkUrl = `syr://delete-account?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&did=${encodeURIComponent(ctx.identity.did)}`;
 
 		return json({
 			challenge_id: challengeId,

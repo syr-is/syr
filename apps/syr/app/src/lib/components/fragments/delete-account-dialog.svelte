@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
 	import QRCode from 'qrcode';
+	import { useSigningOptions } from '$lib/composables/use-signing-options.svelte';
 
 	let {
 		open = $bindable(false),
@@ -13,6 +14,8 @@
 		open?: boolean;
 		onSuccess?: () => void;
 	} = $props();
+
+	const { canVerifyWithPassword } = useSigningOptions();
 
 	let step = $state<'warning' | 'password' | 'syner'>('warning');
 	let deleting = $state(false);
@@ -171,8 +174,13 @@
 						uploads, sessions, identity, and everything you've put on the platform.
 					</p>
 					<p class="mt-2 text-sm text-muted-foreground">
-						This cannot be undone. You must verify ownership with either your password or by signing
-						with Syner.
+						{#if canVerifyWithPassword}
+							This cannot be undone. You must verify ownership with either your password or by
+							signing with Syner.
+						{:else}
+							This cannot be undone. You must verify ownership by signing with Syner (your keys are
+							not stored on the server).
+						{/if}
 					</p>
 				{:else if step === 'password'}
 					<p class="text-sm text-muted-foreground">
@@ -196,15 +204,17 @@
 					</p>
 				</div>
 				<div class="flex flex-col gap-2">
-					<Button
-						variant="outline"
-						onclick={() => {
-							step = 'password';
-						}}
-						disabled={deleting}
-					>
-						Verify with password
-					</Button>
+					{#if canVerifyWithPassword}
+						<Button
+							variant="outline"
+							onclick={() => {
+								step = 'password';
+							}}
+							disabled={deleting}
+						>
+							Verify with password
+						</Button>
+					{/if}
 					<Button variant="outline" onclick={handleVerifyWithSyner} disabled={deleting}>
 						{#if deleting}
 							<Loader2 class="mr-2 h-4 w-4 animate-spin" />

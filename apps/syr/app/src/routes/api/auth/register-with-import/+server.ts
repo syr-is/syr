@@ -96,6 +96,17 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 	const useDataOnlyImport = typeof importToken === 'string' && importToken.length > 0;
 	const parsed = await parseBundle(file);
 
+	// Entry logging: diagnose import mode and bundle state
+	const hasImportToken = typeof importToken === 'string' && importToken.length > 0;
+	const hasAegisBundle = typeof aegisBundleRaw === 'string' && aegisBundleRaw.length > 0;
+	console.log('[register-with-import] Entry', {
+		hasImportToken,
+		hasAegisBundle,
+		useDataOnlyImport,
+		postCount: parsed.posts.length,
+		firstPostHasSignature: !!parsed.posts[0]?.signature
+	});
+
 	let did: string;
 	let aegisBundle: z.infer<typeof AegisBundleSchema> | null = null;
 
@@ -134,6 +145,15 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 			throw error(400, { code: 'INVALID_AEGIS', message: 'Invalid aegisBundle JSON' });
 		}
 		did = await validateBundle(parsed, aegisBundle);
+	}
+
+	// Detect unsigned posts in full-import mode — suggest data-only flow
+	if (!useDataOnlyImport && parsed.posts.length > 0 && !parsed.posts[0]?.signature) {
+		throw error(400, {
+			code: 'UNSIGNED_BACKUP',
+			message:
+				'This backup appears to be a data-only export (unsigned posts). Use "Verify with Syner" on the migrate page instead of entering a passphrase.'
+		});
 	}
 
 	// Create user (no profile, no identity - import will create those)
@@ -180,21 +200,32 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		pinnedPostsRestored: false
 	};
 
+	// Data-only exports (from independent SYR) have unsigned posts — export-bundle-data returns
+	// raw DB data. Trust is established via Syner verification (import_token). Skip signature
+	// verification for data-only imports.
+	const signingOpts = { verifySignatures: !useDataOnlyImport };
+
 	try {
 		if (useDataOnlyImport) {
+			console.log('[register-with-import] Data-only import: skipping signature verification');
 			await importIdentityAndProfileExternal(ctx, parsed);
 		} else if (aegisBundle) {
+			console.log('[register-with-import] Full import with Aegis: verifying signatures');
 			await importIdentityAndProfile(ctx, parsed, aegisBundle);
 		} else {
 			throw new Error('Missing aegisBundle for full import');
 		}
 
-		const signingOpts = { verifySignatures: true };
+		console.log('[register-with-import] Importing posts and assets', {
+			postCount: parsed.posts.length,
+			verifySignatures: signingOpts.verifySignatures
+		});
 		const { postsImported, assetsImported, importedZipPaths } = await importPostsAndAssets(
 			ctx,
 			parsed,
 			signingOpts
 		);
+		console.log('[register-with-import] Posts imported:', postsImported);
 		const standaloneAssetsImported = await importStandaloneAssets(
 			ctx,
 			parsed,
@@ -229,7 +260,10 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err;
 		}
-		console.error('Register-with-import error:', err);
+		console.error('[register-with-import] Error:', err, {
+			useDataOnlyImport,
+			verifySignatures: signingOpts.verifySignatures
+		});
 		await rollbackImport(ctx);
 		try {
 			await sessionRepository.delete(session.id);

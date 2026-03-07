@@ -45,7 +45,7 @@ When the backup has no `identity.sigil`, it contains profile, posts, and assets 
 2. Client parses the zip and detects no `identity.sigil`
 3. User clicks "Verify with Syner"
 4. Client creates import challenge (`POST /api/identity/import-challenge` with `{"did"}` from identity.json)
-5. Client displays QR code and deeplink (`syr://export?challenge=...&instance=...`)
+5. Client displays QR code and deeplink (`syr://import?challenge=...&instance=...`)
 6. Client opens SSE to `GET /api/identity/import-heartbeat?challenge_id=...`
 7. User scans QR with Syner, selects persona, signs challenge
 8. Syner POSTs to `POST /api/identity/export-verify` with challenge_id, did, signature

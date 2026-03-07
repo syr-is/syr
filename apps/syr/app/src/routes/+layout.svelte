@@ -5,6 +5,7 @@
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { userSessionStore } from '$lib/stores/user-session.svelte';
+	import { identityStore } from '$lib/stores/identity.svelte';
 	import { initCryptoWasm } from '@syr-is/crypto';
 	import '../app.css';
 
@@ -19,6 +20,7 @@
 		if (!data.user) {
 			authStore.logout();
 			userSessionStore.clearUser();
+			identityStore.clearIdentityContext();
 		} else {
 			userSessionStore.setUser(data.user);
 		}

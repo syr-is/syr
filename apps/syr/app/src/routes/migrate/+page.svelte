@@ -209,6 +209,10 @@
 
 	async function handleMigrationSubmit() {
 		if (!canSubmitMigration() || !migrationFile) return;
+		if (migrationHasSigil === false && !migrationImportToken) {
+			toast.error('Please verify with Syner first to get an import token.');
+			return;
+		}
 		migrationLoading = true;
 		try {
 			const formData = new FormData();
@@ -668,7 +672,7 @@
 						</div>
 					{/if}
 				</Card.Content>
-				<Card.Footer>
+				<Card.Footer class="flex flex-row items-center justify-between gap-4">
 					<a href={resolve('/login')} class="text-sm text-primary underline">Back to login</a>
 					<Button
 						onclick={handleMigrationSubmit}
@@ -759,7 +763,7 @@
 						{/if}
 					{/if}
 				</Card.Content>
-				<Card.Footer>
+				<Card.Footer class="flex flex-row items-center justify-between gap-4">
 					<a href={resolve('/')} class="text-sm text-primary underline">Back to home</a>
 					<Button onclick={handleSyncSubmit} disabled={!canSubmitSync() || syncLoading}>
 						{#if syncLoading}

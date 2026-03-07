@@ -2,8 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { identityRepository } from '$lib/repositories/identity.repository';
-import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 import { stringToRecordId } from '@syr-is/types';
+import { getIdentityContext } from '$lib/server/identity-context';
 import { consumeDeleteAegisToken, setDeleteAegisToken } from '$lib/server/export-verify-store';
 
 const DeleteAegisRequestSchema = z.object({
@@ -22,20 +22,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const userId = stringToRecordId.decode(locals.user.id);
-	const identity = await identityRepository.findByUserId(userId);
-	if (!identity) {
+	const ctx = await getIdentityContext(locals.user.id);
+	if (!ctx.identity) {
 		throw error(404, { code: 'NO_IDENTITY', message: 'User has no identity' });
 	}
 
-	const aegisBundle = buildAegisBundleFromIdentity(identity);
-	if (!aegisBundle) {
+	if (!ctx.aegisBundle) {
 		throw error(400, {
 			code: 'NO_AEGIS',
 			message: 'Identity has no Aegis — nothing to delete'
 		});
 	}
 
+	const userId = stringToRecordId.decode(locals.user.id);
 	let body: unknown;
 	try {
 		body = await request.json();

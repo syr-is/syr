@@ -1,15 +1,13 @@
 import type { PageServerLoad } from './$types';
-import { identityController } from '$lib/controllers/identity.controller';
+import { getIdentityContext } from '$lib/server/identity-context';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
-	const identity = user ? await identityController.getIdentity(user.id) : null;
-	const hasIdentity = identity != null;
-	const did = identity?.did ?? null;
+	const ctx = user ? await getIdentityContext(user.id) : null;
 
 	return {
 		user,
-		hasIdentity,
-		did
+		hasIdentity: ctx?.hasIdentity ?? false,
+		did: ctx?.did ?? null
 	};
 };

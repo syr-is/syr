@@ -4,7 +4,7 @@ import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { identityController } from '$lib/controllers/identity.controller';
-import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
+import { getIdentityContext } from '$lib/server/identity-context';
 import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 
@@ -156,14 +156,17 @@ export class AuthController {
 		// Find profile
 		const profile = await profileRepository.findByUserId(user.id);
 
-		// Fetch identity and include aegisBundle when identity has Aegis (for client decryption)
-		let identity: Awaited<ReturnType<typeof identityController.getIdentity>> | null = null;
+		// Fetch identity context and include aegisBundle when identity has Aegis (for client decryption)
+		let aegisBundle: AegisBundle | undefined;
 		try {
-			identity = await identityController.getIdentity(user.id);
+			const ctx = await getIdentityContext(user.id.toString());
+			aegisBundle = ctx.aegisBundle;
 		} catch (err) {
-			console.warn('[auth.controller] getIdentity failed, treating identity as null:', err);
+			console.warn(
+				'[auth.controller] getIdentityContext failed, treating aegisBundle as undefined:',
+				err
+			);
 		}
-		const aegisBundle = buildAegisBundleFromIdentity(identity);
 
 		// Create session
 		const session = await this.createSession(user, ctx);

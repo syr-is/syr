@@ -267,7 +267,7 @@
 				</Tabs.Content>
 			</Tabs.Root>
 		</Card.Content>
-		<Card.Footer>
+		<Card.Footer class="flex flex-col gap-2">
 			<p class="text-center text-sm text-muted-foreground">
 				Don't have an account?
 				<a

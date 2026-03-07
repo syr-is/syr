@@ -19,6 +19,26 @@ function base64Size(rawBytes: number): number {
 	return Math.ceil((rawBytes * 4) / 3);
 }
 
+/** Build S3 URL from storage key. */
+function buildUploadUrl(key: string): string {
+	return `${s3Config.endpoint}/${s3Config.bucket}/${key}`;
+}
+
+/** Extract storage key from upload URL (path after bucket). Returns null if not parseable. */
+function keyFromUrl(url: string): string | null {
+	try {
+		const match = new URL(url).pathname.match(/\/uploads\/.+$/);
+		return match ? match[0].slice(1) : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Convert storage key to zip_path (assets/ prefix, DID segment removed). */
+function keyToZipPath(key: string): string {
+	return `assets/${key.replace(/^uploads\/[^/]+\//, '')}`;
+}
+
 type ExportBundleResult = {
 	manifest: IdentityExportManifest;
 	identityBundle: Awaited<ReturnType<typeof identityController.exportIdentity>>;
@@ -66,7 +86,15 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 		uploadNextCursor = page.nextCursor;
 	} while (uploadNextCursor && uploads.length < MAX_EXPORT_RECORDS);
 
-	const uploadsByUrl = new Map(uploads.map((u) => [u.url, u]));
+	const uploadsByUrl = new Map(
+		uploads
+			.filter((u) => u.key)
+			.flatMap((u) => {
+				const url = u.url ?? buildUploadUrl(u.key!);
+				return [[url, u] as const, [u.key!, u] as const];
+			})
+	);
+	const uploadsByKey = new Map(uploads.filter((u) => u.key).map((u) => [u.key!, u]));
 	const exportedAssets: ExportBundleResult['exportedAssets'] = [];
 	const skippedAssets: ExportBundleResult['skippedAssets'] = [];
 	let totalAssetBytes = 0;
@@ -133,7 +161,11 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 		const postAssets: ExportedPost['assets'] = [];
 		if (post.media_urls) {
 			for (const mediaUrl of post.media_urls) {
-				const upload = uploadsByUrl.get(mediaUrl);
+				let upload = uploadsByUrl.get(mediaUrl);
+				if (!upload?.key) {
+					const key = keyFromUrl(mediaUrl);
+					if (key) upload = uploadsByKey.get(key);
+				}
 				if (!upload?.key) continue;
 				const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
 				if (exportedAssetZipPaths.has(zipPath)) {
@@ -166,6 +198,36 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 
 	const pinnedPostIds = await pinnedPostsController.getPinnedPostIds(userId);
 
+	// Build url→zip_path map so we can transform profile avatar/banner from full URLs to zip paths
+	const urlToZipPath = new Map<string, string>();
+	for (const u of uploads) {
+		if (!u.key) continue;
+		const zp = keyToZipPath(u.key);
+		urlToZipPath.set(u.url ?? buildUploadUrl(u.key), zp);
+		urlToZipPath.set(buildUploadUrl(u.key), zp);
+	}
+	function resolveProfileUrlToZipPath(url: string): string | null {
+		if (urlToZipPath.has(url)) return urlToZipPath.get(url)!;
+		const key = keyFromUrl(url);
+		if (!key) return null;
+		const zp = keyToZipPath(key);
+		return exportedAssetZipPaths.has(zp) ? zp : null;
+	}
+	// Transform identity bundle profile URLs to zip paths for portable import
+	const transformedBundle = { ...identityBundle };
+	if (transformedBundle.profile) {
+		const profile = { ...transformedBundle.profile };
+		if (profile.avatarUrl) {
+			const zp = resolveProfileUrlToZipPath(profile.avatarUrl);
+			if (zp) profile.avatarUrl = zp;
+		}
+		if (profile.bannerUrl) {
+			const zp = resolveProfileUrlToZipPath(profile.bannerUrl);
+			if (zp) profile.bannerUrl = zp;
+		}
+		transformedBundle.profile = profile;
+	}
+
 	const manifest: IdentityExportManifest = {
 		version: 1,
 		did: identityBundle.did,
@@ -176,7 +238,7 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 
 	return {
 		manifest,
-		identityBundle,
+		identityBundle: transformedBundle,
 		exportedPosts,
 		exportedAssets,
 		skippedAssets,

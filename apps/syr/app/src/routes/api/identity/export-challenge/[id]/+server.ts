@@ -4,6 +4,7 @@ import { independentLogin } from '$lib/config';
 import {
 	getExportChallenge,
 	getImportChallenge,
+	getPublicImportChallenge,
 	getDeleteAegisChallenge,
 	getDeleteAccountChallenge
 } from '$lib/server/export-verify-store';
@@ -22,6 +23,9 @@ export const GET: RequestHandler = async ({ params }) => {
 	let challenge = await getExportChallenge(id);
 	if (!challenge) {
 		challenge = await getImportChallenge(id);
+	}
+	if (!challenge) {
+		challenge = await getPublicImportChallenge(id);
 	}
 	if (!challenge) {
 		challenge = await getDeleteAegisChallenge(id);

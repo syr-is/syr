@@ -121,6 +121,13 @@ export async function setPublicImportChallenge(
 	await kvService.set(KV_IMPORT_CHALLENGE_PUBLIC, id, full, CHALLENGE_TTL);
 }
 
+/** Non-consuming get for Syner to fetch challenge details (export-challenge/:id). */
+export async function getPublicImportChallenge(
+	id: string
+): Promise<PublicImportChallengeData | null> {
+	return kvService.get<PublicImportChallengeData>(KV_IMPORT_CHALLENGE_PUBLIC, id);
+}
+
 export async function consumePublicImportChallenge(
 	id: string
 ): Promise<PublicImportChallengeData | null> {

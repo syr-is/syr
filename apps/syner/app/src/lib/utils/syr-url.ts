@@ -67,16 +67,20 @@ export function parseSyrLoginUrl(
 	return null;
 }
 
+/** Hostnames for challenge-sign flows (export, import, delete-aegis, delete-account). */
+const CHALLENGE_SIGN_HOSTNAMES = ['export', 'import', 'delete-aegis', 'delete-account'] as const;
+
 /**
- * Parses a syr://export URL.
- * Used for export and import verification (scan QR to sign challenge).
+ * Shared parser for syr:// challenge-sign URLs.
+ * Returns { challenge, instance, did? } when hostname matches and params are valid.
  */
-export function parseSyrExportUrl(
-	urlStr: string
+function parseSyrChallengeSignUrl(
+	urlStr: string,
+	hostname: (typeof CHALLENGE_SIGN_HOSTNAMES)[number]
 ): { challenge: string; instance: string; did?: string } | null {
 	try {
 		const url = new URL(urlStr);
-		if (url.protocol !== 'syr:' || url.hostname !== 'export') return null;
+		if (url.protocol !== 'syr:' || url.hostname !== hostname) return null;
 		const challenge = url.searchParams.get('challenge');
 		const instanceRaw = url.searchParams.get('instance');
 		if (!challenge || !instanceRaw) return null;
@@ -86,6 +90,60 @@ export function parseSyrExportUrl(
 		return { challenge, instance: instanceRaw, ...(did ? { did } : {}) };
 	} catch {
 		// ignore
+	}
+	return null;
+}
+
+/**
+ * Parses a syr://export URL.
+ * Used for export verification (scan QR to sign challenge).
+ */
+export function parseSyrExportUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	return parseSyrChallengeSignUrl(urlStr, 'export');
+}
+
+/**
+ * Parses a syr://import URL.
+ * Used for import/migration verification (scan QR to sign challenge).
+ */
+export function parseSyrImportUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	return parseSyrChallengeSignUrl(urlStr, 'import');
+}
+
+/**
+ * Parses a syr://delete-aegis URL.
+ * Used for delete-aegis verification (scan QR to sign challenge).
+ */
+export function parseSyrDeleteAegisUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	return parseSyrChallengeSignUrl(urlStr, 'delete-aegis');
+}
+
+/**
+ * Parses a syr://delete-account URL.
+ * Used for delete-account verification (scan QR to sign challenge).
+ */
+export function parseSyrDeleteAccountUrl(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	return parseSyrChallengeSignUrl(urlStr, 'delete-account');
+}
+
+/**
+ * Parses any syr:// challenge-sign URL (export, import, delete-aegis, delete-account).
+ * All route to the same export-verify flow.
+ */
+export function parseSyrChallengeSignUrlAny(
+	urlStr: string
+): { challenge: string; instance: string; did?: string } | null {
+	for (const hostname of CHALLENGE_SIGN_HOSTNAMES) {
+		const result = parseSyrChallengeSignUrl(urlStr, hostname);
+		if (result) return result;
 	}
 	return null;
 }

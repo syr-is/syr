@@ -10,11 +10,14 @@ All SYR-compatible flows use the `syr://` custom URL scheme for deep links. Web 
 
 ## URL Patterns
 
-| Action        | Host           | URL Pattern                                  | Params                    | Use                           |
-| ------------- | -------------- | -------------------------------------------- | ------------------------- | ----------------------------- |
-| Login         | `login`        | `syr://login?challenge=&instance=&callback=` | All required              | Independent login             |
-| Export/Import | `export`       | `syr://export?challenge=&instance=&did=`     | `did` optional for import | Export or import verification |
-| Sync Profile  | `sync-profile` | `syr://sync-profile?instance=&did=`          | Both required             | Profile sync from Syner       |
+| Action         | Host             | URL Pattern                                      | Params         | Use                           |
+| -------------- | ---------------- | ------------------------------------------------ | -------------- | ----------------------------- |
+| Login          | `login`          | `syr://login?challenge=&instance=&callback=`     | All required   | Independent login             |
+| Export         | `export`         | `syr://export?challenge=&instance=&did=`         | `did` required | Export verification           |
+| Import         | `import`         | `syr://import?challenge=&instance=&did=`         | `did` optional | Import/migration verification |
+| Delete Aegis   | `delete-aegis`   | `syr://delete-aegis?challenge=&instance=&did=`   | All required   | Remove Aegis (prove backup)   |
+| Delete Account | `delete-account` | `syr://delete-account?challenge=&instance=&did=` | All required   | Permanently delete account    |
+| Sync Profile   | `sync-profile`   | `syr://sync-profile?instance=&did=`              | Both required  | Profile sync from Syner       |
 
 ---
 
@@ -50,21 +53,69 @@ syr://login?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%
 
 ---
 
-## Export / Import (`syr://export`)
+## Export (`syr://export`)
 
 **Params:**
 
-| Param       | Required | Description                                                                 |
-| ----------- | -------- | --------------------------------------------------------------------------- |
-| `challenge` | Yes      | Challenge ID from export or import challenge API                            |
-| `instance`  | Yes      | SYR instance base URL (must be URL-encoded)                                 |
-| `did`       | No       | User DID (required for export; optional for import — Syner selects persona) |
+| Param       | Required | Description                                 |
+| ----------- | -------- | ------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from export challenge API      |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded) |
+| `did`       | Yes      | User DID                                    |
 
-**Example (export):**
+**Example:**
 
 ```text
 syr://export?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%2Fmy.syr.app&did=did%3Asyr%3Az6Mk...
 ```
+
+**Syner routing:** Deep link routes to `/export-verify`.
+
+---
+
+## Import (`syr://import`)
+
+**Params:**
+
+| Param       | Required | Description                                 |
+| ----------- | -------- | ------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from import challenge API      |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded) |
+| `did`       | No       | User DID (optional — Syner selects persona) |
+
+**Example:**
+
+```text
+syr://import?challenge=550e8400-e29b-41d4-a716-446655440000&instance=https%3A%2F%2Fmy.syr.app&did=did%3Asyr%3Az6Mk...
+```
+
+**Syner routing:** Deep link routes to `/export-verify`.
+
+---
+
+## Delete Aegis (`syr://delete-aegis`)
+
+**Params:**
+
+| Param       | Required | Description                                  |
+| ----------- | -------- | -------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from delete-aegis challenge API |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded)  |
+| `did`       | Yes      | User DID                                     |
+
+**Syner routing:** Deep link routes to `/export-verify`.
+
+---
+
+## Delete Account (`syr://delete-account`)
+
+**Params:**
+
+| Param       | Required | Description                                 |
+| ----------- | -------- | ------------------------------------------- |
+| `challenge` | Yes      | Challenge ID from delete-challenge API      |
+| `instance`  | Yes      | SYR instance base URL (must be URL-encoded) |
+| `did`       | Yes      | User DID                                    |
 
 **Syner routing:** Deep link routes to `/export-verify`.
 

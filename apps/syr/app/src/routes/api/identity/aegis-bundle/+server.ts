@@ -1,7 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { identityController } from '$lib/controllers/identity.controller';
-import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
+import { getIdentityContext } from '$lib/server/identity-context';
 
 /**
  * GET /api/identity/aegis-bundle
@@ -20,16 +19,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	const identity = await identityController.getIdentity(locals.user.id);
-	if (!identity) {
+	const ctx = await getIdentityContext(locals.user.id);
+	if (!ctx.identity) {
 		throw error(404, {
 			code: 'NO_IDENTITY',
 			message: 'User has no identity'
 		});
 	}
 
-	const aegisBundle = buildAegisBundleFromIdentity(identity);
-	if (!aegisBundle) {
+	if (!ctx.aegisBundle) {
 		throw error(404, {
 			code: 'NO_AEGIS',
 			message: 'Identity has no Aegis bundle'
@@ -38,7 +36,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	return json({
 		status: 'success',
-		data: { aegisBundle },
+		data: { aegisBundle: ctx.aegisBundle },
 		meta: { timestamp: new Date().toISOString() }
 	});
 };

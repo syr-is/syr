@@ -90,7 +90,9 @@ export async function signAsset(
  */
 export async function verifyPostSignature(did: string, post: ExportedPost): Promise<void> {
 	if (!post.signature || typeof post.signature !== 'string') {
-		throw new Error('Backup contains unsigned or tampered data');
+		throw new Error(
+			`Post local_id=${post.local_id} has no signature. If this is a data-only export (keys in Syner), use "Verify with Syner" on the migrate page and provide the import token.`
+		);
 	}
 	const parsedDid = parseDid(did);
 	const payload = buildPostPayload(did, post);
@@ -114,7 +116,9 @@ export async function verifyAssetSignature(
 	fileBytes: Uint8Array
 ): Promise<void> {
 	if (!asset.signature || typeof asset.signature !== 'string') {
-		throw new Error('Backup contains unsigned or tampered data');
+		throw new Error(
+			`Asset ${asset.zip_path} has no signature. If this is a data-only export (keys in Syner), use "Verify with Syner" on the migrate page and provide the import token.`
+		);
 	}
 	if (fileBytes == null || fileBytes.byteLength === 0) {
 		throw new Error(`Asset ${asset.zip_path} missing from bundle`);

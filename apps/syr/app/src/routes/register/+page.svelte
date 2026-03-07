@@ -120,7 +120,7 @@
 						Sign in
 					</a>
 				</p>
-				<p class="text-center text-sm text-muted-foreground">
+				<p class="mt-2 text-center text-sm text-muted-foreground">
 					<a
 						href={resolve('/migrate')}
 						data-sveltekit-preload-data
