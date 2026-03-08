@@ -115,7 +115,13 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 				message: 'Bundle DID does not match verified identity'
 			});
 		}
-		await consumePublicImportToken(importToken);
+		const consumed = await consumePublicImportToken(importToken);
+		if (!consumed) {
+			throw error(403, {
+				code: 'INVALID_TOKEN',
+				message: 'Import token invalid or already used'
+			});
+		}
 	} else {
 		if (!aegisBundleRaw || typeof aegisBundleRaw !== 'string') {
 			throw error(400, {

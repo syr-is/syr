@@ -673,21 +673,19 @@
 					>
 						Unlock with password
 					</Button>
-					{#if isIndependentSyr}
-						<Button
-							variant="outline"
-							class="w-full justify-start"
-							onclick={handleVerifyWithSyner}
-							disabled={creatingChallenge}
-						>
-							{#if creatingChallenge}
-								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-								Creating...
-							{:else}
-								Verify with Syner
-							{/if}
-						</Button>
-					{/if}
+					<Button
+						variant="outline"
+						class="w-full justify-start"
+						onclick={handleVerifyWithSyner}
+						disabled={creatingChallenge}
+					>
+						{#if creatingChallenge}
+							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							Creating...
+						{:else}
+							Verify with Syner
+						{/if}
+					</Button>
 				</div>
 			{:else if isIndependentSyr}
 				<p class="text-sm text-muted-foreground">

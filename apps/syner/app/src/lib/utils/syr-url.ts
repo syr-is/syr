@@ -87,7 +87,7 @@ function parseSyrChallengeSignUrl(
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
 		const did = url.searchParams.get('did') ?? undefined;
-		return { challenge, instance: instanceUrl.origin, ...(did ? { did } : {}) };
+		return { challenge, instance: instanceRaw, ...(did ? { did } : {}) };
 	} catch {
 		// ignore
 	}
@@ -162,7 +162,7 @@ export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did:
 		if (!instanceRaw || !did) return null;
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
-		return { instance: instanceUrl.origin, did };
+		return { instance: instanceRaw, did };
 	} catch {
 		return null;
 	}
