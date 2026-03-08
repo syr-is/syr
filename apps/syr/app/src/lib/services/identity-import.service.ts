@@ -799,10 +799,8 @@ export async function syncPostsAndProfileFromBundle(
 						stringToRecordId.decode(ctx.userId)
 					);
 					const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-					const createdUpload = await uploadRepository.createWithExplicitId(
-						ctx.did,
-						asset.local_id,
-						{
+					if (existingUpload && !blobMatches(existingUpload, asset)) {
+						await uploadRepository.update(existingUpload.id, {
 							key: s3Key,
 							owner_id: stringToRecordId.decode(ctx.userId),
 							folder_id: folderId,
@@ -813,12 +811,30 @@ export async function syncPostsAndProfileFromBundle(
 							url,
 							status: 'completed',
 							is_public: isPublic,
-							created_at: new Date(),
 							updated_at: new Date()
-						}
-					);
+						});
+					} else {
+						const createdUpload = await uploadRepository.createWithExplicitId(
+							ctx.did,
+							asset.local_id,
+							{
+								key: s3Key,
+								owner_id: stringToRecordId.decode(ctx.userId),
+								folder_id: folderId,
+								filename: asset.filename,
+								mime_type: asset.mime_type,
+								size: asset.size,
+								sha256: asset.sha256,
+								url,
+								status: 'completed',
+								is_public: isPublic,
+								created_at: new Date(),
+								updated_at: new Date()
+							}
+						);
+						ctx.createdUploadIds.push(createdUpload.id.toString());
+					}
 					ctx.uploadedS3Keys.push(s3Key);
-					ctx.createdUploadIds.push(createdUpload.id.toString());
 					zipPathToUrl[asset.zip_path] = url;
 					mediaUrls.push(url);
 					assetsImported++;
@@ -913,10 +929,8 @@ export async function syncPostsAndProfileFromBundle(
 						stringToRecordId.decode(ctx.userId)
 					);
 					const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-					const createdUpload = await uploadRepository.createWithExplicitId(
-						ctx.did,
-						asset.local_id,
-						{
+					if (existing && !blobMatches(existing, asset)) {
+						await uploadRepository.update(existing.id, {
 							key: s3Key,
 							owner_id: stringToRecordId.decode(ctx.userId),
 							folder_id: folderId,
@@ -927,12 +941,30 @@ export async function syncPostsAndProfileFromBundle(
 							url,
 							status: 'completed',
 							is_public: isPublic,
-							created_at: new Date(),
 							updated_at: new Date()
-						}
-					);
+						});
+					} else {
+						const createdUpload = await uploadRepository.createWithExplicitId(
+							ctx.did,
+							asset.local_id,
+							{
+								key: s3Key,
+								owner_id: stringToRecordId.decode(ctx.userId),
+								folder_id: folderId,
+								filename: asset.filename,
+								mime_type: asset.mime_type,
+								size: asset.size,
+								sha256: asset.sha256,
+								url,
+								status: 'completed',
+								is_public: isPublic,
+								created_at: new Date(),
+								updated_at: new Date()
+							}
+						);
+						ctx.createdUploadIds.push(createdUpload.id.toString());
+					}
 					ctx.uploadedS3Keys.push(s3Key);
-					ctx.createdUploadIds.push(createdUpload.id.toString());
 					zipPathToUrl[asset.zip_path] = url;
 					assetsImported++;
 					importedZipPaths.add(asset.zip_path);
@@ -1029,8 +1061,8 @@ export async function syncPostsAndProfileFromBundle(
 		display_name: identity.profile.displayName,
 		bio: identity.profile.bio ?? undefined
 	};
-	if (avatarUrl != null) profileUpdates.avatar_url = avatarUrl;
-	if (bannerUrl != null) profileUpdates.banner_url = bannerUrl;
+	if (avatarUrl != null && isValidProfileUrl(avatarUrl)) profileUpdates.avatar_url = avatarUrl;
+	if (bannerUrl != null && isValidProfileUrl(bannerUrl)) profileUpdates.banner_url = bannerUrl;
 
 	await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
 

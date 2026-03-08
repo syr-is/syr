@@ -140,6 +140,13 @@ export async function setPublicImportToken(token: string, data: { did: string })
 	await kvService.set(KV_PUBLIC_IMPORT_TOKEN, token, data, TOKEN_TTL);
 }
 
+/** Validate token and return did without consuming. Use consumePublicImportToken after success. */
+export function peekPublicImportToken(token: string): Promise<{ did: string } | null> {
+	return kvService
+		.get<{ did: string }>(KV_PUBLIC_IMPORT_TOKEN, token)
+		.then((e) => e ?? null);
+}
+
 export async function consumePublicImportToken(token: string): Promise<{ did: string } | null> {
 	return kvService.getAndDelete<{ did: string }>(KV_PUBLIC_IMPORT_TOKEN, token);
 }

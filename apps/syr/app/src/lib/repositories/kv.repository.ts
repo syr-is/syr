@@ -268,10 +268,16 @@ export class KvRepository {
 			);
 		}
 
+		if (ttlSeconds != null && ttlSeconds < 0) {
+			throw new Error('ttlSeconds must be non-negative');
+		}
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
-		const expiresAt = ttlSeconds ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
-		const expiresAtSet = ttlSeconds ? ', expires_at = $expiresAt' : '';
+		const expiresAt =
+			ttlSeconds != null
+				? new Date(now.getTime() + ttlSeconds * 1000)
+				: undefined;
+		const expiresAtSet = expiresAt !== undefined ? ', expires_at = $expiresAt' : '';
 
 		// Build a single atomic transaction query using BEGIN...COMMIT
 		// This ensures the SELECT, check, and UPSERT happen atomically
@@ -284,7 +290,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
 				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
 				IF $proposed > $maxValue {
@@ -304,7 +310,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
 				IF $proposed > $maxValue {
 					THROW "QUOTA_EXCEEDED";
@@ -323,7 +329,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $newVal = math::max([<int> $minValue, <int> ($current + $amount)]);
 				UPSERT $recordId SET
 					kv_type = $type,
@@ -338,7 +344,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $newVal = $current + $amount;
 				UPSERT $recordId SET
 					kv_type = $type,

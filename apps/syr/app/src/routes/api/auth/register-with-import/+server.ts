@@ -8,7 +8,10 @@ import { generateAccessToken } from '$lib/server/auth';
 import { config } from '$lib/config';
 import { userRepository } from '$lib/repositories/user.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
-import { consumePublicImportToken } from '$lib/server/export-verify-store';
+import {
+	peekPublicImportToken,
+	consumePublicImportToken
+} from '$lib/server/export-verify-store';
 import {
 	parseBundle,
 	validateBundle,
@@ -101,7 +104,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 	let aegisBundle: z.infer<typeof AegisBundleSchema> | null = null;
 
 	if (useDataOnlyImport) {
-		const tokenData = await consumePublicImportToken(importToken);
+		const tokenData = await peekPublicImportToken(importToken);
 		if (!tokenData) {
 			throw error(403, {
 				code: 'INVALID_TOKEN',
@@ -115,6 +118,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 				message: 'Bundle DID does not match verified identity'
 			});
 		}
+		await consumePublicImportToken(importToken);
 	} else {
 		if (!aegisBundleRaw || typeof aegisBundleRaw !== 'string') {
 			throw error(400, {

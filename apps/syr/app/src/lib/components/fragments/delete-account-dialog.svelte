@@ -40,9 +40,15 @@
 			const controller = new AbortController();
 			adminsAbortController = controller;
 			fetch('/api/instance-admins', { credentials: 'include', signal: controller.signal })
-				.then((r) => r.json())
+				.then((r) => {
+					if (!r.ok) {
+						admins = [];
+						return;
+					}
+					return r.json();
+				})
 				.then((d) => {
-					if (!controller.signal.aborted) admins = d?.admins ?? [];
+					if (d != null && !controller.signal.aborted) admins = d?.admins ?? [];
 				})
 				.catch((err) => {
 					if (err?.name !== 'AbortError') admins = [];

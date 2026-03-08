@@ -9,6 +9,7 @@ import {
 	validateBundle,
 	validateBundleForDataOnlyImport,
 	syncPostsAndProfileFromBundle,
+	rollbackImport,
 	ImportValidationError,
 	type ImportContext
 } from '$lib/services/identity-import.service';
@@ -124,6 +125,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 	} catch (err) {
+		try {
+			await rollbackImport(ctx);
+		} catch (rollbackErr) {
+			console.error('Sync from backup rollback failed:', rollbackErr);
+		}
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err;
 		}

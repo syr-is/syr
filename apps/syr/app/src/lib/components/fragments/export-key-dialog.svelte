@@ -61,11 +61,9 @@
 
 	function determineInitialStep(
 		exportTypeVal: ExportType,
-		hasAegisVal: boolean,
-		bundleVal: AegisBundle | null
+		hasAegisVal: boolean
 	): 'choose' | 'verify' | 'unlock' {
 		if (exportTypeVal === 'syr') return hasAegisVal ? 'choose' : 'verify';
-		if (!bundleVal) return 'unlock';
 		return 'unlock';
 	}
 
@@ -82,7 +80,7 @@
 		if (open) {
 			if (isInitialOpen) {
 				isInitialOpen = false;
-				step = determineInitialStep(exportType, hasAegis, bundle);
+				step = determineInitialStep(exportType, hasAegis);
 				if (exportType === 'syr') {
 					exportChallenge = null;
 					exportToken = null;
@@ -475,23 +473,66 @@
 						throw new Error('Invalid export payload: missing or invalid identity DID');
 					}
 
+					const validPosts = data.posts.filter((p: Record<string, unknown>, i: number) => {
+						if (
+							typeof p?.local_id !== 'string' ||
+							typeof p?.type !== 'string' ||
+							typeof p?.visibility !== 'string' ||
+							typeof p?.status !== 'string' ||
+							(p?.created_at != null && typeof p.created_at !== 'string')
+						) {
+							console.warn(`[export] Skipping invalid post at index ${i}: missing local_id, type, visibility, status, or created_at`);
+							return false;
+						}
+						return true;
+					});
+
+					const validAssets = data.assets.filter(
+						(
+							a: {
+								zip_path?: string;
+								local_id?: string;
+								filename?: string;
+								mime_type?: string;
+								size?: number;
+								sha256?: string;
+							},
+							i: number
+						) => {
+							if (
+								typeof a?.zip_path !== 'string' ||
+								typeof a?.local_id !== 'string' ||
+								typeof a?.filename !== 'string' ||
+								typeof a?.mime_type !== 'string' ||
+								typeof a?.size !== 'number' ||
+								typeof a?.sha256 !== 'string'
+							) {
+								console.warn(
+									`[export] Skipping invalid asset at index ${i}: missing zip_path, local_id, filename, mime_type, size, or sha256`
+								);
+								return false;
+							}
+							return true;
+						}
+					);
+
 					// Sign each post and its assets
 					const signedPosts = await Promise.all(
-						data.posts.map((p: Record<string, unknown>) =>
+						validPosts.map((p: Record<string, unknown>) =>
 							signPost(did, p as Parameters<typeof signPost>[1], seed)
 						)
 					);
 
 					// Sign standalone assets
 					const signedAssets = await Promise.all(
-						data.assets.map(
+						validAssets.map(
 							(a: {
 								zip_path: string;
 								local_id: string;
 								filename: string;
 								mime_type: string;
 								size: number;
-								sha256?: string;
+								sha256: string;
 							}) => signAsset(did, a, seed)
 						)
 					);
@@ -520,7 +561,7 @@
 					zipFiles['pinned_posts.json'] = strToU8(JSON.stringify(data.pinned_posts, null, 2));
 					zipFiles['identity.sigil'] = strToU8(JSON.stringify(sigil, null, 2));
 
-					for (const asset of data.assets ?? []) {
+					for (const asset of validAssets) {
 						if (asset.content_base64 && asset.zip_path) {
 							zipFiles[asset.zip_path] = base64ToBytes(asset.content_base64);
 						}
@@ -554,7 +595,9 @@
 		<Dialog.Header>
 			<Dialog.Title>{dialogTitle}</Dialog.Title>
 			<Dialog.Description>
-				{#if pendingDownload}
+				{#if ctx === null}
+					<p class="text-sm text-muted-foreground">Loading...</p>
+				{:else if pendingDownload}
 					<p class="text-sm text-muted-foreground">Click Save file to download your export.</p>
 				{:else if showSynerFlow}
 					<p class="text-sm text-muted-foreground">
@@ -587,7 +630,12 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
-			{#if pendingDownload}
+			{#if ctx === null}
+				<p class="text-sm text-muted-foreground flex items-center gap-2">
+					<Loader2 class="h-4 w-4 animate-spin" />
+					Loading...
+				</p>
+			{:else if pendingDownload}
 				<p class="text-sm text-muted-foreground">
 					Your export is ready. Click Save file below to download.
 				</p>
@@ -623,19 +671,21 @@
 					>
 						Unlock with password
 					</Button>
-					<Button
-						variant="outline"
-						class="w-full justify-start"
-						onclick={handleVerifyWithSyner}
-						disabled={creatingChallenge}
-					>
-						{#if creatingChallenge}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-							Creating...
-						{:else}
-							Verify with Syner
-						{/if}
-					</Button>
+					{#if isIndependentSyr}
+						<Button
+							variant="outline"
+							class="w-full justify-start"
+							onclick={handleVerifyWithSyner}
+							disabled={creatingChallenge}
+						>
+							{#if creatingChallenge}
+								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								Creating...
+							{:else}
+								Verify with Syner
+							{/if}
+						</Button>
+					{/if}
 				</div>
 			{:else if isIndependentSyr}
 				<p class="text-sm text-muted-foreground">
