@@ -39,6 +39,7 @@
 	let loading = $state(false);
 	let unlockLoading = $state(false);
 	let error = $state<string | null>(null);
+	let signingProgress = $state<{ current: number; total: number } | null>(null);
 	let seedValue = $state<string | null>(null);
 	let personaValue = $state<{ id: string } | null>(null);
 
@@ -208,8 +209,10 @@
 		}
 		loading = true;
 		error = null;
+		signingProgress = null;
 		const base = instanceUrl.replace(/\/$/, '');
 		const verifyUrl = `${base}/api/identity/export-verify`;
+		const signaturesUrl = `${base}/api/identity/export-signatures`;
 		info(`[export-verify] Signing challenge and verifying at ${verifyUrl}`);
 		try {
 			const payloadBytes = Array.from(new TextEncoder().encode(message));
@@ -241,8 +244,75 @@
 				toast.error(errMsg);
 				return;
 			}
-			info(`[export-verify] Verification success`);
 
+			// Immediate success: export_token returned (no posts/assets to sign)
+			if (verifyData.export_token) {
+				info(`[export-verify] Verification success`);
+				toast.success('Verification complete. Return to the browser to continue.');
+				lockSession();
+				goto('/');
+				return;
+			}
+
+			// Chunked signing flow: sign items, POST, repeat until done
+			let signingSessionId = verifyData.signing_session_id;
+			let items: Array<{ id: string; message: string }> = verifyData.items ?? [];
+			const totalCount = verifyData.total_count ?? items.length;
+			let chunkIndex = verifyData.chunk_index ?? 0;
+
+			while (items.length > 0) {
+				signingProgress = {
+					current: Math.min(chunkIndex * 20, totalCount),
+					total: totalCount
+				};
+				info(`[export-verify] Signing export chunk ${chunkIndex + 1}, ${items.length} items`);
+
+				const signatures: Array<{ id: string; signature: string }> = [];
+				for (const item of items) {
+					const payloadBytes = Array.from(new TextEncoder().encode(item.message));
+					const sigBytes = await invoke<number[]>('sign_payload', {
+						payload: payloadBytes,
+						privateKeyBase64: s
+					});
+					const sigStr = await invoke<string>('encode_multibase_cmd', {
+						bytes: sigBytes
+					});
+					signatures.push({ id: item.id, signature: sigStr });
+				}
+
+				const sigRes = await fetch(signaturesUrl, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						signing_session_id: signingSessionId,
+						signatures
+					})
+				});
+				const sigData = await sigRes.json();
+
+				if (!sigRes.ok) {
+					const errMsg = sigData.error_description ?? 'Signing failed';
+					error = errMsg;
+					logError(
+						`[export-verify] Signatures failed: ${sigRes.status} - ${redactErrorPayload(sigData)}`
+					);
+					toast.error(errMsg);
+					return;
+				}
+
+				if (sigData.export_token && sigData.done) {
+					info(`[export-verify] Export signing complete`);
+					toast.success('Verification complete. Return to the browser to continue.');
+					lockSession();
+					goto('/');
+					return;
+				}
+
+				items = sigData.items ?? [];
+				chunkIndex = sigData.chunk_index ?? chunkIndex + 1;
+			}
+
+			// Should not reach here; done case returns above
 			toast.success('Verification complete. Return to the browser to continue.');
 			lockSession();
 			goto('/');
@@ -257,6 +327,7 @@
 			toast.error(msg);
 		} finally {
 			loading = false;
+			signingProgress = null;
 		}
 	}
 </script>
@@ -330,11 +401,16 @@
 						<PersonaUnlockForm bind:passphrase loading={unlockLoading} onUnlock={unlockPersona} />
 					{/if}
 
+					{#if signingProgress}
+						<p class="text-muted-foreground text-sm">
+							Signing export… ({signingProgress.current}/{signingProgress.total})
+						</p>
+					{/if}
 					<div class="flex gap-2 pt-2">
 						<Button onclick={signAndVerify} disabled={loading || !hasUnlockedPersona}>
 							{#if loading}
 								<Loader class="h-4 w-4 animate-spin" />
-								Verifying…
+								{signingProgress ? 'Signing…' : 'Verifying…'}
 							{:else}
 								Sign and verify
 							{/if}
@@ -343,11 +419,16 @@
 					</div>
 				{:else}
 					<ExportVerifyPersonaSelector {personas} {selected} onSelect={(p) => (selected = p)} />
+					{#if signingProgress}
+						<p class="text-muted-foreground text-sm">
+							Signing export… ({signingProgress.current}/{signingProgress.total})
+						</p>
+					{/if}
 					<div class="flex gap-2 pt-2">
 						<Button onclick={signAndVerify} disabled={loading || !selected || !hasUnlockedPersona}>
 							{#if loading}
 								<Loader class="h-4 w-4 animate-spin" />
-								Verifying…
+								{signingProgress ? 'Signing…' : 'Verifying…'}
 							{:else}
 								Sign and verify
 							{/if}

@@ -95,46 +95,6 @@ function parseSyrChallengeSignUrl(
 }
 
 /**
- * Parses a syr://export URL.
- * Used for export verification (scan QR to sign challenge).
- */
-export function parseSyrExportUrl(
-	urlStr: string
-): { challenge: string; instance: string; did?: string } | null {
-	return parseSyrChallengeSignUrl(urlStr, 'export');
-}
-
-/**
- * Parses a syr://import URL.
- * Used for import/migration verification (scan QR to sign challenge).
- */
-export function parseSyrImportUrl(
-	urlStr: string
-): { challenge: string; instance: string; did?: string } | null {
-	return parseSyrChallengeSignUrl(urlStr, 'import');
-}
-
-/**
- * Parses a syr://delete-aegis URL.
- * Used for delete-aegis verification (scan QR to sign challenge).
- */
-export function parseSyrDeleteAegisUrl(
-	urlStr: string
-): { challenge: string; instance: string; did?: string } | null {
-	return parseSyrChallengeSignUrl(urlStr, 'delete-aegis');
-}
-
-/**
- * Parses a syr://delete-account URL.
- * Used for delete-account verification (scan QR to sign challenge).
- */
-export function parseSyrDeleteAccountUrl(
-	urlStr: string
-): { challenge: string; instance: string; did?: string } | null {
-	return parseSyrChallengeSignUrl(urlStr, 'delete-account');
-}
-
-/**
  * Parses any syr:// challenge-sign URL (export, import, delete-aegis, delete-account).
  * All route to the same export-verify flow.
  */

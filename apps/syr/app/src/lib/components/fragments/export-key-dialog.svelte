@@ -313,13 +313,15 @@
 							mime_type: string;
 							size: number;
 							sha256?: string;
+							signature?: string;
 						}) => ({
 							zip_path: a.zip_path,
 							local_id: a.local_id,
 							filename: a.filename,
 							mime_type: a.mime_type,
 							size: a.size,
-							sha256: a.sha256
+							sha256: a.sha256,
+							...(a.signature && { signature: a.signature })
 						})
 					)
 				},

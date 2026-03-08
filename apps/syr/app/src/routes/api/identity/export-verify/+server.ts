@@ -10,6 +10,7 @@ import {
 	consumeDeleteAegisChallenge,
 	consumeDeleteAccountChallenge,
 	setExportToken,
+	setExportSigningSession,
 	setImportToken,
 	setPublicImportToken,
 	setDeleteAegisToken,
@@ -18,6 +19,12 @@ import {
 	type DeleteAegisChallengeData,
 	type DeleteAccountChallengeData
 } from '$lib/server/export-verify-store';
+import { buildIdentityExport } from '$lib/server/export-bundle';
+import {
+	getSignableItemsChunk,
+	buildAllSignableItems,
+	CHUNK_SIZE
+} from '$lib/server/export-signing';
 import {
 	notifyExportVerified,
 	notifyImportVerified,
@@ -99,8 +106,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (purpose === 'export') {
-			const exportToken = crypto.randomUUID();
-			// We need user_id - export challenge has expected_did, we need to look up user by did
 			const { identityRepository } = await import('$lib/repositories/identity.repository');
 			const identity = await identityRepository.findByDid(data.did);
 			if (!identity) {
@@ -109,9 +114,57 @@ export const POST: RequestHandler = async ({ request }) => {
 					{ status: 500 }
 				);
 			}
-			await setExportToken(exportToken, identity.user_id.toString());
-			notifyExportVerified(data.challenge_id, exportToken);
-			return json({ success: true as const, export_token: exportToken });
+			const userId = identity.user_id.toString();
+			const exportResult = await buildIdentityExport(userId);
+			const { exportedPosts, exportedAssets } = exportResult;
+
+			// No posts and no assets: issue export_token immediately (data-only, no signing needed)
+			if (exportedPosts.length === 0 && exportedAssets.length === 0) {
+				const exportToken = crypto.randomUUID();
+				await setExportToken(exportToken, userId);
+				notifyExportVerified(data.challenge_id, exportToken);
+				return json({ success: true as const, export_token: exportToken });
+			}
+
+			// Create signing session and return first chunk
+			const signingSessionId = crypto.randomUUID();
+			const exportData = {
+				manifest: exportResult.manifest,
+				identityBundle: exportResult.identityBundle as Record<string, unknown>,
+				exportedPosts: exportedPosts as Array<Record<string, unknown>>,
+				exportedAssets: exportedAssets as Array<
+					Record<string, unknown> & { zip_path: string; content_base64?: string }
+				>,
+				skippedAssets: exportResult.skippedAssets,
+				pinnedPostIds: exportResult.pinnedPostIds
+			};
+			const did = exportResult.identityBundle.did;
+			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
+				exportData,
+				did,
+				0,
+				CHUNK_SIZE
+			);
+			const allItemIds = buildAllSignableItems(exportData, did).map((i) => i.id);
+
+			await setExportSigningSession(signingSessionId, {
+				challenge_id: data.challenge_id,
+				user_id: userId,
+				did: data.did,
+				export_data: exportData,
+				signatures: {},
+				cursor: nextCursor,
+				all_item_ids: allItemIds
+			});
+
+			return json({
+				success: true as const,
+				signing_session_id: signingSessionId,
+				items,
+				has_more: hasMore,
+				chunk_index: 0,
+				total_count: totalCount
+			});
 		} else if (purpose === 'delete_aegis') {
 			const deleteAegisToken = crypto.randomUUID();
 			await setDeleteAegisToken(deleteAegisToken, {

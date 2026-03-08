@@ -11,6 +11,7 @@ import {
 	stringToRecordId,
 	recordIdFromDidAndLocal
 } from '@syr-is/types';
+import type { ExportedAsset, ExportedPost } from '@syr-is/types';
 import {
 	verifyPostSignature,
 	verifyAssetSignature
@@ -72,6 +73,64 @@ function isValidProfileUrl(value: string | null | undefined): value is string {
 	} catch {
 		return false;
 	}
+}
+
+function zipPathFromUrl(url: string): string | null {
+	try {
+		const match = new URL(url).pathname.match(/\/uploads\/.+$/);
+		if (!match) return null;
+		const key = match[0].slice(1);
+		return `assets/${key.replace(/^uploads\/[^/]+\//, '')}`;
+	} catch {
+		return null;
+	}
+}
+
+async function resolveProfileUrls(
+	identity: {
+		profile: { avatarUrl?: string; bannerUrl?: string; displayName?: string; bio?: string };
+	},
+	zipPathToUrl: Record<string, string>,
+	resolveAssetUrl?: (path: string) => Promise<string | undefined>
+): Promise<{
+	avatar_url?: string;
+	banner_url?: string;
+	display_name?: string;
+	bio?: string;
+}> {
+	const updates: {
+		avatar_url?: string;
+		banner_url?: string;
+		display_name?: string;
+		bio?: string;
+	} = {
+		display_name: identity.profile.displayName,
+		bio: identity.profile.bio ?? undefined
+	};
+	const resolve = async (path: string | undefined): Promise<string | undefined> => {
+		if (!path) return undefined;
+		if (resolveAssetUrl) {
+			return resolveAssetUrl(path);
+		}
+		const zp = path.startsWith('assets/') ? path : zipPathFromUrl(path);
+		if (zp && zipPathToUrl[zp]) return zipPathToUrl[zp];
+		return path.startsWith('http://') || path.startsWith('https://') ? path : undefined;
+	};
+	const avatarResolved = await resolve(identity.profile.avatarUrl ?? undefined);
+	const bannerResolved = await resolve(identity.profile.bannerUrl ?? undefined);
+	const avatarUrl =
+		avatarResolved ??
+		(identity.profile.avatarUrl?.startsWith('assets/')
+			? undefined
+			: (identity.profile.avatarUrl ?? undefined));
+	const bannerUrl =
+		bannerResolved ??
+		(identity.profile.bannerUrl?.startsWith('assets/')
+			? undefined
+			: (identity.profile.bannerUrl ?? undefined));
+	if (avatarUrl != null && isValidProfileUrl(avatarUrl)) updates.avatar_url = avatarUrl;
+	if (bannerUrl != null && isValidProfileUrl(bannerUrl)) updates.banner_url = bannerUrl;
+	return updates;
 }
 
 export type ParsedBundle = {
@@ -428,114 +487,177 @@ export type ImportSigningOpts = {
 	verifySignatures: boolean;
 };
 
-/**
- * Import posts and their assets. Mutates ctx. Returns import stats and zip paths for standalone asset dedup.
- */
-export async function importPostsAndAssets(
+type ImportAssetOpts = {
+	verifySignatures: boolean;
+	/** When set, skip S3+DB if existing upload has matching sha256. Return existing url. */
+	skipIfExists?: boolean;
+	/** When set and skipIfExists, caller pre-fetched existing. If blob differs, update instead of create. */
+	existingUpload?: { id: string; url: string; sha256?: string | null } | null;
+	logLabel?: string;
+};
+
+async function importSingleAsset(
 	ctx: ImportContext,
-	parsed: ParsedBundle,
-	opts: ImportSigningOpts = { verifySignatures: true }
-): Promise<{ postsImported: number; assetsImported: number; importedZipPaths: Set<string> }> {
-	const { files, posts } = parsed;
-	const importedZipPaths = new Set<string>();
-	let postsImported = 0;
+	asset: ExportedAsset,
+	assetData: Uint8Array,
+	opts: ImportAssetOpts
+): Promise<{ url: string; zipPath: string }> {
+	const logLabel = opts.logLabel ?? 'importSingleAsset';
+	if (opts.verifySignatures) {
+		try {
+			await verifyAssetSignature(ctx.did, asset, assetData);
+		} catch (e) {
+			throw new ImportValidationError(
+				'IMPORT_BAD_SIGNATURE',
+				e instanceof Error ? e.message : 'Asset signature verification failed',
+				e
+			);
+		}
+	}
+	if (opts.skipIfExists && opts.existingUpload && blobMatches(opts.existingUpload, asset)) {
+		return { url: opts.existingUpload.url, zipPath: asset.zip_path };
+	}
+	const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
+	try {
+		await s3Service.client.send(
+			new PutObjectCommand({
+				Bucket: s3Config.bucket,
+				Key: s3Key,
+				Body: assetData,
+				ContentType: asset.mime_type
+			})
+		);
+		const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
+		const folderId = await resolveFolderIdFromZipPath(
+			asset.zip_path,
+			stringToRecordId.decode(ctx.userId)
+		);
+		const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
+		const uploadData = {
+			key: s3Key,
+			owner_id: stringToRecordId.decode(ctx.userId),
+			folder_id: folderId,
+			filename: asset.filename,
+			mime_type: asset.mime_type,
+			size: asset.size,
+			sha256: asset.sha256,
+			url,
+			status: 'completed' as const,
+			is_public: isPublic,
+			created_at: new Date(),
+			updated_at: new Date()
+		};
+		if (opts.existingUpload && !blobMatches(opts.existingUpload, asset)) {
+			await uploadRepository.update(opts.existingUpload.id, {
+				key: s3Key,
+				owner_id: uploadData.owner_id,
+				folder_id: uploadData.folder_id,
+				filename: uploadData.filename,
+				mime_type: uploadData.mime_type,
+				size: uploadData.size,
+				sha256: uploadData.sha256,
+				url: uploadData.url,
+				status: uploadData.status,
+				is_public: uploadData.is_public,
+				updated_at: new Date()
+			});
+		} else {
+			const createdUpload = await uploadRepository.createWithExplicitId(
+				ctx.did,
+				asset.local_id,
+				uploadData
+			);
+			ctx.createdUploadIds.push(createdUpload.id.toString());
+		}
+		ctx.uploadedS3Keys.push(s3Key);
+		return { url, zipPath: asset.zip_path };
+	} catch (err) {
+		try {
+			await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: s3Key }));
+		} catch {
+			// Best-effort S3 cleanup
+		}
+		console.error(`[${logLabel}] Asset upload failed`, {
+			zip_path: asset.zip_path,
+			local_id: asset.local_id,
+			s3Key,
+			error: err instanceof Error ? err.message : String(err)
+		});
+		throw err;
+	}
+}
+
+type ImportPostOpts = {
+	verifySignatures: boolean;
+	/** When true, skip this post if it already exists. */
+	skipIfExists?: boolean;
+	/** For each post.asset: when true, pass existingUpload to importSingleAsset. */
+	skipAssetsIfExists?: boolean;
+	logLabel?: string;
+};
+
+async function importSinglePost(
+	ctx: ImportContext,
+	post: ExportedPost,
+	files: Record<string, Uint8Array>,
+	importedZipPaths: Set<string>,
+	zipPathToUrl: Record<string, string>,
+	opts: ImportPostOpts
+): Promise<{ imported: boolean; assetsImported: number } | null> {
+	const logLabel = opts.logLabel ?? 'importSinglePost';
+	if (opts.verifySignatures) {
+		try {
+			await verifyPostSignature(ctx.did, post);
+		} catch (e) {
+			throw new ImportValidationError(
+				'IMPORT_BAD_SIGNATURE',
+				e instanceof Error ? e.message : 'Post signature verification failed',
+				e
+			);
+		}
+	}
+	if (opts.skipIfExists) {
+		const existingPost = await postRepository.findById(
+			recordIdFromDidAndLocal('post', ctx.did, post.local_id)
+		);
+		if (existingPost) return null;
+	}
+	const mediaUrls: string[] = [];
 	let assetsImported = 0;
-
-	for (let i = 0; i < posts.length; i++) {
-		const post = posts[i];
-		if (opts.verifySignatures) {
-			try {
-				await verifyPostSignature(ctx.did, post);
-			} catch (e) {
+	if (post.assets) {
+		for (const asset of post.assets) {
+			const assetData = files[asset.zip_path];
+			if (!assetData)
 				throw new ImportValidationError(
-					'IMPORT_BAD_SIGNATURE',
-					e instanceof Error ? e.message : 'Post signature verification failed',
-					e
+					'IMPORT_INVALID',
+					`Asset ${asset.zip_path} missing from bundle`
 				);
-			}
-		}
-
-		const mediaUrls: string[] = [];
-		if (post.assets) {
-			for (const asset of post.assets) {
-				const assetData = files[asset.zip_path];
-				if (!assetData)
-					throw new ImportValidationError(
-						'IMPORT_INVALID',
-						`Asset ${asset.zip_path} missing from bundle`
-					);
-				if (opts.verifySignatures) {
-					try {
-						await verifyAssetSignature(ctx.did, asset, assetData);
-					} catch (e) {
-						throw new ImportValidationError(
-							'IMPORT_BAD_SIGNATURE',
-							e instanceof Error ? e.message : 'Asset signature verification failed',
-							e
-						);
-					}
-				}
-
-				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
-
-				try {
-					await s3Service.client.send(
-						new PutObjectCommand({
-							Bucket: s3Config.bucket,
-							Key: s3Key,
-							Body: assetData,
-							ContentType: asset.mime_type
-						})
-					);
-					const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
-					const folderId = await resolveFolderIdFromZipPath(
-						asset.zip_path,
-						stringToRecordId.decode(ctx.userId)
-					);
-					const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-
-					const createdUpload = await uploadRepository.createWithExplicitId(
-						ctx.did,
-						asset.local_id,
-						{
-							key: s3Key,
-							owner_id: stringToRecordId.decode(ctx.userId),
-							folder_id: folderId,
-							filename: asset.filename,
-							mime_type: asset.mime_type,
-							size: asset.size,
-							sha256: asset.sha256,
-							url,
-							status: 'completed',
-							is_public: isPublic,
-							created_at: new Date(),
-							updated_at: new Date()
-						}
-					);
-					ctx.uploadedS3Keys.push(s3Key);
-					ctx.createdUploadIds.push(createdUpload.id.toString());
-					mediaUrls.push(url);
-					assetsImported++;
-					importedZipPaths.add(asset.zip_path);
-				} catch (err) {
-					try {
-						await s3Service.client.send(
-							new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: s3Key })
-						);
-					} catch {
-						// Best-effort S3 cleanup
-					}
-					console.error('[importPostsAndAssets] Asset upload failed', {
-						zip_path: asset.zip_path,
-						local_id: asset.local_id,
-						s3Key,
-						error: err instanceof Error ? err.message : String(err)
-					});
-					throw err;
+			let existingUpload: { id: string; url: string; sha256?: string | null } | null = null;
+			if (opts.skipAssetsIfExists) {
+				const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
+				if (existing) {
+					existingUpload = {
+						id: existing.id.toString(),
+						url: existing.url ?? '',
+						sha256: existing.sha256
+					};
 				}
 			}
+			const result = await importSingleAsset(ctx, asset, assetData, {
+				verifySignatures: opts.verifySignatures,
+				skipIfExists: opts.skipAssetsIfExists,
+				existingUpload: existingUpload ?? undefined,
+				logLabel
+			});
+			mediaUrls.push(result.url);
+			zipPathToUrl[result.zipPath] = result.url;
+			importedZipPaths.add(result.zipPath);
+			const skipped =
+				opts.skipAssetsIfExists && existingUpload && blobMatches(existingUpload, asset);
+			if (!skipped) assetsImported++;
 		}
-
+	}
+	try {
 		const createdPost = await postRepository.createWithExplicitId(ctx.did, post.local_id, {
 			type: post.type,
 			content_type: post.content_type,
@@ -551,8 +673,40 @@ export async function importPostsAndAssets(
 			updated_at: new Date()
 		});
 		ctx.createdPostIds.push(createdPost.id.toString());
+		return { imported: true, assetsImported };
+	} catch (err) {
+		console.error(`[${logLabel}] Post create failed`, {
+			local_id: post.local_id,
+			error: err instanceof Error ? err.message : String(err)
+		});
+		throw err;
+	}
+}
 
-		postsImported++;
+/**
+ * Import posts and their assets. Mutates ctx. Returns import stats and zip paths for standalone asset dedup.
+ */
+export async function importPostsAndAssets(
+	ctx: ImportContext,
+	parsed: ParsedBundle,
+	opts: ImportSigningOpts = { verifySignatures: true }
+): Promise<{ postsImported: number; assetsImported: number; importedZipPaths: Set<string> }> {
+	const { files, posts } = parsed;
+	const importedZipPaths = new Set<string>();
+	const zipPathToUrl: Record<string, string> = {};
+	let postsImported = 0;
+	let assetsImported = 0;
+
+	for (const post of posts) {
+		const result = await importSinglePost(ctx, post, files, importedZipPaths, zipPathToUrl, {
+			verifySignatures: opts.verifySignatures,
+			skipIfExists: false,
+			logLabel: 'importPostsAndAssets'
+		});
+		if (result) {
+			postsImported++;
+			assetsImported += result.assetsImported;
+		}
 	}
 
 	return { postsImported, assetsImported, importedZipPaths };
@@ -578,6 +732,7 @@ export async function importStandaloneAssets(
 			})
 			.parse(JSON.parse(strFromU8(assetsPayload)));
 
+		const zipPathToUrl: Record<string, string> = {};
 		let assetsImported = 0;
 		for (const asset of parsedAssets.assets) {
 			if (importedZipPaths.has(asset.zip_path)) continue;
@@ -587,96 +742,29 @@ export async function importStandaloneAssets(
 					'IMPORT_INVALID',
 					`Asset ${asset.zip_path} missing from bundle`
 				);
-			if (opts.verifySignatures) {
-				try {
-					await verifyAssetSignature(ctx.did, asset, assetData);
-				} catch (e) {
-					throw new ImportValidationError(
-						'IMPORT_BAD_SIGNATURE',
-						e instanceof Error ? e.message : 'Asset signature verification failed',
-						e
-					);
-				}
-			}
-
-			const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
-			try {
-				await s3Service.client.send(
-					new PutObjectCommand({
-						Bucket: s3Config.bucket,
-						Key: s3Key,
-						Body: assetData,
-						ContentType: asset.mime_type
-					})
-				);
-				ctx.uploadedS3Keys.push(s3Key);
-				const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
-				const folderId = await resolveFolderIdFromZipPath(
-					asset.zip_path,
-					stringToRecordId.decode(ctx.userId)
-				);
-				const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-				const createdUpload = await uploadRepository.createWithExplicitId(ctx.did, asset.local_id, {
-					key: s3Key,
-					owner_id: stringToRecordId.decode(ctx.userId),
-					folder_id: folderId,
-					filename: asset.filename,
-					mime_type: asset.mime_type,
-					size: asset.size,
-					sha256: asset.sha256,
-					url,
-					status: 'completed',
-					is_public: isPublic,
-					created_at: new Date(),
-					updated_at: new Date()
-				});
-				ctx.createdUploadIds.push(createdUpload.id.toString());
+			const result = await importSingleAsset(ctx, asset, assetData, {
+				verifySignatures: opts.verifySignatures,
+				logLabel: 'importStandaloneAssets'
+			});
+			if (result) {
+				zipPathToUrl[result.zipPath] = result.url;
 				assetsImported++;
-				importedZipPaths.add(asset.zip_path);
-			} catch (err) {
-				console.error('[importStandaloneAssets] Asset upload/DB failed', {
-					zip_path: asset.zip_path,
-					local_id: asset.local_id,
-					s3Key,
-					url: `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`,
-					error: err instanceof Error ? err.message : String(err),
-					stack: err instanceof Error ? err.stack : undefined
-				});
-				throw err;
+				importedZipPaths.add(result.zipPath);
 			}
 		}
-		// If profile avatar/banner are asset paths or full URLs, resolve to S3 URLs
-		const updates: { avatar_url?: string; banner_url?: string } = {};
-		const zipPathToUrl = new Map<string, string>();
 		for (const asset of parsedAssets.assets) {
-			if (!importedZipPaths.has(asset.zip_path)) continue;
-			const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
-			const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
-			zipPathToUrl.set(asset.zip_path, url);
-			if (parsed.identity.profile.avatarUrl === asset.zip_path) updates.avatar_url = url;
-			if (parsed.identity.profile.bannerUrl === asset.zip_path) updates.banner_url = url;
-		}
-		// Handle full S3 URLs (e.g. from older exports before zip_path transform)
-		function zipPathFromUrl(url: string): string | null {
-			try {
-				const match = new URL(url).pathname.match(/\/uploads\/.+$/);
-				if (!match) return null;
-				const key = match[0].slice(1);
-				return `assets/${key.replace(/^uploads\/[^/]+\//, '')}`;
-			} catch {
-				return null;
+			if (importedZipPaths.has(asset.zip_path) && !zipPathToUrl[asset.zip_path]) {
+				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
+				zipPathToUrl[asset.zip_path] = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
 			}
 		}
-		for (const [urlOrPath, field] of [
-			[parsed.identity.profile.avatarUrl, 'avatar_url'] as const,
-			[parsed.identity.profile.bannerUrl, 'banner_url'] as const
-		]) {
-			if (!urlOrPath || updates[field]) continue;
-			const zp = urlOrPath.startsWith('assets/') ? urlOrPath : zipPathFromUrl(urlOrPath);
-			if (zp && zipPathToUrl.has(zp)) updates[field] = zipPathToUrl.get(zp)!;
-		}
-		if (Object.keys(updates).length > 0) {
-			await profileRepository.mergeByUserId(ctx.userId, updates);
+		const updates = await resolveProfileUrls(parsed.identity, zipPathToUrl);
+		const profileUpdates = {
+			...(updates.avatar_url && { avatar_url: updates.avatar_url }),
+			...(updates.banner_url && { banner_url: updates.banner_url })
+		};
+		if (Object.keys(profileUpdates).length > 0) {
+			await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
 		}
 		return assetsImported;
 	} catch (err) {
@@ -739,150 +827,18 @@ export async function syncPostsAndProfileFromBundle(
 	let assetsImported = 0;
 
 	for (const post of posts) {
-		if (opts.verifySignatures) {
-			try {
-				await verifyPostSignature(ctx.did, post);
-			} catch (e) {
-				throw new ImportValidationError(
-					'IMPORT_BAD_SIGNATURE',
-					e instanceof Error ? e.message : 'Post signature verification failed',
-					e
-				);
-			}
-		}
-		const existingPost = await postRepository.findById(
-			recordIdFromDidAndLocal('post', ctx.did, post.local_id)
-		);
-		if (existingPost) continue;
-
-		const mediaUrls: string[] = [];
-		if (post.assets) {
-			for (const asset of post.assets) {
-				const assetData = files[asset.zip_path];
-				if (!assetData)
-					throw new ImportValidationError(
-						'IMPORT_INVALID',
-						`Asset ${asset.zip_path} missing from bundle`
-					);
-				if (opts.verifySignatures) {
-					try {
-						await verifyAssetSignature(ctx.did, asset, assetData);
-					} catch (e) {
-						throw new ImportValidationError(
-							'IMPORT_BAD_SIGNATURE',
-							e instanceof Error ? e.message : 'Asset signature verification failed',
-							e
-						);
-					}
-				}
-
-				const existingUpload = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-				if (existingUpload?.url && blobMatches(existingUpload, asset)) {
-					zipPathToUrl[asset.zip_path] = existingUpload.url;
-					mediaUrls.push(existingUpload.url);
-					continue;
-				}
-
-				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
-				try {
-					await s3Service.client.send(
-						new PutObjectCommand({
-							Bucket: s3Config.bucket,
-							Key: s3Key,
-							Body: assetData,
-							ContentType: asset.mime_type
-						})
-					);
-					const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
-					const folderId = await resolveFolderIdFromZipPath(
-						asset.zip_path,
-						stringToRecordId.decode(ctx.userId)
-					);
-					const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-					if (existingUpload && !blobMatches(existingUpload, asset)) {
-						await uploadRepository.update(existingUpload.id, {
-							key: s3Key,
-							owner_id: stringToRecordId.decode(ctx.userId),
-							folder_id: folderId,
-							filename: asset.filename,
-							mime_type: asset.mime_type,
-							size: asset.size,
-							sha256: asset.sha256,
-							url,
-							status: 'completed',
-							is_public: isPublic,
-							updated_at: new Date()
-						});
-					} else {
-						const createdUpload = await uploadRepository.createWithExplicitId(
-							ctx.did,
-							asset.local_id,
-							{
-								key: s3Key,
-								owner_id: stringToRecordId.decode(ctx.userId),
-								folder_id: folderId,
-								filename: asset.filename,
-								mime_type: asset.mime_type,
-								size: asset.size,
-								sha256: asset.sha256,
-								url,
-								status: 'completed',
-								is_public: isPublic,
-								created_at: new Date(),
-								updated_at: new Date()
-							}
-						);
-						ctx.createdUploadIds.push(createdUpload.id.toString());
-					}
-					ctx.uploadedS3Keys.push(s3Key);
-					zipPathToUrl[asset.zip_path] = url;
-					mediaUrls.push(url);
-					assetsImported++;
-					importedZipPaths.add(asset.zip_path);
-				} catch (err) {
-					try {
-						await s3Service.client.send(
-							new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: s3Key })
-						);
-					} catch {
-						// Best-effort S3 cleanup
-					}
-					console.error('[syncPostsAndProfileFromBundle] Post asset upload failed', {
-						zip_path: asset.zip_path,
-						error: err instanceof Error ? err.message : String(err)
-					});
-					throw err;
-				}
-			}
-		}
-
-		try {
-			const createdPost = await postRepository.createWithExplicitId(ctx.did, post.local_id, {
-				type: post.type,
-				content_type: post.content_type,
-				title: post.title,
-				description: post.description,
-				content: post.content,
-				media_urls: mediaUrls.length > 0 ? mediaUrls : (post.media_urls ?? undefined),
-				display_mode: post.display_mode,
-				visibility: post.visibility,
-				status: post.status,
-				author_id: stringToRecordId.decode(ctx.userId),
-				created_at: new Date(post.created_at),
-				updated_at: new Date()
-			});
+		const result = await importSinglePost(ctx, post, files, importedZipPaths, zipPathToUrl, {
+			verifySignatures: opts.verifySignatures,
+			skipIfExists: true,
+			skipAssetsIfExists: true,
+			logLabel: 'syncPostsAndProfileFromBundle'
+		});
+		if (result) {
 			postsImported++;
-			ctx.createdPostIds.push(createdPost.id.toString());
-		} catch (err) {
-			console.error('[syncPostsAndProfileFromBundle] Post create failed', {
-				local_id: post.local_id,
-				error: err instanceof Error ? err.message : String(err)
-			});
-			throw err;
+			assetsImported += result.assetsImported;
 		}
 	}
 
-	// Standalone assets
 	const assetsPayload = files['assets.json'];
 	if (assetsPayload) {
 		try {
@@ -897,90 +853,21 @@ export async function syncPostsAndProfileFromBundle(
 						'IMPORT_INVALID',
 						`Asset ${asset.zip_path} missing from bundle`
 					);
-				if (opts.verifySignatures) {
-					try {
-						await verifyAssetSignature(ctx.did, asset, assetData);
-					} catch (e) {
-						throw new ImportValidationError(
-							'IMPORT_BAD_SIGNATURE',
-							e instanceof Error ? e.message : 'Asset signature verification failed',
-							e
-						);
-					}
-				}
 				const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-				if (existing?.url && blobMatches(existing, asset)) {
-					zipPathToUrl[asset.zip_path] = existing.url;
-					continue;
-				}
-				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
-				try {
-					await s3Service.client.send(
-						new PutObjectCommand({
-							Bucket: s3Config.bucket,
-							Key: s3Key,
-							Body: assetData,
-							ContentType: asset.mime_type
-						})
-					);
-					const url = `${s3Config.endpoint}/${s3Config.bucket}/${s3Key}`;
-					const folderId = await resolveFolderIdFromZipPath(
-						asset.zip_path,
-						stringToRecordId.decode(ctx.userId)
-					);
-					const isPublic = folderId ? await folderRepository.isInPublicHierarchy(folderId) : false;
-					if (existing && !blobMatches(existing, asset)) {
-						await uploadRepository.update(existing.id, {
-							key: s3Key,
-							owner_id: stringToRecordId.decode(ctx.userId),
-							folder_id: folderId,
-							filename: asset.filename,
-							mime_type: asset.mime_type,
-							size: asset.size,
-							sha256: asset.sha256,
-							url,
-							status: 'completed',
-							is_public: isPublic,
-							updated_at: new Date()
-						});
-					} else {
-						const createdUpload = await uploadRepository.createWithExplicitId(
-							ctx.did,
-							asset.local_id,
-							{
-								key: s3Key,
-								owner_id: stringToRecordId.decode(ctx.userId),
-								folder_id: folderId,
-								filename: asset.filename,
-								mime_type: asset.mime_type,
-								size: asset.size,
-								sha256: asset.sha256,
-								url,
-								status: 'completed',
-								is_public: isPublic,
-								created_at: new Date(),
-								updated_at: new Date()
-							}
-						);
-						ctx.createdUploadIds.push(createdUpload.id.toString());
-					}
-					ctx.uploadedS3Keys.push(s3Key);
-					zipPathToUrl[asset.zip_path] = url;
-					assetsImported++;
-					importedZipPaths.add(asset.zip_path);
-				} catch (err) {
-					try {
-						await s3Service.client.send(
-							new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: s3Key })
-						);
-					} catch {
-						// Best-effort S3 cleanup
-					}
-					console.error('[syncPostsAndProfileFromBundle] Standalone asset upload failed', {
-						zip_path: asset.zip_path,
-						error: err instanceof Error ? err.message : String(err)
-					});
-					throw err;
+				const existingUpload = existing
+					? { id: existing.id.toString(), url: existing.url ?? '', sha256: existing.sha256 }
+					: null;
+				const result = await importSingleAsset(ctx, asset, assetData, {
+					verifySignatures: opts.verifySignatures,
+					skipIfExists: true,
+					existingUpload: existingUpload ?? undefined,
+					logLabel: 'syncPostsAndProfileFromBundle'
+				});
+				if (result) {
+					zipPathToUrl[result.zipPath] = result.url;
+					importedZipPaths.add(result.zipPath);
+					const skipped = existingUpload && blobMatches(existingUpload, asset);
+					if (!skipped) assetsImported++;
 				}
 			}
 		} catch (err) {
@@ -990,18 +877,17 @@ export async function syncPostsAndProfileFromBundle(
 		}
 	}
 
-	/** Extract storage key from upload URL (path after bucket). Returns null if not parseable. */
-	const keyFromUrl = (url: string): string | null => {
+	function keyFromUrl(url: string): string | null {
 		try {
 			const match = new URL(url).pathname.match(/\/uploads\/.+$/);
 			return match ? match[0].slice(1) : null;
 		} catch {
 			return null;
 		}
-	};
-	/** Convert storage key to zip_path (assets/ prefix, DID segment removed). */
-	const keyToZipPath = (key: string): string => `assets/${key.replace(/^uploads\/[^/]+\//, '')}`;
-
+	}
+	function keyToZipPath(key: string): string {
+		return `assets/${key.replace(/^uploads\/[^/]+\//, '')}`;
+	}
 	const resolveAssetUrl = async (path: string | undefined): Promise<string | undefined> => {
 		if (!path) return undefined;
 		if (zipPathToUrl[path] != null) return zipPathToUrl[path];
@@ -1018,10 +904,10 @@ export async function syncPostsAndProfileFromBundle(
 			...(files['assets.json']
 				? (() => {
 						try {
-							const parsed = z
+							const parsedAssetsJson = z
 								.object({ assets: z.array(StandaloneAssetSchema) })
 								.parse(JSON.parse(strFromU8(files['assets.json'])));
-							return parsed.assets;
+							return parsedAssetsJson.assets;
 						} catch {
 							return [];
 						}
@@ -1039,31 +925,7 @@ export async function syncPostsAndProfileFromBundle(
 		return undefined;
 	};
 
-	const avatarResolved = await resolveAssetUrl(identity.profile.avatarUrl ?? undefined);
-	const bannerResolved = await resolveAssetUrl(identity.profile.bannerUrl ?? undefined);
-	const avatarUrl =
-		avatarResolved ??
-		(identity.profile.avatarUrl?.startsWith('assets/')
-			? undefined
-			: (identity.profile.avatarUrl ?? undefined));
-	const bannerUrl =
-		bannerResolved ??
-		(identity.profile.bannerUrl?.startsWith('assets/')
-			? undefined
-			: (identity.profile.bannerUrl ?? undefined));
-
-	const profileUpdates: {
-		display_name?: string;
-		bio?: string;
-		avatar_url?: string;
-		banner_url?: string;
-	} = {
-		display_name: identity.profile.displayName,
-		bio: identity.profile.bio ?? undefined
-	};
-	if (avatarUrl != null && isValidProfileUrl(avatarUrl)) profileUpdates.avatar_url = avatarUrl;
-	if (bannerUrl != null && isValidProfileUrl(bannerUrl)) profileUpdates.banner_url = bannerUrl;
-
+	const profileUpdates = await resolveProfileUrls(identity, zipPathToUrl, resolveAssetUrl);
 	await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
 
 	return { postsImported, assetsImported, profileUpdated: true };

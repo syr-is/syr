@@ -3,7 +3,11 @@ import { parseDid } from '@syr-is/did';
 import { computeSha256Hex } from '@syr-is/utils';
 import type { ExportedPost, ExportedAsset } from '@syr-is/types';
 
-/** Post fields for signing (excludes signature; assets included when present to bind post to asset list). */
+/**
+ * Post fields for signing (excludes signature; assets included when present to bind post to asset list).
+ * Note: Only zip_path and local_id from assets are used — asset signatures are excluded from the payload.
+ * Caller may pass ExportedPost (with signature); it is intentionally not included in the payload.
+ */
 export function buildPostPayload(
 	did: string,
 	post: Omit<ExportedPost, 'signature'>

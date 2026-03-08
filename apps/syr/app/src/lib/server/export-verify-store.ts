@@ -7,6 +7,8 @@ const KV_DELETE_AEGIS_CHALLENGE = 'identity_delete_aegis_challenge';
 const KV_DELETE_ACCOUNT_CHALLENGE = 'identity_delete_account_challenge';
 const KV_IMPORT_CHALLENGE_PUBLIC = 'identity_import_challenge_public';
 const KV_EXPORT_TOKEN = 'identity_export_token';
+const KV_EXPORT_SIGNING_SESSION = 'identity_export_signing_session';
+const KV_EXPORT_SIGNED_BUNDLE = 'identity_export_signed_bundle';
 const KV_IMPORT_TOKEN = 'identity_import_token';
 const KV_PUBLIC_IMPORT_TOKEN = 'identity_public_import_token';
 const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
@@ -73,6 +75,100 @@ export function consumeExportToken(token: string): Promise<string | null> {
 	return kvService
 		.getAndDelete<{ user_id: string }>(KV_EXPORT_TOKEN, token)
 		.then((entry) => entry?.user_id ?? null);
+}
+
+// --- Export signing session (chunked post/asset signing) ---
+
+export type ExportSigningSessionExportData = {
+	manifest: {
+		version: number;
+		did: string;
+		exportedAt: string;
+		postCount: number;
+		assetCount: number;
+	};
+	identityBundle: Record<string, unknown>;
+	exportedPosts: Array<Record<string, unknown>>;
+	exportedAssets: Array<Record<string, unknown> & { zip_path: string; content_base64?: string }>;
+	skippedAssets: Array<{ zip_path: string; url?: string; reason?: string }>;
+	pinnedPostIds: string[];
+};
+
+export interface ExportSigningSession {
+	challenge_id: string;
+	user_id: string;
+	did: string;
+	export_data: ExportSigningSessionExportData;
+	signatures: Record<string, string>;
+	cursor: number;
+	created_at: number;
+	/** Flat list of item ids in order (post:0, post:0:asset:0, asset:0, ...) */
+	all_item_ids: string[];
+}
+
+const SIGNING_SESSION_TTL = 600; // 10 minutes for chunked signing
+
+export async function setExportSigningSession(
+	id: string,
+	data: Omit<ExportSigningSession, 'created_at'>
+): Promise<void> {
+	const full: ExportSigningSession = {
+		...data,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_EXPORT_SIGNING_SESSION, id, full, SIGNING_SESSION_TTL);
+}
+
+export async function getExportSigningSession(id: string): Promise<ExportSigningSession | null> {
+	return kvService.get<ExportSigningSession>(KV_EXPORT_SIGNING_SESSION, id);
+}
+
+export async function updateExportSigningSession(
+	id: string,
+	updater: (session: ExportSigningSession) => ExportSigningSession
+): Promise<ExportSigningSession | null> {
+	const current = await getExportSigningSession(id);
+	if (!current) return null;
+	const updated = updater(current);
+	await kvService.set(KV_EXPORT_SIGNING_SESSION, id, updated, SIGNING_SESSION_TTL);
+	return updated;
+}
+
+// --- Export signed bundle (pre-assembled signed export) ---
+
+export async function setExportSignedBundle(
+	token: string,
+	bundle: {
+		manifest: ExportSigningSessionExportData['manifest'];
+		identity: ExportSigningSessionExportData['identityBundle'];
+		posts: Array<Record<string, unknown>>;
+		assets: Array<Record<string, unknown>>;
+		pinned_posts: { post_ids: string[] };
+	}
+): Promise<void> {
+	await kvService.set(KV_EXPORT_SIGNED_BUNDLE, token, bundle, TOKEN_TTL);
+}
+
+/** Peek signed bundle without consuming. Returns null if not a signed-bundle token. */
+export async function peekExportSignedBundle(token: string): Promise<{
+	manifest: ExportSigningSessionExportData['manifest'];
+	identity: ExportSigningSessionExportData['identityBundle'];
+	posts: Array<Record<string, unknown>>;
+	assets: Array<Record<string, unknown>>;
+	pinned_posts: { post_ids: string[] };
+} | null> {
+	return kvService.get(KV_EXPORT_SIGNED_BUNDLE, token);
+}
+
+/** Consume signed bundle (one-time use). Returns null if already used or expired. */
+export async function consumeExportSignedBundle(token: string): Promise<{
+	manifest: ExportSigningSessionExportData['manifest'];
+	identity: ExportSigningSessionExportData['identityBundle'];
+	posts: Array<Record<string, unknown>>;
+	assets: Array<Record<string, unknown>>;
+	pinned_posts: { post_ids: string[] };
+} | null> {
+	return kvService.getAndDelete(KV_EXPORT_SIGNED_BUNDLE, token);
 }
 
 // --- Import challenge ---
