@@ -28,9 +28,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const identity = await identityRepository.findByUserId(
-		stringToRecordId.decode(locals.user.id)
-	);
+	const identity = await identityRepository.findByUserId(stringToRecordId.decode(locals.user.id));
 	if (!identity) {
 		throw error(400, {
 			code: 'NO_IDENTITY',
