@@ -87,7 +87,7 @@ function parseSyrChallengeSignUrl(
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
 		const did = url.searchParams.get('did') ?? undefined;
-		return { challenge, instance: instanceRaw, ...(did ? { did } : {}) };
+		return { challenge, instance: instanceUrl.origin, ...(did ? { did } : {}) };
 	} catch {
 		// ignore
 	}

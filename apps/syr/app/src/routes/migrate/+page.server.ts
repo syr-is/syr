@@ -3,7 +3,7 @@ import { getIdentityContext } from '$lib/server/identity-context';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
-	const ctx = user ? await getIdentityContext(user.id) : null;
+	const ctx = user ? await getIdentityContext(user.id, locals) : null;
 
 	return {
 		user,

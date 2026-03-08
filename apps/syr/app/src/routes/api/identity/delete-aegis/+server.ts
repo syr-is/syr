@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const ctx = await getIdentityContext(locals.user.id);
+	const ctx = await getIdentityContext(locals.user.id, locals);
 	if (!ctx.identity) {
 		throw error(404, { code: 'NO_IDENTITY', message: 'User has no identity' });
 	}

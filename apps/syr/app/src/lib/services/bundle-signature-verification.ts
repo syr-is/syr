@@ -28,21 +28,23 @@ export function buildPostPayload(
 	return payload;
 }
 
-/** Asset fields for signing (excludes signature). */
+/** Asset fields for signing (excludes signature). Requires sha256 for integrity. */
 export function buildAssetPayload(
 	did: string,
 	asset: Omit<ExportedAsset, 'signature'>
 ): Record<string, unknown> {
-	const base: Record<string, unknown> = {
+	if (asset.sha256 == null || typeof asset.sha256 !== 'string') {
+		throw new Error(`Asset ${asset.zip_path} missing sha256 digest — cannot build secure payload`);
+	}
+	return {
 		did,
 		local_id: asset.local_id,
 		filename: asset.filename,
 		mime_type: asset.mime_type,
 		size: asset.size,
-		zip_path: asset.zip_path
+		zip_path: asset.zip_path,
+		sha256: asset.sha256
 	};
-	if (asset.sha256 != null) base.sha256 = asset.sha256;
-	return base;
 }
 
 /**
@@ -128,19 +130,20 @@ export async function verifyAssetSignature(
 			`Asset ${asset.zip_path} size mismatch: expected ${asset.size}, got ${fileBytes.byteLength}`
 		);
 	}
-	if (asset.sha256 != null) {
-		const buf: ArrayBuffer =
-			fileBytes.byteOffset === 0 && fileBytes.byteLength === fileBytes.buffer.byteLength
-				? (fileBytes.buffer as ArrayBuffer)
-				: (fileBytes.buffer.slice(
-						fileBytes.byteOffset,
-						fileBytes.byteOffset + fileBytes.byteLength
-					) as ArrayBuffer);
-		const computed = await computeSha256Hex(buf);
-		const expected = asset.sha256.toLowerCase();
-		if (computed.toLowerCase() !== expected) {
-			throw new Error(`Asset ${asset.zip_path} hash mismatch`);
-		}
+	if (asset.sha256 == null || typeof asset.sha256 !== 'string') {
+		throw new Error(`Asset ${asset.zip_path} missing sha256 digest — cannot verify integrity`);
+	}
+	const buf: ArrayBuffer =
+		fileBytes.byteOffset === 0 && fileBytes.byteLength === fileBytes.buffer.byteLength
+			? (fileBytes.buffer as ArrayBuffer)
+			: (fileBytes.buffer.slice(
+					fileBytes.byteOffset,
+					fileBytes.byteOffset + fileBytes.byteLength
+				) as ArrayBuffer);
+	const computed = await computeSha256Hex(buf);
+	const expected = asset.sha256.toLowerCase();
+	if (computed.toLowerCase() !== expected) {
+		throw new Error(`Asset ${asset.zip_path} hash mismatch`);
 	}
 	const parsedDid = parseDid(did);
 	const payload = buildAssetPayload(did, asset);

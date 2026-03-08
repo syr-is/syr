@@ -3,10 +3,8 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { canonicalize } from '@syr-is/crypto';
 import { config, independentLogin } from '$lib/config';
-import { userRepository } from '$lib/repositories/user.repository';
 import { getIdentityContext } from '$lib/server/identity-context';
 import { seedHandler } from '$lib/services/seed-handler';
-import { verifyPassword } from '$lib/server/auth';
 import { setDeleteAccountChallenge, setDeleteAccountToken } from '$lib/server/export-verify-store';
 
 const DeleteChallengeBodySchema = z.object({
@@ -17,9 +15,9 @@ const DeleteChallengeBodySchema = z.object({
  * POST /api/account/delete-challenge
  *
  * Creates a challenge for account deletion verification.
- * - Aegis users: pass { password } to sign server-side and get token immediately
+ * - Aegis users: pass { password } to verify key control, get token immediately
  * - Syner-only users: returns challenge_id for Syner to sign
- * - Users with no identity: pass { password } for password-only verification
+ * - Users with no identity: deletion not supported; direct to contact instance administrators
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) {
@@ -35,7 +33,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const parsed = DeleteChallengeBodySchema.safeParse(body);
 	const password = parsed.success ? parsed.data.password : undefined;
 
-	const ctx = await getIdentityContext(locals.user.id);
+	const ctx = await getIdentityContext(locals.user.id, locals);
 
 	// Aegis path: password provided → verify decryption (proves key control), return token
 	if (ctx.aegisBundle && password) {
@@ -54,32 +52,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Users with no identity: password-only verification
-	if (!ctx.identity && password) {
-		const user = await userRepository.findById(locals.user.id);
-		if (!user) {
-			throw error(404, { code: 'USER_NOT_FOUND', message: 'User not found' });
-		}
-		const isValid = await verifyPassword(user.password_hash, password);
-		if (!isValid) {
-			throw error(403, {
-				code: 'INVALID_PASSWORD',
-				message: 'Invalid password'
-			});
-		}
-		const deleteAccountToken = crypto.randomUUID();
-		await setDeleteAccountToken(deleteAccountToken, { user_id: locals.user.id });
-		return json({ delete_account_token: deleteAccountToken });
-	}
-
-	// Syner path: user has identity (with or without Aegis) but no password → create challenge
+	// Syner path: user has identity (with or without Aegis) → create challenge
 	if (ctx.identity) {
 		const challengeId = crypto.randomUUID();
 		const now = new Date();
 		const expiresAt = new Date(now.getTime() + independentLogin.challengeTtl * 1000);
 
 		const messageObj = {
-			domain: new URL(config.PUBLIC_URL).hostname,
+			domain: new URL(config.PUBLIC_URL).host,
 			nonce: challengeId,
 			action: 'delete_account',
 			issued_at: now.toISOString(),
@@ -104,9 +84,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	// No identity and no password
+	// No identity: deletion requires signing; direct user to contact admins
 	throw error(400, {
-		code: 'PASSWORD_REQUIRED',
-		message: 'Provide password to verify account ownership'
+		code: 'LOST_IDENTITY',
+		message:
+			'Deletion requires signing with your identity keys. Lost your keys? Contact instance administrators for assistance.'
 	});
 };

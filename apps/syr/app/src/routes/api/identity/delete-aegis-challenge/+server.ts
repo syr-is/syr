@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const ctx = await getIdentityContext(locals.user.id);
+	const ctx = await getIdentityContext(locals.user.id, locals);
 	if (!ctx.identity) {
 		throw error(404, { code: 'NO_IDENTITY', message: 'User has no identity' });
 	}
@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const expiresAt = new Date(now.getTime() + independentLogin.challengeTtl * 1000);
 
 	const messageObj = {
-		domain: new URL(config.PUBLIC_URL).hostname,
+		domain: new URL(config.PUBLIC_URL).host,
 		nonce: challengeId,
 		action: 'delete_aegis',
 		issued_at: now.toISOString(),

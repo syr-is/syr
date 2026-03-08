@@ -207,7 +207,10 @@ async function buildIdentityExport(userId: string): Promise<ExportBundleResult> 
 		urlToZipPath.set(buildUploadUrl(u.key), zp);
 	}
 	function resolveProfileUrlToZipPath(url: string): string | null {
-		if (urlToZipPath.has(url)) return urlToZipPath.get(url)!;
+		if (urlToZipPath.has(url)) {
+			const zp = urlToZipPath.get(url)!;
+			return exportedAssetZipPaths.has(zp) ? zp : null;
+		}
 		const key = keyFromUrl(url);
 		if (!key) return null;
 		const zp = keyToZipPath(key);

@@ -2,17 +2,28 @@ import { identityStore } from '$lib/stores/identity.svelte';
 
 /**
  * Centralized signing options derived from identity context.
- * Use in dialogs/components that need to know password vs Syner verification.
+ * Returns reactive getters so consumers re-render when identityContext changes.
  */
 export function useSigningOptions() {
-	const ctx = identityStore.identityContext;
 	return {
-		hasIdentity: ctx?.hasIdentity ?? false,
-		hasAegis: ctx?.hasAegis ?? false,
-		/** Can use password for verification (no identity, or custodial/Aegis) */
-		canVerifyWithPassword: !ctx?.hasIdentity || !!ctx?.hasAegis,
+		get hasIdentity() {
+			return identityStore.identityContext?.hasIdentity ?? false;
+		},
+		get hasAegis() {
+			return identityStore.identityContext?.hasAegis ?? false;
+		},
+		/** Can use password for verification (custodial/Aegis) */
+		get canVerifyWithPassword() {
+			const ctx = identityStore.identityContext;
+			return !ctx?.hasIdentity || !!ctx?.hasAegis;
+		},
 		/** Keys in Syner only; must sign with Syner */
-		isIndependent: !!(ctx?.hasIdentity && !ctx?.hasAegis),
-		did: ctx?.did ?? null
+		get isIndependent() {
+			const ctx = identityStore.identityContext;
+			return !!(ctx?.hasIdentity && !ctx?.hasAegis);
+		},
+		get did() {
+			return identityStore.identityContext?.did ?? null;
+		}
 	};
 }

@@ -51,7 +51,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const expiresAt = new Date(now.getTime() + independentLogin.challengeTtl * 1000);
 
 	const messageObj = {
-		domain: new URL(config.PUBLIC_URL).hostname,
+		domain: new URL(config.PUBLIC_URL).host,
 		nonce: challengeId,
 		action: 'import',
 		issued_at: now.toISOString(),

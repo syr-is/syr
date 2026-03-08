@@ -8,7 +8,8 @@
 	import { Loader2 } from 'lucide-svelte';
 	import ImportIdentityDialog from '$lib/components/fragments/import-identity-dialog.svelte';
 	import type { PageData } from './$types';
-	import { zip, strToU8 } from 'fflate';
+	import { strToU8 } from 'fflate';
+	import { analyzeBackupFile, createSyntheticZip } from '$lib/utils/migrate-file';
 	import { decodePublicKey, deriveDid } from '@syr-is/crypto';
 	import { buildDidDocument } from '@syr-is/did';
 
@@ -22,8 +23,8 @@
 	let migrationUsername = $state('');
 	let migrationDisplayName = $state('');
 	let migrationHasSigil = $state<boolean | null>(null);
-	/** 'raw_sigil' = raw .sigil file; 'zip' = .syr/.persona with identity.sigil inside */
-	let migrationFileType = $state<'raw_sigil' | 'zip' | null>(null);
+	/** 'raw_sigil' = raw .sigil file; 'zip' = full .syr; 'persona' = .persona (needs synthetic bundle) */
+	let migrationFileType = $state<'raw_sigil' | 'zip' | 'persona' | null>(null);
 	let migrationImportToken = $state<string | null>(null);
 	let migrationImportChallenge = $state<{
 		challenge_id: string;
@@ -38,8 +39,8 @@
 	let syncExportPassphrase = $state('');
 	let syncNewPassword = $state('');
 	let syncHasSigil = $state<boolean | null>(null);
-	/** 'raw_sigil' = raw .sigil file; 'zip' = .syr/.persona with identity.sigil inside */
-	let syncFileType = $state<'raw_sigil' | 'zip' | null>(null);
+	/** 'raw_sigil' = raw .sigil file; 'zip' = full .syr; 'persona' = .persona (needs synthetic bundle) */
+	let syncFileType = $state<'raw_sigil' | 'zip' | 'persona' | null>(null);
 	let syncImportToken = $state<string | null>(null);
 	let syncImportChallenge = $state<{
 		challenge_id: string;
@@ -85,67 +86,13 @@
 		disconnectHeartbeat(migrationHeartbeatSource);
 		migrationHeartbeatSource = null;
 		if (!f) return;
-		try {
-			const ext = f.name.toLowerCase().split('.').pop() ?? '';
-			if (ext === 'sigil') {
-				const text = await f.text();
-				let json: unknown;
-				try {
-					json = JSON.parse(text);
-				} catch {
-					toast.error('Invalid Sigil file');
-					return;
-				}
-				if (
-					json &&
-					typeof json === 'object' &&
-					'v' in json &&
-					'kdf' in json &&
-					'enc' in json &&
-					'pub' in json
-				) {
-					migrationHasSigil = true;
-					migrationFileType = 'raw_sigil';
-				} else {
-					toast.error('Invalid Sigil file');
-				}
-				return;
-			}
-			if (ext === 'json') {
-				const text = await f.text();
-				try {
-					const json = JSON.parse(text);
-					if (
-						json &&
-						typeof json === 'object' &&
-						'v' in json &&
-						'kdf' in json &&
-						'enc' in json &&
-						'pub' in json
-					) {
-						migrationHasSigil = true;
-						migrationFileType = 'raw_sigil';
-					} else {
-						toast.error('File is not a Sigil');
-					}
-				} catch {
-					toast.error('Invalid JSON');
-				}
-				return;
-			}
-			const ab = await f.arrayBuffer();
-			const zip = new Uint8Array(ab);
-			const { unzipSync } = await import('fflate');
-			const files = unzipSync(zip);
-			const hasRootSigil = !!files['identity.sigil'];
-			const hasPersonaSigil = Object.keys(files).some((k) => k.endsWith('/identity.sigil'));
-			migrationHasSigil = hasRootSigil || hasPersonaSigil;
-			migrationFileType = migrationHasSigil ? 'zip' : null;
-		} catch {
-			migrationHasSigil = null;
-			migrationFileType = null;
-			toast.error('Could not read file');
+		const result = await analyzeBackupFile(f);
+		if (result.error) {
+			toast.error(result.error);
+			return;
 		}
+		migrationHasSigil = result.hasSigil;
+		migrationFileType = result.fileType;
 	}
 
 	async function handleMigrationVerifySyner() {
@@ -199,6 +146,7 @@
 			src.onerror = () => {
 				disconnectHeartbeat(src);
 				migrationHeartbeatSource = null;
+				toast.error('Connection lost — please retry migration verification');
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed');
@@ -259,13 +207,88 @@
 						zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: [] }));
 						zipFiles['identity.sigil'] = strToU8(sigilStr);
 						zipFiles['pinned_posts.json'] = strToU8(JSON.stringify({ post_ids: [] }));
-						const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-							zip(zipFiles, { level: 1 }, (err, out) => {
-								if (err) reject(err);
-								else if (out === undefined) reject(new Error('Zip produced no output'));
-								else resolve(out);
-							});
+						const zipped = await createSyntheticZip(zipFiles);
+						bundleFile = new File([new Uint8Array(zipped)], 'synthetic-migration.syr', {
+							type: 'application/zip'
 						});
+						const aegisBundle = await createAegisBundle(seed, migrationNewPassword);
+						formData.set('bundle', bundleFile);
+						formData.append('aegisBundle', JSON.stringify(aegisBundle));
+					} finally {
+						if (seed) seed.fill(0);
+					}
+				} else if (migrationFileType === 'persona') {
+					const { unzipSync, strFromU8 } = await import('fflate');
+					const files = unzipSync(new Uint8Array(await migrationFile.arrayBuffer()));
+					const sigilEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
+					const profileEntry = Object.keys(files).find((k) => k.endsWith('/profile.json'));
+					if (!sigilEntry || !profileEntry || !files[sigilEntry] || !files[profileEntry]) {
+						throw new Error('Invalid persona: missing identity.sigil or profile.json');
+					}
+					sigilStr = strFromU8(files[sigilEntry]);
+					const sigil = JSON.parse(sigilStr);
+					const profile = JSON.parse(strFromU8(files[profileEntry]));
+					let seed: Uint8Array | null = null;
+					try {
+						seed = await decryptSigil(sigil, migrationExportPassphrase);
+						const pubRaw = decodePublicKey(sigil.pub);
+						const did = deriveDid(pubRaw);
+						const didDocument = buildDidDocument({
+							did,
+							publicKeyMultibase: sigil.pub
+						}) as unknown as Record<string, unknown>;
+						const avatarPath = profile.avatarUrl?.replace('./', '');
+						const bannerPath = profile.bannerUrl?.replace('./', '');
+						const personaDir = sigilEntry.replace('/identity.sigil', '');
+						const zipFiles: Record<string, Uint8Array> = {};
+						zipFiles['manifest.json'] = strToU8(
+							JSON.stringify(
+								{
+									version: 1,
+									did,
+									exportedAt: new Date().toISOString(),
+									postCount: 0,
+									assetCount:
+										(avatarPath ? 1 : 0) + (bannerPath && bannerPath !== avatarPath ? 1 : 0)
+								},
+								null,
+								2
+							)
+						);
+						zipFiles['identity.json'] = strToU8(
+							JSON.stringify(
+								{
+									did,
+									publicKey: sigil.pub,
+									didDocument,
+									delegatedKeys: [],
+									profile: {
+										displayName: profile.displayName ?? 'Imported Identity',
+										bio: profile.bio,
+										avatarUrl: avatarPath ? `assets/${avatarPath}` : undefined,
+										bannerUrl: bannerPath ? `assets/${bannerPath}` : undefined
+									},
+									exportedAt: profile.createdAt ?? new Date().toISOString()
+								},
+								null,
+								2
+							)
+						);
+						zipFiles['posts.json'] = strToU8(JSON.stringify([]));
+						zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: [] }, null, 2));
+						zipFiles['identity.sigil'] = strToU8(sigilStr);
+						zipFiles['pinned_posts.json'] = strToU8(JSON.stringify({ post_ids: [] }));
+						if (avatarPath) {
+							const fullPath = `${personaDir}/${avatarPath}`;
+							const data = files[fullPath];
+							if (data) zipFiles[`assets/${avatarPath}`] = data;
+						}
+						if (bannerPath && bannerPath !== avatarPath) {
+							const fullPath = `${personaDir}/${bannerPath}`;
+							const data = files[fullPath];
+							if (data) zipFiles[`assets/${bannerPath}`] = data;
+						}
+						const zipped = await createSyntheticZip(zipFiles);
 						bundleFile = new File([new Uint8Array(zipped)], 'synthetic-migration.syr', {
 							type: 'application/zip'
 						});
@@ -327,64 +350,13 @@
 		disconnectHeartbeat(syncHeartbeatSource);
 		syncHeartbeatSource = null;
 		if (!f) return;
-		try {
-			const ext = f.name.toLowerCase().split('.').pop() ?? '';
-			if (ext === 'sigil') {
-				const text = await f.text();
-				try {
-					const json = JSON.parse(text);
-					if (
-						json &&
-						typeof json === 'object' &&
-						'v' in json &&
-						'kdf' in json &&
-						'enc' in json &&
-						'pub' in json
-					) {
-						syncHasSigil = true;
-						syncFileType = 'raw_sigil';
-					} else {
-						toast.error('Invalid Sigil file');
-					}
-				} catch {
-					toast.error('Invalid Sigil file');
-				}
-				return;
-			}
-			if (ext === 'json') {
-				const text = await f.text();
-				try {
-					const json = JSON.parse(text);
-					if (
-						json &&
-						typeof json === 'object' &&
-						'v' in json &&
-						'kdf' in json &&
-						'enc' in json &&
-						'pub' in json
-					) {
-						syncHasSigil = true;
-						syncFileType = 'raw_sigil';
-					} else {
-						toast.error('File is not a Sigil');
-					}
-				} catch {
-					toast.error('Invalid JSON');
-				}
-				return;
-			}
-			const { unzipSync } = await import('fflate');
-			const ab = await f.arrayBuffer();
-			const files = unzipSync(new Uint8Array(ab));
-			const hasRoot = !!files['identity.sigil'];
-			const hasPersona = Object.keys(files).some((k) => k.endsWith('/identity.sigil'));
-			syncHasSigil = hasRoot || hasPersona;
-			syncFileType = syncHasSigil ? 'zip' : null;
-		} catch {
-			syncHasSigil = null;
-			syncFileType = null;
-			toast.error('Could not read file');
+		const result = await analyzeBackupFile(f);
+		if (result.error) {
+			toast.error(result.error);
+			return;
 		}
+		syncHasSigil = result.hasSigil;
+		syncFileType = result.fileType;
 	}
 
 	async function handleSyncVerifySyner() {
@@ -437,6 +409,7 @@
 			src.onerror = () => {
 				disconnectHeartbeat(src);
 				syncHeartbeatSource = null;
+				toast.error('Connection lost — please retry sync verification');
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed');
@@ -510,13 +483,81 @@
 						zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: [] }));
 						zipFiles['identity.sigil'] = strToU8(sigilStr);
 						zipFiles['pinned_posts.json'] = strToU8(JSON.stringify({ post_ids: [] }));
-						const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-							zip(zipFiles, { level: 1 }, (err, out) => {
-								if (err) reject(err);
-								else if (out === undefined) reject(new Error('Zip produced no output'));
-								else resolve(out);
-							});
+						const zipped = await createSyntheticZip(zipFiles);
+						const bundleFile = new File([new Uint8Array(zipped)], 'synthetic-sync.syr', {
+							type: 'application/zip'
 						});
+						formData.set('bundle', bundleFile);
+					} else if (syncFileType === 'persona') {
+						const { unzipSync, strFromU8 } = await import('fflate');
+						const files = unzipSync(new Uint8Array(await syncFile.arrayBuffer()));
+						const sigilEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
+						const profileEntry = Object.keys(files).find((k) => k.endsWith('/profile.json'));
+						if (!sigilEntry || !profileEntry || !files[sigilEntry] || !files[profileEntry]) {
+							throw new Error('Invalid persona: missing identity.sigil or profile.json');
+						}
+						const profile = JSON.parse(strFromU8(files[profileEntry]));
+						const pubRaw = decodePublicKey(sigil.pub);
+						const did = deriveDid(pubRaw);
+						if (did !== data.did) {
+							throw new Error('This backup does not match your identity.');
+						}
+						const didDocument = buildDidDocument({
+							did,
+							publicKeyMultibase: sigil.pub
+						}) as unknown as Record<string, unknown>;
+						const avatarPath = profile.avatarUrl?.replace('./', '');
+						const bannerPath = profile.bannerUrl?.replace('./', '');
+						const personaDir = sigilEntry.replace('/identity.sigil', '');
+						const zipFiles: Record<string, Uint8Array> = {};
+						zipFiles['manifest.json'] = strToU8(
+							JSON.stringify(
+								{
+									version: 1,
+									did,
+									exportedAt: new Date().toISOString(),
+									postCount: 0,
+									assetCount:
+										(avatarPath ? 1 : 0) + (bannerPath && bannerPath !== avatarPath ? 1 : 0)
+								},
+								null,
+								2
+							)
+						);
+						zipFiles['identity.json'] = strToU8(
+							JSON.stringify(
+								{
+									did,
+									publicKey: sigil.pub,
+									didDocument,
+									delegatedKeys: [],
+									profile: {
+										displayName: profile.displayName ?? 'Imported Identity',
+										bio: profile.bio,
+										avatarUrl: avatarPath ? `assets/${avatarPath}` : undefined,
+										bannerUrl: bannerPath ? `assets/${bannerPath}` : undefined
+									},
+									exportedAt: profile.createdAt ?? new Date().toISOString()
+								},
+								null,
+								2
+							)
+						);
+						zipFiles['posts.json'] = strToU8(JSON.stringify([]));
+						zipFiles['assets.json'] = strToU8(JSON.stringify({ assets: [] }, null, 2));
+						zipFiles['identity.sigil'] = strToU8(sigilStr);
+						zipFiles['pinned_posts.json'] = strToU8(JSON.stringify({ post_ids: [] }));
+						if (avatarPath) {
+							const fullPath = `${personaDir}/${avatarPath}`;
+							const data = files[fullPath];
+							if (data) zipFiles[`assets/${avatarPath}`] = data;
+						}
+						if (bannerPath && bannerPath !== avatarPath) {
+							const fullPath = `${personaDir}/${bannerPath}`;
+							const data = files[fullPath];
+							if (data) zipFiles[`assets/${bannerPath}`] = data;
+						}
+						const zipped = await createSyntheticZip(zipFiles);
 						const bundleFile = new File([new Uint8Array(zipped)], 'synthetic-sync.syr', {
 							type: 'application/zip'
 						});

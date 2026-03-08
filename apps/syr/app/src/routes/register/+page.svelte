@@ -125,8 +125,9 @@
 						href={resolve('/migrate')}
 						data-sveltekit-preload-data
 						class="font-medium text-primary underline-offset-4 hover:underline"
+						aria-label="Migrate an existing account"
 					>
-						Migrating?
+						Migrate an existing account
 					</a>
 				</p>
 			</Card.Footer>

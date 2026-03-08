@@ -5,10 +5,7 @@
 	import {
 		parseSyrLoginUrl,
 		parseSyrSyncProfileUrl,
-		parseSyrExportUrl,
-		parseSyrImportUrl,
-		parseSyrDeleteAegisUrl,
-		parseSyrDeleteAccountUrl
+		parseSyrChallengeSignUrlAny
 	} from '$lib/utils/syr-url';
 
 	function handleUrl(url: string) {
@@ -18,11 +15,7 @@
 			goto(`/scan-confirm?${q.toString()}`);
 			return;
 		}
-		const challengeSignParsed =
-			parseSyrExportUrl(url) ??
-			parseSyrImportUrl(url) ??
-			parseSyrDeleteAegisUrl(url) ??
-			parseSyrDeleteAccountUrl(url);
+		const challengeSignParsed = parseSyrChallengeSignUrlAny(url);
 		if (challengeSignParsed) {
 			const q = new URLSearchParams(challengeSignParsed);
 			goto(`/export-verify?${q.toString()}`);

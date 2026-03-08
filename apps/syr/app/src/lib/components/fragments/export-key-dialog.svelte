@@ -11,15 +11,9 @@
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
 	import QRCode from 'qrcode';
-	import { identityStore } from '$lib/stores/identity.svelte';
+	import { identityStore, type IdentityContextClient } from '$lib/stores/identity.svelte';
 
 	export type ExportType = 'syr' | 'sigil' | 'persona';
-
-	export type IdentityContextClient = {
-		hasIdentity: boolean;
-		hasAegis: boolean;
-		did: string | null;
-	};
 
 	let {
 		open = $bindable(false),
@@ -65,26 +59,38 @@
 		exportType === 'syr' && (isIndependentSyr || exportChallenge !== null)
 	);
 
+	function determineInitialStep(
+		exportTypeVal: ExportType,
+		hasAegisVal: boolean,
+		bundleVal: AegisBundle | null
+	): 'choose' | 'verify' | 'unlock' {
+		if (exportTypeVal === 'syr') return hasAegisVal ? 'choose' : 'verify';
+		if (!bundleVal) return 'unlock';
+		return 'unlock';
+	}
+
+	function resetExportState() {
+		bundle = null;
+		unlockPassword = '';
+		exportChallenge = null;
+		exportToken = null;
+		pendingDownload = null;
+		disconnectExportHeartbeat();
+	}
+
 	$effect(() => {
 		if (open) {
 			if (isInitialOpen) {
 				isInitialOpen = false;
+				step = determineInitialStep(exportType, hasAegis, bundle);
 				if (exportType === 'syr') {
-					step = hasAegis ? 'choose' : 'verify';
 					exportChallenge = null;
 					exportToken = null;
-				} else if (!bundle) {
-					step = 'unlock';
 				}
 			}
 		} else {
 			isInitialOpen = true;
-			bundle = null;
-			unlockPassword = '';
-			exportChallenge = null;
-			exportToken = null;
-			pendingDownload = null;
-			disconnectExportHeartbeat();
+			resetExportState();
 		}
 	});
 
@@ -249,6 +255,7 @@
 				disconnectExportHeartbeat();
 				exportChallenge = null;
 				exportToken = null;
+				toast.error('Connection lost, please retry');
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to create challenge');

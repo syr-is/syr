@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	const ctx = await getIdentityContext(locals.user.id);
+	const ctx = await getIdentityContext(locals.user.id, locals);
 	if (!ctx.identity) {
 		throw error(404, {
 			code: 'NO_IDENTITY',

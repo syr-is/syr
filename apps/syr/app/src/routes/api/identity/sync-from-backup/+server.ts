@@ -111,7 +111,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		pinnedPostsRestored: false
 	};
 
-	const signingOpts = { verifySignatures: true };
+	const signingOpts = { verifySignatures: !useDataOnlyImport };
 	try {
 		const result = await syncPostsAndProfileFromBundle(ctx, parsed, signingOpts);
 		return json({

@@ -112,7 +112,7 @@ User has data-only .syr (no identity.sigil). Must prove key control via Syner to
 2. Client parses bundle, extracts `did` from identity.json.
 3. Web app calls **POST** `/api/identity/import-challenge` with `{ did }` (auth required).
 4. Server returns `challenge_id`, `message`, `deeplink_url`.
-5. User scans QR (`syr://import?...`) with Syner (no `did` in URL for import — Syner selects persona).
+5. User scans QR (`syr://import?...&did=...`) with Syner. The `did` query param is optional (a hint): when present, it pre-selects that persona in Syner; when absent, Syner prompts the user to select a persona.
 6. Syner fetches **GET** `/api/identity/export-challenge/:id` (same endpoint as export).
 7. Syner signs and POSTs to **POST** `/api/identity/export-verify` (same endpoint).
 8. Server returns `import_token`.

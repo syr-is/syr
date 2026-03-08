@@ -283,8 +283,9 @@
 					href={resolve('/migrate')}
 					data-sveltekit-preload-data
 					class="font-medium text-primary underline-offset-4 hover:underline"
+					aria-label="Migrate your account"
 				>
-					Migrating?
+					Migrate your account
 				</a>
 			</p>
 		</Card.Footer>

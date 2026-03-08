@@ -156,43 +156,10 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		});
 	}
 
-	// Create user (no profile, no identity - import will create those)
-	const password_hash = await hashPassword(password);
-	const now = new Date();
-	const user = await userRepository.create({
-		username,
-		password_hash,
-		role: 'USER',
-		created_at: now,
-		updated_at: now
-	} as Parameters<typeof userRepository.create>[0]);
-
-	const userId = user.id.toString();
-
-	// Create session
-	const tokenBytes = new Uint8Array(32);
-	crypto.getRandomValues(tokenBytes);
-	const sessionToken = Array.from(tokenBytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-	const expiresAt = new Date();
-	expiresAt.setDate(expiresAt.getDate() + 7);
-	const ip = getClientAddress?.() || undefined;
-	const userAgent = request.headers.get('user-agent') || undefined;
-
-	const session = await sessionRepository.create({
-		user_id: user.id,
-		token: sessionToken,
-		expires_at: expiresAt,
-		created_at: now,
-		ip,
-		user_agent: userAgent
-	} as Parameters<typeof sessionRepository.create>[0]);
-
-	// Run import
+	// Run import inside try so user/session are only created after validation
 	const ctx: ImportContext = {
 		did,
-		userId,
+		userId: '', // Set after user creation
 		createdProfile: null,
 		createdPostIds: [],
 		createdUploadIds: [],
@@ -206,6 +173,38 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 	const signingOpts = { verifySignatures: !useDataOnlyImport };
 
 	try {
+		// Create user (no profile, no identity - import will create those)
+		const password_hash = await hashPassword(password);
+		const now = new Date();
+		const user = await userRepository.create({
+			username,
+			password_hash,
+			role: 'USER',
+			created_at: now,
+			updated_at: now
+		} as Parameters<typeof userRepository.create>[0]);
+
+		ctx.userId = user.id.toString();
+
+		// Create session
+		const tokenBytes = new Uint8Array(32);
+		crypto.getRandomValues(tokenBytes);
+		const sessionToken = Array.from(tokenBytes)
+			.map((b) => b.toString(16).padStart(2, '0'))
+			.join('');
+		const expiresAt = new Date();
+		expiresAt.setDate(expiresAt.getDate() + 7);
+		const ip = getClientAddress?.() || undefined;
+		const userAgent = request.headers.get('user-agent') || undefined;
+
+		const session = await sessionRepository.create({
+			user_id: user.id,
+			token: sessionToken,
+			expires_at: expiresAt,
+			created_at: now,
+			ip,
+			user_agent: userAgent
+		} as Parameters<typeof sessionRepository.create>[0]);
 		if (useDataOnlyImport) {
 			console.log('[register-with-import] Data-only import: skipping signature verification');
 			await importIdentityAndProfileExternal(ctx, parsed);
@@ -235,7 +234,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		await restorePinnedPosts(ctx, parsed);
 
 		const accessToken = generateAccessToken({
-			userId,
+			userId: ctx.userId,
 			sessionId: session.id.toString()
 		});
 
@@ -257,27 +256,30 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 			}
 		});
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) {
-			throw err;
-		}
 		console.error('[register-with-import] Error:', err, {
 			useDataOnlyImport,
 			verifySignatures: signingOpts.verifySignatures
 		});
 		await rollbackImport(ctx);
-		try {
-			await sessionRepository.delete(session.id);
-		} catch (e) {
-			console.error('Rollback: failed to delete session', e);
+		// Clean up user and session if they were created (ctx.userId set)
+		if (ctx.userId) {
+			try {
+				await sessionRepository.deleteByUserId(ctx.userId);
+			} catch (e) {
+				console.error('Rollback: failed to delete session', e);
+			}
+			try {
+				await userRepository.delete(ctx.userId);
+			} catch (e) {
+				console.error('Rollback: failed to delete user', e);
+			}
 		}
-		try {
-			await userRepository.delete(user.id);
-		} catch (e) {
-			console.error('Rollback: failed to delete user', e);
+		if (err && typeof err === 'object' && 'status' in err) {
+			throw err;
 		}
 		throw error(500, {
 			code: 'IMPORT_FAILED',
-			message: 'Identity import failed after user creation. Your account was not created.'
+			message: 'Identity import failed. Your account was not created.'
 		});
 	}
 };
