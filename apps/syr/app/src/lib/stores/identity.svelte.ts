@@ -10,12 +10,16 @@ export type IdentityContextClient = {
 
 class IdentityStore {
 	identityContext = $state<IdentityContextClient | null>(null);
+	/** True once layout has called setIdentityContext or clearIdentityContext at least once */
+	isContextReady = $state(false);
 
 	setIdentityContext(ctx: IdentityContextClient | null) {
+		this.isContextReady = true;
 		this.identityContext = ctx;
 	}
 
 	clearIdentityContext() {
+		this.isContextReady = true;
 		this.identityContext = null;
 	}
 }

@@ -16,6 +16,7 @@
 	} = $props();
 
 	const signingOpts = useSigningOptions();
+	const isContextReady = $derived(signingOpts.isContextReady);
 	const canVerifyWithPassword = $derived(signingOpts.hasAegis);
 	const canVerifyWithSyner = $derived(signingOpts.hasIdentity);
 
@@ -34,7 +35,8 @@
 	let adminsAbortController: AbortController | null = null;
 
 	$effect(() => {
-		const isLostIdentityPath = open && !canVerifyWithPassword && !canVerifyWithSyner;
+		const isLostIdentityPath =
+			open && isContextReady && !canVerifyWithPassword && !canVerifyWithSyner;
 		if (isLostIdentityPath) {
 			if (adminsAbortController) adminsAbortController.abort();
 			const controller = new AbortController();
@@ -204,7 +206,9 @@
 						uploads, sessions, identity, and everything you've put on the platform.
 					</p>
 					<p class="mt-2 text-sm text-muted-foreground">
-						{#if canVerifyWithPassword && canVerifyWithSyner}
+						{#if !isContextReady}
+							This cannot be undone. You must verify ownership to proceed.
+						{:else if canVerifyWithPassword && canVerifyWithSyner}
 							This cannot be undone. You must verify ownership with either your password or by
 							signing with Syner.
 						{:else if canVerifyWithPassword}
@@ -238,54 +242,58 @@
 						All posts, uploads, profile, and identity data will be deleted.
 					</p>
 				</div>
-				{#if canVerifyWithPassword || canVerifyWithSyner}
-					<div class="flex flex-col gap-2">
-						{#if canVerifyWithPassword}
-							<Button
-								variant="outline"
-								onclick={() => {
-									step = 'password';
-								}}
-								disabled={deleting}
-							>
-								Verify with password
-							</Button>
-						{/if}
-						{#if canVerifyWithSyner}
-							<Button variant="outline" onclick={handleVerifyWithSyner} disabled={deleting}>
-								{#if deleting}
-									<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-									Loading...
-								{:else}
-									Sign with Syner
-								{/if}
-							</Button>
-						{/if}
-					</div>
-				{:else}
-					<div
-						class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30"
-					>
-						<p class="font-medium text-amber-800 dark:text-amber-200">
-							Lost identity? Contact instance administrators
-						</p>
-						{#if admins.length > 0}
-							<ul class="mt-2 space-y-1 text-amber-700 dark:text-amber-300">
-								{#each admins as admin (admin.username)}
-									<li>
-										{admin.username}
-										{#if admin.did}
-											— <span class="font-mono text-xs">{admin.did}</span>
-										{/if}
-									</li>
-								{/each}
-							</ul>
-						{:else}
-							<p class="mt-1 text-amber-700 dark:text-amber-300">
-								No administrators listed. Please contact your instance operator.
+				{#if isContextReady}
+					{#if canVerifyWithPassword || canVerifyWithSyner}
+						<div class="flex flex-col gap-2">
+							{#if canVerifyWithPassword}
+								<Button
+									variant="outline"
+									onclick={() => {
+										step = 'password';
+									}}
+									disabled={deleting}
+								>
+									Verify with password
+								</Button>
+							{/if}
+							{#if canVerifyWithSyner}
+								<Button variant="outline" onclick={handleVerifyWithSyner} disabled={deleting}>
+									{#if deleting}
+										<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+										Loading...
+									{:else}
+										Sign with Syner
+									{/if}
+								</Button>
+							{/if}
+						</div>
+					{:else}
+						<div
+							class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30"
+						>
+							<p class="font-medium text-amber-800 dark:text-amber-200">
+								Lost identity? Contact instance administrators
 							</p>
-						{/if}
-					</div>
+							{#if admins.length > 0}
+								<ul class="mt-2 space-y-1 text-amber-700 dark:text-amber-300">
+									{#each admins as admin (admin.username)}
+										<li>
+											{admin.username}
+											{#if admin.did}
+												— <span class="font-mono text-xs">{admin.did}</span>
+											{/if}
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<p class="mt-1 text-amber-700 dark:text-amber-300">
+									No administrators listed. Please contact your instance operator.
+								</p>
+							{/if}
+						</div>
+					{/if}
+				{:else}
+					<p class="text-sm text-muted-foreground">Loading...</p>
 				{/if}
 			{:else if step === 'password'}
 				<div class="space-y-2">

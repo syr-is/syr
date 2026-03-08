@@ -6,6 +6,10 @@ import { identityStore } from '$lib/stores/identity.svelte';
  */
 export function useSigningOptions() {
 	return {
+		/** True once layout has populated identity context */
+		get isContextReady() {
+			return identityStore.isContextReady;
+		},
 		get hasIdentity() {
 			return identityStore.identityContext?.hasIdentity ?? false;
 		},
