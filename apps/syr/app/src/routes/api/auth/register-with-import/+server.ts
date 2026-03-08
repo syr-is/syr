@@ -22,6 +22,7 @@ import {
 	ImportValidationError,
 	type ImportContext
 } from '$lib/services/identity-import.service';
+import { profileRepository } from '$lib/repositories/profile.repository';
 
 const UsernameSchema = UserSchema.shape.username;
 const DisplayNameSchema = z.string().min(1).max(100);
@@ -209,6 +210,10 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		} else {
 			throw new Error('Missing aegisBundle for full import');
 		}
+		// Override profile display name with form value when provided
+		await profileRepository.mergeByUserId(ctx.userId, {
+			display_name: displayName
+		});
 
 		const { postsImported, assetsImported, importedZipPaths } = await importPostsAndAssets(
 			ctx,

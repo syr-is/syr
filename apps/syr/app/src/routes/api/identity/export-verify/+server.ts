@@ -44,25 +44,22 @@ export const POST: RequestHandler = async ({ request }) => {
 		const data = VerifyRequestSchema.parse(body);
 
 		// Atomically consume export challenge first, then import, then public import, then delete-aegis, then delete-account
-		let challenge = await consumeExportChallenge(data.challenge_id);
-		let purpose: 'export' | 'import' | 'import_public' | 'delete_aegis' | 'delete_account' =
-			'export';
+		let challenge: Awaited<ReturnType<typeof consumeExportChallenge>>;
+		let purpose: 'export' | 'import' | 'import_public' | 'delete_aegis' | 'delete_account';
 
-		if (!challenge) {
-			challenge = await consumeImportChallenge(data.challenge_id);
+		if ((challenge = await consumeExportChallenge(data.challenge_id))) {
+			purpose = 'export';
+		} else if ((challenge = await consumeImportChallenge(data.challenge_id))) {
 			purpose = 'import';
-		}
-		if (!challenge) {
-			challenge = await consumePublicImportChallenge(data.challenge_id);
+		} else if ((challenge = await consumePublicImportChallenge(data.challenge_id))) {
 			purpose = 'import_public';
-		}
-		if (!challenge) {
-			challenge = await consumeDeleteAegisChallenge(data.challenge_id);
+		} else if ((challenge = await consumeDeleteAegisChallenge(data.challenge_id))) {
 			purpose = 'delete_aegis';
-		}
-		if (!challenge) {
-			challenge = await consumeDeleteAccountChallenge(data.challenge_id);
+		} else if ((challenge = await consumeDeleteAccountChallenge(data.challenge_id))) {
 			purpose = 'delete_account';
+		} else {
+			challenge = null;
+			purpose = 'export'; // Unused when challenge is null
 		}
 
 		if (!challenge) {

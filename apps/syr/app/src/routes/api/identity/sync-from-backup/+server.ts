@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { AegisBundleSchema } from '@syr-is/types';
+import { stringToRecordId } from '@syr-is/types';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { consumeImportToken } from '$lib/server/export-verify-store';
 import {
@@ -27,7 +28,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' });
 	}
 
-	const identity = await identityRepository.findByUserId(locals.user.id);
+	const identity = await identityRepository.findByUserId(
+		stringToRecordId.decode(locals.user.id)
+	);
 	if (!identity) {
 		throw error(400, {
 			code: 'NO_IDENTITY',
