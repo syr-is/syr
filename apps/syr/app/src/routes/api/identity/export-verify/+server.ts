@@ -163,7 +163,9 @@ export const POST: RequestHandler = async ({ request }) => {
 				items,
 				has_more: hasMore,
 				chunk_index: 0,
-				total_count: totalCount
+				total_count: totalCount,
+				chunk_size: CHUNK_SIZE,
+				signed_count: 0
 			});
 		} else if (purpose === 'delete_aegis') {
 			const deleteAegisToken = crypto.randomUUID();

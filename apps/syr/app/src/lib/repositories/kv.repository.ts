@@ -414,6 +414,53 @@ export class KvRepository {
 	}
 
 	/**
+	 * Conditionally update a KV entry's value only if value.version equals expectedVersion.
+	 * Used for optimistic locking to prevent lost updates under concurrency.
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param expectedVersion - The version that must match for the update to succeed
+	 * @param newValue - The new value (must include version: expectedVersion + 1)
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 * @returns true if the update succeeded (1 row updated), false if version mismatch or record not found
+	 */
+	async updateValueIfVersionMatch<T extends { version: number }>(
+		type: string,
+		index: string,
+		expectedVersion: number,
+		newValue: T,
+		ttlSeconds?: number
+	): Promise<boolean> {
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+		const expiresAt = ttlSeconds != null ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
+
+		const params: Record<string, unknown> = {
+			recordId,
+			newValue,
+			expectedVersion,
+			now
+		};
+		if (expiresAt !== undefined) {
+			params.expiresAt = expiresAt;
+		}
+
+		const expiresAtSet =
+			expiresAt !== undefined ? ', expires_at = $expiresAt' : ', expires_at = NONE';
+
+		const query = `
+			UPDATE $recordId SET
+				value = $newValue,
+				updated_at = $now${expiresAtSet}
+			WHERE value.version = $expectedVersion
+			RETURN AFTER
+		`;
+
+		const result = await this.db.query<[KvEntry[]]>(query, params);
+		const records = result[0] ?? [];
+		return records.length > 0;
+	}
+
+	/**
 	 * Create a KV entry only if it doesn't already exist
 	 * Uses a single INSERT attempt and catches duplicate-id errors for atomicity
 	 * @param type - The category/type of the entry

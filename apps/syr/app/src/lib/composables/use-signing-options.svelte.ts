@@ -15,7 +15,8 @@ export function useSigningOptions() {
 		/** Can use password for verification (custodial/Aegis) */
 		get canVerifyWithPassword() {
 			const ctx = identityStore.identityContext;
-			return !ctx?.hasIdentity || !!ctx?.hasAegis;
+			if (ctx == null) return false; // loading or uninitialized
+			return !!ctx.hasAegis;
 		},
 		/** Keys in Syner only; must sign with Syner */
 		get isIndependent() {

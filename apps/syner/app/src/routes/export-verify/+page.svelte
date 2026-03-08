@@ -259,10 +259,12 @@
 			let items: Array<{ id: string; message: string }> = verifyData.items ?? [];
 			const totalCount = verifyData.total_count ?? items.length;
 			let chunkIndex = verifyData.chunk_index ?? 0;
+			const chunkSize = verifyData.chunk_size ?? 20;
+			let lastSignedCount = verifyData.signed_count ?? 0;
 
 			while (items.length > 0) {
 				signingProgress = {
-					current: Math.min(chunkIndex * 20, totalCount),
+					current: lastSignedCount,
 					total: totalCount
 				};
 				info(`[export-verify] Signing export chunk ${chunkIndex + 1}, ${items.length} items`);
@@ -310,6 +312,7 @@
 
 				items = sigData.items ?? [];
 				chunkIndex = sigData.chunk_index ?? chunkIndex + 1;
+				lastSignedCount = sigData.signed_count ?? chunkIndex * (sigData.chunk_size ?? chunkSize);
 			}
 
 			// Should not reach here; done case returns above

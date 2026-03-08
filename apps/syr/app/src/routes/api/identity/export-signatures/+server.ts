@@ -133,18 +133,30 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 			const chunkIndex = Math.floor(cursor / CHUNK_SIZE);
 
-			await updateExportSigningSession(data.signing_session_id, (s) => ({
+			const updated = await updateExportSigningSession(data.signing_session_id, (s) => ({
 				...s,
 				signatures: mergedSignatures,
 				cursor: nextCursor
 			}));
+			if (!updated) {
+				return json(
+					{
+						error: 'conflict',
+						error_description:
+							'Session was updated by another request. Please retry signing this chunk.'
+					},
+					{ status: 409 }
+				);
+			}
 
 			return json({
 				success: true as const,
 				items,
 				has_more: hasMore,
 				chunk_index: chunkIndex + 1,
-				total_count: totalCount
+				total_count: totalCount,
+				chunk_size: CHUNK_SIZE,
+				signed_count: Object.keys(mergedSignatures).length
 			});
 		}
 

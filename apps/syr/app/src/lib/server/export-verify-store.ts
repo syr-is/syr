@@ -104,16 +104,19 @@ export interface ExportSigningSession {
 	created_at: number;
 	/** Flat list of item ids in order (post:0, post:0:asset:0, asset:0, ...) */
 	all_item_ids: string[];
+	/** Version for optimistic locking; incremented on each update */
+	version: number;
 }
 
 const SIGNING_SESSION_TTL = 600; // 10 minutes for chunked signing
 
 export async function setExportSigningSession(
 	id: string,
-	data: Omit<ExportSigningSession, 'created_at'>
+	data: Omit<ExportSigningSession, 'created_at' | 'version'>
 ): Promise<void> {
 	const full: ExportSigningSession = {
 		...data,
+		version: 1,
 		created_at: Date.now()
 	};
 	await kvService.set(KV_EXPORT_SIGNING_SESSION, id, full, SIGNING_SESSION_TTL);
@@ -123,15 +126,27 @@ export async function getExportSigningSession(id: string): Promise<ExportSigning
 	return kvService.get<ExportSigningSession>(KV_EXPORT_SIGNING_SESSION, id);
 }
 
+const MAX_UPDATE_RETRIES = 3;
+
 export async function updateExportSigningSession(
 	id: string,
 	updater: (session: ExportSigningSession) => ExportSigningSession
 ): Promise<ExportSigningSession | null> {
-	const current = await getExportSigningSession(id);
-	if (!current) return null;
-	const updated = updater(current);
-	await kvService.set(KV_EXPORT_SIGNING_SESSION, id, updated, SIGNING_SESSION_TTL);
-	return updated;
+	for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
+		const current = await getExportSigningSession(id);
+		if (!current) return null;
+		const updated = updater(current);
+		(updated as ExportSigningSession).version = (current.version ?? 1) + 1;
+		const success = await kvService.updateValueIfVersionMatch(
+			KV_EXPORT_SIGNING_SESSION,
+			id,
+			current.version ?? 1,
+			updated,
+			SIGNING_SESSION_TTL
+		);
+		if (success) return updated;
+	}
+	return null;
 }
 
 // --- Export signed bundle (pre-assembled signed export) ---

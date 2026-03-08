@@ -216,6 +216,26 @@ export class KvService {
 	}
 
 	/**
+	 * Conditionally update a KV entry's value only if value.version matches.
+	 * Used for optimistic locking. Returns true if update succeeded.
+	 */
+	async updateValueIfVersionMatch<T extends { version: number }>(
+		type: string,
+		index: string,
+		expectedVersion: number,
+		newValue: T,
+		ttlSeconds?: number
+	): Promise<boolean> {
+		return this.repository.updateValueIfVersionMatch(
+			type,
+			index,
+			expectedVersion,
+			newValue,
+			ttlSeconds
+		);
+	}
+
+	/**
 	 * Create a KV entry only if it doesn't already exist
 	 * Uses database-level atomic operation to prevent race conditions
 	 * @param type - The category/type of the entry

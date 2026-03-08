@@ -12,6 +12,7 @@
 	import { buildDidDocument } from '@syr-is/did';
 	import { signAsset } from '$lib/services/bundle-signature-verification';
 	import type { SigilObject } from '@syr-is/crypto/sigil';
+	import { analyzeBackupFile } from '$lib/utils/migrate-file';
 	import QRCode from 'qrcode';
 	import { ulid } from '@syr-is/types';
 
@@ -93,57 +94,24 @@
 		importToken = null;
 		disconnectImportHeartbeat();
 		if (!f) return;
-		try {
-			const ext = f.name.toLowerCase().split('.').pop() ?? '';
-			if (ext === 'sigil' || ext === 'json') {
-				const text = await f.text();
-				let json: unknown;
-				try {
-					json = JSON.parse(text);
-				} catch {
-					toast.error(ext === 'sigil' ? 'Invalid Sigil file' : 'Invalid JSON');
-					return;
-				}
-				if (
-					json &&
-					typeof json === 'object' &&
-					'v' in json &&
-					'kdf' in json &&
-					'enc' in json &&
-					'pub' in json
-				) {
-					hasSigil = true;
-					fileType = 'sigil';
-				} else {
-					toast.error(ext === 'sigil' ? 'Invalid Sigil file' : 'File is not a Sigil');
-				}
-				return;
-			}
-			const arrayBuffer = await f.arrayBuffer();
-			const zipBytes = new Uint8Array(arrayBuffer);
-			const files = unzipSync(zipBytes);
-			const hasRootSigil = !!files['identity.sigil'];
-			const hasSyrStructure =
-				!!files['manifest.json'] && !!files['identity.json'] && !!files['posts.json'];
-			const personaEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
-			const hasProfileJson = Object.keys(files).some((k) => k.endsWith('/profile.json'));
-			const hasPersonaStructure = !!personaEntry && hasProfileJson;
-			if (hasSyrStructure) {
-				fileType = 'syr';
-				hasSigil = hasRootSigil;
-			} else if (hasPersonaStructure) {
-				fileType = 'persona';
-				hasSigil = true;
-			} else {
-				hasSigil = null;
-				fileType = null;
-				toast.error('Unrecognized file format. Expected .syr, .persona, or .sigil.');
-			}
-		} catch (err) {
-			hasSigil = null;
-			fileType = null;
-			toast.error(err instanceof SyntaxError ? 'Invalid JSON' : 'Could not read bundle file');
+		const result = await analyzeBackupFile(f);
+		if (result.error) {
+			toast.error(result.error);
+			return;
 		}
+		if (result.fileType == null) {
+			toast.error('Unrecognized file format. Expected .syr, .persona, or .sigil.');
+			return;
+		}
+		hasSigil = result.hasSigil;
+		fileType =
+			result.fileType === 'raw_sigil'
+				? 'sigil'
+				: result.fileType === 'zip'
+					? 'syr'
+					: result.fileType === 'persona'
+						? 'persona'
+						: null;
 	}
 
 	async function handleVerifyWithSyner() {
