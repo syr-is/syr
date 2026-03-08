@@ -73,7 +73,9 @@ export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis>
 /**
  * Create a ZIP archive from file entries. Used for synthetic migration/sync bundles.
  */
-export async function createSyntheticZip(zipFiles: Record<string, Uint8Array>): Promise<Uint8Array> {
+export async function createSyntheticZip(
+	zipFiles: Record<string, Uint8Array>
+): Promise<Uint8Array> {
 	const { zip } = await import('fflate');
 	return new Promise((resolve, reject) => {
 		zip(zipFiles, { level: 1 }, (err, out) => {

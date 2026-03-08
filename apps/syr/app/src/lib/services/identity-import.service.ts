@@ -460,7 +460,10 @@ export async function importPostsAndAssets(
 			for (const asset of post.assets) {
 				const assetData = files[asset.zip_path];
 				if (!assetData)
-					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
+					throw new ImportValidationError(
+						'IMPORT_INVALID',
+						`Asset ${asset.zip_path} missing from bundle`
+					);
 				if (opts.verifySignatures) {
 					try {
 						await verifyAssetSignature(ctx.did, asset, assetData);
@@ -580,7 +583,10 @@ export async function importStandaloneAssets(
 			if (importedZipPaths.has(asset.zip_path)) continue;
 			const assetData = files[asset.zip_path];
 			if (!assetData)
-				throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
+				throw new ImportValidationError(
+					'IMPORT_INVALID',
+					`Asset ${asset.zip_path} missing from bundle`
+				);
 			if (opts.verifySignatures) {
 				try {
 					await verifyAssetSignature(ctx.did, asset, assetData);
@@ -754,7 +760,10 @@ export async function syncPostsAndProfileFromBundle(
 			for (const asset of post.assets) {
 				const assetData = files[asset.zip_path];
 				if (!assetData)
-					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
+					throw new ImportValidationError(
+						'IMPORT_INVALID',
+						`Asset ${asset.zip_path} missing from bundle`
+					);
 				if (opts.verifySignatures) {
 					try {
 						await verifyAssetSignature(ctx.did, asset, assetData);
@@ -868,7 +877,10 @@ export async function syncPostsAndProfileFromBundle(
 				if (importedZipPaths.has(asset.zip_path)) continue;
 				const assetData = files[asset.zip_path];
 				if (!assetData)
-					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
+					throw new ImportValidationError(
+						'IMPORT_INVALID',
+						`Asset ${asset.zip_path} missing from bundle`
+					);
 				if (opts.verifySignatures) {
 					try {
 						await verifyAssetSignature(ctx.did, asset, assetData);
