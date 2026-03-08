@@ -8,7 +8,7 @@
 	import { decryptSigil } from '@syr-is/crypto/sigil';
 	import { createAegisBundle } from '@syr-is/crypto/aegis';
 	import { decodePublicKey, deriveDid } from '@syr-is/crypto';
-import { computeSha256Hex } from '@syr-is/utils';
+	import { computeSha256Hex } from '@syr-is/utils';
 	import { buildDidDocument } from '@syr-is/did';
 	import { signAsset } from '$lib/services/bundle-signature-verification';
 	import type { SigilObject } from '@syr-is/crypto/sigil';
@@ -224,10 +224,10 @@ import { computeSha256Hex } from '@syr-is/utils';
 			const buf: ArrayBuffer =
 				a.data.byteOffset === 0 && a.data.byteLength === a.data.buffer.byteLength
 					? (a.data.buffer as ArrayBuffer)
-					: a.data.buffer.slice(
+					: (a.data.buffer.slice(
 							a.data.byteOffset,
 							a.data.byteOffset + a.data.byteLength
-						) as ArrayBuffer;
+						) as ArrayBuffer);
 			const sha256 = await computeSha256Hex(buf);
 			const unsigned = {
 				local_id: localId,

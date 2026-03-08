@@ -481,7 +481,9 @@
 							typeof p?.status !== 'string' ||
 							(p?.created_at != null && typeof p.created_at !== 'string')
 						) {
-							console.warn(`[export] Skipping invalid post at index ${i}: missing local_id, type, visibility, status, or created_at`);
+							console.warn(
+								`[export] Skipping invalid post at index ${i}: missing local_id, type, visibility, status, or created_at`
+							);
 							return false;
 						}
 						return true;
@@ -631,7 +633,7 @@
 		</Dialog.Header>
 		<div class="space-y-4 py-4">
 			{#if ctx === null}
-				<p class="text-sm text-muted-foreground flex items-center gap-2">
+				<p class="flex items-center gap-2 text-sm text-muted-foreground">
 					<Loader2 class="h-4 w-4 animate-spin" />
 					Loading...
 				</p>

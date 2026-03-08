@@ -8,10 +8,7 @@ import { generateAccessToken } from '$lib/server/auth';
 import { config } from '$lib/config';
 import { userRepository } from '$lib/repositories/user.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
-import {
-	peekPublicImportToken,
-	consumePublicImportToken
-} from '$lib/server/export-verify-store';
+import { peekPublicImportToken, consumePublicImportToken } from '$lib/server/export-verify-store';
 import {
 	parseBundle,
 	validateBundle,

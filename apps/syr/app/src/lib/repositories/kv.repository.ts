@@ -273,10 +273,7 @@ export class KvRepository {
 		}
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
-		const expiresAt =
-			ttlSeconds != null
-				? new Date(now.getTime() + ttlSeconds * 1000)
-				: undefined;
+		const expiresAt = ttlSeconds != null ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
 		const expiresAtSet = expiresAt !== undefined ? ', expires_at = $expiresAt' : '';
 
 		// Build a single atomic transaction query using BEGIN...COMMIT
