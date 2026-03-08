@@ -191,6 +191,7 @@ export class KvService {
 	 * @param amount - Amount to add (can be negative for decrement)
 	 * @param minValue - Optional minimum value (will clamp to this)
 	 * @param maxValue - Optional maximum value (will reject if exceeded)
+	 * @param ttlSeconds - Optional time-to-live in seconds for rate-limit-style windows
 	 * @returns The new value of the field
 	 * @throws Error with message 'QUOTA_EXCEEDED' if maxValue is specified and would be exceeded
 	 */
@@ -200,9 +201,18 @@ export class KvService {
 		field: string,
 		amount: number,
 		minValue?: number,
-		maxValue?: number
+		maxValue?: number,
+		ttlSeconds?: number
 	): Promise<number> {
-		return this.repository.atomicIncrementField(type, index, field, amount, minValue, maxValue);
+		return this.repository.atomicIncrementField(
+			type,
+			index,
+			field,
+			amount,
+			minValue,
+			maxValue,
+			ttlSeconds
+		);
 	}
 
 	/**

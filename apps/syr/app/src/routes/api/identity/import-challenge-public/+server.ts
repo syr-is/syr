@@ -48,19 +48,29 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		throw error(500, { code: 'INTERNAL_ERROR', message: 'Unexpected error' });
 	}
 
-	// Rate limit by client IP
+	// Rate limit by client IP (atomic to avoid TOCTOU)
 	const clientId = getClientAddress?.() ?? 'unknown';
 	const rateLimitIndex = `${RATE_LIMIT_INDEX_PREFIX}${clientId}`;
 	const ttlSeconds = Math.ceil(security.rateLimitWindow / 1000);
-	const existing = await kvService.get<{ count: number }>(RATE_LIMIT_TYPE, rateLimitIndex);
-	const count = (existing?.count ?? 0) + 1;
-	if (count > security.rateLimitMax) {
-		throw error(429, {
-			code: 'RATE_LIMIT_EXCEEDED',
-			message: 'Too many import challenge requests. Please try again later.'
-		});
+	try {
+		await kvService.atomicIncrementField(
+			RATE_LIMIT_TYPE,
+			rateLimitIndex,
+			'count',
+			1,
+			undefined,
+			security.rateLimitMax,
+			ttlSeconds
+		);
+	} catch (e) {
+		if (e instanceof Error && e.message === 'QUOTA_EXCEEDED') {
+			throw error(429, {
+				code: 'RATE_LIMIT_EXCEEDED',
+				message: 'Too many import challenge requests. Please try again later.'
+			});
+		}
+		throw e;
 	}
-	await kvService.set(RATE_LIMIT_TYPE, rateLimitIndex, { count }, ttlSeconds);
 
 	const challengeId = crypto.randomUUID();
 	const now = new Date();

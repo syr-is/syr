@@ -556,16 +556,16 @@
 			<Dialog.Description>
 				{#if pendingDownload}
 					<p class="text-sm text-muted-foreground">Click Save file to download your export.</p>
-				{:else if step === 'choose'}
-					<p class="text-sm text-muted-foreground">
-						Choose how to verify your export. Unlock with password for a full backup (includes
-						keys). Verify with Syner for a data-only backup (keys stay in Syner).
-					</p>
 				{:else if showSynerFlow}
 					<p class="text-sm text-muted-foreground">
 						You are about to download your SYR data backup (profile, posts, assets). Your keys are
 						managed in Syner — this backup does not include them. Scan the QR or open the link with
 						Syner to verify.
+					</p>
+				{:else if step === 'choose'}
+					<p class="text-sm text-muted-foreground">
+						Choose how to verify your export. Unlock with password for a full backup (includes
+						keys). Verify with Syner for a data-only backup (keys stay in Syner).
 					</p>
 				{:else if step === 'unlock'}
 					<p class="text-sm text-muted-foreground">
@@ -591,6 +591,28 @@
 				<p class="text-sm text-muted-foreground">
 					Your export is ready. Click Save file below to download.
 				</p>
+			{:else if exportChallenge}
+				<div class="flex flex-col items-center gap-4">
+					<img
+						src={exportChallenge.qrDataUrl}
+						alt="Scan with Syner"
+						class="h-64 w-64 rounded-lg border"
+					/>
+					<a
+						href={exportChallenge.deeplink_url}
+						class="text-sm text-primary underline hover:no-underline"
+					>
+						Open in Syner
+					</a>
+					{#if signatureValidated}
+						<div class="flex items-center gap-2 text-green-600">
+							<CheckCircle class="h-5 w-5 shrink-0" />
+							<span>Download request validated</span>
+						</div>
+					{:else}
+						<p class="text-xs text-muted-foreground">Scan or open link, then sign in Syner.</p>
+					{/if}
+				</div>
 			{:else if step === 'choose'}
 				<div class="flex flex-col gap-3">
 					<Button
@@ -614,28 +636,6 @@
 							Verify with Syner
 						{/if}
 					</Button>
-				</div>
-			{:else if exportChallenge}
-				<div class="flex flex-col items-center gap-4">
-					<img
-						src={exportChallenge.qrDataUrl}
-						alt="Scan with Syner"
-						class="h-64 w-64 rounded-lg border"
-					/>
-					<a
-						href={exportChallenge.deeplink_url}
-						class="text-sm text-primary underline hover:no-underline"
-					>
-						Open in Syner
-					</a>
-					{#if signatureValidated}
-						<div class="flex items-center gap-2 text-green-600">
-							<CheckCircle class="h-5 w-5 shrink-0" />
-							<span>Download request validated</span>
-						</div>
-					{:else}
-						<p class="text-xs text-muted-foreground">Scan or open link, then sign in Syner.</p>
-					{/if}
 				</div>
 			{:else if isIndependentSyr}
 				<p class="text-sm text-muted-foreground">

@@ -1,5 +1,3 @@
-import { zip } from 'fflate';
-
 export type BackupFileAnalysis = {
 	hasSigil: boolean | null;
 	fileType: 'raw_sigil' | 'zip' | 'persona' | null;
@@ -7,12 +5,20 @@ export type BackupFileAnalysis = {
 	error?: string;
 };
 
+/** Returns true if json has Sigil shape (v, kdf, enc, pub). Returns false for null/non-object. */
+function isValidSigilJson(json: unknown): boolean {
+	if (json == null || typeof json !== 'object') return false;
+	const o = json as Record<string, unknown>;
+	return 'v' in o && 'kdf' in o && 'enc' in o && 'pub' in o;
+}
+
 /**
  * Analyze a backup file (Sigil or .syr bundle) to determine if it contains
  * identity keys and what type it is.
  */
 export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis> {
-	const ext = file.name.toLowerCase().split('.').pop() ?? '';
+	const dotIdx = file.name.lastIndexOf('.');
+	const ext = dotIdx > 0 ? file.name.slice(dotIdx + 1).toLowerCase() : '';
 	if (ext === 'sigil') {
 		const text = await file.text();
 		let json: unknown;
@@ -21,14 +27,7 @@ export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis>
 		} catch {
 			return { hasSigil: null, fileType: null, error: 'Invalid Sigil file' };
 		}
-		if (
-			json &&
-			typeof json === 'object' &&
-			'v' in json &&
-			'kdf' in json &&
-			'enc' in json &&
-			'pub' in json
-		) {
+		if (isValidSigilJson(json)) {
 			return { hasSigil: true, fileType: 'raw_sigil' };
 		}
 		return { hasSigil: null, fileType: null, error: 'Invalid Sigil file' };
@@ -37,14 +36,7 @@ export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis>
 		const text = await file.text();
 		try {
 			const json = JSON.parse(text);
-			if (
-				json &&
-				typeof json === 'object' &&
-				'v' in json &&
-				'kdf' in json &&
-				'enc' in json &&
-				'pub' in json
-			) {
+			if (isValidSigilJson(json)) {
 				return { hasSigil: true, fileType: 'raw_sigil' };
 			}
 			return { hasSigil: null, fileType: null, error: 'File is not a Sigil' };
@@ -61,7 +53,9 @@ export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis>
 		const hasSyrStructure =
 			!!files['manifest.json'] && !!files['identity.json'] && !!files['posts.json'];
 		const personaEntry = Object.keys(files).find((k) => k.endsWith('/identity.sigil'));
-		const hasProfileJson = Object.keys(files).some((k) => k.endsWith('/profile.json'));
+		const personaDir = personaEntry ? personaEntry.replace(/\/identity\.sigil$/, '') : '';
+		const hasProfileJson =
+			!!personaDir && Object.prototype.hasOwnProperty.call(files, `${personaDir}/profile.json`);
 		const hasPersonaStructure = !!personaEntry && hasProfileJson;
 		const hasSigil = hasRootSigil || !!personaEntry;
 		if (hasSyrStructure) {
@@ -79,7 +73,8 @@ export async function analyzeBackupFile(file: File): Promise<BackupFileAnalysis>
 /**
  * Create a ZIP archive from file entries. Used for synthetic migration/sync bundles.
  */
-export function createSyntheticZip(zipFiles: Record<string, Uint8Array>): Promise<Uint8Array> {
+export async function createSyntheticZip(zipFiles: Record<string, Uint8Array>): Promise<Uint8Array> {
+	const { zip } = await import('fflate');
 	return new Promise((resolve, reject) => {
 		zip(zipFiles, { level: 1 }, (err, out) => {
 			if (err) reject(err);

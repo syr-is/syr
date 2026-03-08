@@ -14,6 +14,7 @@ import {
 	importStandaloneAssets,
 	restorePinnedPosts,
 	rollbackImport,
+	ImportValidationError,
 	type ImportContext
 } from '$lib/services/identity-import.service';
 
@@ -113,6 +114,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (err && typeof err === 'object' && 'status' in err) {
 				throw err;
 			}
+			if (err instanceof ImportValidationError) {
+				await rollbackImport(ctx);
+				throw error(err.code === 'IMPORT_BAD_SIGNATURE' ? 422 : 400, {
+					code: err.code,
+					message: err.message
+				});
+			}
 			const msg = err instanceof Error ? err.message : '';
 			if (msg.includes('unsigned or tampered')) {
 				await rollbackImport(ctx);
@@ -194,6 +202,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err;
+		}
+		if (err instanceof ImportValidationError) {
+			await rollbackImport(ctx);
+			throw error(err.code === 'IMPORT_BAD_SIGNATURE' ? 422 : 400, {
+				code: err.code,
+				message: err.message
+			});
 		}
 		const msg = err instanceof Error ? err.message : '';
 		if (msg.includes('unsigned or tampered')) {

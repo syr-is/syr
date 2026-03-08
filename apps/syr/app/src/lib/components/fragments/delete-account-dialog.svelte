@@ -31,24 +31,34 @@
 		qrDataUrl: string;
 	} | null>(null);
 	let deleteAccountHeartbeatSource: EventSource | null = null;
+	let adminsAbortController: AbortController | null = null;
 
 	$effect(() => {
-		if (open) {
-			// Fetch admins when dialog opens (for lost-identity case)
-			fetch('/api/instance-admins', { credentials: 'include' })
+		const isLostIdentityPath = open && !canVerifyWithPassword && !canVerifyWithSyner;
+		if (isLostIdentityPath) {
+			if (adminsAbortController) adminsAbortController.abort();
+			const controller = new AbortController();
+			adminsAbortController = controller;
+			fetch('/api/instance-admins', { credentials: 'include', signal: controller.signal })
 				.then((r) => r.json())
 				.then((d) => {
-					admins = d?.admins ?? [];
+					if (!controller.signal.aborted) admins = d?.admins ?? [];
 				})
-				.catch(() => {
-					admins = [];
+				.catch((err) => {
+					if (err?.name !== 'AbortError') admins = [];
 				});
 		} else {
-			step = 'warning';
-			password = '';
-			synerChallenge = null;
-			disconnectHeartbeat();
+			if (adminsAbortController) {
+				adminsAbortController.abort();
+				adminsAbortController = null;
+			}
 			admins = [];
+			if (!open) {
+				step = 'warning';
+				password = '';
+				synerChallenge = null;
+				disconnectHeartbeat();
+			}
 		}
 	});
 

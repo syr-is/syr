@@ -19,6 +19,7 @@ import {
 	importStandaloneAssets,
 	restorePinnedPosts,
 	rollbackImport,
+	ImportValidationError,
 	type ImportContext
 } from '$lib/services/identity-import.service';
 
@@ -95,17 +96,6 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 
 	const useDataOnlyImport = typeof importToken === 'string' && importToken.length > 0;
 	const parsed = await parseBundle(file);
-
-	// Entry logging: diagnose import mode and bundle state
-	const hasImportToken = typeof importToken === 'string' && importToken.length > 0;
-	const hasAegisBundle = typeof aegisBundleRaw === 'string' && aegisBundleRaw.length > 0;
-	console.log('[register-with-import] Entry', {
-		hasImportToken,
-		hasAegisBundle,
-		useDataOnlyImport,
-		postCount: parsed.posts.length,
-		firstPostHasSignature: !!parsed.posts[0]?.signature
-	});
 
 	let did: string;
 	let aegisBundle: z.infer<typeof AegisBundleSchema> | null = null;
@@ -206,25 +196,18 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 			user_agent: userAgent
 		} as Parameters<typeof sessionRepository.create>[0]);
 		if (useDataOnlyImport) {
-			console.log('[register-with-import] Data-only import: skipping signature verification');
 			await importIdentityAndProfileExternal(ctx, parsed);
 		} else if (aegisBundle) {
-			console.log('[register-with-import] Full import with Aegis: verifying signatures');
 			await importIdentityAndProfile(ctx, parsed, aegisBundle);
 		} else {
 			throw new Error('Missing aegisBundle for full import');
 		}
 
-		console.log('[register-with-import] Importing posts and assets', {
-			postCount: parsed.posts.length,
-			verifySignatures: signingOpts.verifySignatures
-		});
 		const { postsImported, assetsImported, importedZipPaths } = await importPostsAndAssets(
 			ctx,
 			parsed,
 			signingOpts
 		);
-		console.log('[register-with-import] Posts imported:', postsImported);
 		const standaloneAssetsImported = await importStandaloneAssets(
 			ctx,
 			parsed,
@@ -276,6 +259,12 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 		}
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err;
+		}
+		if (err instanceof ImportValidationError) {
+			throw error(err.code === 'IMPORT_BAD_SIGNATURE' ? 422 : 400, {
+				code: err.code,
+				message: err.message
+			});
 		}
 		throw error(500, {
 			code: 'IMPORT_FAILED',

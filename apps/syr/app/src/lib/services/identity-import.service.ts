@@ -31,6 +31,19 @@ import type { RecordId } from 'surrealdb';
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 const MAX_UNCOMPRESSED_BYTES = MAX_UPLOAD_BYTES * 10; // 1 GB — zip-bomb protection
 
+/** Input/validation errors that should map to 4xx, not 5xx */
+export class ImportValidationError extends Error {
+	constructor(
+		public readonly code: 'IMPORT_INVALID' | 'IMPORT_BAD_SIGNATURE',
+		message: string,
+		public readonly cause?: unknown
+	) {
+		super(message);
+		this.name = 'ImportValidationError';
+		Object.setPrototypeOf(this, ImportValidationError.prototype);
+	}
+}
+
 /**
  * Schema for assets.json entries. More permissive than ExportedAssetSchema: local_id may be
  * a ULID (post assets) or semantic IDs like "profile-avatar", "profile-banner" (profile assets).
@@ -38,6 +51,15 @@ const MAX_UNCOMPRESSED_BYTES = MAX_UPLOAD_BYTES * 10; // 1 GB — zip-bomb prote
 const StandaloneAssetSchema = ExportedAssetSchema.extend({
 	local_id: z.string().min(1)
 });
+
+/** Only reuse existing upload when both have sha256 and they match; otherwise fall through to re-import. */
+function blobMatches(
+	existingUpload: { sha256?: string | null } | null,
+	asset: { sha256?: string | null }
+): boolean {
+	if (!existingUpload?.sha256 || !asset?.sha256) return false;
+	return existingUpload.sha256 === asset.sha256;
+}
 
 /** Returns true if value is a valid URL (ProfileUpdateSchema requires z.url()). Asset paths like assets/... are not valid. */
 function isValidProfileUrl(value: string | null | undefined): value is string {
@@ -303,11 +325,6 @@ export async function importIdentityAndProfileExternal(
 		profileUpdates.avatar_url = identity.profile.avatarUrl;
 	if (isValidProfileUrl(identity.profile.bannerUrl))
 		profileUpdates.banner_url = identity.profile.bannerUrl;
-	// Defensive: ensure we never pass invalid URLs (ProfileUpdateSchema requires z.url())
-	if (profileUpdates.avatar_url && !isValidProfileUrl(profileUpdates.avatar_url))
-		delete profileUpdates.avatar_url;
-	if (profileUpdates.banner_url && !isValidProfileUrl(profileUpdates.banner_url))
-		delete profileUpdates.banner_url;
 	await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
 
 	for (const dk of identity.delegatedKeys) {
@@ -427,16 +444,33 @@ export async function importPostsAndAssets(
 	for (let i = 0; i < posts.length; i++) {
 		const post = posts[i];
 		if (opts.verifySignatures) {
-			await verifyPostSignature(ctx.did, post);
+			try {
+				await verifyPostSignature(ctx.did, post);
+			} catch (e) {
+				throw new ImportValidationError(
+					'IMPORT_BAD_SIGNATURE',
+					e instanceof Error ? e.message : 'Post signature verification failed',
+					e
+				);
+			}
 		}
 
 		const mediaUrls: string[] = [];
 		if (post.assets) {
 			for (const asset of post.assets) {
 				const assetData = files[asset.zip_path];
-				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (!assetData)
+					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
 				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset, assetData);
+					try {
+						await verifyAssetSignature(ctx.did, asset, assetData);
+					} catch (e) {
+						throw new ImportValidationError(
+							'IMPORT_BAD_SIGNATURE',
+							e instanceof Error ? e.message : 'Asset signature verification failed',
+							e
+						);
+					}
 				}
 
 				const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
@@ -494,6 +528,7 @@ export async function importPostsAndAssets(
 						s3Key,
 						error: err instanceof Error ? err.message : String(err)
 					});
+					throw err;
 				}
 			}
 		}
@@ -504,7 +539,7 @@ export async function importPostsAndAssets(
 			title: post.title,
 			description: post.description,
 			content: post.content,
-			media_urls: mediaUrls.length > 0 ? mediaUrls : undefined,
+			media_urls: mediaUrls.length > 0 ? mediaUrls : (post.media_urls ?? undefined),
 			display_mode: post.display_mode,
 			visibility: post.visibility,
 			status: post.status,
@@ -544,9 +579,18 @@ export async function importStandaloneAssets(
 		for (const asset of parsedAssets.assets) {
 			if (importedZipPaths.has(asset.zip_path)) continue;
 			const assetData = files[asset.zip_path];
-			if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+			if (!assetData)
+				throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
 			if (opts.verifySignatures) {
-				await verifyAssetSignature(ctx.did, asset, assetData);
+				try {
+					await verifyAssetSignature(ctx.did, asset, assetData);
+				} catch (e) {
+					throw new ImportValidationError(
+						'IMPORT_BAD_SIGNATURE',
+						e instanceof Error ? e.message : 'Asset signature verification failed',
+						e
+					);
+				}
 			}
 
 			const s3Key = `uploads/${ctx.did}/${asset.zip_path.replace(/^assets\//, '')}`;
@@ -592,6 +636,7 @@ export async function importStandaloneAssets(
 					error: err instanceof Error ? err.message : String(err),
 					stack: err instanceof Error ? err.stack : undefined
 				});
+				throw err;
 			}
 		}
 		// If profile avatar/banner are asset paths or full URLs, resolve to S3 URLs
@@ -629,11 +674,12 @@ export async function importStandaloneAssets(
 		}
 		return assetsImported;
 	} catch (err) {
+		if (err instanceof ImportValidationError) throw err;
 		console.error('[importStandaloneAssets] Failed to parse or import assets', {
 			error: err instanceof Error ? err.message : String(err),
 			stack: err instanceof Error ? err.stack : undefined
 		});
-		return 0;
+		throw err;
 	}
 }
 
@@ -688,7 +734,15 @@ export async function syncPostsAndProfileFromBundle(
 
 	for (const post of posts) {
 		if (opts.verifySignatures) {
-			await verifyPostSignature(ctx.did, post);
+			try {
+				await verifyPostSignature(ctx.did, post);
+			} catch (e) {
+				throw new ImportValidationError(
+					'IMPORT_BAD_SIGNATURE',
+					e instanceof Error ? e.message : 'Post signature verification failed',
+					e
+				);
+			}
 		}
 		const existingPost = await postRepository.findById(
 			recordIdFromDidAndLocal('post', ctx.did, post.local_id)
@@ -699,13 +753,22 @@ export async function syncPostsAndProfileFromBundle(
 		if (post.assets) {
 			for (const asset of post.assets) {
 				const assetData = files[asset.zip_path];
-				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (!assetData)
+					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
 				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset, assetData);
+					try {
+						await verifyAssetSignature(ctx.did, asset, assetData);
+					} catch (e) {
+						throw new ImportValidationError(
+							'IMPORT_BAD_SIGNATURE',
+							e instanceof Error ? e.message : 'Asset signature verification failed',
+							e
+						);
+					}
 				}
 
 				const existingUpload = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-				if (existingUpload?.url) {
+				if (existingUpload?.url && blobMatches(existingUpload, asset)) {
 					zipPathToUrl[asset.zip_path] = existingUpload.url;
 					mediaUrls.push(existingUpload.url);
 					continue;
@@ -759,10 +822,11 @@ export async function syncPostsAndProfileFromBundle(
 					} catch {
 						// Best-effort S3 cleanup
 					}
-					console.error('[importStandaloneAssets] Post asset upload failed', {
+					console.error('[syncPostsAndProfileFromBundle] Post asset upload failed', {
 						zip_path: asset.zip_path,
 						error: err instanceof Error ? err.message : String(err)
 					});
+					throw err;
 				}
 			}
 		}
@@ -774,7 +838,7 @@ export async function syncPostsAndProfileFromBundle(
 				title: post.title,
 				description: post.description,
 				content: post.content,
-				media_urls: mediaUrls.length > 0 ? mediaUrls : undefined,
+				media_urls: mediaUrls.length > 0 ? mediaUrls : (post.media_urls ?? undefined),
 				display_mode: post.display_mode,
 				visibility: post.visibility,
 				status: post.status,
@@ -784,8 +848,12 @@ export async function syncPostsAndProfileFromBundle(
 			});
 			postsImported++;
 			ctx.createdPostIds.push(createdPost.id.toString());
-		} catch {
-			// Skip on failure (e.g. race)
+		} catch (err) {
+			console.error('[syncPostsAndProfileFromBundle] Post create failed', {
+				local_id: post.local_id,
+				error: err instanceof Error ? err.message : String(err)
+			});
+			throw err;
 		}
 	}
 
@@ -799,12 +867,21 @@ export async function syncPostsAndProfileFromBundle(
 			for (const asset of parsedAssets.assets) {
 				if (importedZipPaths.has(asset.zip_path)) continue;
 				const assetData = files[asset.zip_path];
-				if (!assetData) throw new Error(`Asset ${asset.zip_path} missing from bundle`);
+				if (!assetData)
+					throw new ImportValidationError('IMPORT_INVALID', `Asset ${asset.zip_path} missing from bundle`);
 				if (opts.verifySignatures) {
-					await verifyAssetSignature(ctx.did, asset, assetData);
+					try {
+						await verifyAssetSignature(ctx.did, asset, assetData);
+					} catch (e) {
+						throw new ImportValidationError(
+							'IMPORT_BAD_SIGNATURE',
+							e instanceof Error ? e.message : 'Asset signature verification failed',
+							e
+						);
+					}
 				}
 				const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-				if (existing?.url) {
+				if (existing?.url && blobMatches(existing, asset)) {
 					zipPathToUrl[asset.zip_path] = existing.url;
 					continue;
 				}
@@ -855,14 +932,17 @@ export async function syncPostsAndProfileFromBundle(
 					} catch {
 						// Best-effort S3 cleanup
 					}
-					console.error('[importStandaloneAssets] Standalone asset upload failed', {
+					console.error('[syncPostsAndProfileFromBundle] Standalone asset upload failed', {
 						zip_path: asset.zip_path,
 						error: err instanceof Error ? err.message : String(err)
 					});
+					throw err;
 				}
 			}
-		} catch {
-			// Ignore malformed assets.json
+		} catch (err) {
+			if (err instanceof ImportValidationError) throw err;
+			console.error('[syncPostsAndProfileFromBundle] assets.json parse/import failed', err);
+			throw err;
 		}
 	}
 
@@ -907,7 +987,7 @@ export async function syncPostsAndProfileFromBundle(
 		const asset = allAssets.find((a) => a.zip_path === path);
 		if (asset) {
 			const existing = await uploadRepository.findByCompositeId(ctx.did, asset.local_id);
-			if (existing?.url) {
+			if (existing?.url && blobMatches(existing, asset)) {
 				zipPathToUrl[path] = existing.url;
 				return existing.url;
 			}

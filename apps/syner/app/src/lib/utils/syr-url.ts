@@ -162,7 +162,7 @@ export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did:
 		if (!instanceRaw || !did) return null;
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
-		return { instance: instanceRaw, did };
+		return { instance: instanceUrl.origin, did };
 	} catch {
 		return null;
 	}
