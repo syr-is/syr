@@ -2,7 +2,11 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
-	import { parseSyrLoginUrl, parseSyrSyncProfileUrl, parseSyrExportUrl } from '$lib/utils/syr-url';
+	import {
+		parseSyrLoginUrl,
+		parseSyrSyncProfileUrl,
+		parseSyrChallengeSignUrlAny
+	} from '$lib/utils/syr-url';
 
 	function handleUrl(url: string) {
 		const loginParsed = parseSyrLoginUrl(url);
@@ -11,9 +15,9 @@
 			goto(`/scan-confirm?${q.toString()}`);
 			return;
 		}
-		const exportParsed = parseSyrExportUrl(url);
-		if (exportParsed) {
-			const q = new URLSearchParams(exportParsed);
+		const challengeSignParsed = parseSyrChallengeSignUrlAny(url);
+		if (challengeSignParsed) {
+			const q = new URLSearchParams(challengeSignParsed);
 			goto(`/export-verify?${q.toString()}`);
 			return;
 		}

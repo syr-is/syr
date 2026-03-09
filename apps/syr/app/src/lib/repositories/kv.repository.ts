@@ -246,6 +246,7 @@ export class KvRepository {
 	 * @param amount - Amount to add (can be negative for decrement)
 	 * @param minValue - Optional minimum value (will clamp to this)
 	 * @param maxValue - Optional maximum value (will reject if exceeded)
+	 * @param ttlSeconds - Optional time-to-live in seconds; sets expires_at for rate-limit-style windows
 	 * @returns The new value of the field
 	 * @throws Error if field name is invalid (potential injection)
 	 * @throws Error with message 'QUOTA_EXCEEDED' if maxValue is specified and would be exceeded
@@ -257,7 +258,8 @@ export class KvRepository {
 		field: string,
 		amount: number,
 		minValue?: number,
-		maxValue?: number
+		maxValue?: number,
+		ttlSeconds?: number
 	): Promise<number> {
 		// Validate field name to prevent SurrealQL injection
 		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
@@ -266,8 +268,13 @@ export class KvRepository {
 			);
 		}
 
+		if (ttlSeconds != null && ttlSeconds < 0) {
+			throw new Error('ttlSeconds must be non-negative');
+		}
 		const recordId = createKvRecordId(type, index);
 		const now = new Date();
+		const expiresAt = ttlSeconds != null ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
+		const expiresAtSet = expiresAt !== undefined ? ', expires_at = $expiresAt' : '';
 
 		// Build a single atomic transaction query using BEGIN...COMMIT
 		// This ensures the SELECT, check, and UPSERT happen atomically
@@ -280,7 +287,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
 				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
 				IF $proposed > $maxValue {
@@ -290,7 +297,7 @@ export class KvRepository {
 					kv_type = $type,
 					value.${field} = $clamped,
 					created_at = created_at ?? $now,
-					updated_at = $now;
+					updated_at = $now${expiresAtSet};
 				COMMIT TRANSACTION;
 				RETURN $clamped;
 			`;
@@ -300,7 +307,7 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $proposed = $current + $amount;
 				IF $proposed > $maxValue {
 					THROW "QUOTA_EXCEEDED";
@@ -309,7 +316,7 @@ export class KvRepository {
 					kv_type = $type,
 					value.${field} = $proposed,
 					created_at = created_at ?? $now,
-					updated_at = $now;
+					updated_at = $now${expiresAtSet};
 				COMMIT TRANSACTION;
 				RETURN $proposed;
 			`;
@@ -319,13 +326,13 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $newVal = math::max([<int> $minValue, <int> ($current + $amount)]);
 				UPSERT $recordId SET
 					kv_type = $type,
 					value.${field} = $newVal,
 					created_at = created_at ?? $now,
-					updated_at = $now;
+					updated_at = $now${expiresAtSet};
 				COMMIT TRANSACTION;
 				RETURN $newVal;
 			`;
@@ -334,20 +341,20 @@ export class KvRepository {
 			query = `
 				BEGIN TRANSACTION;
 				LET $record = SELECT * FROM ONLY $recordId;
-				LET $current = IF $record { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
 				LET $newVal = $current + $amount;
 				UPSERT $recordId SET
 					kv_type = $type,
 					value.${field} = $newVal,
 					created_at = created_at ?? $now,
-					updated_at = $now;
+					updated_at = $now${expiresAtSet};
 				COMMIT TRANSACTION;
 				RETURN $newVal;
 			`;
 		}
 
 		try {
-			const params = {
+			const params: Record<string, unknown> = {
 				recordId,
 				type,
 				amount,
@@ -355,6 +362,9 @@ export class KvRepository {
 				maxValue: maxValue ?? Number.MAX_SAFE_INTEGER,
 				now
 			};
+			if (expiresAt !== undefined) {
+				params.expiresAt = expiresAt;
+			}
 
 			const result = await this.db.query<[unknown]>(query, params);
 
@@ -401,6 +411,53 @@ export class KvRepository {
 			}
 			throw err;
 		}
+	}
+
+	/**
+	 * Conditionally update a KV entry's value only if value.version equals expectedVersion.
+	 * Used for optimistic locking to prevent lost updates under concurrency.
+	 * @param type - The category/type of the entry
+	 * @param index - The unique index within the type
+	 * @param expectedVersion - The version that must match for the update to succeed
+	 * @param newValue - The new value (must include version: expectedVersion + 1)
+	 * @param ttlSeconds - Optional time-to-live in seconds
+	 * @returns true if the update succeeded (1 row updated), false if version mismatch or record not found
+	 */
+	async updateValueIfVersionMatch<T extends { version: number }>(
+		type: string,
+		index: string,
+		expectedVersion: number,
+		newValue: T,
+		ttlSeconds?: number
+	): Promise<boolean> {
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+		const expiresAt = ttlSeconds != null ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
+
+		const params: Record<string, unknown> = {
+			recordId,
+			newValue,
+			expectedVersion,
+			now
+		};
+		if (expiresAt !== undefined) {
+			params.expiresAt = expiresAt;
+		}
+
+		const expiresAtSet =
+			expiresAt !== undefined ? ', expires_at = $expiresAt' : ', expires_at = NONE';
+
+		const query = `
+			UPDATE $recordId SET
+				value = $newValue,
+				updated_at = $now${expiresAtSet}
+			WHERE value.version = $expectedVersion
+			RETURN AFTER
+		`;
+
+		const result = await this.db.query<[KvEntry[]]>(query, params);
+		const records = result[0] ?? [];
+		return records.length > 0;
 	}
 
 	/**

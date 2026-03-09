@@ -8,6 +8,8 @@ declare global {
 			details?: Record<string, unknown> | string;
 		}
 		interface Locals {
+			/** Per-request cache for getIdentityContext (keyed by userId). */
+			_identityContextCache?: Map<string, import('$lib/server/identity-context').IdentityContext>;
 			user?: {
 				id: string;
 				username: string;

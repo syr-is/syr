@@ -267,7 +267,7 @@
 				</Tabs.Content>
 			</Tabs.Root>
 		</Card.Content>
-		<Card.Footer>
+		<Card.Footer class="flex flex-col gap-2">
 			<p class="text-center text-sm text-muted-foreground">
 				Don't have an account?
 				<a
@@ -276,6 +276,16 @@
 					class="font-medium text-primary underline-offset-4 hover:underline"
 				>
 					Create one
+				</a>
+			</p>
+			<p class="text-center text-sm text-muted-foreground">
+				<a
+					href={resolve('/migrate')}
+					data-sveltekit-preload-data
+					class="font-medium text-primary underline-offset-4 hover:underline"
+					aria-label="Migrate your account"
+				>
+					Migrate your account
 				</a>
 			</p>
 		</Card.Footer>

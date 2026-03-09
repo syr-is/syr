@@ -4,30 +4,28 @@ import { registryRepository } from '$lib/repositories/registry.repository';
 import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { redirect } from '@sveltejs/kit';
 import { stringToRecordId } from '@syr-is/types';
-import { buildAegisBundleFromIdentity } from '$lib/utils/aegis-bundle.server';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, parent }) => {
 	if (!locals.user) {
 		throw redirect(302, '/login');
 	}
 
+	const parentData = await parent();
+	const identityContext = parentData.identityContext;
+	const hasIdentity = identityContext?.hasIdentity ?? false;
+	const did = identityContext?.did ?? null;
 	const userId = stringToRecordId.decode(locals.user.id);
-	const hasIdentity = await identityController.hasIdentity(locals.user.id);
-	const identity = hasIdentity ? await identityController.getIdentity(locals.user.id) : null;
+
 	const delegatedKeys = hasIdentity
 		? await identityController.getDelegatedKeys(locals.user.id)
 		: [];
 
-	// Load registries and outbox jobs if identity exists
-	const registries = identity ? await registryRepository.findByDid(identity.did) : [];
+	const registries = did ? await registryRepository.findByDid(did) : [];
 	const outboxJobs = hasIdentity
 		? await outboxRepository.findActiveByUserAndType(userId, 'registry_sync')
 		: [];
 
 	return {
-		hasIdentity,
-		hasAegis: identity ? !!buildAegisBundleFromIdentity(identity) : false,
-		did: identity?.did ?? null,
 		delegatedKeys,
 		registries: registries.map((r) => ({
 			id: String(r.id),

@@ -39,6 +39,20 @@ export class UserRepository extends BaseRepository<User> {
 	}
 
 	/**
+	 * Find all users with ADMIN role (for instance administrators contact info).
+	 */
+	async findAdmins(): Promise<Array<Pick<User, 'username' | 'did'>>> {
+		const result = await this.db.query<[User[]]>(
+			`SELECT username, did FROM ${this.tableName} WHERE role = 'ADMIN'`
+		);
+		const raw = result[0] ?? [];
+		return raw.map((r) => ({
+			username: r.username,
+			did: r.did ?? null
+		})) as Array<Pick<User, 'username' | 'did'>>;
+	}
+
+	/**
 	 * Check if username exists
 	 */
 	async usernameExists(username: string): Promise<boolean> {

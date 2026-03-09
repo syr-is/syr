@@ -5,8 +5,12 @@ const KV_EXPORT_CHALLENGE = 'identity_export_challenge';
 const KV_IMPORT_CHALLENGE = 'identity_import_challenge';
 const KV_DELETE_AEGIS_CHALLENGE = 'identity_delete_aegis_challenge';
 const KV_DELETE_ACCOUNT_CHALLENGE = 'identity_delete_account_challenge';
+const KV_IMPORT_CHALLENGE_PUBLIC = 'identity_import_challenge_public';
 const KV_EXPORT_TOKEN = 'identity_export_token';
+const KV_EXPORT_SIGNING_SESSION = 'identity_export_signing_session';
+const KV_EXPORT_SIGNED_BUNDLE = 'identity_export_signed_bundle';
 const KV_IMPORT_TOKEN = 'identity_import_token';
+const KV_PUBLIC_IMPORT_TOKEN = 'identity_public_import_token';
 const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
 const KV_DELETE_ACCOUNT_TOKEN = 'identity_delete_account_token';
 
@@ -73,6 +77,120 @@ export function consumeExportToken(token: string): Promise<string | null> {
 		.then((entry) => entry?.user_id ?? null);
 }
 
+// --- Export signing session (chunked post/asset signing) ---
+
+export type ExportSigningSessionExportData = {
+	manifest: {
+		version: number;
+		did: string;
+		exportedAt: string;
+		postCount: number;
+		assetCount: number;
+	};
+	identityBundle: Record<string, unknown>;
+	exportedPosts: Array<Record<string, unknown>>;
+	exportedAssets: Array<Record<string, unknown> & { zip_path: string; content_base64?: string }>;
+	skippedAssets: Array<{ zip_path: string; url?: string; reason?: string }>;
+	pinnedPostIds: string[];
+};
+
+/** Cached signable item for chunked signing. Matches SignableItem from export-signing. */
+export type CachedSignableItem = { id: string; message: string };
+
+export interface ExportSigningSession {
+	challenge_id: string;
+	user_id: string;
+	did: string;
+	export_data: ExportSigningSessionExportData;
+	signatures: Record<string, string>;
+	cursor: number;
+	created_at: number;
+	/** Flat list of item ids in order (post:0, post:0:asset:0, asset:0, ...) */
+	all_item_ids: string[];
+	/** Pre-built signable items to avoid recomputing on each chunk (performance) */
+	all_signable_items?: CachedSignableItem[];
+	/** Version for optimistic locking; incremented on each update */
+	version: number;
+}
+
+const SIGNING_SESSION_TTL = 600; // 10 minutes for chunked signing
+
+export async function setExportSigningSession(
+	id: string,
+	data: Omit<ExportSigningSession, 'created_at' | 'version'>
+): Promise<void> {
+	const full: ExportSigningSession = {
+		...data,
+		version: 1,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_EXPORT_SIGNING_SESSION, id, full, SIGNING_SESSION_TTL);
+}
+
+export async function getExportSigningSession(id: string): Promise<ExportSigningSession | null> {
+	return kvService.get<ExportSigningSession>(KV_EXPORT_SIGNING_SESSION, id);
+}
+
+const MAX_UPDATE_RETRIES = 3;
+
+export async function updateExportSigningSession(
+	id: string,
+	updater: (session: ExportSigningSession) => ExportSigningSession
+): Promise<ExportSigningSession | null> {
+	for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
+		const current = await getExportSigningSession(id);
+		if (!current) return null;
+		const updated = updater(current);
+		(updated as ExportSigningSession).version = (current.version ?? 1) + 1;
+		const success = await kvService.updateValueIfVersionMatch(
+			KV_EXPORT_SIGNING_SESSION,
+			id,
+			current.version ?? 1,
+			updated,
+			SIGNING_SESSION_TTL
+		);
+		if (success) return updated;
+	}
+	return null;
+}
+
+// --- Export signed bundle (pre-assembled signed export) ---
+
+export async function setExportSignedBundle(
+	token: string,
+	bundle: {
+		manifest: ExportSigningSessionExportData['manifest'];
+		identity: ExportSigningSessionExportData['identityBundle'];
+		posts: Array<Record<string, unknown>>;
+		assets: Array<Record<string, unknown>>;
+		pinned_posts: { post_ids: string[] };
+	}
+): Promise<void> {
+	await kvService.set(KV_EXPORT_SIGNED_BUNDLE, token, bundle, TOKEN_TTL);
+}
+
+/** Peek signed bundle without consuming. Returns null if not a signed-bundle token. */
+export async function peekExportSignedBundle(token: string): Promise<{
+	manifest: ExportSigningSessionExportData['manifest'];
+	identity: ExportSigningSessionExportData['identityBundle'];
+	posts: Array<Record<string, unknown>>;
+	assets: Array<Record<string, unknown>>;
+	pinned_posts: { post_ids: string[] };
+} | null> {
+	return kvService.get(KV_EXPORT_SIGNED_BUNDLE, token);
+}
+
+/** Consume signed bundle (one-time use). Returns null if already used or expired. */
+export async function consumeExportSignedBundle(token: string): Promise<{
+	manifest: ExportSigningSessionExportData['manifest'];
+	identity: ExportSigningSessionExportData['identityBundle'];
+	posts: Array<Record<string, unknown>>;
+	assets: Array<Record<string, unknown>>;
+	pinned_posts: { post_ids: string[] };
+} | null> {
+	return kvService.getAndDelete(KV_EXPORT_SIGNED_BUNDLE, token);
+}
+
 // --- Import challenge ---
 
 export async function setImportChallenge(
@@ -97,6 +215,54 @@ export async function deleteImportChallenge(id: string): Promise<void> {
 /** Atomically get and delete import challenge. Prevents concurrent replay. */
 export async function consumeImportChallenge(id: string): Promise<ImportChallengeData | null> {
 	return kvService.getAndDelete<ImportChallengeData>(KV_IMPORT_CHALLENGE, id);
+}
+
+// --- Public import challenge (no auth, for migration flow) ---
+
+export interface PublicImportChallengeData {
+	message: string;
+	domain: string;
+	expected_did: string;
+	created_at: number;
+}
+
+export async function setPublicImportChallenge(
+	id: string,
+	data: Omit<PublicImportChallengeData, 'created_at'>
+): Promise<void> {
+	const full: PublicImportChallengeData = {
+		...data,
+		created_at: Date.now()
+	};
+	await kvService.set(KV_IMPORT_CHALLENGE_PUBLIC, id, full, CHALLENGE_TTL);
+}
+
+/** Non-consuming get for Syner to fetch challenge details (export-challenge/:id). */
+export async function getPublicImportChallenge(
+	id: string
+): Promise<PublicImportChallengeData | null> {
+	return kvService.get<PublicImportChallengeData>(KV_IMPORT_CHALLENGE_PUBLIC, id);
+}
+
+export async function consumePublicImportChallenge(
+	id: string
+): Promise<PublicImportChallengeData | null> {
+	return kvService.getAndDelete<PublicImportChallengeData>(KV_IMPORT_CHALLENGE_PUBLIC, id);
+}
+
+// --- Public import token (did-only, for register-with-import) ---
+
+export async function setPublicImportToken(token: string, data: { did: string }): Promise<void> {
+	await kvService.set(KV_PUBLIC_IMPORT_TOKEN, token, data, TOKEN_TTL);
+}
+
+/** Validate token and return did without consuming. Use consumePublicImportToken after success. */
+export function peekPublicImportToken(token: string): Promise<{ did: string } | null> {
+	return kvService.get<{ did: string }>(KV_PUBLIC_IMPORT_TOKEN, token).then((e) => e ?? null);
+}
+
+export async function consumePublicImportToken(token: string): Promise<{ did: string } | null> {
+	return kvService.getAndDelete<{ did: string }>(KV_PUBLIC_IMPORT_TOKEN, token);
 }
 
 // --- Import token ---

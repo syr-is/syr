@@ -120,6 +120,16 @@
 						Sign in
 					</a>
 				</p>
+				<p class="mt-2 text-center text-sm text-muted-foreground">
+					<a
+						href={resolve('/migrate')}
+						data-sveltekit-preload-data
+						class="font-medium text-primary underline-offset-4 hover:underline"
+						aria-label="Migrate an existing account"
+					>
+						Migrate an existing account
+					</a>
+				</p>
 			</Card.Footer>
 		</form>
 	</Card.Root>

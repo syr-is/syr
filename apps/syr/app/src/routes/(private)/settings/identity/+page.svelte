@@ -163,7 +163,7 @@
 
 	// SSE: subscribe to outbox updates when on this page with identity
 	onMount(() => {
-		if (!data.hasIdentity) return;
+		if (!data.identityContext?.hasIdentity) return;
 
 		const es = new EventSource('/api/identity/outbox/sse', { withCredentials: true });
 
@@ -190,10 +190,12 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			{#if data.hasIdentity}
+			{#if data.identityContext?.hasIdentity}
 				<div class="space-y-2">
 					<p class="text-sm font-medium">Your DID</p>
-					<p class="font-mono text-sm break-all text-muted-foreground">{data.did}</p>
+					<p class="font-mono text-sm break-all text-muted-foreground">
+						{data.identityContext?.did}
+					</p>
 				</div>
 
 				<div class="flex flex-wrap gap-2">
@@ -209,7 +211,7 @@
 							<DropdownMenu.Item onclick={() => openExportIdentityDialog('syr')}>
 								Export SYR
 							</DropdownMenu.Item>
-							{#if data.hasAegis}
+							{#if data.identityContext?.hasAegis}
 								<DropdownMenu.Item onclick={() => openExportIdentityDialog('sigil')}>
 									Export Sigil
 								</DropdownMenu.Item>
@@ -226,7 +228,7 @@
 					<ul class="space-y-1.5 text-muted-foreground">
 						<li>
 							<strong class="text-foreground">Export SYR</strong> —
-							{#if data.hasAegis}
+							{#if data.identityContext?.hasAegis}
 								Complete backup (.syr file). All posts, assets, manifest, and identity. Use for full
 								migration or reclaim identity in SYR.
 							{:else}
@@ -234,7 +236,7 @@
 								Keys stay in Syner.
 							{/if}
 						</li>
-						{#if data.hasAegis}
+						{#if data.identityContext?.hasAegis}
 							<li>
 								<strong class="text-foreground">Export Sigil</strong> — Bare minimum identity backup
 								(.sigil file). Single encrypted file. Use for key recovery or minimal backup.
@@ -247,7 +249,7 @@
 					</ul>
 				</div>
 
-				{#if data.hasAegis}
+				{#if data.identityContext?.hasAegis}
 					<div
 						class="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/20"
 					>
@@ -313,7 +315,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if data.hasIdentity}
+	{#if data.identityContext?.hasIdentity}
 		<!-- Registries Card -->
 		<Card.Root>
 			<Card.Header>
@@ -514,9 +516,8 @@
 
 <ExportKeyDialog
 	bind:open={exportIdentityDialogOpen}
-	hasIdentity={data.hasIdentity}
-	hasAegis={data.hasAegis ?? false}
 	exportType={exportTypeForDialog}
+	identityContext={data.identityContext}
 	onSuccess={invalidateAll}
 />
 

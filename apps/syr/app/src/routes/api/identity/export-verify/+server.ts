@@ -6,16 +6,25 @@ import { parseDid } from '@syr-is/did';
 import {
 	consumeExportChallenge,
 	consumeImportChallenge,
+	consumePublicImportChallenge,
 	consumeDeleteAegisChallenge,
 	consumeDeleteAccountChallenge,
 	setExportToken,
+	setExportSigningSession,
 	setImportToken,
+	setPublicImportToken,
 	setDeleteAegisToken,
 	setDeleteAccountToken,
 	type ImportChallengeData,
 	type DeleteAegisChallengeData,
 	type DeleteAccountChallengeData
 } from '$lib/server/export-verify-store';
+import { buildIdentityExport } from '$lib/server/export-bundle';
+import {
+	getSignableItemsChunk,
+	buildAllSignableItems,
+	CHUNK_SIZE
+} from '$lib/server/export-signing';
 import {
 	notifyExportVerified,
 	notifyImportVerified,
@@ -41,21 +50,23 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const data = VerifyRequestSchema.parse(body);
 
-		// Atomically consume export challenge first, then import, then delete-aegis, then delete-account
-		let challenge = await consumeExportChallenge(data.challenge_id);
-		let purpose: 'export' | 'import' | 'delete_aegis' | 'delete_account' = 'export';
+		// Atomically consume export challenge first, then import, then public import, then delete-aegis, then delete-account
+		let challenge: Awaited<ReturnType<typeof consumeExportChallenge>>;
+		let purpose: 'export' | 'import' | 'import_public' | 'delete_aegis' | 'delete_account';
 
-		if (!challenge) {
-			challenge = await consumeImportChallenge(data.challenge_id);
+		if ((challenge = await consumeExportChallenge(data.challenge_id))) {
+			purpose = 'export';
+		} else if ((challenge = await consumeImportChallenge(data.challenge_id))) {
 			purpose = 'import';
-		}
-		if (!challenge) {
-			challenge = await consumeDeleteAegisChallenge(data.challenge_id);
+		} else if ((challenge = await consumePublicImportChallenge(data.challenge_id))) {
+			purpose = 'import_public';
+		} else if ((challenge = await consumeDeleteAegisChallenge(data.challenge_id))) {
 			purpose = 'delete_aegis';
-		}
-		if (!challenge) {
-			challenge = await consumeDeleteAccountChallenge(data.challenge_id);
+		} else if ((challenge = await consumeDeleteAccountChallenge(data.challenge_id))) {
 			purpose = 'delete_account';
+		} else {
+			challenge = null;
+			purpose = 'export'; // Unused when challenge is null
 		}
 
 		if (!challenge) {
@@ -95,8 +106,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (purpose === 'export') {
-			const exportToken = crypto.randomUUID();
-			// We need user_id - export challenge has expected_did, we need to look up user by did
 			const { identityRepository } = await import('$lib/repositories/identity.repository');
 			const identity = await identityRepository.findByDid(data.did);
 			if (!identity) {
@@ -105,9 +114,61 @@ export const POST: RequestHandler = async ({ request }) => {
 					{ status: 500 }
 				);
 			}
-			await setExportToken(exportToken, identity.user_id.toString());
-			notifyExportVerified(data.challenge_id, exportToken);
-			return json({ success: true as const, export_token: exportToken });
+			const userId = identity.user_id.toString();
+			const exportResult = await buildIdentityExport(userId);
+			const { exportedPosts, exportedAssets } = exportResult;
+
+			// No posts and no assets: issue export_token immediately (data-only, no signing needed)
+			if (exportedPosts.length === 0 && exportedAssets.length === 0) {
+				const exportToken = crypto.randomUUID();
+				await setExportToken(exportToken, userId);
+				notifyExportVerified(data.challenge_id, exportToken);
+				return json({ success: true as const, export_token: exportToken });
+			}
+
+			// Create signing session and return first chunk
+			const signingSessionId = crypto.randomUUID();
+			const exportData = {
+				manifest: exportResult.manifest,
+				identityBundle: exportResult.identityBundle as Record<string, unknown>,
+				exportedPosts: exportedPosts as Array<Record<string, unknown>>,
+				exportedAssets: exportedAssets as Array<
+					Record<string, unknown> & { zip_path: string; content_base64?: string }
+				>,
+				skippedAssets: exportResult.skippedAssets,
+				pinnedPostIds: exportResult.pinnedPostIds
+			};
+			const did = exportResult.identityBundle.did;
+			const allSignableItems = buildAllSignableItems(exportData, did);
+			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
+				exportData,
+				did,
+				0,
+				CHUNK_SIZE,
+				allSignableItems
+			);
+
+			await setExportSigningSession(signingSessionId, {
+				challenge_id: data.challenge_id,
+				user_id: userId,
+				did: data.did,
+				export_data: exportData,
+				signatures: {},
+				cursor: nextCursor,
+				all_item_ids: allSignableItems.map((i) => i.id),
+				all_signable_items: allSignableItems
+			});
+
+			return json({
+				success: true as const,
+				signing_session_id: signingSessionId,
+				items,
+				has_more: hasMore,
+				chunk_index: 0,
+				total_count: totalCount,
+				chunk_size: CHUNK_SIZE,
+				signed_count: 0
+			});
 		} else if (purpose === 'delete_aegis') {
 			const deleteAegisToken = crypto.randomUUID();
 			await setDeleteAegisToken(deleteAegisToken, {
@@ -122,6 +183,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 			notifyDeleteAccountVerified(data.challenge_id, deleteAccountToken);
 			return json({ success: true as const, delete_account_token: deleteAccountToken });
+		} else if (purpose === 'import_public') {
+			const importToken = crypto.randomUUID();
+			await setPublicImportToken(importToken, { did: data.did });
+			notifyImportVerified(data.challenge_id, importToken);
+			return json({ success: true as const, import_token: importToken });
 		} else {
 			const importToken = crypto.randomUUID();
 			await setImportToken(importToken, {

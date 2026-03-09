@@ -12,7 +12,11 @@
 	import { ArrowLeft } from '@lucide/svelte';
 	import { Button } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
-	import { parseSyrLoginUrl, parseSyrSyncProfileUrl, parseSyrExportUrl } from '$lib/utils/syr-url';
+	import {
+		parseSyrLoginUrl,
+		parseSyrSyncProfileUrl,
+		parseSyrChallengeSignUrlAny
+	} from '$lib/utils/syr-url';
 
 	let _scanning = $state(true);
 	let cancelled = $state(false);
@@ -52,9 +56,9 @@
 						const q = new URLSearchParams(loginParsed);
 						goto(`/scan-confirm?${q.toString()}`);
 					} else {
-						const exportParsed = parseSyrExportUrl(content);
-						if (exportParsed) {
-							const q = new URLSearchParams(exportParsed);
+						const challengeSignParsed = parseSyrChallengeSignUrlAny(content);
+						if (challengeSignParsed) {
+							const q = new URLSearchParams(challengeSignParsed);
 							goto(`/export-verify?${q.toString()}`);
 						} else {
 							const syncParsed = parseSyrSyncProfileUrl(content);
