@@ -312,7 +312,9 @@
 
 				items = sigData.items ?? [];
 				chunkIndex = sigData.chunk_index ?? chunkIndex + 1;
-				lastSignedCount = sigData.signed_count ?? chunkIndex * (sigData.chunk_size ?? chunkSize);
+				lastSignedCount =
+					sigData.signed_count ??
+					(chunkIndex === 0 ? 0 : (chunkIndex - 1) * (sigData.chunk_size ?? chunkSize));
 			}
 
 			// Should not reach here; done case returns above
