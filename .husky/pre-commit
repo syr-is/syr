@@ -4,6 +4,7 @@ echo "Building..."
 pnpm run build
 echo "Running format, lint, check, test..."
 pnpm run format
+git add -u
 pnpm run lint
 pnpm run check
 pnpm run test

@@ -136,12 +136,13 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 			totalAssetBytes += assetBase64Size;
 			const base64 = Buffer.from(bytes).toString('base64');
 			const sha256 = upload.sha256 ?? createHash('sha256').update(bytes).digest('hex');
+			const actualSize = bytes.length;
 			exportedAssets.push({
 				zip_path: zipPath,
 				local_id: extractLocalId(upload.id),
 				filename: upload.filename,
 				mime_type: upload.mime_type,
-				size: upload.size,
+				size: actualSize,
 				sha256,
 				content_base64: base64
 			});
@@ -154,10 +155,7 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 		}
 	}
 
-	const exportedAssetZipPaths = new Set(exportedAssets.map((a) => a.zip_path));
-	const exportedAssetSha256 = new Map(
-		exportedAssets.filter((a) => a.sha256).map((a) => [a.zip_path, a.sha256!])
-	);
+	const exportedAssetByZipPath = new Map(exportedAssets.map((a) => [a.zip_path, a] as const));
 	const exportedPosts: ExportedPost[] = [];
 	for (const post of posts) {
 		const postAssets: ExportedPost['assets'] = [];
@@ -170,13 +168,14 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 				}
 				if (!upload?.key) continue;
 				const zipPath = `assets/${upload.key.replace(/^uploads\/[^/]+\//, '')}`;
-				if (exportedAssetZipPaths.has(zipPath)) {
+				const exportedAsset = exportedAssetByZipPath.get(zipPath);
+				if (exportedAsset) {
 					postAssets.push({
 						local_id: extractLocalId(upload.id),
 						filename: upload.filename,
 						mime_type: upload.mime_type,
-						size: upload.size,
-						sha256: upload.sha256 ?? exportedAssetSha256.get(zipPath),
+						size: exportedAsset.size,
+						sha256: exportedAsset.sha256 ?? undefined,
 						zip_path: zipPath
 					});
 				}
@@ -211,12 +210,12 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 	function resolveProfileUrlToZipPath(url: string): string | null {
 		if (urlToZipPath.has(url)) {
 			const zp = urlToZipPath.get(url)!;
-			return exportedAssetZipPaths.has(zp) ? zp : null;
+			return exportedAssetByZipPath.has(zp) ? zp : null;
 		}
 		const key = keyFromUrl(url);
 		if (!key) return null;
 		const zp = keyToZipPath(key);
-		return exportedAssetZipPaths.has(zp) ? zp : null;
+		return exportedAssetByZipPath.has(zp) ? zp : null;
 	}
 	// Transform identity bundle profile URLs to zip paths for portable import
 	const transformedBundle = { ...identityBundle };
