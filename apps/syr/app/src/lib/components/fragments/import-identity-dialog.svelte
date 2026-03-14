@@ -427,7 +427,7 @@
 
 	$effect(() => {
 		if (!open) {
-			disconnectImportHeartbeat();
+			resetImportState();
 		}
 	});
 </script>

@@ -11,7 +11,7 @@
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
 	import QRCode from 'qrcode';
-	import { identityStore, type IdentityContextClient } from '$lib/stores/identity.svelte';
+	import { getIdentityStore, type IdentityContextClient } from '$lib/stores/identity.svelte';
 
 	export type ExportType = 'syr' | 'sigil' | 'persona';
 
@@ -27,7 +27,8 @@
 		onSuccess?: () => void;
 	} = $props();
 
-	const ctx = $derived(identityContextProp ?? identityStore.identityContext ?? null);
+	const identityStoreCtx = getIdentityStore();
+	const ctx = $derived(identityContextProp ?? identityStoreCtx.identityContext ?? null);
 	const hasIdentity = $derived(ctx?.hasIdentity ?? false);
 	const hasAegis = $derived(ctx?.hasAegis ?? false);
 	const isIndependent = $derived(!!(hasIdentity && !hasAegis));
@@ -51,6 +52,7 @@
 	} | null>(null);
 	let exportHeartbeatSource: EventSource | null = null;
 	let pendingDownload = $state<{ blob: Blob; filename: string } | null>(null);
+	let exportGeneration = $state(0);
 
 	const signatureValidated = $derived(!!exportToken);
 
@@ -68,8 +70,12 @@
 	}
 
 	function resetExportState() {
+		exportGeneration++;
 		bundle = null;
 		unlockPassword = '';
+		passphrase = '';
+		confirmPassphrase = '';
+		creatingChallenge = false;
 		exportChallenge = null;
 		exportToken = null;
 		pendingDownload = null;
@@ -78,7 +84,7 @@
 
 	$effect(() => {
 		if (open) {
-			if (isInitialOpen) {
+			if (isInitialOpen && ctx !== null) {
 				isInitialOpen = false;
 				step = determineInitialStep(exportType, hasAegis);
 				if (exportType === 'syr') {
@@ -154,6 +160,13 @@
 		return bytes;
 	}
 
+	/** Sanitize a zip_path to prevent path traversal (defense-in-depth for server-provided paths). */
+	function sanitizeZipPath(raw: string): string {
+		const normalized = raw.replace(/\\/g, '/');
+		const segments = normalized.split('/').filter((s) => s && s !== '..' && s !== '.');
+		return segments.join('/');
+	}
+
 	/** Sanitize API-provided asset filename to prevent path traversal in ZIP entries. */
 	function sanitizeAssetFilename(
 		raw: string | undefined,
@@ -217,15 +230,18 @@
 
 	async function handleVerifyWithSyner() {
 		if (!hasIdentity || exportType !== 'syr') return;
+		const gen = exportGeneration;
 		creatingChallenge = true;
 		exportChallenge = null;
 		exportToken = null;
 		try {
 			const res = await fetch('/api/identity/export-challenge', { method: 'POST' });
+			if (gen !== exportGeneration) return;
 			const data = await res.json();
 			if (!res.ok)
 				throw new Error(data.error_description ?? data.message ?? 'Failed to create challenge');
 			const qrDataUrl = await QRCode.toDataURL(data.deeplink_url, { width: 256, margin: 2 });
+			if (gen !== exportGeneration) return;
 			exportChallenge = {
 				challenge_id: data.challenge_id,
 				deeplink_url: data.deeplink_url,
@@ -237,6 +253,7 @@
 			);
 			exportHeartbeatSource = src;
 			src.addEventListener('verified', (e: MessageEvent) => {
+				if (gen !== exportGeneration) return;
 				try {
 					const payload = JSON.parse(e.data || '{}');
 					const token = payload.export_token;
@@ -565,11 +582,14 @@
 					zipFiles['pinned_posts.json'] = strToU8(JSON.stringify(data.pinned_posts, null, 2));
 					zipFiles['identity.sigil'] = strToU8(JSON.stringify(sigil, null, 2));
 
-					for (const asset of validAssets) {
-						if (asset.content_base64 && asset.zip_path) {
-							zipFiles[asset.zip_path] = base64ToBytes(asset.content_base64);
+				for (const asset of validAssets) {
+					if (asset.content_base64 && asset.zip_path) {
+						const safePath = sanitizeZipPath(asset.zip_path);
+						if (safePath) {
+							zipFiles[safePath] = base64ToBytes(asset.content_base64);
 						}
 					}
+				}
 
 					const zipped = zipSync(zipFiles, { level: 1 });
 					const filename = `syr-export-${didShort}-${timestamp}.syr`;

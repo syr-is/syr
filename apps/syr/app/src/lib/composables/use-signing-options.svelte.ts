@@ -1,34 +1,36 @@
-import { identityStore } from '$lib/stores/identity.svelte';
+import { getIdentityStore } from '$lib/stores/identity.svelte';
 
 /**
  * Centralized signing options derived from identity context.
  * Returns reactive getters so consumers re-render when identityContext changes.
+ * Must be called during component initialization (uses Svelte context).
  */
 export function useSigningOptions() {
+	const store = getIdentityStore();
 	return {
 		/** True once layout has populated identity context */
 		get isContextReady() {
-			return identityStore.isContextReady;
+			return store.isContextReady;
 		},
 		get hasIdentity() {
-			return identityStore.identityContext?.hasIdentity ?? false;
+			return store.identityContext?.hasIdentity ?? false;
 		},
 		get hasAegis() {
-			return identityStore.identityContext?.hasAegis ?? false;
+			return store.identityContext?.hasAegis ?? false;
 		},
 		/** Can use password for verification (custodial/Aegis) */
 		get canVerifyWithPassword() {
-			const ctx = identityStore.identityContext;
-			if (ctx == null) return false; // loading or uninitialized
+			const ctx = store.identityContext;
+			if (ctx == null) return false;
 			return !!ctx.hasAegis;
 		},
 		/** Keys in Syner only; must sign with Syner */
 		get isIndependent() {
-			const ctx = identityStore.identityContext;
+			const ctx = store.identityContext;
 			return !!(ctx?.hasIdentity && !ctx?.hasAegis);
 		},
 		get did() {
-			return identityStore.identityContext?.did ?? null;
+			return store.identityContext?.did ?? null;
 		}
 	};
 }

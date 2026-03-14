@@ -17,12 +17,14 @@ import {
 
 const SignaturesRequestSchema = z.object({
 	signing_session_id: z.string().uuid(),
-	signatures: z.array(
-		z.object({
-			id: z.string().min(1),
-			signature: z.string().min(1)
-		})
-	)
+	signatures: z
+		.array(
+			z.object({
+				id: z.string().min(1),
+				signature: z.string().min(1)
+			})
+		)
+		.min(1)
 });
 
 /**
@@ -113,6 +115,27 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
+		// Validate that received IDs cover the current chunk
+		const currentChunk = getSignableItemsChunk(
+			export_data,
+			did,
+			cursor,
+			CHUNK_SIZE,
+			all_signable_items
+		);
+		const chunkIds = new Set(currentChunk.items.map((i) => i.id));
+		for (const cid of chunkIds) {
+			if (!receivedIds.has(cid)) {
+				return json(
+					{
+						error: 'invalid_request',
+						error_description: `Missing signature for chunk item: ${cid}`
+					},
+					{ status: 400 }
+				);
+			}
+		}
+
 		// Merge signatures
 		const mergedSignatures: Record<string, string> = { ...signatures };
 		for (const { id, signature } of data.signatures) {
@@ -123,19 +146,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		const allReceived = all_item_ids.every((id) => mergedSignatures[id]);
 
 		if (!allReceived) {
-			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
-				export_data,
-				did,
-				cursor,
-				CHUNK_SIZE,
-				all_signable_items
-			);
 			const chunkIndex = Math.floor(cursor / CHUNK_SIZE);
 
 			const updated = await updateExportSigningSession(data.signing_session_id, (s) => ({
 				...s,
 				signatures: mergedSignatures,
-				cursor: nextCursor
+				cursor: currentChunk.nextCursor
 			}));
 			if (!updated) {
 				return json(
@@ -150,16 +166,32 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			return json({
 				success: true as const,
-				items,
-				has_more: hasMore,
+				items: currentChunk.items,
+				has_more: currentChunk.hasMore,
 				chunk_index: chunkIndex + 1,
-				total_count: totalCount,
+				total_count: currentChunk.totalCount,
 				chunk_size: CHUNK_SIZE,
 				signed_count: Object.keys(mergedSignatures).length
 			});
 		}
 
-		// All done: assemble signed bundle
+		// All done: claim session via optimistic lock to prevent concurrent finalization
+		const finalized = await updateExportSigningSession(data.signing_session_id, (s) => ({
+			...s,
+			signatures: mergedSignatures,
+			finalized: true
+		}));
+		if (!finalized) {
+			return json(
+				{
+					error: 'conflict',
+					error_description: 'Already finalized by another request'
+				},
+				{ status: 409 }
+			);
+		}
+
+		// Assemble signed bundle
 		const signedPosts = export_data.exportedPosts.map((post, i) => {
 			const sig = mergedSignatures[`post:${i}`];
 			if (!sig) return post;

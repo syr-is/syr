@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { identityController } from '$lib/controllers/identity.controller';
 import { pinnedPostsController } from '$lib/controllers/pinned-posts.controller';
 import { postRepository } from '$lib/repositories/post.repository';
@@ -11,9 +12,9 @@ import { extractLocalId } from '@syr-is/types';
 export const MAX_EXPORT_RECORDS = 10_000;
 export const MAX_EXPORT_ASSET_BYTES = 500 * 1024 * 1024; // 500 MB total base64 asset bytes in export
 
-/** Base64 encoding expands bytes by 4/3 (plus padding). Used to enforce export size limit. */
+/** Base64 encoding expands bytes by 4/3 (with padding to 4-byte boundary). Used to enforce export size limit. */
 function base64Size(rawBytes: number): number {
-	return Math.ceil((rawBytes * 4) / 3);
+	return 4 * Math.ceil(rawBytes / 3);
 }
 
 /** Build S3 URL from storage key. */
@@ -134,13 +135,15 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 			}
 			totalAssetBytes += assetBase64Size;
 			const base64 = Buffer.from(bytes).toString('base64');
+			const sha256 =
+				upload.sha256 ?? createHash('sha256').update(bytes).digest('hex');
 			exportedAssets.push({
 				zip_path: zipPath,
 				local_id: extractLocalId(upload.id),
 				filename: upload.filename,
 				mime_type: upload.mime_type,
 				size: upload.size,
-				sha256: upload.sha256,
+				sha256,
 				content_base64: base64
 			});
 		} catch (err) {
@@ -153,6 +156,9 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 	}
 
 	const exportedAssetZipPaths = new Set(exportedAssets.map((a) => a.zip_path));
+	const exportedAssetSha256 = new Map(
+		exportedAssets.filter((a) => a.sha256).map((a) => [a.zip_path, a.sha256!])
+	);
 	const exportedPosts: ExportedPost[] = [];
 	for (const post of posts) {
 		const postAssets: ExportedPost['assets'] = [];
@@ -171,7 +177,7 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 						filename: upload.filename,
 						mime_type: upload.mime_type,
 						size: upload.size,
-						sha256: upload.sha256,
+						sha256: upload.sha256 ?? exportedAssetSha256.get(zipPath),
 						zip_path: zipPath
 					});
 				}

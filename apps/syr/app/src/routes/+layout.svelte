@@ -5,7 +5,7 @@
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { userSessionStore } from '$lib/stores/user-session.svelte';
-	import { identityStore } from '$lib/stores/identity.svelte';
+	import { setIdentityStoreContext } from '$lib/stores/identity.svelte';
 	import { initCryptoWasm } from '@syr-is/crypto';
 	import '../app.css';
 
@@ -15,6 +15,8 @@
 	initCryptoWasm();
 
 	let open = $state(true);
+
+	const identityStore = setIdentityStoreContext();
 
 	$effect(() => {
 		if (!data.user) {

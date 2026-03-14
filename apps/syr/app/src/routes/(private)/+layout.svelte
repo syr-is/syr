@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { identityStore } from '$lib/stores/identity.svelte';
+	import { getIdentityStore } from '$lib/stores/identity.svelte';
 
 	let { data, children } = $props();
+
+	const identityStore = getIdentityStore();
 
 	$effect(() => {
 		if (data?.identityContext) {
