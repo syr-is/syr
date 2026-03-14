@@ -126,7 +126,7 @@ export async function verifyAssetSignature(
 			`Asset ${asset.zip_path} has no signature. If this is a data-only export (keys in Syner), use "Verify with Syner" on the migrate page and provide the import token.`
 		);
 	}
-	if (fileBytes == null || fileBytes.byteLength === 0) {
+	if (fileBytes == null) {
 		throw new Error(`Asset ${asset.zip_path} missing from bundle`);
 	}
 	if (fileBytes.byteLength !== asset.size) {

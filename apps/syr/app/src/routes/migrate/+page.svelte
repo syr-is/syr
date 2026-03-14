@@ -146,6 +146,8 @@
 			src.onerror = () => {
 				disconnectHeartbeat(src);
 				migrationHeartbeatSource = null;
+				migrationImportChallenge = null;
+				migrationImportToken = null;
 				toast.error('Connection lost — please retry migration verification');
 			};
 		} catch (err) {
@@ -409,6 +411,8 @@
 			src.onerror = () => {
 				disconnectHeartbeat(src);
 				syncHeartbeatSource = null;
+				syncImportChallenge = null;
+				syncImportToken = null;
 				toast.error('Connection lost — please retry sync verification');
 			};
 		} catch (err) {
@@ -451,6 +455,13 @@
 				let seed: Uint8Array | null = null;
 				try {
 					seed = await decryptSigil(sigil, syncExportPassphrase);
+					{
+						const pubRaw = decodePublicKey(sigil.pub);
+						const sigilDid = deriveDid(pubRaw);
+						if (sigilDid !== data.did) {
+							throw new Error('This backup does not match your identity.');
+						}
+					}
 					if (syncFileType === 'raw_sigil') {
 						const pubRaw = decodePublicKey(sigil.pub);
 						const did = deriveDid(pubRaw);

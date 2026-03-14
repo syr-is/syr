@@ -159,8 +159,8 @@ export class AuthController {
 		// Fetch identity context and include aegisBundle when identity has Aegis (for client decryption)
 		let aegisBundle: AegisBundle | undefined;
 		try {
-			const ctx = await getIdentityContext(user.id.toString());
-			aegisBundle = ctx.aegisBundle;
+			const identityCtx = await getIdentityContext(user.id.toString());
+			aegisBundle = identityCtx.aegisBundle;
 		} catch (err) {
 			console.warn(
 				'[auth.controller] getIdentityContext failed, treating aegisBundle as undefined:',

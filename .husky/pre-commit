@@ -2,8 +2,8 @@
 set -e
 echo "Building..."
 pnpm run build
-echo "Running format, lint, check, test..."
-pnpm run format
+echo "Running format (staged only), lint, check, test..."
+pnpm exec lint-staged
 pnpm run lint
 pnpm run check
 pnpm run test

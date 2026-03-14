@@ -1,6 +1,10 @@
+import { getContext, setContext } from 'svelte';
+
 /**
  * Identity context store for client-side identity state.
  * Populated from (private) layout data. Single source for custodial vs Syner identity.
+ *
+ * Provided per-render via Svelte context to avoid SSR request-isolation issues.
  */
 export type IdentityContextClient = {
 	hasIdentity: boolean;
@@ -8,7 +12,7 @@ export type IdentityContextClient = {
 	did: string | null;
 };
 
-class IdentityStore {
+export class IdentityStore {
 	identityContext = $state<IdentityContextClient | null>(null);
 	/** True once layout has called setIdentityContext or clearIdentityContext at least once */
 	isContextReady = $state(false);
@@ -24,4 +28,16 @@ class IdentityStore {
 	}
 }
 
-export const identityStore = new IdentityStore();
+const IDENTITY_STORE_KEY = Symbol('identity-store');
+
+/** Create a fresh IdentityStore and provide it via Svelte context. Call in a root layout. */
+export function setIdentityStoreContext(): IdentityStore {
+	const store = new IdentityStore();
+	setContext(IDENTITY_STORE_KEY, store);
+	return store;
+}
+
+/** Retrieve the IdentityStore from Svelte context. Must be called during component init. */
+export function getIdentityStore(): IdentityStore {
+	return getContext<IdentityStore>(IDENTITY_STORE_KEY);
+}

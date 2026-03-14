@@ -111,6 +111,8 @@ export interface ExportSigningSession {
 	all_signable_items?: CachedSignableItem[];
 	/** Version for optimistic locking; incremented on each update */
 	version: number;
+	/** Set to true when all signatures are received and the bundle is finalized */
+	finalized?: boolean;
 }
 
 const SIGNING_SESSION_TTL = 600; // 10 minutes for chunked signing
@@ -140,12 +142,13 @@ export async function updateExportSigningSession(
 	for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
 		const current = await getExportSigningSession(id);
 		if (!current) return null;
+		const expectedVersion = current.version ?? 1;
 		const updated = updater(current);
-		(updated as ExportSigningSession).version = (current.version ?? 1) + 1;
+		(updated as ExportSigningSession).version = expectedVersion + 1;
 		const success = await kvService.updateValueIfVersionMatch(
 			KV_EXPORT_SIGNING_SESSION,
 			id,
-			current.version ?? 1,
+			expectedVersion,
 			updated,
 			SIGNING_SESSION_TTL
 		);
