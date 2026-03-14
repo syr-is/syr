@@ -34,7 +34,14 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
+    "prettier": "catalog:",
+    "prettier-plugin-svelte": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
     "turbo": "^2.8.0"
+  },
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx,svelte,json,css,scss,md,html,yml,yaml}": "prettier --write"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
