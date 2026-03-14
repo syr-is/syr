@@ -135,8 +135,7 @@ export async function buildIdentityExport(userId: string): Promise<ExportBundleR
 			}
 			totalAssetBytes += assetBase64Size;
 			const base64 = Buffer.from(bytes).toString('base64');
-			const sha256 =
-				upload.sha256 ?? createHash('sha256').update(bytes).digest('hex');
+			const sha256 = upload.sha256 ?? createHash('sha256').update(bytes).digest('hex');
 			exportedAssets.push({
 				zip_path: zipPath,
 				local_id: extractLocalId(upload.id),

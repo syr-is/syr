@@ -582,14 +582,14 @@
 					zipFiles['pinned_posts.json'] = strToU8(JSON.stringify(data.pinned_posts, null, 2));
 					zipFiles['identity.sigil'] = strToU8(JSON.stringify(sigil, null, 2));
 
-				for (const asset of validAssets) {
-					if (asset.content_base64 && asset.zip_path) {
-						const safePath = sanitizeZipPath(asset.zip_path);
-						if (safePath) {
-							zipFiles[safePath] = base64ToBytes(asset.content_base64);
+					for (const asset of validAssets) {
+						if (asset.content_base64 && asset.zip_path) {
+							const safePath = sanitizeZipPath(asset.zip_path);
+							if (safePath) {
+								zipFiles[safePath] = base64ToBytes(asset.content_base64);
+							}
 						}
 					}
-				}
 
 					const zipped = zipSync(zipFiles, { level: 1 });
 					const filename = `syr-export-${didShort}-${timestamp}.syr`;

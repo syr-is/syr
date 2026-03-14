@@ -143,13 +143,13 @@
 					/* ignore */
 				}
 			});
-		src.onerror = () => {
-			disconnectHeartbeat(src);
-			migrationHeartbeatSource = null;
-			migrationImportChallenge = null;
-			migrationImportToken = null;
-			toast.error('Connection lost — please retry migration verification');
-		};
+			src.onerror = () => {
+				disconnectHeartbeat(src);
+				migrationHeartbeatSource = null;
+				migrationImportChallenge = null;
+				migrationImportToken = null;
+				toast.error('Connection lost — please retry migration verification');
+			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed');
 		} finally {
@@ -408,13 +408,13 @@
 					/* ignore */
 				}
 			});
-		src.onerror = () => {
-			disconnectHeartbeat(src);
-			syncHeartbeatSource = null;
-			syncImportChallenge = null;
-			syncImportToken = null;
-			toast.error('Connection lost — please retry sync verification');
-		};
+			src.onerror = () => {
+				disconnectHeartbeat(src);
+				syncHeartbeatSource = null;
+				syncImportChallenge = null;
+				syncImportToken = null;
+				toast.error('Connection lost — please retry sync verification');
+			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed');
 		} finally {
