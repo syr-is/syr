@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		const { export_data, signatures, cursor, all_item_ids, did } = session;
+		const { export_data, signatures, cursor, all_item_ids, all_signable_items, did } = session;
 		const expectedIds = new Set(all_item_ids);
 		const receivedIds = new Set<string>();
 
@@ -71,8 +71,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			receivedIds.add(id);
 		}
 
-		// Verify each signature
-		const allItems = buildAllSignableItems(export_data, did);
+		const allItems = all_signable_items ?? buildAllSignableItems(export_data, did);
 		const itemsById = new Map(allItems.map((i) => [i.id, i]));
 		let parsedDid;
 		try {
@@ -124,12 +123,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		const allReceived = all_item_ids.every((id) => mergedSignatures[id]);
 
 		if (!allReceived) {
-			// Update session and return next chunk
 			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
 				export_data,
 				did,
 				cursor,
-				CHUNK_SIZE
+				CHUNK_SIZE,
+				all_signable_items
 			);
 			const chunkIndex = Math.floor(cursor / CHUNK_SIZE);
 

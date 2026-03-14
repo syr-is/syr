@@ -94,6 +94,9 @@ export type ExportSigningSessionExportData = {
 	pinnedPostIds: string[];
 };
 
+/** Cached signable item for chunked signing. Matches SignableItem from export-signing. */
+export type CachedSignableItem = { id: string; message: string };
+
 export interface ExportSigningSession {
 	challenge_id: string;
 	user_id: string;
@@ -104,6 +107,8 @@ export interface ExportSigningSession {
 	created_at: number;
 	/** Flat list of item ids in order (post:0, post:0:asset:0, asset:0, ...) */
 	all_item_ids: string[];
+	/** Pre-built signable items to avoid recomputing on each chunk (performance) */
+	all_signable_items?: CachedSignableItem[];
 	/** Version for optimistic locking; incremented on each update */
 	version: number;
 }

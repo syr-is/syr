@@ -56,14 +56,16 @@ export function buildAllSignableItems(
 /**
  * Returns a chunk of signable items starting at cursor.
  * Also returns the next cursor and whether more items remain.
+ * When allItems is provided, uses it instead of rebuilding (avoids O(n) canonicalization per chunk).
  */
 export function getSignableItemsChunk(
 	exportData: ExportSigningSessionExportData,
 	did: string,
 	cursor: number,
-	chunkSize: number = CHUNK_SIZE
+	chunkSize: number = CHUNK_SIZE,
+	allItems?: SignableItem[]
 ): { items: SignableItem[]; nextCursor: number; hasMore: boolean; totalCount: number } {
-	const all = buildAllSignableItems(exportData, did);
+	const all = allItems ?? buildAllSignableItems(exportData, did);
 	const chunk = all.slice(cursor, cursor + chunkSize);
 	const nextCursor = cursor + chunk.length;
 	const hasMore = nextCursor < all.length;

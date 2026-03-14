@@ -139,13 +139,14 @@ export const POST: RequestHandler = async ({ request }) => {
 				pinnedPostIds: exportResult.pinnedPostIds
 			};
 			const did = exportResult.identityBundle.did;
+			const allSignableItems = buildAllSignableItems(exportData, did);
 			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
 				exportData,
 				did,
 				0,
-				CHUNK_SIZE
+				CHUNK_SIZE,
+				allSignableItems
 			);
-			const allItemIds = buildAllSignableItems(exportData, did).map((i) => i.id);
 
 			await setExportSigningSession(signingSessionId, {
 				challenge_id: data.challenge_id,
@@ -154,7 +155,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				export_data: exportData,
 				signatures: {},
 				cursor: nextCursor,
-				all_item_ids: allItemIds
+				all_item_ids: allSignableItems.map((i) => i.id),
+				all_signable_items: allSignableItems
 			});
 
 			return json({
