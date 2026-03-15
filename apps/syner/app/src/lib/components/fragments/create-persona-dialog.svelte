@@ -37,7 +37,10 @@
 			multiple: false,
 			directory: false,
 			title: 'Select image',
-			filters: IMAGE_FILTERS
+			filters: IMAGE_FILTERS,
+			// iOS: copy file to app sandbox; document picker more reliable than image picker
+			fileAccessMode: 'copy',
+			pickerMode: 'document'
 		});
 		// Ensure single file: take first only (Android may return array despite multiple: false)
 		const paths = file == null ? null : Array.isArray(file) ? file : [file];

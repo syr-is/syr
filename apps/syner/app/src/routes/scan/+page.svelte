@@ -17,6 +17,9 @@
 		parseSyrSyncProfileUrl,
 		parseSyrChallengeSignUrlAny
 	} from '$lib/utils/syr-url';
+	import { error as logError, info as logInfo } from '@tauri-apps/plugin-log';
+
+	const LOG = '[scan]';
 
 	let _scanning = $state(true);
 	let cancelled = $state(false);
@@ -30,6 +33,16 @@
 
 	onMount(() => {
 		let mounted = true;
+
+		function handlePopState() {
+			logInfo(`${LOG} popstate fired`);
+			cancelled = true;
+			cancel().catch((e) => logError(`${LOG} popstate cancel error: ${e}`));
+		}
+
+		if (typeof window !== 'undefined') {
+			window.addEventListener('popstate', handlePopState);
+		}
 
 		async function runScan() {
 			try {
@@ -72,6 +85,7 @@
 						}
 					}
 				} else {
+					logInfo(`${LOG} scan returned null (cancelled/back), navigating home`);
 					goto('/');
 				}
 			} catch (e) {
@@ -91,18 +105,34 @@
 		runScan();
 
 		return () => {
+			logInfo(`${LOG} unmount cleanup`);
+			window.removeEventListener('popstate', handlePopState);
 			mounted = false;
 		};
 	});
 
 	async function handleBack() {
-		cancelled = true;
 		try {
-			await cancel();
-		} catch {
-			// ignore
+			logInfo(`${LOG} handleBack entry`);
+			cancelled = true;
+			try {
+				logInfo(`${LOG} handleBack calling cancel()`);
+				await cancel();
+				logInfo(`${LOG} handleBack cancel() done`);
+			} catch (e) {
+				logError(`${LOG} handleBack cancel() threw: ${e}`);
+			}
+			logInfo(`${LOG} handleBack calling goto('/')`);
+			goto('/');
+			logInfo(`${LOG} handleBack goto('/') done`);
+		} catch (e) {
+			logError(`${LOG} handleBack uncaught error: ${e}`);
+			try {
+				goto('/');
+			} catch (e2) {
+				logError(`${LOG} handleBack fallback goto also failed: ${e2}`);
+			}
 		}
-		goto('/');
 	}
 </script>
 

@@ -1,17 +1,25 @@
 mod crypto_commands;
 mod persona_commands;
 
+#[tauri::command]
+fn get_platform_cmd() -> &'static str {
+    std::env::consts::OS
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = {
         let b = tauri::Builder::default()
             .plugin(
                 tauri_plugin_log::Builder::default()
+                    .clear_targets()
                     .target(tauri_plugin_log::Target::new(
                         tauri_plugin_log::TargetKind::Stdout,
                     ))
                     .target(tauri_plugin_log::Target::new(
-                        tauri_plugin_log::TargetKind::Webview,
+                        tauri_plugin_log::TargetKind::LogDir {
+                            file_name: Some("syner.log".to_string()),
+                        },
                     ))
                     .level(log::LevelFilter::Info)
                     .build(),
@@ -40,6 +48,7 @@ pub fn run() {
             Ok::<(), Box<dyn std::error::Error>>(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_platform_cmd,
             crypto_commands::sign_payload,
             crypto_commands::decrypt_sigil_cmd,
             crypto_commands::derive_public_key_from_seed_cmd,

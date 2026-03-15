@@ -12,11 +12,13 @@
 	let loading = $state(true);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
+	let platform = $state<string>('');
 
 	async function loadPath() {
 		loading = true;
 		error = null;
 		try {
+			platform = await invoke<string>('get_platform_cmd');
 			basePath = await invoke<string>('get_personas_base_path_cmd');
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -55,6 +57,8 @@
 			saving = false;
 		}
 	}
+
+	const isIos = $derived(platform === 'ios');
 </script>
 
 <div class="flex flex-col gap-6 p-4 md:p-6">
@@ -67,7 +71,12 @@
 				Persona storage location
 			</CardTitle>
 			<CardDescription>
-				Configure where personas are stored on disk. Default: app data directory (syr-personas)
+				{#if isIos}
+					iOS does not allow user-defined directories for file storage. Personas are stored in the
+					app's Documents folder, visible in the Files app.
+				{:else}
+					Configure where personas are stored on disk. Default: app data directory (syr-personas)
+				{/if}
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
@@ -81,17 +90,21 @@
 							id="base-path"
 							bind:value={basePath}
 							placeholder="Personas folder path…"
-							disabled={saving}
+							disabled={saving || isIos}
 						/>
-						<Button variant="outline" onclick={pickDirectory} disabled={saving}>
-							<FolderOpen class="h-4 w-4" />
-							Browse
-						</Button>
+						{#if !isIos}
+							<Button variant="outline" onclick={pickDirectory} disabled={saving}>
+								<FolderOpen class="h-4 w-4" />
+								Browse
+							</Button>
+						{/if}
 					</div>
 				</div>
-				<Button onclick={savePath} disabled={saving}>
-					{saving ? 'Saving…' : 'Save'}
-				</Button>
+				{#if !isIos}
+					<Button onclick={savePath} disabled={saving}>
+						{saving ? 'Saving…' : 'Save'}
+					</Button>
+				{/if}
 				{#if error}
 					<p class="text-destructive text-sm">{error}</p>
 				{/if}

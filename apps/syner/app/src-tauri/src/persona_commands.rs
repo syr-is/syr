@@ -41,7 +41,22 @@ pub struct Persona {
     pub banner_mtime: Option<i64>,
 }
 
-/// Default personas storage path. Uses app data dir (works on Android/iOS where document_dir is None).
+/// Default personas storage path. On iOS uses Documents (exposed in Finder/Files); otherwise app data dir.
+#[cfg(target_os = "ios")]
+fn default_personas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .document_dir()
+        .map_err(|e| e.to_string())
+        .map(|p| p.join("syr-personas"))
+        .or_else(|_| {
+            app.path()
+                .app_data_dir()
+                .map_err(|e| e.to_string())
+                .map(|p| p.join("syr-personas"))
+        })
+}
+
+#[cfg(not(target_os = "ios"))]
 fn default_personas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -74,11 +89,109 @@ fn save_config(app: &tauri::AppHandle, config: &PersonaConfig) -> Result<(), Str
 }
 
 pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let config = load_config(app)?;
-    match config.personas_base_path {
-        Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
-        _ => default_personas_path(app),
+    #[cfg(target_os = "ios")]
+    {
+        let base = default_personas_path(app)?;
+        ensure_migrated_from_app_data_to_documents(app);
+        Ok(base)
     }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let config = load_config(app)?;
+        match config.personas_base_path {
+            Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
+            _ => default_personas_path(app),
+        }
+    }
+}
+
+/// On iOS: one-time migration from app_data_dir/syr-personas to Documents/syr-personas.
+/// Copies persona dirs, writes .migrated sentinel, then deletes the old directory.
+#[cfg(target_os = "ios")]
+fn ensure_migrated_from_app_data_to_documents(app: &tauri::AppHandle) {
+    let doc_dir = match app.path().document_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let app_data = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let new_base = doc_dir.join("syr-personas");
+    let old_base = app_data.join("syr-personas");
+
+    if new_base.join(".migrated").exists() {
+        return;
+    }
+    if !old_base.exists() {
+        return;
+    }
+
+    let read_dir = match std::fs::read_dir(&old_base) {
+        Ok(rd) => rd,
+        Err(e) => {
+            log::warn!("[migration] Cannot read old personas dir: {}", e);
+            return;
+        }
+    };
+
+    let persona_dirs: Vec<_> = read_dir
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter(|e| e.path().join("profile.json").exists())
+        .collect();
+
+    if persona_dirs.is_empty() {
+        if let Err(e) = std::fs::remove_dir_all(&old_base) {
+            log::warn!("[migration] Cannot remove empty old dir: {}", e);
+        }
+        return;
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&new_base) {
+        log::warn!("[migration] Cannot create Documents/syr-personas: {}", e);
+        return;
+    }
+
+    for entry in persona_dirs {
+        let name = entry.file_name();
+        let src = entry.path();
+        let dst = new_base.join(&name);
+        if let Err(e) = copy_dir_recursive(&src, &dst) {
+            log::warn!("[migration] Failed to copy {:?}: {}", name, e);
+            return;
+        }
+    }
+
+    if let Err(e) = std::fs::write(new_base.join(".migrated"), "") {
+        log::warn!("[migration] Cannot write .migrated: {}", e);
+        return;
+    }
+
+    if let Err(e) = std::fs::remove_dir_all(&old_base) {
+        log::warn!(
+            "[migration] Failed to delete old app_data_dir/syr-personas: {}",
+            e
+        );
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in std::fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let ty = entry.file_type().map_err(|e| e.to_string())?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -118,9 +231,22 @@ pub fn get_personas_base_path_cmd(app: tauri::AppHandle) -> Result<String, Strin
 
 #[tauri::command]
 pub fn set_personas_base_path_cmd(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    let mut config = load_config(&app)?;
-    config.personas_base_path = Some(path);
-    save_config(&app, &config)
+    #[cfg(target_os = "ios")]
+    {
+        let _ = app;
+        let _ = path;
+        return Err(
+            "iOS does not support custom storage paths. Personas are stored in the app's Documents folder."
+                .to_string(),
+        );
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let mut config = load_config(&app)?;
+        config.personas_base_path = Some(path);
+        save_config(&app, &config)
+    }
 }
 
 #[tauri::command]
@@ -212,7 +338,8 @@ fn copy_image_from_source(
 
     #[cfg(not(target_os = "android"))]
     {
-        std::fs::copy(source_path, dest)
+        let path = normalize_picker_path(source_path);
+        std::fs::copy(&path, dest)
             .map_err(|e| e.to_string())
             .map(|_| ())
     }
@@ -380,8 +507,15 @@ pub fn import_persona_from_sigil_cmd(
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }
 
-fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
-    let canonical = path
+/// Normalizes paths from the file picker. On iOS, the dialog may return file:// URLs.
+fn normalize_picker_path(s: &str) -> PathBuf {
+    let s = s.trim_start_matches("file://");
+    PathBuf::from(s)
+}
+
+fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &str) -> Result<PathBuf, String> {
+    let path_buf = normalize_picker_path(path);
+    let canonical = path_buf
         .canonicalize()
         .map_err(|e| format!("Path not found or invalid: {}", e))?;
 
@@ -401,7 +535,18 @@ fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<P
     let personas_base = get_base_path(app)?;
 
     let mut allowed_roots: Vec<PathBuf> = vec![app_data, config_dir, personas_base];
+    // iOS: dialog Copy mode may put files in tmp or cache
+    if let Ok(tmp) = app.path().temp_dir() {
+        allowed_roots.push(tmp);
+    }
+    if let Ok(cache) = app.path().cache_dir() {
+        allowed_roots.push(cache);
+    }
     if let Some(doc) = dirs::document_dir() {
+        allowed_roots.push(doc);
+    }
+    // iOS: dirs::document_dir() is None; use Tauri's document_dir for app Documents
+    if let Ok(doc) = app.path().document_dir() {
         allowed_roots.push(doc);
     }
     if let Some(home) = dirs::home_dir() {
@@ -435,7 +580,7 @@ fn open_persona_bundle_file(app: &tauri::AppHandle, path: &str) -> Result<File, 
 
     #[cfg(not(target_os = "android"))]
     {
-        let path_buf = validate_persona_bundle_path(app, Path::new(path))?;
+        let path_buf = validate_persona_bundle_path(app, path)?;
         File::open(&path_buf).map_err(|e| e.to_string())
     }
 }
@@ -725,7 +870,9 @@ pub fn read_file_as_base64_cmd(
 
         #[cfg(not(target_os = "android"))]
         {
-            let mut file = std::fs::File::open(&source_path).map_err(|e| e.to_string())?;
+            // iOS: dialog may return file:// URLs
+            let path_buf = normalize_picker_path(&source_path);
+            let mut file = std::fs::File::open(&path_buf).map_err(|e| e.to_string())?;
             let meta = file.metadata().map_err(|e| e.to_string())?;
             if meta.len() > MAX_ASSET_SIZE as u64 {
                 return Err(format!(

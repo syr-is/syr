@@ -1,6 +1,6 @@
 //! Tauri commands for Syr crypto.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::persona_commands;
 use tauri::Manager;
@@ -112,7 +112,8 @@ fn read_file_content_android(app: &tauri::AppHandle, path: &str) -> Result<Strin
 
 #[cfg(not(target_os = "android"))]
 fn read_file_content_desktop(app: &tauri::AppHandle, path: &str) -> Result<String, String> {
-    let path_buf = Path::new(path);
+    // iOS: dialog may return file:// URLs
+    let path_buf = PathBuf::from(path.trim_start_matches("file://"));
     let canonical = path_buf
         .canonicalize()
         .map_err(|e| format!("Path not found or invalid: {}", e))?;
@@ -132,7 +133,18 @@ fn read_file_content_desktop(app: &tauri::AppHandle, path: &str) -> Result<Strin
     let personas_base = persona_commands::get_base_path(app)?;
 
     let mut allowed_roots: Vec<PathBuf> = vec![app_data, config_dir, personas_base];
+    // iOS: dialog Copy mode may put files in tmp or cache
+    if let Ok(tmp) = app.path().temp_dir() {
+        allowed_roots.push(tmp);
+    }
+    if let Ok(cache) = app.path().cache_dir() {
+        allowed_roots.push(cache);
+    }
     if let Some(doc) = dirs::document_dir() {
+        allowed_roots.push(doc);
+    }
+    // iOS: dirs::document_dir() is None; use Tauri's document_dir
+    if let Ok(doc) = app.path().document_dir() {
         allowed_roots.push(doc);
     }
     if let Some(home) = dirs::home_dir() {
