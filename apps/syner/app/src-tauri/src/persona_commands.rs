@@ -94,9 +94,7 @@ fn save_config(app: &tauri::AppHandle, config: &PersonaConfig) -> Result<(), Str
 pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     #[cfg(target_os = "ios")]
     {
-        let base = default_personas_path(app)?;
-        ensure_migrated_from_app_data_to_documents(app);
-        Ok(base)
+        default_personas_path(app)
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -107,94 +105,6 @@ pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
             _ => default_personas_path(app),
         }
     }
-}
-
-/// On iOS: one-time migration from app_data_dir/syr-personas to Documents/syr-personas.
-/// Copies persona dirs, writes .migrated sentinel, then deletes the old directory.
-#[cfg(target_os = "ios")]
-fn ensure_migrated_from_app_data_to_documents(app: &tauri::AppHandle) {
-    let doc_dir = match app.path().document_dir() {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    let app_data = match app.path().app_data_dir() {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    let new_base = doc_dir.join("syr-personas");
-    let old_base = app_data.join("syr-personas");
-
-    if new_base.join(".migrated").exists() {
-        return;
-    }
-    if !old_base.exists() {
-        return;
-    }
-
-    let read_dir = match std::fs::read_dir(&old_base) {
-        Ok(rd) => rd,
-        Err(e) => {
-            log::warn!("[migration] Cannot read old personas dir: {}", e);
-            return;
-        }
-    };
-
-    let persona_dirs: Vec<_> = read_dir
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .filter(|e| e.path().join("profile.json").exists())
-        .collect();
-
-    if persona_dirs.is_empty() {
-        if let Err(e) = std::fs::remove_dir_all(&old_base) {
-            log::warn!("[migration] Cannot remove empty old dir: {}", e);
-        }
-        return;
-    }
-
-    if let Err(e) = std::fs::create_dir_all(&new_base) {
-        log::warn!("[migration] Cannot create Documents/syr-personas: {}", e);
-        return;
-    }
-
-    for entry in persona_dirs {
-        let name = entry.file_name();
-        let src = entry.path();
-        let dst = new_base.join(&name);
-        if let Err(e) = copy_dir_recursive(&src, &dst) {
-            log::warn!("[migration] Failed to copy {:?}: {}", name, e);
-            return;
-        }
-    }
-
-    if let Err(e) = std::fs::write(new_base.join(".migrated"), "") {
-        log::warn!("[migration] Cannot write .migrated: {}", e);
-        return;
-    }
-
-    if let Err(e) = std::fs::remove_dir_all(&old_base) {
-        log::warn!(
-            "[migration] Failed to delete old app_data_dir/syr-personas: {}",
-            e
-        );
-    }
-}
-
-#[cfg(target_os = "ios")]
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
-    for entry in std::fs::read_dir(src).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let ty = entry.file_type().map_err(|e| e.to_string())?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            std::fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -511,9 +421,22 @@ pub fn import_persona_from_sigil_cmd(
 }
 
 /// Normalizes paths from the file picker. On iOS, the dialog may return file:// URLs.
+/// Detects file:// URIs, parses them via Url::parse, and converts to PathBuf via to_file_path().
+/// Falls back to percent-decoding the remainder if parsing fails, so returned PathBufs are valid for canonicalize/open.
 fn normalize_picker_path(s: &str) -> PathBuf {
-    let s = s.trim_start_matches("file://");
-    PathBuf::from(s)
+    let s = s.trim();
+    if s.starts_with("file://") {
+        if let Ok(url) = url::Url::parse(s) {
+            if let Ok(path) = url.to_file_path() {
+                return path;
+            }
+        }
+        let remainder = s.trim_start_matches("file://");
+        let decoded = percent_encoding::percent_decode_str(remainder).decode_utf8_lossy();
+        return PathBuf::from(decoded.as_ref());
+    }
+    let decoded = percent_encoding::percent_decode_str(s).decode_utf8_lossy();
+    PathBuf::from(decoded.as_ref())
 }
 
 fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &str) -> Result<PathBuf, String> {
@@ -862,16 +785,21 @@ pub fn export_persona_as_file_cmd(
     let did_short = did_short_for_filename(&persona.did);
     let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
 
-    let (_ext, default_name) = if format == "sigil" {
-        (
+    let (_ext, default_name) = match format.as_str() {
+        "sigil" => (
             "sigil",
             format!("syr-sigil-{}-{}.sigil", did_short, timestamp),
-        )
-    } else {
-        (
+        ),
+        "persona" => (
             "persona",
             format!("syr-persona-{}-{}.persona", did_short, timestamp),
-        )
+        ),
+        other => {
+            return Err(format!(
+                "Unknown export format: {:?}. Expected \"sigil\" or \"persona\".",
+                other
+            ));
+        }
     };
 
     let dest_path: PathBuf = {
