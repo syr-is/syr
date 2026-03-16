@@ -2,9 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
+use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
 
 #[cfg(target_os = "android")]
 use tauri_plugin_android_fs::{convert_string_to_file_path, AndroidFs, AndroidFsExt};
@@ -823,6 +826,122 @@ pub fn save_persona_banner_cmd(
     let updated = serde_json::to_string_pretty(&persona).map_err(|e| e.to_string())?;
     std::fs::write(&profile_path, updated).map_err(|e| e.to_string())?;
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
+}
+
+/// Short suffix for filenames from DID (last 8 chars of multibase id).
+fn did_short_for_filename(did: &str) -> String {
+    did.trim_start_matches("did:syr:")
+        .chars()
+        .rev()
+        .take(8)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>()
+}
+
+#[tauri::command]
+pub fn export_persona_as_file_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+    format: String,
+) -> Result<String, String> {
+    validate_persona_id(&persona_id)?;
+    let base = get_base_path(&app)?;
+    let persona_dir = base.join(&persona_id);
+    if !persona_dir.exists() {
+        return Err("Persona not found".to_string());
+    }
+    let profile_path = persona_dir.join("profile.json");
+    let sigil_path = persona_dir.join("identity.sigil");
+    if !profile_path.exists() || !sigil_path.exists() {
+        return Err("Persona data incomplete".to_string());
+    }
+    let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
+    let persona: Persona = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let did_short = did_short_for_filename(&persona.did);
+    let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+
+    let (_ext, default_name) = if format == "sigil" {
+        (
+            "sigil",
+            format!("syr-sigil-{}-{}.sigil", did_short, timestamp),
+        )
+    } else {
+        (
+            "persona",
+            format!("syr-persona-{}-{}.persona", did_short, timestamp),
+        )
+    };
+
+    let dest_path: PathBuf = {
+        #[cfg(target_os = "ios")]
+        {
+            let doc_dir = app.path().document_dir().map_err(|e| e.to_string())?;
+            doc_dir.join(&default_name)
+        }
+
+        #[cfg(not(target_os = "ios"))]
+        {
+            let (filter_name, filter_exts): (&str, &[&str]) = if format == "sigil" {
+                ("Sigil files", &["sigil"])
+            } else {
+                ("Persona files", &["persona"])
+            };
+            let path = app
+                .dialog()
+                .file()
+                .set_file_name(&default_name)
+                .add_filter(filter_name, filter_exts)
+                .blocking_save_file();
+            let fp = path.ok_or("Save cancelled".to_string())?;
+            fp.into_path().map_err(|e| e.to_string())?
+        }
+    };
+
+    if format == "sigil" {
+        let sigil_content = std::fs::read_to_string(&sigil_path).map_err(|e| e.to_string())?;
+        std::fs::write(&dest_path, sigil_content).map_err(|e| e.to_string())?;
+    } else {
+        let file = File::create(&dest_path).map_err(|e| e.to_string())?;
+        let mut zip = ZipWriter::new(file);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let prefix = format!("{}/", persona_id);
+
+        let mut files_to_add: Vec<(String, PathBuf)> = vec![
+            ("profile.json".into(), persona_dir.join("profile.json")),
+            ("identity.sigil".into(), persona_dir.join("identity.sigil")),
+        ];
+        for ext in IMAGE_EXTENSIONS {
+            for (name, path) in [
+                ("avatar", persona_dir.join(format!("avatar.{}", ext))),
+                ("banner", persona_dir.join(format!("banner.{}", ext))),
+            ] {
+                if path.exists() {
+                    files_to_add.push((format!("{}.{}", name, ext), path));
+                }
+            }
+        }
+
+        for (arc_name, src_path) in files_to_add {
+            if !src_path.exists() {
+                continue;
+            }
+            let data = std::fs::read(&src_path).map_err(|e| e.to_string())?;
+            if data.len() > MAX_ENTRY_BYTES {
+                return Err(format!("File {} exceeds maximum size", arc_name));
+            }
+            let entry_name = format!("{}{}", prefix, arc_name);
+            zip.start_file(entry_name, opts)
+                .map_err(|e| format!("ZIP error: {}", e))?;
+            zip.write_all(&data).map_err(|e| e.to_string())?;
+        }
+
+        zip.finish().map_err(|e| e.to_string())?;
+    }
+
+    Ok(dest_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

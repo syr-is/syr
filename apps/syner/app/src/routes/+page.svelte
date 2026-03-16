@@ -6,8 +6,18 @@
 	import { selectedPersona } from '$lib/stores/session';
 	import { Button } from '@syr-is/ui/button';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@syr-is/ui/card';
+	import * as Popover from '@syr-is/ui/popover';
 	import { toast } from 'svelte-sonner';
-	import { Users, Plus, FileInput, PenLine, Trash2, Pencil } from '@lucide/svelte';
+	import {
+		Users,
+		Plus,
+		FileInput,
+		PenLine,
+		Trash2,
+		Pencil,
+		MoreVertical,
+		Save
+	} from '@lucide/svelte';
 	import PersonaImage from '$lib/components/persona-image.svelte';
 	import CreatePersonaDialog from '$lib/components/fragments/create-persona-dialog.svelte';
 	import EditPersonaDialog from '$lib/components/fragments/edit-persona-dialog.svelte';
@@ -39,6 +49,22 @@
 	function openEdit(p: Persona) {
 		editPersona = p;
 		editOpen = true;
+	}
+
+	async function savePersona(p: Persona, format: 'persona' | 'sigil') {
+		try {
+			const path = await invoke<string>('export_persona_as_file_cmd', {
+				personaId: p.id,
+				format
+			});
+			const filename = path.split(/[/\\]/).pop() ?? path;
+			toast.success(`Saved: ${filename}`);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (msg !== 'Save cancelled') {
+				toast.error(msg);
+			}
+		}
 	}
 
 	async function deletePersona(id: string) {
@@ -129,34 +155,66 @@
 									<p class="font-medium">{persona.displayName}</p>
 									<p class="text-muted-foreground truncate font-mono text-xs">{persona.did}</p>
 								</div>
-								<div class="flex gap-2">
-									<Button variant="outline" size="sm" onclick={() => openEdit(persona)}>
-										<Pencil class="h-4 w-4" />
-										Edit
-									</Button>
-									<Button
-										variant="outline"
-										size="sm"
-										onclick={() => {
-											selectedPersona.set({
-												id: persona.id,
-												displayName: persona.displayName,
-												did: persona.did,
-												avatarUrl: persona.avatarUrl,
-												bannerUrl: persona.bannerUrl,
-												avatarMtime: persona.avatarMtime,
-												bannerMtime: persona.bannerMtime
-											});
-											goto('/sign');
-										}}
+								<Popover.Root>
+									<Popover.Trigger
+										class="hover:bg-muted rounded-md p-1.5"
+										onclick={(e) => e.stopPropagation()}
 									>
-										<PenLine class="h-4 w-4" />
-										Sign
-									</Button>
-									<Button variant="ghost" size="icon-sm" onclick={() => deletePersona(persona.id)}>
-										<Trash2 class="text-destructive h-4 w-4" />
-									</Button>
-								</div>
+										<MoreVertical class="text-muted-foreground h-4 w-4" />
+									</Popover.Trigger>
+									<Popover.Content
+										align="end"
+										class="min-w-[8rem] p-1"
+										onclick={(e) => e.stopPropagation()}
+									>
+										<Popover.Close
+											class="hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+											onclick={() => openEdit(persona)}
+										>
+											<Pencil class="h-4 w-4" />
+											Edit
+										</Popover.Close>
+										<Popover.Close
+											class="hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+											onclick={() => savePersona(persona, 'persona')}
+										>
+											<Save class="h-4 w-4" />
+											Save as persona
+										</Popover.Close>
+										<Popover.Close
+											class="hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+											onclick={() => savePersona(persona, 'sigil')}
+										>
+											<Save class="h-4 w-4" />
+											Save as sigil
+										</Popover.Close>
+										<Popover.Close
+											class="hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+											onclick={() => {
+												selectedPersona.set({
+													id: persona.id,
+													displayName: persona.displayName,
+													did: persona.did,
+													avatarUrl: persona.avatarUrl,
+													bannerUrl: persona.bannerUrl,
+													avatarMtime: persona.avatarMtime,
+													bannerMtime: persona.bannerMtime
+												});
+												goto('/sign');
+											}}
+										>
+											<PenLine class="h-4 w-4" />
+											Sign
+										</Popover.Close>
+										<Popover.Close
+											class="text-destructive hover:bg-destructive/10 hover:text-destructive flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+											onclick={() => deletePersona(persona.id)}
+										>
+											<Trash2 class="h-4 w-4" />
+											Delete
+										</Popover.Close>
+									</Popover.Content>
+								</Popover.Root>
 							</div>
 						</li>
 					{/each}
