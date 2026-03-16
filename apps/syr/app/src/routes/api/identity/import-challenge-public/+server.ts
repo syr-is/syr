@@ -49,9 +49,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	// Rate limit by client IP (atomic to avoid TOCTOU)
-	// Sanitize clientId: KV index allows [a-zA-Z0-9_:-] only; IPv4/IPv6 have dots
+	// Sanitize clientId: KV index allows [a-zA-Z0-9_:-] only; replace disallowed chars with underscore
 	const clientId = getClientAddress?.() ?? 'unknown';
-	const clientIdSafe = clientId.replace(/\./g, '_');
+	const clientIdSafe = clientId
+		.replace(/[^A-Za-z0-9_:-]/g, '_')
+		.replace(/_+/g, '_')
+		.replace(/^_|_$/g, '');
 	const rateLimitIndex = `${RATE_LIMIT_INDEX_PREFIX}${clientIdSafe}`;
 	const ttlSeconds = Math.ceil(security.rateLimitWindow / 1000);
 	try {
@@ -71,13 +74,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 				message: 'Too many import challenge requests. Please try again later.'
 			});
 		}
-		const kvId = `kv:${RATE_LIMIT_TYPE}:${rateLimitIndex}`;
 		console.error('[import-challenge-public] KV rate-limit error:', {
-			clientId,
-			rateLimitIndex,
-			kvId,
-			error: e instanceof Error ? e.message : String(e),
-			stack: e instanceof Error ? e.stack : undefined
+			context: 'import-challenge-public KV rate-limit',
+			errorName: e instanceof Error ? e.name : 'Error',
+			errorMessage: e instanceof Error ? e.message : String(e)
 		});
 		throw e;
 	}

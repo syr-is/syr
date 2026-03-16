@@ -48,14 +48,13 @@
 
 				// scan() resolving means native scanner is already stopped; no cancel() needed
 				if (result) {
-					const content = typeof result === 'string' ? result : result.content;
-					scanOutcome.set({ status: 'result', content });
+					scanOutcome.set({ status: 'result', content: result.content });
 				} else {
 					scanOutcome.set({ status: 'cancelled' });
 				}
 			} catch (_) {
 				if (!mounted || cancelled) return;
-				await cancel().catch(() => {});
+				if (!isIos) await cancel().catch(() => {});
 				if (mounted) scanOutcome.set({ status: 'cancelled' });
 			}
 		}

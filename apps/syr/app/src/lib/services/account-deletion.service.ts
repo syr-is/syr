@@ -39,7 +39,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		console.warn('[account-deletion] Failed to delete outbox:', e);
 	}
 
-	// 3. Registry (by DID)
+	// 2. Registry (by DID)
 	if (did) {
 		try {
 			const regs = await registryRepository.findByDid(did);
@@ -51,14 +51,14 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		}
 	}
 
-	// 4. Sessions
+	// 3. Sessions
 	try {
 		await sessionRepository.deleteByUserId(recordId);
 	} catch (e) {
 		console.warn('[account-deletion] Failed to delete sessions:', e);
 	}
 
-	// 5. Folders + uploads + S3 (folders owned by user)
+	// 4. Folders + uploads + S3 (folders owned by user)
 	const rootFolders = await folderRepository.findByParent(recordId, null);
 	for (const folder of rootFolders) {
 		try {
@@ -68,7 +68,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		}
 	}
 
-	// 6. Posts (by DID)
+	// 5. Posts (by DID)
 	if (did) {
 		let cursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null = null;
 		do {
@@ -87,7 +87,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		} while (cursor);
 	}
 
-	// 7. Uploads (by DID) + S3
+	// 6. Uploads (by DID) + S3
 	if (did) {
 		let cursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null = null;
 		const s3Keys: string[] = [];
@@ -114,7 +114,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 			}
 		}
 
-		// 7b. Delete any orphaned S3 objects under uploads/{did}/ (e.g. failed uploads with no DB record)
+		// 7. Delete any orphaned S3 objects under uploads/{did}/ (e.g. failed uploads with no DB record)
 		const prefix = `uploads/${did}/`;
 		try {
 			let continuationToken: string | undefined;
@@ -131,7 +131,9 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 						new DeleteObjectsCommand({
 							Bucket: s3.bucket,
 							Delete: {
-								Objects: listResp.Contents.map((obj) => ({ Key: obj.Key! })),
+								Objects: (listResp.Contents ?? [])
+									.filter((obj): obj is typeof obj & { Key: string } => obj.Key != null)
+									.map((obj) => ({ Key: obj.Key })),
 								Quiet: true
 							}
 						})

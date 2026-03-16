@@ -806,7 +806,23 @@ pub fn export_persona_as_file_cmd(
         #[cfg(target_os = "ios")]
         {
             let doc_dir = app.path().document_dir().map_err(|e| e.to_string())?;
-            doc_dir.join(&default_name)
+            let mut dest_path = doc_dir.join(&default_name);
+            let mut n = 2u32;
+            while dest_path.exists() {
+                let stem = dest_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("export");
+                let ext = dest_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let new_name = if ext.is_empty() {
+                    format!("{}-{}", stem, n)
+                } else {
+                    format!("{}-{}.{}", stem, n, ext)
+                };
+                dest_path = doc_dir.join(new_name);
+                n += 1;
+            }
+            dest_path
         }
 
         #[cfg(not(target_os = "ios"))]
