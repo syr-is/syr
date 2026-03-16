@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
@@ -85,16 +86,20 @@
 	$effect(() => {
 		if (open) {
 			if (isInitialOpen && ctx !== null) {
-				isInitialOpen = false;
-				step = determineInitialStep(exportType, hasAegis);
-				if (exportType === 'syr') {
-					exportChallenge = null;
-					exportToken = null;
-				}
+				untrack(() => {
+					isInitialOpen = false;
+					step = determineInitialStep(exportType, hasAegis);
+					if (exportType === 'syr') {
+						exportChallenge = null;
+						exportToken = null;
+					}
+				});
 			}
 		} else {
-			isInitialOpen = true;
-			resetExportState();
+			untrack(() => {
+				isInitialOpen = true;
+				resetExportState();
+			});
 		}
 	});
 

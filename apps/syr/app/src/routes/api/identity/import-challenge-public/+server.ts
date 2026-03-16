@@ -49,8 +49,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	// Rate limit by client IP (atomic to avoid TOCTOU)
+	// Sanitize clientId: KV index allows [a-zA-Z0-9_:-] only; IPv4/IPv6 have dots
 	const clientId = getClientAddress?.() ?? 'unknown';
-	const rateLimitIndex = `${RATE_LIMIT_INDEX_PREFIX}${clientId}`;
+	const clientIdSafe = clientId.replace(/\./g, '_');
+	const rateLimitIndex = `${RATE_LIMIT_INDEX_PREFIX}${clientIdSafe}`;
 	const ttlSeconds = Math.ceil(security.rateLimitWindow / 1000);
 	try {
 		await kvService.atomicIncrementField(
@@ -69,6 +71,14 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 				message: 'Too many import challenge requests. Please try again later.'
 			});
 		}
+		const kvId = `kv:${RATE_LIMIT_TYPE}:${rateLimitIndex}`;
+		console.error('[import-challenge-public] KV rate-limit error:', {
+			clientId,
+			rateLimitIndex,
+			kvId,
+			error: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined
+		});
 		throw e;
 	}
 
