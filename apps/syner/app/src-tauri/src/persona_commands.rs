@@ -752,15 +752,21 @@ pub fn save_persona_banner_cmd(
 }
 
 /// Short suffix for filenames from DID (last 8 chars of multibase id).
+/// Sanitizes to [A-Za-z0-9_-] to avoid path separators and invalid fs chars.
 fn did_short_for_filename(did: &str) -> String {
-    did.trim_start_matches("did:syr:")
+    let raw: String = did
+        .trim_start_matches("did:syr:")
         .chars()
         .rev()
         .take(8)
         .collect::<String>()
         .chars()
         .rev()
-        .collect::<String>()
+        .collect();
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .take(8)
+        .collect()
 }
 
 #[tauri::command]

@@ -127,7 +127,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 					})
 				);
 				if (listResp.Contents && listResp.Contents.length > 0) {
-					await s3Service.client.send(
+					const deleteResp = await s3Service.client.send(
 						new DeleteObjectsCommand({
 							Bucket: s3.bucket,
 							Delete: {
@@ -138,6 +138,12 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 							}
 						})
 					);
+					if (deleteResp.Errors && deleteResp.Errors.length > 0) {
+						const errKeys = deleteResp.Errors.map((e) => e.Key ?? '?').join(', ');
+						throw new Error(
+							`S3 DeleteObjects failed for prefix ${prefix}: ${deleteResp.Errors.length} error(s) (keys: ${errKeys})`
+						);
+					}
 				}
 				continuationToken = listResp.NextContinuationToken;
 			} while (continuationToken);
