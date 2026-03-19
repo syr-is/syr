@@ -2,9 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
+use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
 
 #[cfg(target_os = "android")]
 use tauri_plugin_android_fs::{convert_string_to_file_path, AndroidFs, AndroidFsExt};
@@ -41,7 +44,22 @@ pub struct Persona {
     pub banner_mtime: Option<i64>,
 }
 
-/// Default personas storage path. Uses app data dir (works on Android/iOS where document_dir is None).
+/// Default personas storage path. On iOS uses Documents (exposed in Finder/Files); otherwise app data dir.
+#[cfg(target_os = "ios")]
+fn default_personas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .document_dir()
+        .map_err(|e| e.to_string())
+        .map(|p| p.join("syr-personas"))
+        .or_else(|_| {
+            app.path()
+                .app_data_dir()
+                .map_err(|e| e.to_string())
+                .map(|p| p.join("syr-personas"))
+        })
+}
+
+#[cfg(not(target_os = "ios"))]
 fn default_personas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -74,10 +92,18 @@ fn save_config(app: &tauri::AppHandle, config: &PersonaConfig) -> Result<(), Str
 }
 
 pub fn get_base_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let config = load_config(app)?;
-    match config.personas_base_path {
-        Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
-        _ => default_personas_path(app),
+    #[cfg(target_os = "ios")]
+    {
+        default_personas_path(app)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let config = load_config(app)?;
+        match config.personas_base_path {
+            Some(ref p) if !p.is_empty() => Ok(PathBuf::from(p)),
+            _ => default_personas_path(app),
+        }
     }
 }
 
@@ -118,9 +144,22 @@ pub fn get_personas_base_path_cmd(app: tauri::AppHandle) -> Result<String, Strin
 
 #[tauri::command]
 pub fn set_personas_base_path_cmd(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    let mut config = load_config(&app)?;
-    config.personas_base_path = Some(path);
-    save_config(&app, &config)
+    #[cfg(target_os = "ios")]
+    {
+        let _ = app;
+        let _ = path;
+        return Err(
+            "iOS does not support custom storage paths. Personas are stored in the app's Documents folder."
+                .to_string(),
+        );
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let mut config = load_config(&app)?;
+        config.personas_base_path = Some(path);
+        save_config(&app, &config)
+    }
 }
 
 #[tauri::command]
@@ -212,7 +251,8 @@ fn copy_image_from_source(
 
     #[cfg(not(target_os = "android"))]
     {
-        std::fs::copy(source_path, dest)
+        let path = normalize_picker_path(source_path);
+        std::fs::copy(&path, dest)
             .map_err(|e| e.to_string())
             .map(|_| ())
     }
@@ -380,8 +420,28 @@ pub fn import_persona_from_sigil_cmd(
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }
 
-fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
-    let canonical = path
+/// Normalizes paths from the file picker. On iOS, the dialog may return file:// URLs.
+/// Detects file:// URIs, parses them via Url::parse, and converts to PathBuf via to_file_path().
+/// Falls back to percent-decoding the remainder if parsing fails, so returned PathBufs are valid for canonicalize/open.
+fn normalize_picker_path(s: &str) -> PathBuf {
+    let s = s.trim();
+    if s.starts_with("file://") {
+        if let Ok(url) = url::Url::parse(s) {
+            if let Ok(path) = url.to_file_path() {
+                return path;
+            }
+        }
+        let remainder = s.trim_start_matches("file://");
+        let decoded = percent_encoding::percent_decode_str(remainder).decode_utf8_lossy();
+        return PathBuf::from(decoded.as_ref());
+    }
+    let decoded = percent_encoding::percent_decode_str(s).decode_utf8_lossy();
+    PathBuf::from(decoded.as_ref())
+}
+
+fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &str) -> Result<PathBuf, String> {
+    let path_buf = normalize_picker_path(path);
+    let canonical = path_buf
         .canonicalize()
         .map_err(|e| format!("Path not found or invalid: {}", e))?;
 
@@ -401,7 +461,18 @@ fn validate_persona_bundle_path(app: &tauri::AppHandle, path: &Path) -> Result<P
     let personas_base = get_base_path(app)?;
 
     let mut allowed_roots: Vec<PathBuf> = vec![app_data, config_dir, personas_base];
+    // iOS: dialog Copy mode may put files in tmp or cache
+    if let Ok(tmp) = app.path().temp_dir() {
+        allowed_roots.push(tmp);
+    }
+    if let Ok(cache) = app.path().cache_dir() {
+        allowed_roots.push(cache);
+    }
     if let Some(doc) = dirs::document_dir() {
+        allowed_roots.push(doc);
+    }
+    // iOS: dirs::document_dir() is None; use Tauri's document_dir for app Documents
+    if let Ok(doc) = app.path().document_dir() {
         allowed_roots.push(doc);
     }
     if let Some(home) = dirs::home_dir() {
@@ -435,7 +506,7 @@ fn open_persona_bundle_file(app: &tauri::AppHandle, path: &str) -> Result<File, 
 
     #[cfg(not(target_os = "android"))]
     {
-        let path_buf = validate_persona_bundle_path(app, Path::new(path))?;
+        let path_buf = validate_persona_bundle_path(app, path)?;
         File::open(&path_buf).map_err(|e| e.to_string())
     }
 }
@@ -680,6 +751,149 @@ pub fn save_persona_banner_cmd(
     Ok(resolve_persona_asset_paths(&persona_dir, persona))
 }
 
+/// Short suffix for filenames from DID (last 8 chars of multibase id).
+/// Sanitizes to [A-Za-z0-9_-] to avoid path separators and invalid fs chars.
+fn did_short_for_filename(did: &str) -> String {
+    let raw: String = did
+        .trim_start_matches("did:syr:")
+        .chars()
+        .rev()
+        .take(8)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .take(8)
+        .collect()
+}
+
+#[tauri::command]
+pub fn export_persona_as_file_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+    format: String,
+) -> Result<String, String> {
+    validate_persona_id(&persona_id)?;
+    let base = get_base_path(&app)?;
+    let persona_dir = base.join(&persona_id);
+    if !persona_dir.exists() {
+        return Err("Persona not found".to_string());
+    }
+    let profile_path = persona_dir.join("profile.json");
+    let sigil_path = persona_dir.join("identity.sigil");
+    if !profile_path.exists() || !sigil_path.exists() {
+        return Err("Persona data incomplete".to_string());
+    }
+    let content = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
+    let persona: Persona = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let did_short = did_short_for_filename(&persona.did);
+    let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+
+    let (_ext, default_name) = match format.as_str() {
+        "sigil" => (
+            "sigil",
+            format!("syr-sigil-{}-{}.sigil", did_short, timestamp),
+        ),
+        "persona" => (
+            "persona",
+            format!("syr-persona-{}-{}.persona", did_short, timestamp),
+        ),
+        other => {
+            return Err(format!(
+                "Unknown export format: {:?}. Expected \"sigil\" or \"persona\".",
+                other
+            ));
+        }
+    };
+
+    let dest_path: PathBuf = {
+        #[cfg(target_os = "ios")]
+        {
+            let doc_dir = app.path().document_dir().map_err(|e| e.to_string())?;
+            let mut dest_path = doc_dir.join(&default_name);
+            let mut n = 2u32;
+            while dest_path.exists() {
+                let stem = dest_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("export");
+                let ext = dest_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let new_name = if ext.is_empty() {
+                    format!("{}-{}", stem, n)
+                } else {
+                    format!("{}-{}.{}", stem, n, ext)
+                };
+                dest_path = doc_dir.join(new_name);
+                n += 1;
+            }
+            dest_path
+        }
+
+        #[cfg(not(target_os = "ios"))]
+        {
+            let (filter_name, filter_exts): (&str, &[&str]) = if format == "sigil" {
+                ("Sigil files", &["sigil"])
+            } else {
+                ("Persona files", &["persona"])
+            };
+            let path = app
+                .dialog()
+                .file()
+                .set_file_name(&default_name)
+                .add_filter(filter_name, filter_exts)
+                .blocking_save_file();
+            let fp = path.ok_or("Save cancelled".to_string())?;
+            fp.into_path().map_err(|e| e.to_string())?
+        }
+    };
+
+    if format == "sigil" {
+        let sigil_content = std::fs::read_to_string(&sigil_path).map_err(|e| e.to_string())?;
+        std::fs::write(&dest_path, sigil_content).map_err(|e| e.to_string())?;
+    } else {
+        let file = File::create(&dest_path).map_err(|e| e.to_string())?;
+        let mut zip = ZipWriter::new(file);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let prefix = format!("{}/", persona_id);
+
+        let mut files_to_add: Vec<(String, PathBuf)> = vec![
+            ("profile.json".into(), persona_dir.join("profile.json")),
+            ("identity.sigil".into(), persona_dir.join("identity.sigil")),
+        ];
+        for ext in IMAGE_EXTENSIONS {
+            for (name, path) in [
+                ("avatar", persona_dir.join(format!("avatar.{}", ext))),
+                ("banner", persona_dir.join(format!("banner.{}", ext))),
+            ] {
+                if path.exists() {
+                    files_to_add.push((format!("{}.{}", name, ext), path));
+                }
+            }
+        }
+
+        for (arc_name, src_path) in files_to_add {
+            if !src_path.exists() {
+                continue;
+            }
+            let data = std::fs::read(&src_path).map_err(|e| e.to_string())?;
+            if data.len() > MAX_ENTRY_BYTES {
+                return Err(format!("File {} exceeds maximum size", arc_name));
+            }
+            let entry_name = format!("{}{}", prefix, arc_name);
+            zip.start_file(entry_name, opts)
+                .map_err(|e| format!("ZIP error: {}", e))?;
+            zip.write_all(&data).map_err(|e| e.to_string())?;
+        }
+
+        zip.finish().map_err(|e| e.to_string())?;
+    }
+
+    Ok(dest_path.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub fn delete_persona_cmd(app: tauri::AppHandle, persona_id: String) -> Result<(), String> {
     validate_persona_id(&persona_id)?;
@@ -725,7 +939,9 @@ pub fn read_file_as_base64_cmd(
 
         #[cfg(not(target_os = "android"))]
         {
-            let mut file = std::fs::File::open(&source_path).map_err(|e| e.to_string())?;
+            // iOS: dialog may return file:// URLs
+            let path_buf = normalize_picker_path(&source_path);
+            let mut file = std::fs::File::open(&path_buf).map_err(|e| e.to_string())?;
             let meta = file.metadata().map_err(|e| e.to_string())?;
             if meta.len() > MAX_ASSET_SIZE as u64 {
                 return Err(format!(

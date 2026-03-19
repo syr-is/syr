@@ -41,7 +41,9 @@
 			multiple: false,
 			directory: false,
 			title: 'Select image',
-			filters: IMAGE_FILTERS
+			filters: IMAGE_FILTERS,
+			fileAccessMode: 'copy',
+			pickerMode: 'document'
 		});
 		// Ensure single file: take first only (Android may return array despite multiple: false)
 		const paths = file == null ? null : Array.isArray(file) ? file : [file];
@@ -63,7 +65,10 @@
 				{ name: 'Persona files', extensions: ['persona'] },
 				{ name: 'Sigil files', extensions: ['sigil'] },
 				{ name: 'All files', extensions: ['*'] }
-			]
+			],
+			// iOS: copy file to app sandbox so path is readable; use document picker for .persona/.sigil
+			fileAccessMode: 'copy',
+			pickerMode: 'document'
 		});
 		if (file && typeof file === 'string') {
 			selectedPath = file;

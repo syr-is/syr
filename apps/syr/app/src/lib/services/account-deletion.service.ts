@@ -1,4 +1,8 @@
-import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+	DeleteObjectCommand,
+	DeleteObjectsCommand,
+	ListObjectsV2Command
+} from '@aws-sdk/client-s3';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 import { kvService } from '$lib/services/kv';
@@ -18,29 +22,24 @@ import { folderController } from '$lib/controllers/folder.controller';
 /**
  * Account Deletion Service
  * Orchestrates cascade deletion of all user data.
- * Order: KV, outbox, registry, sessions, folders (+ S3), posts, uploads (+ S3), delegated keys, identity, profile, user.
+ * Order: outbox, registry, sessions, folders (+ S3), posts, uploads (+ S3), delegated keys, identity, profile,
+ *        KV (pinned_posts, file_store_usage), user.
+ * Note: pinned_posts and file_store_usage are deleted last so subtractUsage during folder/upload deletion
+ * updates the real entry; deleting early would let subtractUsage recreate it.
  */
 export async function deleteAccount(userId: RecordId | string): Promise<void> {
 	const recordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 	const identity = await identityRepository.findByUserId(recordId);
 	const did = identity?.did ?? null;
 
-	// 1. KV: pinned_posts, file_store_usage
-	await kvService
-		.delete('pinned_posts', String(recordId))
-		.catch((e) => console.warn('[account-deletion] Failed to delete pinned_posts:', e));
-	await kvService
-		.delete('file_store_usage', String(recordId))
-		.catch((e) => console.warn('[account-deletion] Failed to delete file_store_usage:', e));
-
-	// 2. Outbox
+	// 1. Outbox
 	try {
 		await outboxRepository.deleteByUserId(recordId);
 	} catch (e) {
 		console.warn('[account-deletion] Failed to delete outbox:', e);
 	}
 
-	// 3. Registry (by DID)
+	// 2. Registry (by DID)
 	if (did) {
 		try {
 			const regs = await registryRepository.findByDid(did);
@@ -52,14 +51,14 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		}
 	}
 
-	// 4. Sessions
+	// 3. Sessions
 	try {
 		await sessionRepository.deleteByUserId(recordId);
 	} catch (e) {
 		console.warn('[account-deletion] Failed to delete sessions:', e);
 	}
 
-	// 5. Folders + uploads + S3 (folders owned by user)
+	// 4. Folders + uploads + S3 (folders owned by user)
 	const rootFolders = await folderRepository.findByParent(recordId, null);
 	for (const folder of rootFolders) {
 		try {
@@ -69,7 +68,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		}
 	}
 
-	// 6. Posts (by DID)
+	// 5. Posts (by DID)
 	if (did) {
 		let cursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null = null;
 		do {
@@ -88,7 +87,7 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		} while (cursor);
 	}
 
-	// 7. Uploads (by DID) + S3
+	// 6. Uploads (by DID) + S3
 	if (did) {
 		let cursor: { afterCreatedAt: Date; afterDid: string; afterLocalId: string } | null = null;
 		const s3Keys: string[] = [];
@@ -113,6 +112,43 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 			} catch (e) {
 				console.warn('[account-deletion] Failed to delete S3 object:', key, e);
 			}
+		}
+
+		// 7. Delete any orphaned S3 objects under uploads/{did}/ (e.g. failed uploads with no DB record)
+		const prefix = `uploads/${did}/`;
+		try {
+			let continuationToken: string | undefined;
+			do {
+				const listResp = await s3Service.client.send(
+					new ListObjectsV2Command({
+						Bucket: s3.bucket,
+						Prefix: prefix,
+						ContinuationToken: continuationToken
+					})
+				);
+				if (listResp.Contents && listResp.Contents.length > 0) {
+					const deleteResp = await s3Service.client.send(
+						new DeleteObjectsCommand({
+							Bucket: s3.bucket,
+							Delete: {
+								Objects: (listResp.Contents ?? [])
+									.filter((obj): obj is typeof obj & { Key: string } => obj.Key != null)
+									.map((obj) => ({ Key: obj.Key })),
+								Quiet: true
+							}
+						})
+					);
+					if (deleteResp.Errors && deleteResp.Errors.length > 0) {
+						const errKeys = deleteResp.Errors.map((e) => e.Key ?? '?').join(', ');
+						throw new Error(
+							`S3 DeleteObjects failed for prefix ${prefix}: ${deleteResp.Errors.length} error(s) (keys: ${errKeys})`
+						);
+					}
+				}
+				continuationToken = listResp.NextContinuationToken;
+			} while (continuationToken);
+		} catch (e) {
+			console.warn('[account-deletion] Failed to delete orphaned S3 prefix:', prefix, e);
 		}
 	}
 
@@ -140,7 +176,15 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		}
 	}
 
-	// 10. User
+	// 10. KV: pinned_posts, file_store_usage (must be after folder/upload deletion so subtractUsage doesn't recreate)
+	await kvService
+		.delete('pinned_posts', String(recordId))
+		.catch((e) => console.warn('[account-deletion] Failed to delete pinned_posts:', e));
+	await kvService
+		.delete('file_store_usage', String(recordId))
+		.catch((e) => console.warn('[account-deletion] Failed to delete file_store_usage:', e));
+
+	// 11. User
 	try {
 		await userRepository.delete(recordId);
 	} catch (e) {

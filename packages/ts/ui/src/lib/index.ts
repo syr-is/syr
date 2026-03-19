@@ -22,6 +22,7 @@ export * as Form from './components/ui/form/index.js';
 export * as Input from './components/ui/input/index.js';
 export * as Label from './components/ui/label/index.js';
 export * as Pagination from './components/ui/pagination/index.js';
+export * as Popover from './components/ui/popover/index.js';
 export * as Progress from './components/ui/progress/index.js';
 export * as Select from './components/ui/select/index.js';
 export * as Separator from './components/ui/separator/index.js';
