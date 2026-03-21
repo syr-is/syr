@@ -36,8 +36,20 @@ function normalizeOptStr(v: unknown): string | undefined {
 
 function stableMetadataJson(meta: unknown): string {
 	if (meta === undefined || meta === null) return 'null';
-	if (typeof meta !== 'object') return JSON.stringify(meta);
-	return JSON.stringify(meta, Object.keys(meta as object).sort());
+	if (typeof meta === 'string' || typeof meta === 'number' || typeof meta === 'boolean') {
+		return JSON.stringify(meta);
+	}
+	if (Array.isArray(meta)) {
+		return `[${meta.map((v) => stableMetadataJson(v)).join(',')}]`;
+	}
+	if (typeof meta === 'object') {
+		const keys = Object.keys(meta as object).sort();
+		const parts = keys.map(
+			(k) => `${JSON.stringify(k)}:${stableMetadataJson((meta as Record<string, unknown>)[k])}`
+		);
+		return `{${parts.join(',')}}`;
+	}
+	return JSON.stringify(meta);
 }
 
 async function loadIdentityForUser(userRecordId: string): Promise<{
@@ -258,7 +270,20 @@ export async function assertPostCreateSignedMutation(
 
 function postCreatedAtIso(post: Post): string {
 	const d = post.created_at;
-	return d instanceof Date ? d.toISOString() : new Date(d as unknown as string).toISOString();
+	if (d instanceof Date) {
+		return d.toISOString();
+	}
+	if (typeof d === 'string') {
+		const t = Date.parse(d);
+		if (Number.isNaN(t)) {
+			throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Post has invalid created_at' });
+		}
+		return new Date(t).toISOString();
+	}
+	if (typeof d === 'number' && Number.isFinite(d)) {
+		return new Date(d).toISOString();
+	}
+	throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Post has invalid created_at' });
 }
 
 export async function assertPostUpdateSignedMutation(
@@ -327,8 +352,6 @@ export async function assertPostUpdateSignedMutation(
 			message: 'Signed post payload does not match this post.'
 		});
 	}
-
-	assertCreatedAtRecent(p.created_at);
 
 	const createdIso = postCreatedAtIso(existingPost);
 	if (p.created_at !== createdIso) {

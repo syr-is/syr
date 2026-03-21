@@ -138,13 +138,11 @@ export const ProfileSignatureFieldsSchema = z.object({
 export type ProfileSignatureFields = z.infer<typeof ProfileSignatureFieldsSchema>;
 
 export const ProfileRepositoryMergeSchema = ProfileUpdateSchema.and(
-	z
-		.object({
-			content_signature: z.string().optional(),
-			signed_payload_json: z.string().optional(),
-			signing_device_public_key: z.string().optional()
-		})
-		.partial()
+	z.object({
+		content_signature: z.string().optional(),
+		signed_payload_json: z.string().optional(),
+		signing_device_public_key: z.string().optional()
+	})
 );
 
 export type ProfileRepositoryMerge = z.infer<typeof ProfileRepositoryMergeSchema>;

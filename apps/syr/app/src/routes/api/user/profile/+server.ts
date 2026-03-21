@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { userController } from '$lib/controllers/user.controller';
+import { profileRepository } from '$lib/repositories/profile.repository';
 import { ProfilePatchRequestSchema } from '@syr-is/types';
 import { assertProfileSignedMutation } from '$lib/server/signed-mutation.server';
 import { z } from 'zod';
@@ -8,12 +9,9 @@ import { z } from 'zod';
 /**
  * PATCH /api/user/profile
  *
- * Update the user's profile. Requires an authenticated session.
- * Profile mutations are authorized by the user's active session — no
- * client-side cryptographic signing is required.
- *
- * Server-side signing of profile mutations will be added when key
- * generation moves server-side (Phase C).
+ * Body validated by `ProfilePatchRequestSchema` (profile fields + optional `signed_mutation`).
+ * When signing is required, `assertProfileSignedMutation` verifies the envelope; when it is not
+ * required and no envelope is sent, stored verification columns are cleared.
  */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
@@ -39,6 +37,14 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 		const mergePayload = signature ? { ...profileFields, ...signature } : profileFields;
 		const result = await userController.updateProfile(locals.user.id, mergePayload);
+		if (!signature) {
+			await profileRepository.clearSigningFieldsByUserId(locals.user.id);
+			const profile = await profileRepository.findByUserId(locals.user.id);
+			return json({
+				status: 'success',
+				data: { profile: profile ?? result.profile }
+			});
+		}
 
 		return json({
 			status: 'success',

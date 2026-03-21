@@ -79,12 +79,19 @@ export class PostRepository extends BaseRepository<Post> {
 		did: string,
 		opts: { limit?: number; offset?: number } = {}
 	): Promise<{ data: Post[]; total: number }> {
-		const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
-		const offset = Math.max(opts.offset ?? 0, 0);
+		const limitRaw = Number(opts.limit ?? 50);
+		const offsetRaw = Number(opts.offset ?? 0);
+		const limitNum = Number.isFinite(limitRaw) ? Math.floor(limitRaw) : NaN;
+		const offsetNum = Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : NaN;
+		if (Number.isNaN(limitNum) || Number.isNaN(offsetNum)) {
+			throw new Error('findPublicByDid: limit and offset must be finite numbers');
+		}
+		const limit = Math.min(Math.max(limitNum, 1), 200);
+		const offset = Math.max(offsetNum, 0);
 		const dataResult = await this.db.query<[Post[]]>(
 			`SELECT * FROM post
 			 WHERE id.created_by = $did AND visibility = 'public'
-			 ORDER BY created_at DESC
+			 ORDER BY created_at DESC, id DESC
 			 LIMIT $limit START $offset`,
 			{ did, limit, offset }
 		);

@@ -3,7 +3,12 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { postController } from '$lib/controllers/post.controller';
-import { recordIdFromDidAndLocal, PostUpdateSchema, PostDeleteRequestSchema } from '@syr-is/types';
+import {
+	recordIdFromDidAndLocal,
+	PostUpdateSchema,
+	PostDeleteRequestSchema,
+	type SignedMutationEnvelope
+} from '@syr-is/types';
 import {
 	assertPostUpdateSignedMutation,
 	assertPostDeleteSigned
@@ -96,12 +101,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			});
 		}
 
-		const body = await request.json();
-		const signed_mutation = body.signed_mutation;
-		delete body.signed_mutation;
+		const body = (await request.json()) as Record<string, unknown>;
+		const { signed_mutation, ...rest } = body;
 
 		// Parse the update data (without id since it's in the URL)
-		const data = PostUpdateSchema.omit({ id: true }).partial().parse(body);
+		const data = PostUpdateSchema.omit({ id: true }).partial().parse(rest);
 
 		const resolvedType = data.type ?? existingPost.type;
 
@@ -143,7 +147,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 		const { signature } = await assertPostUpdateSignedMutation(
 			locals.user.id,
-			signed_mutation,
+			signed_mutation as SignedMutationEnvelope | undefined,
 			existingPost,
 			{
 				type: updatePayload.type,
@@ -224,20 +228,27 @@ export const DELETE: RequestHandler = async ({ params, locals, request }) => {
 			});
 		}
 
-		let signed_mutation: unknown;
-		try {
-			const text = await request.text();
-			if (text) {
-				const parsed = PostDeleteRequestSchema.safeParse(JSON.parse(text));
-				if (parsed.success) {
-					signed_mutation = parsed.data.signed_mutation;
-				}
+		let signed_mutation: SignedMutationEnvelope | undefined;
+		const text = await request.text();
+		if (text.trim()) {
+			let parsedJson: unknown;
+			try {
+				parsedJson = JSON.parse(text);
+			} catch {
+				throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' });
 			}
-		} catch {
-			// no body
+			const parsed = PostDeleteRequestSchema.safeParse(parsedJson);
+			if (!parsed.success) {
+				throw error(400, {
+					code: 'VALIDATION_ERROR',
+					message: 'Invalid delete request body',
+					details: z.treeifyError(parsed.error)
+				});
+			}
+			signed_mutation = parsed.data.signed_mutation;
 		}
 
-		await assertPostDeleteSigned(locals.user.id, signed_mutation as never, postId);
+		await assertPostDeleteSigned(locals.user.id, signed_mutation, postId);
 
 		// Delete the post record (uploads are preserved in user storage)
 		await postController.deletePost(postId, user.id);

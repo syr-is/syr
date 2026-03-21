@@ -5,8 +5,14 @@ import { postController } from '$lib/controllers/post.controller';
 import { extractDid, extractLocalId } from '@syr-is/types';
 
 export const GET: RequestHandler = async ({ params }) => {
-	const did = decodeURIComponent(params.did);
-	const localId = decodeURIComponent(params.localId);
+	let did: string;
+	let localId: string;
+	try {
+		did = decodeURIComponent(params.did);
+		localId = decodeURIComponent(params.localId);
+	} catch {
+		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid encoding' });
+	}
 	if (!isValidSyrDid(did)) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}

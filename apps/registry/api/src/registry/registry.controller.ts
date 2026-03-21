@@ -93,15 +93,12 @@ export class RegistryController {
 			if (err instanceof HttpException) throw err;
 
 			const message = err instanceof Error ? err.message : 'Update failed';
+			const lower = message.toLowerCase();
 
-			if (message.includes('signature')) {
+			if (lower.includes('signature')) {
 				throw new HttpException({ code: 'INVALID_SIGNATURE', message }, HttpStatus.BAD_REQUEST);
 			}
-			if (
-				message.includes('stale') ||
-				message.includes('older') ||
-				message.includes('concurrent')
-			) {
+			if (lower.includes('stale') || lower.includes('older') || lower.includes('concurrent')) {
 				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
 			}
 			if (RegistryController.isUniqueConstraintError(err)) {
@@ -145,11 +142,12 @@ export class RegistryController {
 			if (err instanceof HttpException) throw err;
 
 			const message = err instanceof Error ? err.message : 'Delete failed';
+			const lower = message.toLowerCase();
 
-			if (message.includes('signature')) {
+			if (lower.includes('signature')) {
 				throw new HttpException({ code: 'INVALID_SIGNATURE', message }, HttpStatus.BAD_REQUEST);
 			}
-			if (message.includes('not found') || message.includes('Not found')) {
+			if (lower.includes('not found')) {
 				throw new HttpException({ code: 'NOT_FOUND', message }, HttpStatus.NOT_FOUND);
 			}
 
@@ -189,10 +187,11 @@ export class RegistryController {
 		} catch (err) {
 			if (err instanceof HttpException) throw err;
 			const message = err instanceof Error ? err.message : 'Directory upsert failed';
-			if (message.includes('signature')) {
+			const lower = message.toLowerCase();
+			if (lower.includes('signature')) {
 				throw new HttpException({ code: 'INVALID_SIGNATURE', message }, HttpStatus.BAD_REQUEST);
 			}
-			if (message.includes('Stale')) {
+			if (lower.includes('stale')) {
 				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
 			}
 			throw new HttpException(

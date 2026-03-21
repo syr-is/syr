@@ -130,6 +130,17 @@ export class ProfileRepository extends BaseRepository<Profile> {
 
 		return result as Profile | null;
 	}
+
+	/** Remove client-verification columns when the user saves without a signed envelope. */
+	async clearSigningFieldsByUserId(userId: RecordId | string): Promise<void> {
+		const userRecordId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+		const profile = await this.findByUserId(userRecordId);
+		if (!profile) return;
+		await this.db.query(
+			`UPDATE $pid SET content_signature = NONE, signed_payload_json = NONE, signing_device_public_key = NONE`,
+			{ pid: profile.id }
+		);
+	}
 }
 
 // Export singleton instance

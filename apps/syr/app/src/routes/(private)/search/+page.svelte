@@ -7,6 +7,7 @@
 
 	let q = $state('');
 	let loading = $state(false);
+	let searchError = $state<string | null>(null);
 	let results = $state<
 		Array<{
 			did: string;
@@ -19,11 +20,24 @@
 
 	async function runSearch() {
 		loading = true;
+		searchError = null;
 		try {
 			const trimmed = q.trim();
 			const qs = trimmed ? `?q=${encodeURIComponent(trimmed)}` : '';
 			const res = await fetch(`${resolve('/api/search/directory')}${qs}`);
-			const j = await res.json();
+			if (!res.ok) {
+				results = [];
+				let msg = 'Search failed';
+				try {
+					const j = (await res.json()) as { error?: { message?: string }; message?: string };
+					msg = j.error?.message ?? j.message ?? msg;
+				} catch {
+					/* non-JSON body */
+				}
+				searchError = msg;
+				return;
+			}
+			const j = (await res.json()) as { data?: typeof results };
 			results = j.data ?? [];
 		} finally {
 			loading = false;
@@ -47,6 +61,10 @@
 		<Input placeholder="Username, display name, or DID fragment" bind:value={q} class="flex-1" />
 		<Button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
 	</form>
+
+	{#if searchError}
+		<p class="text-sm text-destructive">{searchError}</p>
+	{/if}
 
 	<ul class="space-y-2">
 		{#each results as row (row.did)}

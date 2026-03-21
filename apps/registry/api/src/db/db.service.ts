@@ -50,6 +50,9 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS updated_at ON TABLE directory_entry TYPE datetime;
       DEFINE FIELD IF NOT EXISTS signature ON TABLE directory_entry TYPE string;
       DEFINE INDEX IF NOT EXISTS idx_directory_did ON TABLE directory_entry COLUMNS did UNIQUE;
+      DEFINE INDEX IF NOT EXISTS idx_directory_listed ON TABLE directory_entry COLUMNS listed;
+      DEFINE INDEX IF NOT EXISTS idx_directory_username ON TABLE directory_entry COLUMNS username;
+      DEFINE INDEX IF NOT EXISTS idx_directory_display_name ON TABLE directory_entry COLUMNS display_name;
     `);
 		console.log('✅ Registry API schema initialized');
 	}

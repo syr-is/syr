@@ -5,7 +5,12 @@ import { profileRepository } from '$lib/repositories/profile.repository';
 import { isValidSyrDid } from '@syr-is/did';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const key = decodeURIComponent(params.param);
+	let key: string;
+	try {
+		key = decodeURIComponent(params.param);
+	} catch {
+		throw error(400, 'Bad request');
+	}
 	const user = isValidSyrDid(key)
 		? await userRepository.findByDid(key)
 		: await userRepository.findByUsername(key);

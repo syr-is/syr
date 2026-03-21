@@ -14,8 +14,8 @@
 			const res = await fetch('/api/user/signing-preferences');
 			const j = await res.json();
 			if (res.ok && j.data) {
-				warn = j.data.signing_warn_before_each_action;
-				explicit = j.data.signing_require_explicit_sign_button;
+				warn = j.data.signing_warn_before_each_action ?? warn;
+				explicit = j.data.signing_require_explicit_sign_button ?? explicit;
 			}
 		} catch {
 			toast.error('Could not load signing preferences');

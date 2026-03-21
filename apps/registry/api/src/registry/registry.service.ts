@@ -37,6 +37,24 @@ interface DirectoryRow {
 export class RegistryService {
 	constructor(private readonly dbService: DbService) {}
 
+	private static isUniqueConstraintError(error: unknown): boolean {
+		if (error && typeof error === 'object') {
+			if ('code' in error && (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION') {
+				return true;
+			}
+			if ('message' in error) {
+				const msg = String((error as { message: string }).message).toLowerCase();
+				return (
+					msg.includes('unique') ||
+					msg.includes('duplicate') ||
+					msg.includes('already exists') ||
+					msg.includes('constraint')
+				);
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Resolve a DID to its hosting record.
 	 */
@@ -206,13 +224,18 @@ export class RegistryService {
 		}
 
 		const db = this.dbService.getDb();
-		const existing = await db.query<[DirectoryRow[]]>(
-			'SELECT * FROM directory_entry WHERE did = $did LIMIT 1',
-			{ did: dto.did }
-		);
-		const prev = existing[0]?.[0];
+		const selectRow = async (): Promise<DirectoryRow | undefined> => {
+			const existing = await db.query<[DirectoryRow[]]>(
+				'SELECT * FROM directory_entry WHERE did = $did LIMIT 1',
+				{ did: dto.did }
+			);
+			return existing[0]?.[0];
+		};
+
+		let prev = await selectRow();
 		const newTime = new Date(dto.updatedAt).getTime();
-		if (prev) {
+		const runDirectoryUpdate = async () => {
+			if (!prev) return;
 			const oldTime = new Date(prev.updated_at).getTime();
 			if (newTime <= oldTime) {
 				throw new Error(
@@ -238,9 +261,14 @@ export class RegistryService {
 					signature: dto.signature
 				}
 			);
+		};
+
+		if (prev) {
+			await runDirectoryUpdate();
 		} else {
-			await db.query(
-				`CREATE directory_entry SET
+			try {
+				await db.query(
+					`CREATE directory_entry SET
           did = $did,
           provider = $provider,
           username = $username,
@@ -248,16 +276,26 @@ export class RegistryService {
           listed = $listed,
           updated_at = $updatedAt,
           signature = $signature`,
-				{
-					did: dto.did,
-					provider: dto.provider,
-					username: dto.username,
-					displayName: dto.displayName,
-					listed: dto.listed,
-					updatedAt: new Date(dto.updatedAt),
-					signature: dto.signature
+					{
+						did: dto.did,
+						provider: dto.provider,
+						username: dto.username,
+						displayName: dto.displayName,
+						listed: dto.listed,
+						updatedAt: new Date(dto.updatedAt),
+						signature: dto.signature
+					}
+				);
+			} catch (createErr) {
+				if (!RegistryService.isUniqueConstraintError(createErr)) {
+					throw createErr;
 				}
-			);
+				prev = await selectRow();
+				if (!prev) {
+					throw createErr;
+				}
+				await runDirectoryUpdate();
+			}
 		}
 
 		return {
@@ -274,21 +312,25 @@ export class RegistryService {
 	async searchDirectory(q: string, limit: number): Promise<DirectoryEntry[]> {
 		const db = this.dbService.getDb();
 		const cap = Math.min(Math.max(limit, 1), 100);
+		const needle = q.trim().toLowerCase();
 		const result = await db.query<[DirectoryRow[]]>(
-			`SELECT * FROM directory_entry WHERE listed = true ORDER BY updated_at DESC LIMIT 500`,
-			{}
+			needle
+				? `SELECT * FROM directory_entry
+           WHERE listed = true AND (
+             string::contains(string::lowercase(did), $needle)
+             OR string::contains(string::lowercase(username), $needle)
+             OR string::contains(string::lowercase(display_name ?? ''), $needle)
+           )
+           ORDER BY updated_at DESC
+           LIMIT $cap`
+				: `SELECT * FROM directory_entry
+           WHERE listed = true
+           ORDER BY updated_at DESC
+           LIMIT $cap`,
+			needle ? { needle, cap } : { cap }
 		);
 		const rows = result[0] ?? [];
-		const needle = q.trim().toLowerCase();
-		const filtered = needle
-			? rows.filter(
-					(r) =>
-						r.did.toLowerCase().includes(needle) ||
-						r.username.toLowerCase().includes(needle) ||
-						(r.display_name || '').toLowerCase().includes(needle)
-				)
-			: rows;
-		return filtered.slice(0, cap).map((r) => ({
+		return rows.map((r) => ({
 			did: r.did,
 			provider: r.provider,
 			username: r.username,

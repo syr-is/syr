@@ -28,7 +28,15 @@ export const PATCH: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) {
 		throw error(401, { code: 'UNAUTHORIZED', message: 'Unauthorized' });
 	}
-	const body = await request.json();
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch (e) {
+		if (e instanceof SyntaxError) {
+			throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' });
+		}
+		throw e;
+	}
 	const parsed = PatchSchema.safeParse(body);
 	if (!parsed.success) {
 		throw error(400, {

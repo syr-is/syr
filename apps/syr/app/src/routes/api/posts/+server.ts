@@ -10,7 +10,8 @@ import {
 	PostUpdateSchema,
 	recordIdFromDidAndLocal,
 	extractDid,
-	extractLocalId
+	extractLocalId,
+	type SignedMutationEnvelope
 } from '@syr-is/types';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 import {
@@ -196,16 +197,20 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const body = await request.json();
-		const signed_mutation = body.signed_mutation;
-		delete body.signed_mutation;
+		const body = (await request.json()) as Record<string, unknown>;
+		const { signed_mutation, ...patchRest } = body;
+		const patchBody: Record<string, unknown> = { ...patchRest };
 		// Convert DID + local_id to composite RecordId
-		if (body.did && body.local_id) {
-			body.id = recordIdFromDidAndLocal('post', body.did, body.local_id);
-			delete body.did;
-			delete body.local_id;
+		if (patchBody.did && patchBody.local_id) {
+			patchBody.id = recordIdFromDidAndLocal(
+				'post',
+				String(patchBody.did),
+				String(patchBody.local_id)
+			);
+			delete patchBody.did;
+			delete patchBody.local_id;
 		}
-		const data = PostUpdateSchema.parse(body);
+		const data = PostUpdateSchema.parse(patchBody);
 
 		// Verify post exists and user owns it
 		const existingPost = await postController.getPost(data.id);
@@ -263,7 +268,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 		const { signature } = await assertPostUpdateSignedMutation(
 			locals.user.id,
-			signed_mutation,
+			signed_mutation as SignedMutationEnvelope | undefined,
 			existingPost,
 			{
 				type: updatePayload.type,

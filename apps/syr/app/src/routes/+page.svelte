@@ -13,6 +13,7 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { Pin } from 'lucide-svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import DraggableItem from '$lib/components/fragments/draggable-item.svelte';
 
 	let { data } = $props();
@@ -50,7 +51,18 @@
 		fullUrl: string;
 	};
 
+	type TimelinePostDetail =
+		| { status: 'idle' }
+		| { status: 'loading' }
+		| { status: 'error'; message: string }
+		| { status: 'ready'; contentPreview?: string; mediaCount?: number };
+
 	let timelineRows = $state<TimelineRow[]>([]);
+	let timelinePostDetailByUrl = new SvelteMap<string, TimelinePostDetail>();
+
+	function setTimelineDetail(url: string, detail: TimelinePostDetail) {
+		timelinePostDetailByUrl.set(url, detail);
+	}
 	let timelineLoading = $state(false);
 	let timelineError = $state<string | null>(null);
 
@@ -299,6 +311,7 @@
 		if (!data.user?.did) return;
 		timelineLoading = true;
 		timelineError = null;
+		timelinePostDetailByUrl.clear();
 		try {
 			const [fr, rr] = await Promise.all([
 				fetch('/api/follows'),
@@ -312,45 +325,85 @@
 			const rj = await rr.json();
 			const follows: { followed_did: string }[] = fj.data ?? [];
 			const registries: { registry_url: string }[] = rj.data ?? [];
-			const bases = registries.map((r) => registryApiRoot(r.registry_url));
-			const merged: TimelineRow[] = [];
-			for (const f of follows) {
-				let provider: string | null = null;
-				for (const b of bases) {
-					try {
-						provider = await resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 });
-						break;
-					} catch {
-						/* try next registry */
-					}
-				}
-				if (!provider) continue;
-				const origin = provider.replace(/\/$/, '');
-				const metaRes = await fetch(
-					`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`
-				);
-				if (!metaRes.ok) continue;
-				const mj = await metaRes.json();
-				const items = mj.data ?? [];
-				for (const it of items) {
-					if (!it.local_id) continue;
-					merged.push({
-						did: f.followed_did,
-						provider: origin,
-						title: it.title,
-						description: it.description,
-						created_at: it.created_at,
-						local_id: it.local_id,
-						fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
-					});
+			const bases: string[] = [];
+			for (const r of registries) {
+				try {
+					bases.push(registryApiRoot(r.registry_url));
+				} catch {
+					/* skip invalid registry URL */
 				}
 			}
+			const rowChunks = await Promise.all(
+				follows.map(async (f) => {
+					const settled = await Promise.allSettled(
+						bases.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
+					);
+					const hit = settled.find(
+						(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
+					);
+					if (!hit) return [] as TimelineRow[];
+					const provider = hit.value;
+					const origin = provider.replace(/\/$/, '');
+					let metaRes: Response;
+					try {
+						metaRes = await fetch(
+							`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`,
+							{ signal: AbortSignal.timeout(12_000) }
+						);
+					} catch {
+						return [] as TimelineRow[];
+					}
+					if (!metaRes.ok) return [] as TimelineRow[];
+					const mj = await metaRes.json();
+					const items = mj.data ?? [];
+					const out: TimelineRow[] = [];
+					for (const it of items) {
+						if (!it.local_id) continue;
+						out.push({
+							did: f.followed_did,
+							provider: origin,
+							title: it.title,
+							description: it.description,
+							created_at: it.created_at,
+							local_id: it.local_id,
+							fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
+						});
+					}
+					return out;
+				})
+			);
+			const merged = rowChunks.flat();
 			merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 			timelineRows = merged.slice(0, 100);
 		} catch (e) {
 			timelineError = e instanceof Error ? e.message : 'Timeline failed';
 		} finally {
 			timelineLoading = false;
+		}
+	}
+
+	async function loadPostDetail(row: TimelineRow) {
+		const key = row.fullUrl;
+		const cur = timelinePostDetailByUrl.get(key);
+		if (cur?.status === 'loading' || cur?.status === 'ready') return;
+		setTimelineDetail(key, { status: 'loading' });
+		try {
+			const res = await fetch(row.fullUrl, { signal: AbortSignal.timeout(12_000) });
+			if (!res.ok) throw new Error('Could not load post');
+			const payload = await res.json();
+			const d = payload?.data;
+			if (d?.type === 'blog' && typeof d.content === 'string' && d.content) {
+				setTimelineDetail(key, { status: 'ready', contentPreview: d.content });
+			} else if (d?.type === 'media' && Array.isArray(d.media_urls) && d.media_urls.length > 0) {
+				setTimelineDetail(key, { status: 'ready', mediaCount: d.media_urls.length });
+			} else {
+				setTimelineDetail(key, { status: 'ready' });
+			}
+		} catch (e) {
+			setTimelineDetail(key, {
+				status: 'error',
+				message: e instanceof Error ? e.message : 'Failed to load'
+			});
 		}
 	}
 
@@ -443,27 +496,32 @@
 					{:else}
 						<ul class="max-h-96 space-y-2 overflow-y-auto">
 							{#each timelineRows as row (row.fullUrl)}
+								{@const d = timelinePostDetailByUrl.get(row.fullUrl)}
 								<li class="rounded-md border px-3 py-2 text-sm">
 									<p class="font-medium">{row.title || 'Untitled'}</p>
 									<p class="font-mono text-xs text-muted-foreground">{row.did}</p>
 									<p class="text-xs text-muted-foreground">
 										{new Date(row.created_at).toLocaleString()}
 									</p>
-									{#await fetch(row.fullUrl).then((r) => r.json())}
-										<p class="mt-1 text-xs text-muted-foreground">Loading full post…</p>
-									{:then payload}
-										{#if payload?.data?.type === 'blog' && payload.data.content}
-											<p class="mt-2 line-clamp-3 text-xs">{payload.data.content}</p>
-										{:else if payload?.data?.type === 'media' && payload.data.media_urls?.length}
-											<p class="mt-1 text-xs text-muted-foreground">
-												Media post ({payload.data.media_urls.length} items)
-											</p>
-										{/if}
-									{:catch}
-										<p class="mt-1 text-xs text-destructive">
-											Could not load full post (CORS/network)
+									{#if d?.status === 'ready' && d.contentPreview}
+										<p class="mt-2 line-clamp-3 text-xs">{d.contentPreview}</p>
+									{:else if d?.status === 'ready' && d.mediaCount != null}
+										<p class="mt-1 text-xs text-muted-foreground">
+											Media post ({d.mediaCount} items)
 										</p>
-									{/await}
+									{:else if d?.status === 'error'}
+										<p class="mt-1 text-xs text-destructive">{d.message}</p>
+									{:else if d?.status === 'loading'}
+										<p class="mt-1 text-xs text-muted-foreground">Loading full post…</p>
+									{:else}
+										<button
+											type="button"
+											class="mt-1 text-xs text-muted-foreground underline"
+											onclick={() => loadPostDetail(row)}
+										>
+											Load details
+										</button>
+									{/if}
 								</li>
 							{/each}
 						</ul>

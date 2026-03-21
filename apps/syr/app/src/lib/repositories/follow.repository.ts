@@ -30,6 +30,15 @@ export class FollowRepository {
 			created_at: now
 		});
 		const row = Array.isArray(result) ? result[0] : result;
+		if (
+			!row ||
+			typeof row !== 'object' ||
+			!('followed_did' in row) ||
+			!('follower_user_id' in row) ||
+			!('created_at' in row)
+		) {
+			throw new Error('createFollow: unexpected database response');
+		}
 		return row as unknown as UserFollow;
 	}
 

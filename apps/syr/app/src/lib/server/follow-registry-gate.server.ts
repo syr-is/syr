@@ -15,11 +15,17 @@ export async function assertFollowableFromRegistries(
 	}
 
 	for (const raw of registryUrls) {
-		const registryUrl = registryApiRoot(raw);
-		if (!registryUrl) continue;
+		const trimmed = raw.trim();
+		if (trimmed === '') continue;
+		let apiRoot: string;
 		try {
-			await resolveProvider(followedDid, { registryUrl, timeout: 12_000 });
-			return { sourceRegistry: registryUrl };
+			apiRoot = registryApiRoot(trimmed);
+		} catch {
+			continue;
+		}
+		try {
+			await resolveProvider(followedDid, { registryUrl: apiRoot, timeout: 12_000 });
+			return { sourceRegistry: trimmed };
 		} catch {
 			continue;
 		}

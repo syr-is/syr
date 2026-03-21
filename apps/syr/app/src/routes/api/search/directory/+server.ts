@@ -49,7 +49,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	await Promise.all(
 		registries.map(async (r) => {
-			const base = registryApiRoot(r.registry_url);
+			let base: string;
+			try {
+				base = registryApiRoot(r.registry_url);
+			} catch (err) {
+				console.debug('directory search: invalid registry URL', {
+					registry_url: r.registry_url,
+					err
+				});
+				return;
+			}
 			try {
 				const res = await fetch(`${base}/directory/search?${params.toString()}`, {
 					signal: AbortSignal.timeout(12_000)
@@ -70,8 +79,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 						merged.set(row.did, { ...row, registryUrl: base });
 					}
 				}
-			} catch {
-				// ignore per-registry errors
+			} catch (err) {
+				console.debug('directory search registry failed', {
+					registry_url: r.registry_url,
+					base,
+					err
+				});
 			}
 		})
 	);

@@ -41,18 +41,21 @@ Signed object SHOULD include at minimum:
 
 ### 2.3 Post mutations
 
-Signed object SHOULD include at minimum:
+The shipped shape is **`PostSignedPayloadV1Schema`** in `@syr-is/types` (`packages/ts/types/src/signed-mutations.ts`). Summary:
 
-| Field                               | Description                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `type`                              | Literal `"post"` (or versioned `"post@v1"`).                                                           |
-| `did`                               | Author `did:syr:...`.                                                                                  |
-| `post_id`                           | Composite id `{ created_by, id }` or stable string form used by the API (must match stored record).    |
-| `title`, `body`, `type` (post type) | Content snapshot as applicable.                                                                        |
-| `media_urls`                        | Array or omitted per schema.                                                                           |
-| `created_at`                        | ISO-8601 from server or client per policy (document whether server timestamps overwrite after verify). |
+| Field                                                                                     | Description                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                                                                                    | Literal **`"post@v1"`** (mutation envelope type; distinct from post kind).                                                                                                                                                              |
+| `did`                                                                                     | Author `did:syr:...` (must match the authenticated identity).                                                                                                                                                                           |
+| `post_id`                                                                                 | **ULID string** — the stable local id part of the composite record id (`id.id` in storage), not an embedded `{ created_by, id }` object.                                                                                                |
+| `post_type`                                                                               | **`"blog"`** or **`"media"`** (content kind).                                                                                                                                                                                           |
+| `title`, `description`, `content`, `content_type`, `display_mode`, `visibility`, `status` | Same semantics as the API post model (`content` / `description` — not a generic `body` field).                                                                                                                                          |
+| `media_urls`                                                                              | Optional array; for **media** posts use `[]` when there are no URLs if the signed payload must reflect an empty list (see schema / server `assertPost*` comparison).                                                                    |
+| `created_at`                                                                              | ISO-8601 string. **Create:** must be within server skew and is stored as the post `created_at`. **Update:** must **equal** the stored post `created_at` (binds the signature to the original creation time; not a freshness timestamp). |
 
-**Creates:** Include all fields that will be persisted. **Updates:** Full snapshot of post fields after the edit.
+**Creates:** Include all fields that will be persisted and match the unsigned body. **Updates:** Full snapshot of post fields after the edit, with `created_at` equal to the existing row.
+
+Profile mutations use **`ProfileSignedPayloadV1Schema`** (`type: "profile@v1"`, `display_name`, optional `bio` / URLs / `metadata`).
 
 ### 2.4 Deletes
 

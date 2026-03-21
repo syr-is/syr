@@ -1,4 +1,4 @@
-import { json, error } from '@sveltejs/kit';
+import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
@@ -66,8 +66,16 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 				: null
 		});
 	} catch (e) {
+		if (isHttpError(e)) throw e;
 		const msg = e instanceof Error ? e.message : 'Follow failed';
-		throw error(400, { code: 'BAD_REQUEST', message: msg });
+		const clientFacing =
+			msg.includes('Add at least one identity registry') ||
+			msg.includes('not listed on any of your configured registries') ||
+			msg.startsWith('registryApiRoot:');
+		throw error(clientFacing ? 400 : 500, {
+			code: clientFacing ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
+			message: msg
+		});
 	}
 };
 

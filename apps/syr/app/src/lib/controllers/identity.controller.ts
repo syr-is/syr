@@ -302,6 +302,17 @@ export class IdentityController {
 		signature: string,
 		devicePublicKey: string
 	): Promise<void> {
+		if (devicePublicKey === identity.public_key) {
+			const rootKeyClean = decodePublicKey(identity.public_key);
+			const canonicalPayload = canonicalize(payload);
+			const sigBytes = decodeMultibase(signature);
+			const isValid = await verify(canonicalPayload, sigBytes, rootKeyClean);
+			if (!isValid) {
+				throw new Error('Invalid payload signature.');
+			}
+			return;
+		}
+
 		const dk = await delegatedKeyRepository.findByPublicKey(devicePublicKey);
 		if (dk) {
 			const { identity: verifiedIdentity } = await this.verifySignedMutation(
@@ -315,17 +326,7 @@ export class IdentityController {
 			return;
 		}
 
-		if (devicePublicKey !== identity.public_key) {
-			throw new Error('Device key not found.');
-		}
-
-		const rootKeyClean = decodePublicKey(identity.public_key);
-		const canonicalPayload = canonicalize(payload);
-		const sigBytes = decodeMultibase(signature);
-		const isValid = await verify(canonicalPayload, sigBytes, rootKeyClean);
-		if (!isValid) {
-			throw new Error('Invalid payload signature.');
-		}
+		throw new Error('Device key not found.');
 	}
 
 	/**
