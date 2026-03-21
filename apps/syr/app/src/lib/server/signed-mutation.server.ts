@@ -34,16 +34,13 @@ function normalizeOptStr(v: unknown): string | undefined {
 	return s === '' ? undefined : s;
 }
 
-/** Compare media URL lists ignoring order (signed payload vs stored post). */
+/** Compare media URL lists in order (signed payload vs stored post). */
 function mediaUrlsEquivalent(
 	a: string[] | null | undefined,
 	b: string[] | null | undefined
 ): boolean {
 	const norm = (x: string[] | null | undefined) =>
-		[...(x ?? [])]
-			.map((s) => String(s).trim())
-			.filter((s) => s !== '')
-			.sort();
+		[...(x ?? [])].map((s) => String(s).trim()).filter((s) => s !== '');
 	const aa = norm(a);
 	const bb = norm(b);
 	if (aa.length !== bb.length) return false;
@@ -76,7 +73,13 @@ async function loadIdentityForUser(userRecordId: string): Promise<{
 	const user = await userRepository.findById(uid);
 	if (!user?.did) return null;
 	const identity = await identityRepository.findByUserId(uid);
-	if (!identity) return null;
+	if (!identity) {
+		throw error(500, {
+			code: 'INTERNAL_SERVER_ERROR',
+			message:
+				'Account has a DID but no identity record. Contact support or re-create your identity.'
+		});
+	}
 	return { user, identity };
 }
 

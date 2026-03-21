@@ -17,16 +17,19 @@ export class FollowRepository {
 
 	private isUniqueConstraintError(error: unknown): boolean {
 		if (error && typeof error === 'object') {
-			if ('code' in error && (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION') {
-				return true;
-			}
-			if ('message' in error) {
-				const msg = String((error as { message: string }).message).toLowerCase();
+			const o = error as { code?: unknown; errno?: unknown; message?: unknown };
+			const codeStr = o.code !== undefined ? String(o.code) : '';
+			if (codeStr === 'UNIQUE_CONSTRAINT_VIOLATION') return true;
+			if (codeStr === '23505') return true;
+			if (typeof o.errno === 'number' && o.errno === 19) return true;
+
+			if (typeof o.message === 'string') {
+				const msg = o.message.toLowerCase();
 				return (
-					msg.includes('duplicate') ||
-					msg.includes('unique') ||
-					msg.includes('already exists') ||
-					msg.includes('constraint')
+					/\bduplicate key\b/.test(msg) ||
+					/\bunique constraint\b/.test(msg) ||
+					/\balready exists\b/.test(msg) ||
+					/\bduplicate entry\b/.test(msg)
 				);
 			}
 		}
@@ -59,6 +62,7 @@ export class FollowRepository {
 		if (
 			!row ||
 			typeof row !== 'object' ||
+			!('id' in row) ||
 			!('followed_did' in row) ||
 			!('follower_user_id' in row) ||
 			!('created_at' in row)

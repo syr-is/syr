@@ -171,7 +171,8 @@ export class RegistryController {
 	@ApiResponse({ status: 400, description: 'Invalid query' })
 	@ApiResponse({ status: 500, description: 'Internal error' })
 	async searchDirectory(@Query('q') q?: string, @Query('limit') limitRaw?: string) {
-		const limit = Math.min(100, Math.max(1, parseInt(limitRaw ?? '20', 10) || 20));
+		const parsed = parseInt(limitRaw ?? '20', 10);
+		const limit = Math.min(100, Math.max(1, Number.isNaN(parsed) ? 20 : parsed));
 		const data = await this.registryService.searchDirectory(q ?? '', limit);
 		return { status: 'success', data };
 	}

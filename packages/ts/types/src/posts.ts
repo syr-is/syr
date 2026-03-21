@@ -97,7 +97,10 @@ export const PostCreateSchema = PostObjectSchema.omit({
 	updated_at: true,
 	author_id: true,
 	did: true,
-	local_id: true
+	local_id: true,
+	content_signature: true,
+	signed_payload_json: true,
+	signing_device_public_key: true
 }).superRefine(refinePostType);
 
 export type PostCreate = z.infer<typeof PostCreateSchema>;
@@ -107,7 +110,10 @@ export const PostUpdateSchema = PostObjectSchema.omit({
 	updated_at: true,
 	author_id: true,
 	did: true,
-	local_id: true
+	local_id: true,
+	content_signature: true,
+	signed_payload_json: true,
+	signing_device_public_key: true
 }).superRefine(refineMediaNoContentType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;
