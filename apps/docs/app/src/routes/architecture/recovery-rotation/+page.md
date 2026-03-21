@@ -4,6 +4,8 @@ title: Syr Recovery & Key Rotation Specification v0.1
 
 # Syr Recovery & Key Rotation Specification v0.1
 
+> **Product status:** Current Syr scope follows [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified): **one DID, one root key**; rotation and recovery here are **not** active roadmap items. This document is kept as reference for a possible future phase.
+
 ## 1. Purpose
 
 This specification defines how a Syr identity can:

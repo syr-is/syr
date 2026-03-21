@@ -5,7 +5,8 @@
 	import {
 		parseSyrLoginUrl,
 		parseSyrSyncProfileUrl,
-		parseSyrChallengeSignUrlAny
+		parseSyrChallengeSignUrlAny,
+		parseSyrSigilHandoffUrl
 	} from '$lib/utils/syr-url';
 
 	function handleUrl(url: string) {
@@ -25,6 +26,12 @@
 		if (syncParsed) {
 			const q = new URLSearchParams(syncParsed);
 			goto(`/sync-profile?${q.toString()}`);
+			return;
+		}
+		const sigilParsed = parseSyrSigilHandoffUrl(url);
+		if (sigilParsed) {
+			const q = new URLSearchParams(sigilParsed);
+			goto(`/sigil-handoff?${q.toString()}`);
 		}
 	}
 

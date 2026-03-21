@@ -109,13 +109,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 							created_at: user.created_at,
 							updated_at: user.updated_at,
 							sessionId: payload.sessionId,
+							signing_warn_before_each_action: user.signing_warn_before_each_action ?? true,
+							signing_require_explicit_sign_button:
+								user.signing_require_explicit_sign_button ?? true,
 							profile: profile
 								? {
 										id: profile.id.toString(),
 										display_name: profile.display_name,
 										bio: profile.bio,
 										avatar_url: profile.avatar_url,
-										banner_url: profile.banner_url
+										banner_url: profile.banner_url,
+										content_signature: profile.content_signature,
+										signed_payload_json: profile.signed_payload_json,
+										signing_device_public_key: profile.signing_device_public_key
 									}
 								: undefined
 						};

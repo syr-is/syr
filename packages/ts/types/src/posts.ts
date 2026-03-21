@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BaseEntitySchema, RecordIdSchema, DidSyrSchema } from './common.js';
+import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
 export const PostTypeSchema = z.enum(['blog', 'media']);
 
@@ -80,7 +81,10 @@ const PostObjectSchema = BaseEntitySchema.extend({
 	/** DID from composite record ID (present when serialized for API) */
 	did: DidSyrSchema.optional(),
 	/** Local ID/ULID from composite record ID (present when serialized for API) */
-	local_id: z.string().optional()
+	local_id: z.string().optional(),
+	content_signature: z.string().optional(),
+	signed_payload_json: z.string().optional(),
+	signing_device_public_key: z.string().optional()
 });
 
 export const PostSchema = PostObjectSchema.superRefine(refinePostType);
@@ -107,3 +111,23 @@ export const PostUpdateSchema = PostObjectSchema.omit({
 }).superRefine(refineMediaNoContentType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;
+
+export const PostUpdateRequestSchema = PostUpdateSchema.safeExtend({
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostUpdateRequest = z.infer<typeof PostUpdateRequestSchema>;
+
+/** POST /api/posts — optional client-chosen ULID + signed envelope */
+export const PostCreateRequestSchema = PostCreateSchema.safeExtend({
+	post_local_id: z.string().min(1).optional(),
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostCreateRequest = z.infer<typeof PostCreateRequestSchema>;
+
+export const PostDeleteRequestSchema = z.object({
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostDeleteRequest = z.infer<typeof PostDeleteRequestSchema>;

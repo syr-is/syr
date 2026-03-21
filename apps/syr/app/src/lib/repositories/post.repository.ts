@@ -71,6 +71,34 @@ export class PostRepository extends BaseRepository<Post> {
 
 		return { posts, nextCursor };
 	}
+
+	/**
+	 * Public posts for a DID (composite id.created_by), visibility = public only.
+	 */
+	async findPublicByDid(
+		did: string,
+		opts: { limit?: number; offset?: number } = {}
+	): Promise<{ data: Post[]; total: number }> {
+		const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+		const offset = Math.max(opts.offset ?? 0, 0);
+		const dataResult = await this.db.query<[Post[]]>(
+			`SELECT * FROM post
+			 WHERE id.created_by = $did AND visibility = 'public'
+			 ORDER BY created_at DESC
+			 LIMIT $limit START $offset`,
+			{ did, limit, offset }
+		);
+		const countResult = await this.db.query<[{ total: number }[]]>(
+			`SELECT count() AS total FROM post
+			 WHERE id.created_by = $did AND visibility = 'public'
+			 GROUP ALL`,
+			{ did }
+		);
+		const raw = dataResult[0] ?? [];
+		const data = raw.map((r) => this.validate(r));
+		const total = countResult[0]?.[0]?.total ?? 0;
+		return { data, total };
+	}
 }
 
 export const postRepository = new PostRepository();

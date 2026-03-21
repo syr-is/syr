@@ -1,8 +1,18 @@
-import { Controller, Get, Post, Param, Body, HttpException, HttpStatus } from '@nestjs/common';
+import {
+	Controller,
+	Get,
+	Post,
+	Param,
+	Body,
+	Query,
+	HttpException,
+	HttpStatus
+} from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RegistryService } from './registry.service';
 import { UpdateRecordDto } from './dto/update-record.dto';
 import { DeleteRecordDto } from './dto/delete-record.dto';
+import { DirectoryUpsertDto } from './dto/directory-upsert.dto';
 
 @ApiTags('registry')
 @Controller()
@@ -143,6 +153,48 @@ export class RegistryController {
 				throw new HttpException({ code: 'NOT_FOUND', message }, HttpStatus.NOT_FOUND);
 			}
 
+			throw new HttpException(
+				{ code: 'INTERNAL_ERROR', message },
+				HttpStatus.INTERNAL_SERVER_ERROR
+			);
+		}
+	}
+
+	/**
+	 * GET /directory/search?q=&limit=
+	 * Opted-in directory entries only (listed = true).
+	 */
+	@Get('directory/search')
+	@ApiOperation({
+		summary: 'Search public directory',
+		description: 'Substring match on username, display name, DID.'
+	})
+	async searchDirectory(@Query('q') q?: string, @Query('limit') limitRaw?: string) {
+		const limit = Math.min(100, Math.max(1, parseInt(limitRaw ?? '20', 10) || 20));
+		const data = await this.registryService.searchDirectory(q ?? '', limit);
+		return { status: 'success', data };
+	}
+
+	/**
+	 * POST /directory/upsert
+	 * Signed directory row (root key), same trust model as hosting updates.
+	 */
+	@Post('directory/upsert')
+	@ApiOperation({ summary: 'Upsert directory listing' })
+	@ApiBody({ type: DirectoryUpsertDto })
+	async upsertDirectory(@Body() dto: DirectoryUpsertDto) {
+		try {
+			const result = await this.registryService.upsertDirectory(dto);
+			return { status: 'success', data: result };
+		} catch (err) {
+			if (err instanceof HttpException) throw err;
+			const message = err instanceof Error ? err.message : 'Directory upsert failed';
+			if (message.includes('signature')) {
+				throw new HttpException({ code: 'INVALID_SIGNATURE', message }, HttpStatus.BAD_REQUEST);
+			}
+			if (message.includes('Stale')) {
+				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
+			}
 			throw new HttpException(
 				{ code: 'INTERNAL_ERROR', message },
 				HttpStatus.INTERNAL_SERVER_ERROR

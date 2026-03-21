@@ -419,6 +419,9 @@ importers:
       "@syr-is/did":
         specifier: workspace:*
         version: link:../../../packages/ts/did
+      "@syr-is/resolver":
+        specifier: workspace:*
+        version: link:../../../packages/ts/resolver
       "@syr-is/types":
         specifier: workspace:*
         version: link:../../../packages/ts/types

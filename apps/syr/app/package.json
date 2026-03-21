@@ -61,6 +61,7 @@
 		"@node-rs/argon2": "^2.0.2",
 		"@syr-is/crypto": "workspace:*",
 		"@syr-is/did": "workspace:*",
+		"@syr-is/resolver": "workspace:*",
 		"@syr-is/types": "workspace:*",
 		"@syr-is/ui": "workspace:*",
 		"clsx": "^2.1.1",

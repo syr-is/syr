@@ -73,7 +73,10 @@ export const ErrorCodeSchema = z.enum([
 	'INVALID_CREDENTIALS',
 	'TOKEN_EXPIRED',
 	'INVALID_TOKEN',
-	'INSUFFICIENT_PERMISSIONS'
+	'INSUFFICIENT_PERMISSIONS',
+	'SIGNED_MUTATION_REQUIRED',
+	'INVALID_SIGNATURE',
+	'IDENTITY_REQUIRED'
 ]);
 
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;

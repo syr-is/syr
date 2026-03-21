@@ -95,6 +95,12 @@
 							Settings
 						</DropdownMenu.Item>
 					</a>
+					<a href="/settings/signing">
+						<DropdownMenu.Item>
+							<Settings />
+							Signing preferences
+						</DropdownMenu.Item>
+					</a>
 					<!-- <DropdownMenu.Item>
 							<CreditCard />
 							Billing

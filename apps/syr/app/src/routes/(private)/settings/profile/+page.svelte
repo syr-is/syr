@@ -11,6 +11,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { ProfileUpdateSchema } from '@syr-is/types';
 	import type { PageData } from './$types';
+	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let loading = $state(false);
@@ -140,6 +141,16 @@
 				<Card.Header>
 					<Card.Title>Profile Information</Card.Title>
 					<Card.Description>Update your profile information and preferences.</Card.Description>
+					{#if data.user?.did && data.user.profile}
+						<div class="pt-2">
+							<SignatureVerification
+								did={data.user.did}
+								signedPayloadJson={data.user.profile.signed_payload_json}
+								signatureMultibase={data.user.profile.content_signature}
+								signingPublicKeyMultibase={data.user.profile.signing_device_public_key}
+							/>
+						</div>
+					{/if}
 				</Card.Header>
 				<form method="POST" use:enhance>
 					<Card.Content class="space-y-4">

@@ -9,6 +9,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
 	import { Pencil, ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
+	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let isPinned = $state(false);
@@ -220,6 +221,14 @@
 							{/if}
 						{/if}
 					</Card.Description>
+					{#if data.post.did}
+						<SignatureVerification
+							did={data.post.did}
+							signedPayloadJson={data.post.signed_payload_json}
+							signatureMultibase={data.post.content_signature}
+							signingPublicKeyMultibase={data.post.signing_device_public_key}
+						/>
+					{/if}
 				</div>
 				{#if data.user}
 					{@const isOwner = data.post.author_id === data.user.id}

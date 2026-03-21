@@ -95,6 +95,34 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS username_last_updated ON TABLE user TYPE option<datetime>;
 			`);
 
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS signing_warn_before_each_action ON TABLE user TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS signing_require_explicit_sign_button ON TABLE user TYPE option<bool>;
+			`);
+
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE profile TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE profile TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE profile TYPE option<string>;
+			`);
+
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE post TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE post TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE post TYPE option<string>;
+			`);
+
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS user_follow SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS follower_user_id ON TABLE user_follow TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS followed_did ON TABLE user_follow TYPE string
+					ASSERT string::starts_with($value, "did:syr:");
+				DEFINE FIELD IF NOT EXISTS source_registry ON TABLE user_follow TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_follow TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_follow_follower ON TABLE user_follow COLUMNS follower_user_id;
+				DEFINE INDEX IF NOT EXISTS idx_follow_unique ON TABLE user_follow COLUMNS follower_user_id, followed_did UNIQUE;
+			`);
+
 			// Define index for profile lookup by user_id
 			await db.query(`
 				DEFINE INDEX IF NOT EXISTS profile_user_id ON TABLE profile COLUMNS user_id UNIQUE;

@@ -2,7 +2,7 @@
 	import * as Sidebar from '@syr-is/ui/sidebar';
 	import { Button } from '@syr-is/ui/button';
 	import { toggleMode } from 'mode-watcher';
-	import { House, FileText, Upload } from 'lucide-svelte';
+	import { House, FileText, Upload, Search } from 'lucide-svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import NavUser from '$lib/components/nav-user.svelte';
@@ -43,6 +43,11 @@
 			title: 'Uploads',
 			href: '/uploads',
 			icon: Upload
+		},
+		{
+			title: 'Search',
+			href: '/search',
+			icon: Search
 		}
 	];
 

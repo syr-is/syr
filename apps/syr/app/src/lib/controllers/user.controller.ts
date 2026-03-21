@@ -1,7 +1,7 @@
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { userRepository } from '$lib/repositories/user.repository';
 import { getUsernameChangeCooldownDays } from '$lib/instance-config';
-import type { ProfileUpdate, Profile, User } from '@syr-is/types';
+import type { ProfileRepositoryMerge, Profile, User } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
 export interface UpdateProfileResponse {
@@ -19,7 +19,7 @@ export class UserController {
 	 */
 	async updateProfile(
 		userId: RecordId | string,
-		data: ProfileUpdate
+		data: ProfileRepositoryMerge
 	): Promise<UpdateProfileResponse> {
 		// Get existing profile
 		const existingProfile = await profileRepository.findByUserId(userId);

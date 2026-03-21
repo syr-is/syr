@@ -48,5 +48,8 @@ export * from './tenant.js';
 // Registry (DID hosting record) types
 export * from './registry.js';
 
+// Signed mutations (client-signed profile/post)
+export * from './signed-mutations.js';
+
 // Persona types (Syner local identities)
 export * from './persona.js';

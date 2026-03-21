@@ -1,10 +1,10 @@
 import { BaseRepository } from './base.repository';
 import {
 	ProfileSchema,
-	ProfileUpdateSchema,
+	ProfileRepositoryMergeSchema,
 	stringToRecordId,
 	type Profile,
-	type ProfileUpdate,
+	type ProfileRepositoryMerge,
 	type ProfileCreate
 } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
@@ -106,21 +106,27 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	 * Merge profile by user ID
 	 * Uses SurrealDB's merge method to update only specified fields
 	 */
-	async mergeByUserId(userId: RecordId | string, data: ProfileUpdate): Promise<Profile | null> {
+	async mergeByUserId(
+		userId: RecordId | string,
+		data: ProfileRepositoryMerge
+	): Promise<Profile | null> {
 		// First find the profile by user_id
 		const profile = await this.findByUserId(userId);
 		if (!profile) {
 			return null;
 		}
 
-		const validatedData = ProfileUpdateSchema.safeParse(data);
+		const validatedData = ProfileRepositoryMergeSchema.safeParse(data);
 
 		if (!validatedData.success) {
 			throw new Error(`Validation failed: ${JSON.stringify(validatedData.error.issues)}`);
 		}
 
 		// Use SurrealDB's merge method to update only the specified fields using profile ID
-		const result = await this.db.merge<Profile, ProfileUpdate>(profile.id, validatedData.data);
+		const result = await this.db.merge<Profile, ProfileRepositoryMerge>(
+			profile.id,
+			validatedData.data
+		);
 
 		return result as Profile | null;
 	}

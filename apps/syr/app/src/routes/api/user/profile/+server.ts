@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { userController } from '$lib/controllers/user.controller';
-import { ProfileUpdateSchema } from '@syr-is/types';
+import { ProfilePatchRequestSchema } from '@syr-is/types';
+import { assertProfileSignedMutation } from '$lib/server/signed-mutation.server';
 import { z } from 'zod';
 
 /**
@@ -27,10 +28,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const body = await request.json();
 
 		// Parse and validate request body
-		const data = ProfileUpdateSchema.parse(body);
+		const parsed = ProfilePatchRequestSchema.parse(body);
+		const { signed_mutation, ...profileFields } = parsed;
 
-		// Update profile
-		const result = await userController.updateProfile(locals.user.id, data);
+		const { signature } = await assertProfileSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			profileFields
+		);
+
+		const mergePayload = signature ? { ...profileFields, ...signature } : profileFields;
+		const result = await userController.updateProfile(locals.user.id, mergePayload);
 
 		return json({
 			status: 'success',

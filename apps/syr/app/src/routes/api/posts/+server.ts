@@ -6,13 +6,17 @@ import { postController } from '$lib/controllers/post.controller';
 import {
 	QueryParamsSchema,
 	QueryOptionsSchema,
-	PostCreateSchema,
+	PostCreateRequestSchema,
 	PostUpdateSchema,
 	recordIdFromDidAndLocal,
 	extractDid,
 	extractLocalId
 } from '@syr-is/types';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
+import {
+	assertPostCreateSignedMutation,
+	assertPostUpdateSignedMutation
+} from '$lib/server/signed-mutation.server';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -117,10 +121,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		const data = PostCreateSchema.parse(body);
-		const result = await postController.createPost(user, data);
+		const parsed = PostCreateRequestSchema.parse(body);
+		const { post_local_id, signed_mutation, ...postCreate } = parsed;
+		const signResult = await assertPostCreateSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			post_local_id,
+			postCreate
+		);
+		const result = await postController.createPost(user, postCreate, {
+			localId: post_local_id,
+			createdAt: signResult.postCreatedAt,
+			signature: signResult.signature
+		});
 
-		// user.did guard above and postController.createPost(user, data) guarantee result.id is a composite record ID
+		// user.did guard above guarantees composite record ID
 		return json(
 			{
 				status: 'success',
@@ -182,6 +197,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
+		const signed_mutation = body.signed_mutation;
+		delete body.signed_mutation;
 		// Convert DID + local_id to composite RecordId
 		if (body.did && body.local_id) {
 			body.id = recordIdFromDidAndLocal('post', body.did, body.local_id);
@@ -244,7 +261,25 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						display_mode: data.display_mode ?? existingPost.display_mode ?? 'masonry'
 					};
 
-		const result = await postController.updatePost(updatePayload, keysToUnset);
+		const { signature } = await assertPostUpdateSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			existingPost,
+			{
+				type: updatePayload.type,
+				title: updatePayload.title,
+				description: updatePayload.description,
+				content: updatePayload.content,
+				content_type: updatePayload.content_type,
+				media_urls: updatePayload.media_urls,
+				display_mode: updatePayload.display_mode,
+				visibility: updatePayload.visibility,
+				status: updatePayload.status
+			},
+			data.id
+		);
+
+		const result = await postController.updatePost(updatePayload, keysToUnset, signature);
 
 		return json({
 			status: 'success',

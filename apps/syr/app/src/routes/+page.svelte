@@ -8,6 +8,8 @@
 	import NewPost from '$lib/components/fragments/new-post.svelte';
 	import PostPreview from '$lib/components/fragments/post-preview.svelte';
 	import { getPostId, type Post } from '@syr-is/types';
+	import { resolveProvider } from '@syr-is/resolver';
+	import { registryApiRoot } from '$lib/registry-url';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { Pin } from 'lucide-svelte';
@@ -37,6 +39,20 @@
 	let currentPage = $state(1);
 	let limit = $state(20);
 	let total = $state(0);
+
+	type TimelineRow = {
+		did: string;
+		provider: string;
+		title?: string;
+		description?: string;
+		created_at: string;
+		local_id: string;
+		fullUrl: string;
+	};
+
+	let timelineRows = $state<TimelineRow[]>([]);
+	let timelineLoading = $state(false);
+	let timelineError = $state<string | null>(null);
 
 	// Sorting state
 	let sortField = $state<'created_at' | 'updated_at' | 'title'>('created_at');
@@ -278,6 +294,71 @@
 	function getSortOrderLabel(order: string): string {
 		return order === 'asc' ? 'Ascending' : 'Descending';
 	}
+
+	async function loadFollowingTimeline() {
+		if (!data.user?.did) return;
+		timelineLoading = true;
+		timelineError = null;
+		try {
+			const [fr, rr] = await Promise.all([
+				fetch('/api/follows'),
+				fetch('/api/identity/registries')
+			]);
+			if (!fr.ok || !rr.ok) {
+				timelineError = 'Could not load follows or registries';
+				return;
+			}
+			const fj = await fr.json();
+			const rj = await rr.json();
+			const follows: { followed_did: string }[] = fj.data ?? [];
+			const registries: { registry_url: string }[] = rj.data ?? [];
+			const bases = registries.map((r) => registryApiRoot(r.registry_url));
+			const merged: TimelineRow[] = [];
+			for (const f of follows) {
+				let provider: string | null = null;
+				for (const b of bases) {
+					try {
+						provider = await resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 });
+						break;
+					} catch {
+						/* try next registry */
+					}
+				}
+				if (!provider) continue;
+				const origin = provider.replace(/\/$/, '');
+				const metaRes = await fetch(
+					`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`
+				);
+				if (!metaRes.ok) continue;
+				const mj = await metaRes.json();
+				const items = mj.data ?? [];
+				for (const it of items) {
+					if (!it.local_id) continue;
+					merged.push({
+						did: f.followed_did,
+						provider: origin,
+						title: it.title,
+						description: it.description,
+						created_at: it.created_at,
+						local_id: it.local_id,
+						fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
+					});
+				}
+			}
+			merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+			timelineRows = merged.slice(0, 100);
+		} catch (e) {
+			timelineError = e instanceof Error ? e.message : 'Timeline failed';
+		} finally {
+			timelineLoading = false;
+		}
+	}
+
+	$effect(() => {
+		if (data.user?.did) {
+			void loadFollowingTimeline();
+		}
+	});
 </script>
 
 {#if data.user}
@@ -337,6 +418,58 @@
 				</div>
 				<NewPost onDraftCreated={fetchPosts} onDraftDeleted={fetchPosts} />
 			</div>
+
+			{#if data.user?.did}
+				<div class="space-y-2 rounded-lg border p-4">
+					<div class="flex items-center justify-between gap-2">
+						<h2 class="text-lg font-semibold">Following (remote)</h2>
+						<button
+							type="button"
+							class="text-xs text-muted-foreground underline"
+							onclick={() => loadFollowingTimeline()}
+						>
+							Refresh
+						</button>
+					</div>
+					{#if timelineLoading}
+						<p class="text-sm text-muted-foreground">Loading merged public posts…</p>
+					{:else if timelineError}
+						<p class="text-sm text-destructive">{timelineError}</p>
+					{:else if timelineRows.length === 0}
+						<p class="text-sm text-muted-foreground">
+							Follow identities from <span class="font-mono">u/…</span> and ensure your registries can
+							resolve them. Public posts load client-side from each provider (CORS applies).
+						</p>
+					{:else}
+						<ul class="max-h-96 space-y-2 overflow-y-auto">
+							{#each timelineRows as row (row.fullUrl)}
+								<li class="rounded-md border px-3 py-2 text-sm">
+									<p class="font-medium">{row.title || 'Untitled'}</p>
+									<p class="font-mono text-xs text-muted-foreground">{row.did}</p>
+									<p class="text-xs text-muted-foreground">
+										{new Date(row.created_at).toLocaleString()}
+									</p>
+									{#await fetch(row.fullUrl).then((r) => r.json())}
+										<p class="mt-1 text-xs text-muted-foreground">Loading full post…</p>
+									{:then payload}
+										{#if payload?.data?.type === 'blog' && payload.data.content}
+											<p class="mt-2 line-clamp-3 text-xs">{payload.data.content}</p>
+										{:else if payload?.data?.type === 'media' && payload.data.media_urls?.length}
+											<p class="mt-1 text-xs text-muted-foreground">
+												Media post ({payload.data.media_urls.length} items)
+											</p>
+										{/if}
+									{:catch}
+										<p class="mt-1 text-xs text-destructive">
+											Could not load full post (CORS/network)
+										</p>
+									{/await}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- Pinned Posts Section -->
 			{#if pinnedPosts.length > 0}

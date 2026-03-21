@@ -113,6 +113,25 @@ export function parseSyrChallengeSignUrlAny(
  * Used when onboarding page shows QR for "Import from Syner".
  * Requires instance and did (no JWT).
  */
+/**
+ * syr://sigil-handoff?origin=...&nonce=...
+ * Requesting web app origin for Sigil file export (encrypted .sigil only; no plaintext keys on the wire).
+ */
+export function parseSyrSigilHandoffUrl(urlStr: string): { origin: string; nonce?: string } | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'sigil-handoff') return null;
+		const originRaw = url.searchParams.get('origin');
+		if (!originRaw) return null;
+		const ou = new URL(originRaw);
+		if (!isValidUrlScheme(ou)) return null;
+		const nonce = url.searchParams.get('nonce') ?? undefined;
+		return { origin: ou.origin, nonce };
+	} catch {
+		return null;
+	}
+}
+
 export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did: string } | null {
 	try {
 		const url = new URL(urlStr);
