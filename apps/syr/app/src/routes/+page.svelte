@@ -333,45 +333,63 @@
 					/* skip invalid registry URL */
 				}
 			}
-			const rowChunks = await Promise.all(
-				follows.map(async (f) => {
+
+			const RESOLVE_BASES_BATCH = 3;
+			const FOLLOWS_CONCURRENCY = 4;
+
+			async function loadFollowTimelineRows(f: { followed_did: string }): Promise<TimelineRow[]> {
+				let provider: string | null = null;
+				for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
+					const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
 					const settled = await Promise.allSettled(
-						bases.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
+						chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
 					);
 					const hit = settled.find(
 						(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
 					);
-					if (!hit) return [] as TimelineRow[];
-					const provider = hit.value;
-					const origin = provider.replace(/\/$/, '');
-					let metaRes: Response;
-					try {
-						metaRes = await fetch(
-							`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`,
-							{ signal: AbortSignal.timeout(12_000) }
-						);
-					} catch {
-						return [] as TimelineRow[];
+					if (hit) {
+						provider = hit.value;
+						break;
 					}
-					if (!metaRes.ok) return [] as TimelineRow[];
-					const mj = await metaRes.json();
-					const items = mj.data ?? [];
-					const out: TimelineRow[] = [];
-					for (const it of items) {
-						if (!it.local_id) continue;
-						out.push({
-							did: f.followed_did,
-							provider: origin,
-							title: it.title,
-							description: it.description,
-							created_at: it.created_at,
-							local_id: it.local_id,
-							fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
-						});
-					}
-					return out;
-				})
-			);
+				}
+				if (!provider) return [];
+				const origin = provider.replace(/\/$/, '');
+				let metaRes: Response;
+				try {
+					metaRes = await fetch(
+						`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`,
+						{ signal: AbortSignal.timeout(12_000) }
+					);
+				} catch {
+					return [];
+				}
+				if (!metaRes.ok) return [];
+				const mj = await metaRes.json();
+				const items = mj.data ?? [];
+				const out: TimelineRow[] = [];
+				for (const it of items) {
+					if (!it.local_id) continue;
+					out.push({
+						did: f.followed_did,
+						provider: origin,
+						title: it.title,
+						description: it.description,
+						created_at: it.created_at,
+						local_id: it.local_id,
+						fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
+					});
+				}
+				return out;
+			}
+
+			const rowChunks: TimelineRow[][] = [];
+			for (let i = 0; i < follows.length; i += FOLLOWS_CONCURRENCY) {
+				const batch = follows.slice(i, i + FOLLOWS_CONCURRENCY);
+				const settled = await Promise.allSettled(batch.map((f) => loadFollowTimelineRows(f)));
+				for (const s of settled) {
+					if (s.status === 'fulfilled') rowChunks.push(s.value);
+				}
+			}
 			const merged = rowChunks.flat();
 			merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 			timelineRows = merged.slice(0, 100);

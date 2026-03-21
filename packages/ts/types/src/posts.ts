@@ -118,6 +118,15 @@ export const PostUpdateRequestSchema = PostUpdateSchema.safeExtend({
 
 export type PostUpdateRequest = z.infer<typeof PostUpdateRequestSchema>;
 
+/** PATCH body when post id comes from URL (`/api/posts/[did]/[id]`), not from JSON. */
+export const PostUpdateByUrlRequestSchema = PostUpdateSchema.omit({ id: true })
+	.partial()
+	.safeExtend({
+		signed_mutation: SignedMutationEnvelopeSchema.optional()
+	});
+
+export type PostUpdateByUrlRequest = z.infer<typeof PostUpdateByUrlRequestSchema>;
+
 /** POST /api/posts — optional client-chosen ULID + signed envelope */
 export const PostCreateRequestSchema = PostCreateSchema.safeExtend({
 	post_local_id: z.string().min(1).optional(),

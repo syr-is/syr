@@ -15,6 +15,24 @@ export class FollowRepository {
 		return dbService.getDb();
 	}
 
+	private isUniqueConstraintError(error: unknown): boolean {
+		if (error && typeof error === 'object') {
+			if ('code' in error && (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION') {
+				return true;
+			}
+			if ('message' in error) {
+				const msg = String((error as { message: string }).message).toLowerCase();
+				return (
+					msg.includes('duplicate') ||
+					msg.includes('unique') ||
+					msg.includes('already exists') ||
+					msg.includes('constraint')
+				);
+			}
+		}
+		return false;
+	}
+
 	async createFollow(
 		followerUserId: RecordId | string,
 		followedDid: string,
@@ -23,12 +41,20 @@ export class FollowRepository {
 		const uid =
 			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
 		const now = new Date();
-		const result = await this.db.create('user_follow', {
-			follower_user_id: uid,
-			followed_did: followedDid,
-			source_registry: sourceRegistry,
-			created_at: now
-		});
+		let result: unknown;
+		try {
+			result = await this.db.create('user_follow', {
+				follower_user_id: uid,
+				followed_did: followedDid,
+				source_registry: sourceRegistry,
+				created_at: now
+			});
+		} catch (e) {
+			if (!this.isUniqueConstraintError(e)) throw e;
+			const existing = await this.findOne(uid, followedDid);
+			if (existing) return existing;
+			throw e;
+		}
 		const row = Array.isArray(result) ? result[0] : result;
 		if (
 			!row ||

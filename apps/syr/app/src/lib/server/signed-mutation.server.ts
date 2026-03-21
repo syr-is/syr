@@ -34,6 +34,22 @@ function normalizeOptStr(v: unknown): string | undefined {
 	return s === '' ? undefined : s;
 }
 
+/** Compare media URL lists ignoring order (signed payload vs stored post). */
+function mediaUrlsEquivalent(
+	a: string[] | null | undefined,
+	b: string[] | null | undefined
+): boolean {
+	const norm = (x: string[] | null | undefined) =>
+		[...(x ?? [])]
+			.map((s) => String(s).trim())
+			.filter((s) => s !== '')
+			.sort();
+	const aa = norm(a);
+	const bb = norm(b);
+	if (aa.length !== bb.length) return false;
+	return aa.every((v, i) => v === bb[i]!);
+}
+
 function stableMetadataJson(meta: unknown): string {
 	if (meta === undefined || meta === null) return 'null';
 	if (typeof meta === 'string' || typeof meta === 'number' || typeof meta === 'boolean') {
@@ -247,7 +263,7 @@ export async function assertPostCreateSignedMutation(
 		normalizeOptStr(p.description) !== normalizeOptStr(post.description) ||
 		normalizeOptStr(p.content) !== normalizeOptStr(post.content) ||
 		normalizeOptStr(p.content_type) !== normalizeOptStr(post.content_type) ||
-		JSON.stringify(p.media_urls ?? null) !== JSON.stringify(post.media_urls ?? null) ||
+		!mediaUrlsEquivalent(p.media_urls, post.media_urls) ||
 		normalizeOptStr(p.display_mode) !== normalizeOptStr(post.display_mode) ||
 		p.visibility !== post.visibility ||
 		p.status !== post.status
@@ -367,7 +383,7 @@ export async function assertPostUpdateSignedMutation(
 		normalizeOptStr(p.description) !== normalizeOptStr(resolved.description) ||
 		normalizeOptStr(p.content) !== normalizeOptStr(resolved.content) ||
 		normalizeOptStr(p.content_type) !== normalizeOptStr(resolved.content_type) ||
-		JSON.stringify(p.media_urls ?? null) !== JSON.stringify(resolved.media_urls ?? null) ||
+		!mediaUrlsEquivalent(p.media_urls, resolved.media_urls) ||
 		normalizeOptStr(p.display_mode) !== normalizeOptStr(resolved.display_mode) ||
 		p.visibility !== resolved.visibility ||
 		p.status !== resolved.status

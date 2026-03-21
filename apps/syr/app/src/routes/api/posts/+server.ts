@@ -7,11 +7,10 @@ import {
 	QueryParamsSchema,
 	QueryOptionsSchema,
 	PostCreateRequestSchema,
-	PostUpdateSchema,
+	PostUpdateRequestSchema,
 	recordIdFromDidAndLocal,
 	extractDid,
-	extractLocalId,
-	type SignedMutationEnvelope
+	extractLocalId
 } from '@syr-is/types';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 import {
@@ -197,20 +196,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const body = (await request.json()) as Record<string, unknown>;
-		const { signed_mutation, ...patchRest } = body;
-		const patchBody: Record<string, unknown> = { ...patchRest };
-		// Convert DID + local_id to composite RecordId
-		if (patchBody.did && patchBody.local_id) {
-			patchBody.id = recordIdFromDidAndLocal(
-				'post',
-				String(patchBody.did),
-				String(patchBody.local_id)
-			);
-			delete patchBody.did;
-			delete patchBody.local_id;
+		const raw = await request.json();
+		if (raw === null || typeof raw !== 'object') {
+			throw error(400, { code: 'BAD_REQUEST', message: 'Expected JSON object' });
 		}
-		const data = PostUpdateSchema.parse(patchBody);
+		const patchInput = { ...(raw as Record<string, unknown>) };
+		if (!patchInput.id && patchInput.did && patchInput.local_id) {
+			patchInput.id = recordIdFromDidAndLocal(
+				'post',
+				String(patchInput.did),
+				String(patchInput.local_id)
+			);
+			delete patchInput.did;
+			delete patchInput.local_id;
+		}
+		const parsed = PostUpdateRequestSchema.parse(patchInput);
+		const { signed_mutation, ...data } = parsed;
 
 		// Verify post exists and user owns it
 		const existingPost = await postController.getPost(data.id);
@@ -268,7 +269,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 		const { signature } = await assertPostUpdateSignedMutation(
 			locals.user.id,
-			signed_mutation as SignedMutationEnvelope | undefined,
+			signed_mutation,
 			existingPost,
 			{
 				type: updatePayload.type,

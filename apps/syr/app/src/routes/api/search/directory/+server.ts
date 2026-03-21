@@ -63,7 +63,22 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				const res = await fetch(`${base}/directory/search?${params.toString()}`, {
 					signal: AbortSignal.timeout(12_000)
 				});
-				if (!res.ok) return;
+				if (!res.ok) {
+					let bodySnippet = '';
+					try {
+						bodySnippet = (await res.text()).slice(0, 500);
+					} catch {
+						/* ignore body read errors */
+					}
+					console.debug('directory search: non-OK registry response', {
+						registry_url: r.registry_url,
+						base,
+						status: res.status,
+						statusText: res.statusText,
+						body: bodySnippet
+					});
+					return;
+				}
 				const jsonBody = (await res.json()) as {
 					data?: Array<{
 						did: string;

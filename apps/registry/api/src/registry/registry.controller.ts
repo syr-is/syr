@@ -167,6 +167,9 @@ export class RegistryController {
 		summary: 'Search public directory',
 		description: 'Substring match on username, display name, DID.'
 	})
+	@ApiResponse({ status: 200, description: 'Directory rows (listed DIDs only)' })
+	@ApiResponse({ status: 400, description: 'Invalid query' })
+	@ApiResponse({ status: 500, description: 'Internal error' })
 	async searchDirectory(@Query('q') q?: string, @Query('limit') limitRaw?: string) {
 		const limit = Math.min(100, Math.max(1, parseInt(limitRaw ?? '20', 10) || 20));
 		const data = await this.registryService.searchDirectory(q ?? '', limit);
@@ -180,6 +183,10 @@ export class RegistryController {
 	@Post('directory/upsert')
 	@ApiOperation({ summary: 'Upsert directory listing' })
 	@ApiBody({ type: DirectoryUpsertDto })
+	@ApiResponse({ status: 200, description: 'Directory entry upserted ({ status, data })' })
+	@ApiResponse({ status: 400, description: 'INVALID_SIGNATURE or invalid body' })
+	@ApiResponse({ status: 409, description: 'STALE_UPDATE' })
+	@ApiResponse({ status: 500, description: 'INTERNAL_ERROR' })
 	async upsertDirectory(@Body() dto: DirectoryUpsertDto) {
 		try {
 			const result = await this.registryService.upsertDirectory(dto);

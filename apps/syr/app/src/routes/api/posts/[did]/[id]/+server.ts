@@ -6,6 +6,7 @@ import { postController } from '$lib/controllers/post.controller';
 import {
 	recordIdFromDidAndLocal,
 	PostUpdateSchema,
+	PostUpdateByUrlRequestSchema,
 	PostDeleteRequestSchema,
 	type SignedMutationEnvelope
 } from '@syr-is/types';
@@ -101,8 +102,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			});
 		}
 
-		const body = (await request.json()) as Record<string, unknown>;
-		const { signed_mutation, ...rest } = body;
+		const parsedBody = PostUpdateByUrlRequestSchema.parse(await request.json());
+		const { signed_mutation, ...rest } = parsedBody;
 
 		// Parse the update data (without id since it's in the URL)
 		const data = PostUpdateSchema.omit({ id: true }).partial().parse(rest);
@@ -147,7 +148,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 		const { signature } = await assertPostUpdateSignedMutation(
 			locals.user.id,
-			signed_mutation as SignedMutationEnvelope | undefined,
+			signed_mutation,
 			existingPost,
 			{
 				type: updatePayload.type,
