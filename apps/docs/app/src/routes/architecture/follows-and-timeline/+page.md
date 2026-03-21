@@ -33,7 +33,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 - ActivityPub or other federation protocols.
 - Global search without registry or provider participation.
 - Trust scoring, moderation, or recommendation algorithms.
-- Mandatory server-side aggregation (optional optimization; see §8).
+- Server-side timeline aggregation on the home instance (out of scope for v1; see §8).
 
 ---
 
@@ -81,17 +81,13 @@ To avoid ambiguity between usernames and DIDs:
 
 Implementations should document any reserved username patterns that could collide with DID-like strings.
 
-### 5.3 Search (target contract — not implemented)
+### 5.3 Search (registry directory)
 
-The **registry API** today supports **resolve-by-DID** only; there is **no** directory or search in the reference registry service yet. This spec compares **options**; **Syr product direction: Option A** (the registry should act as the directory/search surface for opted-in identities).
+**Contract:** The **registry** exposes **directory search** for identities that **opt in** to public listing (`GET …/directory/search` on the registry HTTP API; signed directory upserts per [registry protocol](/architecture/registry-protocol)).
 
-| Option                        | Description                                                                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A — Registry directory**    | Registry exposes search (e.g. by username, display name, DID prefix) for **opted-in** public directory entries. Requires privacy model, indexing, and signed directory records. |
-| **B — Provider-local search** | Each Syr instance exposes `GET {provider}/api/public/...` search after DID resolution; clients fan out only when narrowed.                                                      |
-| **C — No global search**      | Discovery via direct links, QR, `u/...`, and pasted DIDs only — no registry directory API.                                                                                      |
+The **Syr web app** calls that endpoint on **each** of the viewer’s configured registry base URLs (normalized to the registry API root), **merges** and **dedupes by DID**, and links results to **`u/<did>`** (and direct profile flows).
 
-**Chosen direction:** **A** — implement directory + search on the **registry**; the Syr web app queries each of the user’s configured registry URLs and merges results (see implementation plan).
+**Also:** resolve-by-DID (`GET …/resolve/:did`) remains the source of truth for whether a DID is **listed** for follow gating (§4).
 
 ---
 
@@ -117,19 +113,18 @@ Minimum fields (logical model):
 ```mermaid
 sequenceDiagram
   participant UI as HomeTimeline
-  participant HomeAPI as OptionalHomeAggregator
   participant Reg as ConfiguredRegistries
   participant Prov as RemoteProviders
 
-  UI->>HomeAPI: listFollowedDids_and_timeWindow
+  Note over UI: v1: aggregation in the browser (no home merge API)
   loop per followed DID
-    HomeAPI->>Reg: resolve did
-    Reg-->>HomeAPI: provider URL
-    HomeAPI->>Prov: fetch post meta index
-    Prov-->>HomeAPI: meta items
+    UI->>Reg: resolve did
+    Reg-->>UI: provider URL
+    UI->>Prov: fetch public post list / meta
+    Prov-->>UI: meta items
   end
-  HomeAPI-->>UI: merged sorted meta page
-  UI->>Prov: fetch full post by id when visible
+  Note over UI: merge and sort by created_at client-side
+  UI->>Prov: fetch full post on demand (e.g. user action)
   Prov-->>UI: full post
 ```
 
@@ -142,8 +137,8 @@ sequenceDiagram
 
 ### 7.3 Full post fetch
 
-- When a row enters (or nears) the **viewport** in a **virtual scroll** list, fetch the **full post** from the resolved provider.
-- Requests should be **idempotent**; failures surface **per row** (retry, error state).
+- Fetch the **full post** from the resolved provider **on demand** (e.g. when the row is expanded or the user taps **Load details**) or when a row enters the **viewport** once a **virtual scroll** list is in place.
+- Requests should be **idempotent**; failures surface **per row** (retry, error state). Avoid uncapped automatic cross-origin fetches for every row on initial render.
 
 ### 7.4 Consistency and tie-breakers
 
@@ -152,14 +147,11 @@ sequenceDiagram
 
 ---
 
-## 8. Aggregation location (implementation choice)
+## 8. Aggregation location
 
-| Approach                   | Pros                                                                                      | Cons                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Pure client**            | No new server routes; simple mental model.                                                | CORS, many parallel requests, secrets stay in browser patterns only. |
-| **Home-server aggregator** | Single place for registry resolution, rate limits, optional caching; can run server-side. | New API surface and operational cost.                                |
+**v1 (locked):** Timeline aggregation runs in the **browser** — the client loads follows and configured registries, resolves each followed DID to a provider URL, fetches each provider’s **public** post APIs, and **merges** streams client-side. Implications: **CORS** and provider availability affect what the user sees; there is **no** `GET /api/timeline/…` merge endpoint on the home instance for this version.
 
-The spec does not mandate one; pick before implementation and document in the app.
+A future **home-server aggregator** (single merge API, optional caching, rate limits) remains a possible optimization but is **not** part of the current product scope described here.
 
 ---
 
@@ -183,7 +175,7 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 - Use **Svelte await blocks** (or promise-bound components) for:
   - initial timeline **meta** load;
   - **infinite scroll** / older page chunks;
-  - **per-row** full post fetch;
+  - **per-row** full post fetch when triggered (user action or viewport policy), not necessarily for every row at once;
   - **media** loads where appropriate.
 - **Virtual list**: use a virtualizer with **stable row keys** `(followed_did, post_id)` so order does not jump when async work completes out of order.
 - **Skeletons / spinners**: place holders to reduce **layout shift** when meta arrives before full content.
@@ -203,17 +195,17 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 - [ ] Follows storage (DB) and CRUD API (`followed_did`, uniqueness, optional registry provenance).
 - [ ] `u/<username>` and `u/<did>` routes and resolution rules.
 - [ ] Registry-gated follow action (client or server validation).
-- [ ] Search (if not option C): registry and/or provider endpoints.
+- [x] Registry directory search + Syr app merged directory query.
 - [ ] Public post meta + full post endpoints on Syr providers.
 - [ ] Home page: replace “copy of own posts” with **timeline** virtual list + meta/full pipeline.
-- [ ] Resolver usage from browser vs server for timeline aggregation.
+- [x] Resolver / registry usage from the **browser** for timeline aggregation (v1).
 - [ ] Integrate [signature verification](/architecture/signature-verification-ui) in post rows where signatures are exposed.
 
 ---
 
-## 13. Open decisions before coding
+## 13. Resolved choices (this doc)
 
-1. Search strategy: **A**, **B**, **C**, or hybrid.
-2. Follow persistence: confirmed **server** vs local-only.
-3. Timeline aggregation: **client** vs **home-server aggregator**.
-4. Final URL paths and JSON shapes for **meta** and **full post** public APIs.
+1. **Search:** Registry directory (**§5.3**); Syr merges multi-registry results.
+2. **Follow persistence:** **Server-persisted** on the home instance (§6).
+3. **Timeline aggregation:** **Pure client** for v1 (§8).
+4. **Public API paths:** Implementations use shapes such as `GET …/api/public/posts/{did}` and `GET …/api/public/posts/{did}/{localId}`; exact versioning (`/api/public/v1/…`) may evolve — keep provider and client in sync.

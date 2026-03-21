@@ -110,14 +110,14 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Follows, Timeline, and Verification UI
 
-| Requirement                                  | Status          | Details                                                                                                                                 |
-| -------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| DID-keyed follows and registry discovery     | **Implemented** | `user_follow` table; `GET/POST/DELETE /api/follows`; registry gate via `@syr-is/resolver` `resolveProvider`. `u/[param]` profile route. |
-| Home timeline (meta + full post fetch)       | **Partial**     | Home `+page.svelte` merges public post meta from followed DIDs client-side (`{#await}` per row); virtual scroll not yet added.          |
-| Public post/profile read for feeds           | **Implemented** | `GET /api/public/profile/[param]`, `GET /api/public/posts/[did]`, `GET /api/public/posts/[did]/[localId]`.                              |
-| Registry directory search (opt-in)           | **Partial**     | Registry `directory/search` + Syr `GET /api/search/directory` merges registries; Syr `/search` UI.                                      |
-| Signature verification UI (profile/post)     | **Implemented** | `signature-verification.svelte` on profile settings, post view, and `u/` profile.                                                       |
-| Signing UX preferences + Syner Sigil handoff | **Partial**     | User prefs API + settings; `syr://sigil-handoff` + Syner trust page; WASM `signMutationPayload()` helper. Full QR/file pipe TBD.        |
+| Requirement                                  | Status          | Details                                                                                                                                                                             |
+| -------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DID-keyed follows and registry discovery     | **Implemented** | `user_follow` table; `GET/POST/DELETE /api/follows`; registry gate via `@syr-is/resolver` `resolveProvider`. `u/[param]` profile route.                                             |
+| Home timeline (meta + full post fetch)       | **Partial**     | Home `+page.svelte` merges public post meta client-side (batched registry resolve + meta `fetch`); full post on **Load details** (not eager per-row); virtual scroll not yet added. |
+| Public post/profile read for feeds           | **Implemented** | `GET /api/public/profile/[param]`, `GET /api/public/posts/[did]`, `GET /api/public/posts/[did]/[localId]`.                                                                          |
+| Registry directory search (opt-in)           | **Partial**     | Registry `directory/search` + Syr `GET /api/search/directory` merges registries; Syr `/search` UI.                                                                                  |
+| Signature verification UI (profile/post)     | **Implemented** | `signature-verification.svelte` on profile settings, post view, and `u/` profile.                                                                                                   |
+| Signing UX preferences + Syner Sigil handoff | **Partial**     | User prefs API + settings; `syr://sigil-handoff` + Syner trust page; WASM `signMutationPayload()` helper. Full QR/file pipe TBD.                                                    |
 
 ---
 
