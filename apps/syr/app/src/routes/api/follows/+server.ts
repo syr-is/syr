@@ -70,8 +70,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		const msg = e instanceof Error ? e.message : 'Follow failed';
 		const clientFacing =
 			msg.includes('Add at least one identity registry') ||
+			msg.includes('Add at least one discovery registry') ||
 			msg.includes('not listed on any of your configured registries') ||
-			msg.startsWith('registryApiRoot:');
+			msg.includes('not listed on any of your discovery registries') ||
+			msg.startsWith('registryApiRoot:') ||
+			msg === 'Invalid follow target DID.';
 		throw error(clientFacing ? 400 : 500, {
 			code: clientFacing ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
 			message: msg

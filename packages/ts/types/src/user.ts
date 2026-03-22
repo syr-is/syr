@@ -34,7 +34,15 @@ export const UserSchema = BaseEntitySchema.extend({
 	role: UserRoleSchema.default('USER'), // Instance-level role for access control
 	username_last_updated: TimestampSchema.optional(), // When username was last changed; null = never changed, allow first update
 	signing_warn_before_each_action: z.boolean().optional(),
-	signing_require_explicit_sign_button: z.boolean().optional()
+	signing_require_explicit_sign_button: z.boolean().optional(),
+	/** When true, hide posts without a content signature in your own posts list (client may filter). */
+	feed_hide_unsigned_posts: z.boolean().optional(),
+	/** When true, treat author publication registry bases as implicit allow prefixes in post content trust. */
+	content_trust_auto_author_provider: z.boolean().optional(),
+	/** Allow data:/blob: in sanitized post HTML (off by default). */
+	content_trust_allow_data_urls: z.boolean().optional(),
+	/** Max decoded post payload bytes the user allows the browser to load (feeds, lists); null = app default. */
+	content_max_post_bytes: z.number().int().positive().optional()
 });
 
 export type User = z.infer<typeof UserSchema>;

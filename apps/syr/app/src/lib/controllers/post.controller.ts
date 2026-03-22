@@ -74,7 +74,7 @@ export class PostController {
 	async getPublicPost(did: string, localId: string): Promise<Post | null> {
 		const id = recordIdFromDidAndLocal('post', did, localId);
 		const post = await postRepository.findById(id);
-		if (!post || post.visibility !== 'public') return null;
+		if (!post || post.visibility !== 'public' || post.status !== 'completed') return null;
 		return post;
 	}
 }

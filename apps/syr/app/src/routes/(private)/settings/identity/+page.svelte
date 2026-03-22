@@ -3,9 +3,23 @@
 	import { invalidateAll } from '$app/navigation';
 	import * as Card from '@syr-is/ui/card';
 	import { buttonVariants } from '@syr-is/ui/button';
+	import { Button } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { seedHandler } from '$lib/services/seed-handler';
-	import { processPendingRegistryJobs } from '$lib/services/registry-sign.service';
+	import {
+		processPendingRegistryJobs,
+		startRegistrySynerSession
+	} from '$lib/services/registry-sign.service';
+	import { pollRegistrySignSessionResult } from '$lib/client/registry-sign-poll';
+	import {
+		getSigilSessionStatus,
+		getLoadedSigilDid,
+		unlockSigilSession,
+		getUnlockedSigningSeed
+	} from '$lib/client/sigil-session';
+	import { getIdentityStore } from '$lib/stores/identity.svelte';
+	import type { AegisBundle } from '@syr-is/crypto/aegis';
+	import QRCode from 'qrcode';
 	import type { PageData } from './$types';
 
 	import RemoveRegistryDialog from '$lib/components/fragments/remove-registry-dialog.svelte';
@@ -18,7 +32,8 @@
 	import DeleteAccountDialog from '$lib/components/fragments/delete-account-dialog.svelte';
 	import CancelOutboxJobDialog from '$lib/components/fragments/cancel-outbox-job-dialog.svelte';
 	import { Input } from '@syr-is/ui/input';
-	import { Loader2, ChevronDown } from 'lucide-svelte';
+	import { Label } from '@syr-is/ui/label';
+	import { ChevronDown, Loader, Smartphone, KeyRound, LockKeyhole } from 'lucide-svelte';
 	import type { ExportType } from '$lib/components/fragments/export-key-dialog.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -38,8 +53,164 @@
 	let jobToCancel = $state<string | null>(null);
 	let deleteAegisDialogOpen = $state(false);
 	let deleteAccountDialogOpen = $state(false);
-	let unlockPassword = $state('');
-	let unlockingForSync = $state(false);
+
+	const identityStore = getIdentityStore();
+	let registryBusy = $state(false);
+	let registrySigilPassphrase = $state('');
+	let registryAegisPassword = $state('');
+	let registrySigilUiTick = $state(0);
+	let registrySynerDeeplink = $state<string | null>(null);
+	let registrySynerQr = $state<string | null>(null);
+	let _registrySynerSessionId = $state<string | null>(null);
+	let registrySynerPolling = $state(false);
+	let registrySynerPollAbort: AbortController | null = null;
+
+	const registryDid = $derived(identityStore.identityContext?.did ?? null);
+	const registryIdentityPk = $derived(identityStore.identityContext?.identityPublicKey ?? null);
+	const registryHasAegis = $derived(identityStore.identityContext?.hasAegis ?? false);
+
+	const registrySigilStatus = $derived.by(() => {
+		void registrySigilUiTick;
+		return getSigilSessionStatus();
+	});
+	const registrySigilUnlocked = $derived(registrySigilStatus === 'unlocked');
+	const registrySigilLocked = $derived(registrySigilStatus === 'loaded_locked');
+	const registryShowSyner = $derived(!!registryIdentityPk);
+
+	const firstPendingRegistryJobId = $derived(
+		data.outboxJobs?.find((j) => j.type === 'registry_sync' && j.status === 'pending')?.id ?? null
+	);
+
+	function resetRegistrySynerUi() {
+		registrySynerPollAbort?.abort();
+		registrySynerPollAbort = null;
+		registrySynerDeeplink = null;
+		registrySynerQr = null;
+		_registrySynerSessionId = null;
+		registrySynerPolling = false;
+	}
+
+	async function runRegistrySyncWithSeed(seed: Uint8Array) {
+		await processPendingRegistryJobs(seed);
+	}
+
+	async function signRegistryWithUnlockedSigil() {
+		const did = registryDid;
+		if (!did?.startsWith('did:syr:')) {
+			toast.error('Not signed in with a DID.');
+			return;
+		}
+		registryBusy = true;
+		try {
+			const loadedDid = await getLoadedSigilDid();
+			if (loadedDid !== did) {
+				throw new Error('Loaded Sigil is for a different identity.');
+			}
+			const seed = getUnlockedSigningSeed();
+			if (!seed) throw new Error('Unlock your Sigil first.');
+			await runRegistrySyncWithSeed(seed);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Signing failed');
+		} finally {
+			registryBusy = false;
+		}
+	}
+
+	async function signRegistryAfterUnlockSigil() {
+		const did = registryDid;
+		if (!did?.startsWith('did:syr:')) {
+			toast.error('Not signed in with a DID.');
+			return;
+		}
+		if (!registrySigilPassphrase.trim()) {
+			toast.error('Enter your Sigil passphrase');
+			return;
+		}
+		registryBusy = true;
+		try {
+			const loadedDid = await getLoadedSigilDid();
+			if (loadedDid !== did) {
+				throw new Error('Loaded Sigil is for a different identity.');
+			}
+			await unlockSigilSession(registrySigilPassphrase);
+			registrySigilPassphrase = '';
+			registrySigilUiTick++;
+			const seed = getUnlockedSigningSeed();
+			if (!seed) throw new Error('Unlock failed.');
+			await runRegistrySyncWithSeed(seed);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Signing failed');
+		} finally {
+			registryBusy = false;
+		}
+	}
+
+	async function signRegistryWithAegis() {
+		if (!registryAegisPassword.trim()) {
+			toast.error('Enter your Aegis password');
+			return;
+		}
+		registryBusy = true;
+		try {
+			const res = await fetch('/api/identity/aegis-bundle');
+			const j = await res.json();
+			if (!res.ok) {
+				throw new Error(j.error?.message ?? 'Could not load Aegis bundle');
+			}
+			const bundle = j.data?.aegisBundle as AegisBundle;
+			if (!bundle) throw new Error('No Aegis bundle');
+			await seedHandler.run({
+				bundle,
+				password: registryAegisPassword,
+				action: processPendingRegistryJobs
+			});
+			registryAegisPassword = '';
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Aegis signing failed');
+		} finally {
+			registryBusy = false;
+		}
+	}
+
+	async function startRegistrySynerSigning() {
+		const jobId = firstPendingRegistryJobId;
+		if (!jobId) {
+			toast.error('No pending registry job to sign.');
+			return;
+		}
+		registryBusy = true;
+		resetRegistrySynerUi();
+		try {
+			const start = await startRegistrySynerSession(jobId);
+			_registrySynerSessionId = start.session_id;
+			registrySynerDeeplink = start.deeplink_url;
+			registrySynerQr = await QRCode.toDataURL(start.deeplink_url, { margin: 1, width: 220 });
+			void pollRegistrySyner(start.session_id);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Syner session failed');
+		} finally {
+			registryBusy = false;
+		}
+	}
+
+	async function pollRegistrySyner(sessionId: string) {
+		registrySynerPollAbort?.abort();
+		registrySynerPollAbort = new AbortController();
+		const signal = registrySynerPollAbort.signal;
+		registrySynerPolling = true;
+		try {
+			await pollRegistrySignSessionResult(sessionId, { signal });
+			registrySynerPolling = false;
+			resetRegistrySynerUi();
+			registrySigilUiTick++;
+			toast.success('Registry synced via Syner');
+			await invalidateAll();
+		} catch (e) {
+			registrySynerPolling = false;
+			if (e instanceof DOMException && e.name === 'AbortError') return;
+			toast.error(e instanceof Error ? e.message : 'Syner signing failed');
+		}
+	}
 
 	function openExportIdentityDialog(type: ExportType = 'syr') {
 		exportTypeForDialog = type;
@@ -132,32 +303,6 @@
 				return 'text-muted-foreground';
 			default:
 				return '';
-		}
-	}
-
-	async function unlockForSync() {
-		if (!unlockPassword || unlockPassword.length < 1) return;
-
-		unlockingForSync = true;
-		try {
-			const res = await fetch('/api/identity/aegis-bundle');
-			if (!res.ok) throw new Error('Failed to fetch identity');
-			const bundleData = await res.json();
-			const bundle = bundleData.data?.aegisBundle;
-			if (!bundle) throw new Error('No Aegis bundle found');
-
-			await seedHandler.run({
-				bundle,
-				password: unlockPassword,
-				action: processPendingRegistryJobs
-			});
-			toast.success('Registry sync complete');
-			await invalidateAll();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Unlock failed');
-		} finally {
-			unlockingForSync = false;
-			unlockPassword = '';
 		}
 	}
 
@@ -319,9 +464,13 @@
 		<!-- Registries Card -->
 		<Card.Root>
 			<Card.Header>
-				<Card.Title>Registries</Card.Title>
+				<Card.Title>Publication registries</Card.Title>
 				<Card.Description>
-					Manage where your identity is listed. Registries allow others to discover your provider.
+					Where <strong class="font-medium text-foreground"
+						>your DID is registered and synced</strong
+					>. This controls outbox jobs and listing of your provider — not which registries you use
+					to search or to validate follows. For that, configure
+					<a href="/settings/discovery" class="text-primary underline">Discovery registries</a>.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
@@ -369,7 +518,7 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="text-sm text-muted-foreground">No registries configured.</p>
+					<p class="text-sm text-muted-foreground">No publication registries configured.</p>
 				{/if}
 
 				{#if data.registries?.length}
@@ -399,37 +548,125 @@
 							class="mb-4 space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30"
 						>
 							<p class="text-sm text-amber-800 dark:text-amber-200">
-								Unlock your identity to complete registry sync. Enter your account password to
-								decrypt and sign.
+								Complete publication registry sync by signing pending jobs with your <strong
+									class="font-medium text-foreground">root key</strong
+								>: unlocked Sigil in this tab, Sigil passphrase, Aegis password (if enabled), or
+								Syner (QR). Sigil and Aegis sign
+								<strong class="font-medium text-foreground">all</strong>
+								pending jobs in one go; Syner signs
+								<strong class="font-medium text-foreground">one</strong> job per scan (repeat if several
+								are queued).
 							</p>
-							<div class="flex items-end gap-2">
-								<div class="flex-1 space-y-1">
-									<label for="unlock-sync-password" class="sr-only text-sm font-medium"
-										>Password</label
+							<div class="flex flex-col gap-2">
+								{#if registrySigilUnlocked}
+									<Button
+										type="button"
+										variant="secondary"
+										disabled={registryBusy}
+										onclick={() => void signRegistryWithUnlockedSigil()}
+										class="justify-start"
 									>
-									<Input
-										id="unlock-sync-password"
-										type="password"
-										bind:value={unlockPassword}
-										placeholder="Account password"
-										autocomplete="current-password"
-										disabled={unlockingForSync}
-										class="w-full"
-										onkeydown={(e) => e.key === 'Enter' && unlockForSync()}
-									/>
-								</div>
-								<button
-									class={buttonVariants({ variant: 'default' })}
-									onclick={unlockForSync}
-									disabled={unlockingForSync || !unlockPassword}
-								>
-									{#if unlockingForSync}
-										<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-										Unlocking...
-									{:else}
-										Unlock
-									{/if}
-								</button>
+										{#if registryBusy}
+											<Loader class="mr-2 h-4 w-4 animate-spin" />
+										{:else}
+											<KeyRound class="mr-2 h-4 w-4" />
+										{/if}
+										Sign with unlocked Sigil (this browser)
+									</Button>
+								{/if}
+								{#if registrySigilLocked}
+									<div class="space-y-2 rounded-md border border-border bg-background/60 p-3">
+										<Label for="reg-sigil-pass">Sigil passphrase</Label>
+										<Input
+											id="reg-sigil-pass"
+											type="password"
+											autocomplete="off"
+											bind:value={registrySigilPassphrase}
+											placeholder="Unlock Sigil in this tab…"
+											disabled={registryBusy}
+										/>
+										<Button
+											type="button"
+											size="sm"
+											disabled={registryBusy || !registrySigilPassphrase.trim()}
+											onclick={() => void signRegistryAfterUnlockSigil()}
+										>
+											Unlock &amp; sign with Sigil
+										</Button>
+									</div>
+								{:else if registrySigilStatus === 'empty'}
+									<p class="text-sm text-muted-foreground">
+										No Sigil loaded in this tab. Open <strong>Settings → Signing</strong> to load one,
+										or use Aegis / Syner below.
+									</p>
+								{/if}
+								{#if registryHasAegis}
+									<div class="space-y-2 rounded-md border border-border bg-background/60 p-3">
+										<Label for="reg-aegis-pass" class="flex items-center gap-2">
+											<LockKeyhole class="h-4 w-4" />
+											Aegis password
+										</Label>
+										<Input
+											id="reg-aegis-pass"
+											type="password"
+											autocomplete="off"
+											bind:value={registryAegisPassword}
+											disabled={registryBusy}
+										/>
+										<Button
+											type="button"
+											size="sm"
+											disabled={registryBusy || !registryAegisPassword.trim()}
+											onclick={() => void signRegistryWithAegis()}
+										>
+											Sign with Aegis (custodial)
+										</Button>
+									</div>
+								{/if}
+								{#if registryShowSyner && firstPendingRegistryJobId}
+									<div class="space-y-2">
+										<Button
+											type="button"
+											variant="outline"
+											disabled={registryBusy || registrySynerPolling}
+											onclick={() => void startRegistrySynerSigning()}
+											class="justify-start"
+										>
+											<Smartphone class="mr-2 h-4 w-4" />
+											Sign with Syner (QR / app)
+										</Button>
+										{#if registrySynerQr && registrySynerDeeplink}
+											<div class="flex flex-col items-center gap-2">
+												<img
+													src={registrySynerQr}
+													alt="Syner registry signing QR"
+													class="rounded-md border"
+												/>
+												<a
+													href={registrySynerDeeplink}
+													class="text-sm font-medium text-primary underline"
+													rel="noopener noreferrer"
+												>
+													Open in Syner
+												</a>
+												<p class="text-center text-xs text-muted-foreground">
+													Use the persona for this DID:
+												</p>
+												<p
+													class="max-w-full text-center font-mono text-xs break-all text-foreground select-all"
+												>
+													{registryDid ?? ''}
+												</p>
+												{#if registrySynerPolling}
+													<p class="flex items-center gap-2 text-sm text-muted-foreground">
+														<Loader class="h-4 w-4 animate-spin" />
+														Waiting for Syner…
+													</p>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						</div>
 					{/if}

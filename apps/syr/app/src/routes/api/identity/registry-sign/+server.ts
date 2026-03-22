@@ -1,13 +1,16 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verify, canonicalize, decodeMultibase, decodePublicKey } from '@syr-is/crypto';
 import { identityRepository } from '$lib/repositories/identity.repository';
-import { registryRepository } from '$lib/repositories/registry.repository';
 import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { stringToRecordId } from '@syr-is/types';
 import { z } from 'zod';
-
-const REQUEST_TIMEOUT_MS = 5000;
+import {
+	canonicalStringForDirectoryUpsert,
+	canonicalStringForRegistryDelete,
+	canonicalStringForRegistryUpdate,
+	verifyRegistryRootSignature
+} from '$lib/server/registry-job-crypto';
+import { pushSignedRegistryJobToRemoteAndComplete } from '$lib/server/registry-job-runner';
 
 const RegistrySignSchema = z.object({
 	jobId: z.string().min(1),
@@ -17,7 +20,8 @@ const RegistrySignSchema = z.object({
 	provider: z.string().optional(),
 	updatedAt: z.string().datetime().optional(),
 	deletedAt: z.string().datetime().optional(),
-	signature: z.string().min(1)
+	signature: z.string().min(1),
+	directorySignature: z.string().min(1)
 });
 
 /**
@@ -50,139 +54,178 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	const { jobId, action, did, registryUrl, provider, updatedAt, deletedAt, signature } =
-		parsed.data;
+	const {
+		jobId,
+		action,
+		did,
+		registryUrl,
+		provider,
+		updatedAt,
+		deletedAt,
+		signature,
+		directorySignature
+	} = parsed.data;
 
-	// Verify job belongs to user and is pending
 	const userId = stringToRecordId.decode(locals.user.id);
 	const job = await outboxRepository.findActiveByIdAndUser(jobId, userId);
 	if (!job) {
 		throw error(404, { code: 'JOB_NOT_FOUND', message: 'Job not found or already completed' });
 	}
 
-	// Atomically claim the job so only one requester proceeds
 	const claimed = await outboxRepository.claimIfPending(job.id, userId);
 	if (!claimed) {
 		throw error(404, { code: 'JOB_NOT_FOUND', message: 'Job not found or already completed' });
 	}
 
-	const payload = job.payload as {
-		action?: string;
-		did?: string;
-		registryUrl?: string;
-		provider?: string;
-	};
-	if (
-		payload.did !== did ||
-		payload.registryUrl !== registryUrl ||
-		payload.action !== action ||
-		(action === 'update' && payload.provider !== provider)
-	) {
-		throw error(400, { code: 'PAYLOAD_MISMATCH', message: 'Request does not match job payload' });
-	}
+	let completed = false;
+	try {
+		const payload = job.payload as {
+			action?: string;
+			did?: string;
+			registryUrl?: string;
+			provider?: string;
+		};
+		if (
+			payload.did !== did ||
+			payload.registryUrl !== registryUrl ||
+			payload.action !== action ||
+			(action === 'update' && payload.provider !== provider)
+		) {
+			throw error(400, { code: 'PAYLOAD_MISMATCH', message: 'Request does not match job payload' });
+		}
 
-	// Verify identity belongs to user
-	const identity = await identityRepository.findByDid(did);
-	if (!identity || identity.user_id.toString() !== locals.user.id) {
-		throw error(403, { code: 'FORBIDDEN', message: 'Identity does not belong to user' });
-	}
+		const identity = await identityRepository.findByDid(did);
+		if (!identity || identity.user_id.toString() !== locals.user.id) {
+			throw error(403, { code: 'FORBIDDEN', message: 'Identity does not belong to user' });
+		}
 
-	// Verify signature
-	let canonicalPayload: string;
-	if (action === 'update') {
-		if (!provider || !updatedAt) {
+		let canonicalPayload: string;
+		if (action === 'update') {
+			if (!provider || !updatedAt) {
+				throw error(400, {
+					code: 'MISSING_FIELDS',
+					message: 'update requires provider and updatedAt'
+				});
+			}
+			canonicalPayload = canonicalStringForRegistryUpdate({ did, provider, updatedAt });
+		} else {
+			if (!deletedAt) {
+				throw error(400, { code: 'MISSING_FIELDS', message: 'delete requires deletedAt' });
+			}
+			canonicalPayload = canonicalStringForRegistryDelete({ did, deletedAt });
+		}
+
+		const valid = await verifyRegistryRootSignature(
+			canonicalPayload,
+			signature,
+			identity.public_key
+		);
+		if (!valid) {
+			throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
+		}
+
+		const prov = payload.provider;
+		if (!prov) {
+			throw error(400, { code: 'MISSING_FIELDS', message: 'Job payload missing provider' });
+		}
+
+		const username = locals.user.username;
+		const displayName =
+			locals.user.profile?.display_name?.trim() &&
+			locals.user.profile.display_name.trim().length > 0
+				? locals.user.profile.display_name.trim()
+				: username;
+
+		let directoryCanonical: string;
+		let directoryListing: {
+			username: string;
+			displayName: string;
+			listed: boolean;
+			updatedAt: string;
+			signature: string;
+		};
+		if (action === 'update') {
+			if (!updatedAt) {
+				throw error(400, {
+					code: 'MISSING_FIELDS',
+					message: 'update requires updatedAt'
+				});
+			}
+			directoryCanonical = canonicalStringForDirectoryUpsert({
+				did,
+				provider: prov,
+				username,
+				displayName,
+				listed: true,
+				updatedAt
+			});
+			directoryListing = {
+				username,
+				displayName,
+				listed: true,
+				updatedAt,
+				signature: directorySignature
+			};
+		} else {
+			if (!deletedAt) {
+				throw error(400, { code: 'MISSING_FIELDS', message: 'delete requires deletedAt' });
+			}
+			directoryCanonical = canonicalStringForDirectoryUpsert({
+				did,
+				provider: prov,
+				username,
+				displayName,
+				listed: false,
+				updatedAt: deletedAt
+			});
+			directoryListing = {
+				username,
+				displayName,
+				listed: false,
+				updatedAt: deletedAt,
+				signature: directorySignature
+			};
+		}
+
+		const dirValid = await verifyRegistryRootSignature(
+			directoryCanonical,
+			directorySignature,
+			identity.public_key
+		);
+		if (!dirValid) {
 			throw error(400, {
-				code: 'MISSING_FIELDS',
-				message: 'update requires provider and updatedAt'
+				code: 'INVALID_SIGNATURE',
+				message: 'Directory signature verification failed'
 			});
 		}
-		canonicalPayload = canonicalize({ did, provider, updatedAt });
-	} else {
-		if (!deletedAt) {
-			throw error(400, { code: 'MISSING_FIELDS', message: 'delete requires deletedAt' });
-		}
-		canonicalPayload = canonicalize({ did, deletedAt });
-	}
 
-	let valid: boolean;
-	try {
-		const rootKey = decodePublicKey(identity.public_key);
-		const signatureBytes = decodeMultibase(signature);
-		valid = await verify(canonicalPayload, signatureBytes, rootKey);
-	} catch {
-		throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
-	}
-	if (!valid) {
-		throw error(400, { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
-	}
+		const pushResult = await pushSignedRegistryJobToRemoteAndComplete({
+			job,
+			action,
+			did,
+			registryUrl,
+			jobPayload: payload,
+			providerForUpdate: provider,
+			updatedAt,
+			deletedAt,
+			signature,
+			directory: directoryListing
+		});
 
-	// Send to registry (fetch only; DB updates in separate try)
-	const base = registryUrl.replace(/\/$/, '');
-	const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-	try {
-		if (action === 'update') {
-			const providerForRegistry = payload.provider ?? provider!;
-			const res = await fetch(`${base}/api/v1/update`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					did,
-					provider: providerForRegistry,
-					updatedAt,
-					signature
-				}),
-				signal
-			});
-			if (!res.ok) {
-				const body = await res.text();
-				throw new Error(`Registry update failed (${res.status}): ${body}`);
-			}
-		} else {
-			const res = await fetch(`${base}/api/v1/delete`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ did, deletedAt, signature }),
-				signal
-			});
-			if (!res.ok) {
-				const body = await res.text();
-				throw new Error(`Registry delete failed (${res.status}): ${body}`);
+		completed = true;
+
+		return json({
+			status: 'success',
+			data: { completed: true, directory_synced: pushResult.directorySyncOk },
+			meta: { timestamp: new Date().toISOString() }
+		});
+	} finally {
+		if (!completed) {
+			try {
+				await outboxRepository.retry(job.id);
+			} catch (re) {
+				console.error('[registry-sign] failed to release claimed job:', re);
 			}
 		}
-	} catch (err) {
-		const msg =
-			err instanceof Error && err.name === 'AbortError'
-				? 'Registry request timed out'
-				: err instanceof Error
-					? err.message
-					: 'Registry request failed';
-		await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
-		throw error(502, { code: 'REGISTRY_ERROR', message: msg });
 	}
-
-	// Fetch succeeded; persist DB updates (mark job complete on success, markFailed on DB error but still return 200)
-	try {
-		if (action === 'update') {
-			await registryRepository.updateStatus(did, registryUrl, 'synced');
-		} else {
-			const registryEntry = await registryRepository.findByDidAndUrl(did, registryUrl);
-			if (registryEntry) {
-				await registryRepository.removeRegistry(registryEntry.id);
-			}
-		}
-		await outboxRepository.markCompleted(job.id);
-	} catch (dbErr) {
-		const msg = dbErr instanceof Error ? dbErr.message : 'Database update failed';
-		try {
-			await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
-		} catch (markErr) {
-			console.error('[registry-sign] markFailed threw:', markErr);
-		}
-	}
-
-	return json({
-		status: 'success',
-		data: { completed: true },
-		meta: { timestamp: new Date().toISOString() }
-	});
 };

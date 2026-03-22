@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { isValidSyrDid } from '@syr-is/did';
 import { postController } from '$lib/controllers/post.controller';
+import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
 import { extractDid, extractLocalId } from '@syr-is/types';
 
 export const GET: RequestHandler = async ({ params, url }) => {
@@ -9,13 +10,43 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	if (!isValidSyrDid(did)) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}
+	const full = url.searchParams.get('full') === '1';
+	const defaultLimit = full ? 24 : 30;
 	const limit = Math.min(
 		100,
-		Math.max(1, parseInt(url.searchParams.get('limit') ?? '30', 10) || 30)
+		Math.max(1, parseInt(url.searchParams.get('limit') ?? String(defaultLimit), 10) || defaultLimit)
 	);
 	const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
 
 	const { data, total } = await postController.getPublicPostsByDid(did, limit, offset);
+
+	if (full) {
+		const allMediaUrls = data.flatMap((p) =>
+			p.type === 'media' && p.media_urls ? p.media_urls : []
+		);
+		const { mimeTypes: mediaUrlMimeTypes, filenames: mediaUrlFilenames } =
+			allMediaUrls.length > 0
+				? await resolveMediaUrlMetadata(allMediaUrls)
+				: { mimeTypes: {}, filenames: {} };
+
+		const serialized = data.map((post) => ({
+			...post,
+			id: post.id.toString(),
+			did: extractDid(post.id),
+			local_id: extractLocalId(post.id),
+			author_id: post.author_id.toString(),
+			created_at: post.created_at.toISOString(),
+			updated_at: post.updated_at.toISOString()
+		}));
+
+		return json({
+			status: 'success',
+			data: serialized,
+			mediaUrlMimeTypes,
+			mediaUrlFilenames,
+			pagination: { limit, offset, total, has_more: offset + data.length < total }
+		});
+	}
 
 	const meta = data.map((p) => ({
 		did: extractDid(p.id),

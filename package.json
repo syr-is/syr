@@ -7,6 +7,7 @@
     "prepare": "husky",
     "setup-signing": "sh scripts/setup-commit-signing.sh",
     "dev": "turbo dev",
+    "dev:core": "turbo dev --filter=@syr-is/syr --filter=@syr-is/registry-api --filter=@syr-is/registry-client",
     "dev:syr": "pnpm --filter @syr-is/syr dev",
     "dev:docs": "pnpm --filter @syr-is/docs dev",
     "dev:registry-api": "pnpm --filter @syr-is/registry-api start:dev",

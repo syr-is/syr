@@ -1,4 +1,5 @@
 import type { User, Profile } from '@syr-is/types';
+import { clearSigilSession } from '$lib/client/sigil-session';
 
 /**
  * Auth Store (Svelte 5 Runes)
@@ -42,6 +43,7 @@ class AuthStore {
 		this.token = null;
 		if (typeof window !== 'undefined') {
 			localStorage.removeItem('auth_token');
+			clearSigilSession();
 		}
 	}
 

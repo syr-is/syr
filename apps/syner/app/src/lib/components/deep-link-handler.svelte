@@ -2,36 +2,13 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
-	import {
-		parseSyrLoginUrl,
-		parseSyrSyncProfileUrl,
-		parseSyrChallengeSignUrlAny,
-		parseSyrSigilHandoffUrl
-	} from '$lib/utils/syr-url';
+	import { syrUrlToInternalRoute } from '$lib/utils/syr-url';
 
 	function handleUrl(url: string) {
-		const loginParsed = parseSyrLoginUrl(url);
-		if (loginParsed) {
-			const q = new URLSearchParams(loginParsed);
-			goto(`/scan-confirm?${q.toString()}`);
-			return;
-		}
-		const challengeSignParsed = parseSyrChallengeSignUrlAny(url);
-		if (challengeSignParsed) {
-			const q = new URLSearchParams(challengeSignParsed);
-			goto(`/export-verify?${q.toString()}`);
-			return;
-		}
-		const syncParsed = parseSyrSyncProfileUrl(url);
-		if (syncParsed) {
-			const q = new URLSearchParams(syncParsed);
-			goto(`/sync-profile?${q.toString()}`);
-			return;
-		}
-		const sigilParsed = parseSyrSigilHandoffUrl(url);
-		if (sigilParsed) {
-			const q = new URLSearchParams(sigilParsed);
-			goto(`/sigil-handoff?${q.toString()}`);
+		const route = syrUrlToInternalRoute(url);
+		if (route) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto(route);
 		}
 	}
 

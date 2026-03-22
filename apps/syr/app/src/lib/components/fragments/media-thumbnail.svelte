@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Play, Music, FileDown } from 'lucide-svelte';
+	import { Play, Music, FileDown, ImageIcon } from 'lucide-svelte';
 	import { Skeleton } from '@syr-is/ui/skeleton';
 	import { getMediaType, fetchAlbumArt, trackAlbumArt } from '$lib/utils/media';
 	import { type DisplayItem, resolveItemUrl } from '$lib/types/display-item';
@@ -11,7 +11,8 @@
 		mode = 'card',
 		alt = '',
 		class: className = '',
-		onImageClick
+		onImageClick,
+		blockSubresourceLoad = false
 	}: {
 		url: string;
 		mimeType?: string;
@@ -21,6 +22,8 @@
 		alt?: string;
 		class?: string;
 		onImageClick?: () => void;
+		/** When true, do not load remote media (feed); same-origin still loads after mount. */
+		blockSubresourceLoad?: boolean;
 	} = $props();
 
 	// --- Lazy URL resolution for private 'file' items ---
@@ -31,6 +34,7 @@
 	$effect(() => {
 		resolvedUrl = null;
 		urlLoading = false;
+		if (blockSubresourceLoad) return;
 		if (!item || item.kind !== 'file') return;
 
 		urlLoading = true;
@@ -60,7 +64,7 @@
 	$effect(() => {
 		albumArtUrl = null;
 		const artSourceUrl = effectiveUrl;
-		if (mediaType !== 'audio' || !artSourceUrl) return;
+		if (blockSubresourceLoad || mediaType !== 'audio' || !artSourceUrl) return;
 
 		const requestId = ++albumArtRequestId;
 		fetchAlbumArt(artSourceUrl)
@@ -77,7 +81,23 @@
 	});
 </script>
 
-{#if urlLoading}
+{#if blockSubresourceLoad}
+	{#if mode === 'card'}
+		<div
+			class="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground"
+		>
+			<ImageIcon class="h-10 w-10 opacity-60" />
+			<span class="px-2 text-center text-[10px]">Open post to load</span>
+		</div>
+	{:else}
+		<div
+			class="flex h-48 w-full flex-col items-center justify-center gap-2 rounded-md bg-muted text-muted-foreground {className}"
+		>
+			<ImageIcon class="h-12 w-12 opacity-60" />
+			<span class="text-xs">Open post to load external media</span>
+		</div>
+	{/if}
+{:else if urlLoading}
 	<!-- Skeleton placeholder while resolving a signed URL -->
 	{#if mode === 'card'}
 		<Skeleton class="h-full w-full" />

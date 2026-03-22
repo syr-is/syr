@@ -10,7 +10,7 @@ export async function assertFollowableFromRegistries(
 ): Promise<{ sourceRegistry: string }> {
 	if (registryUrls.length === 0) {
 		throw new Error(
-			'Add at least one identity registry in settings before following remote identities.'
+			'Add at least one discovery registry in Settings → Discovery before following remote identities.'
 		);
 	}
 
@@ -32,6 +32,6 @@ export async function assertFollowableFromRegistries(
 	}
 
 	throw new Error(
-		'This DID is not listed on any of your configured registries, so it cannot be followed from this account.'
+		'This DID is not listed on any of your discovery registries, so it cannot be followed from this account.'
 	);
 }

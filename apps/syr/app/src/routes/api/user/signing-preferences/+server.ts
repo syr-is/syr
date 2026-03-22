@@ -6,7 +6,8 @@ import { stringToRecordId } from '@syr-is/types';
 
 const PatchSchema = z.object({
 	signing_warn_before_each_action: z.boolean().optional(),
-	signing_require_explicit_sign_button: z.boolean().optional()
+	signing_require_explicit_sign_button: z.boolean().optional(),
+	feed_hide_unsigned_posts: z.boolean().optional()
 });
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -19,7 +20,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		status: 'success',
 		data: {
 			signing_warn_before_each_action: user.signing_warn_before_each_action ?? true,
-			signing_require_explicit_sign_button: user.signing_require_explicit_sign_button ?? true
+			signing_require_explicit_sign_button: user.signing_require_explicit_sign_button ?? true,
+			feed_hide_unsigned_posts: user.feed_hide_unsigned_posts ?? false
 		}
 	});
 };
@@ -55,7 +57,8 @@ export const PATCH: RequestHandler = async ({ locals, request }) => {
 		status: 'success',
 		data: {
 			signing_warn_before_each_action: updated.signing_warn_before_each_action ?? true,
-			signing_require_explicit_sign_button: updated.signing_require_explicit_sign_button ?? true
+			signing_require_explicit_sign_button: updated.signing_require_explicit_sign_button ?? true,
+			feed_hide_unsigned_posts: updated.feed_hide_unsigned_posts ?? false
 		}
 	});
 };

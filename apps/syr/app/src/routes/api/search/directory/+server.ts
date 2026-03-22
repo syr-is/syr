@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { identityController } from '$lib/controllers/identity.controller';
-import { registryRepository } from '$lib/repositories/registry.repository';
+import { stringToRecordId } from '@syr-is/types';
+import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
 import { registryApiRoot } from '$lib/registry-url';
 
 const ERROR_BODY_MAX_CHARS = 500;
@@ -14,6 +14,54 @@ type DirectoryRow = {
 	updatedAt: string;
 	registryUrl: string;
 };
+
+type EnrichedDirectoryRow = DirectoryRow & {
+	avatarUrl: string | null;
+	bannerUrl: string | null;
+};
+
+function isHttpOrHttpsUrl(urlStr: string): boolean {
+	try {
+		const u = new URL(urlStr);
+		return u.protocol === 'https:' || u.protocol === 'http:';
+	} catch {
+		return false;
+	}
+}
+
+/** Syr app public profile JSON for banner/avatar in search results. */
+function publicProfileFetchUrl(provider: string, did: string): string | null {
+	if (!isHttpOrHttpsUrl(provider)) return null;
+	const base = provider.replace(/\/$/, '');
+	return `${base}/api/public/profile/${encodeURIComponent(did)}`;
+}
+
+async function enrichRowWithProfileAssets(row: DirectoryRow): Promise<EnrichedDirectoryRow> {
+	const profileUrl = publicProfileFetchUrl(row.provider, row.did);
+	if (!profileUrl) {
+		return { ...row, avatarUrl: null, bannerUrl: null };
+	}
+	try {
+		const res = await fetch(profileUrl, {
+			signal: AbortSignal.timeout(6_000),
+			headers: { Accept: 'application/json' }
+		});
+		if (!res.ok) {
+			return { ...row, avatarUrl: null, bannerUrl: null };
+		}
+		const body = (await res.json()) as {
+			data?: { avatar_url?: string | null; banner_url?: string | null };
+		};
+		const d = body.data;
+		return {
+			...row,
+			avatarUrl: d?.avatar_url ?? null,
+			bannerUrl: d?.banner_url ?? null
+		};
+	} catch {
+		return { ...row, avatarUrl: null, bannerUrl: null };
+	}
+}
 
 function parseUpdatedAtMs(iso: string): number {
 	const t = Date.parse(iso);
@@ -66,20 +114,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const parsedLimit = parseInt(limitParam ?? '20', 10);
 	const limit = Math.min(50, Math.max(1, Number.isNaN(parsedLimit) ? 20 : parsedLimit));
 
-	const identity = await identityController.getIdentity(locals.user.id);
-	if (!identity) {
-		throw error(400, {
-			code: 'IDENTITY_REQUIRED',
-			message: 'Configure an identity and registries to search'
-		});
-	}
-
-	const registries = await registryRepository.findByDid(identity.did);
+	const userId = stringToRecordId.decode(locals.user.id);
+	const registries = await discoveryRegistryRepository.findByUserId(userId);
 	if (registries.length === 0) {
 		return json({
 			status: 'success',
 			data: [],
-			meta: { message: 'No registries configured' }
+			meta: {
+				message:
+					'No discovery registries configured. Add registries under Settings → Discovery to search the directory.'
+			}
 		});
 	}
 
@@ -148,8 +192,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		return a.did.localeCompare(b.did);
 	});
 
+	const limited = sorted.slice(0, limit);
+	const data = await Promise.all(limited.map((row) => enrichRowWithProfileAssets(row)));
+
 	return json({
 		status: 'success',
-		data: sorted.slice(0, limit)
+		data
 	});
 };

@@ -20,7 +20,7 @@ export type PostBlogVisibilityType = z.infer<typeof PostBlogVisibilityTypeSchema
  * - masonry: Display media in a CSS masonry grid layout
  * - gallery: Display media in a uniform grid with a preview modal
  */
-export const MediaDisplayModeSchema = z.enum(['carousel', 'masonry', 'gallery']);
+export const MediaDisplayModeSchema = z.enum(['carousel', 'masonry', 'gallery', 'cards']);
 
 export type MediaDisplayMode = z.infer<typeof MediaDisplayModeSchema>;
 

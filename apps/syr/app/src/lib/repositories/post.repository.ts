@@ -90,14 +90,14 @@ export class PostRepository extends BaseRepository<Post> {
 		const offset = Math.max(offsetNum, 0);
 		const dataResult = await this.db.query<[Post[]]>(
 			`SELECT * FROM post
-			 WHERE id.created_by = $did AND visibility = 'public'
+			 WHERE id.created_by = $did AND visibility = 'public' AND status = 'completed'
 			 ORDER BY created_at DESC, id DESC
 			 LIMIT $limit START $offset`,
 			{ did, limit, offset }
 		);
 		const countResult = await this.db.query<[{ total: number }[]]>(
 			`SELECT count() AS total FROM post
-			 WHERE id.created_by = $did AND visibility = 'public'
+			 WHERE id.created_by = $did AND visibility = 'public' AND status = 'completed'
 			 GROUP ALL`,
 			{ did }
 		);

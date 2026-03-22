@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import * as Card from '@syr-is/ui/card';
 	import * as Carousel from '@syr-is/ui/carousel';
 	import type { CarouselAPI } from '@syr-is/ui/carousel/context';
@@ -6,6 +7,7 @@
 	import { Button } from '@syr-is/ui/button';
 	import * as Tooltip from '@syr-is/ui/tooltip';
 	import DeletePostDialog from '$lib/components/fragments/delete-post-dialog.svelte';
+	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import MediaThumbnail from '$lib/components/fragments/media-thumbnail.svelte';
 	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
 	import { Skeleton } from '@syr-is/ui/skeleton';
@@ -26,10 +28,18 @@
 		isPinned?: boolean;
 		onPinToggle?: (postId: string, isPinned: boolean) => void;
 		showPinButton?: boolean;
+		/** When false, hide pin/delete (e.g. public profile directory). Default true. */
+		showOwnerActions?: boolean;
 		/** Optional URL -> mime_type map for accurate media type detection */
 		mediaUrlMimeTypes?: Record<string, string>;
 		/** Optional URL -> filename map for display names */
 		mediaUrlFilenames?: Record<string, string>;
+		/** When set (e.g. home feed), show a compact author row above the post */
+		feedAuthor?: {
+			displayName: string;
+			username: string;
+			avatarUrl?: string | null;
+		};
 	}
 
 	let {
@@ -37,8 +47,10 @@
 		isPinned = false,
 		onPinToggle,
 		showPinButton = true,
+		showOwnerActions = true,
 		mediaUrlMimeTypes = {},
-		mediaUrlFilenames = {}
+		mediaUrlFilenames = {},
+		feedAuthor
 	}: Props = $props();
 
 	// Check if post is a draft
@@ -75,7 +87,18 @@
 			: []
 	);
 
+	function isRemoteFeedUrl(url: string): boolean {
+		if (!browser) return true;
+		try {
+			return new URL(url, `${window.location.origin}/`).origin !== window.location.origin;
+		} catch {
+			return true;
+		}
+	}
+
 	function openPreview(index: number, e: MouseEvent) {
+		const u = post.media_urls?.[index];
+		if (u && isRemoteFeedUrl(u)) return;
 		e.stopPropagation();
 		e.preventDefault();
 		previewIndex = index;
@@ -140,6 +163,22 @@
 		? 'border-warning/50 border-dashed'
 		: ''}"
 >
+	{#if feedAuthor}
+		<div class="flex gap-3 border-b border-border/70 px-6 pt-4 pb-3">
+			<Avatar class="size-10 shrink-0 border border-border">
+				<AvatarImage src={feedAuthor.avatarUrl ?? undefined} alt="" />
+				<AvatarFallback class="text-xs">
+					{feedAuthor.displayName.slice(0, 2) || feedAuthor.username.slice(0, 2) || '?'}
+				</AvatarFallback>
+			</Avatar>
+			<div class="flex min-w-0 flex-col justify-center gap-0.5">
+				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-sm">
+					<span class="truncate font-semibold">{feedAuthor.displayName}</span>
+					<span class="truncate text-muted-foreground">@{feedAuthor.username}</span>
+				</div>
+			</div>
+		</div>
+	{/if}
 	<Card.Header>
 		<div class="flex flex-wrap items-start gap-2">
 			<Card.Title class="line-clamp-2 min-w-0 flex-1">
@@ -190,6 +229,7 @@
 											mimeType={mediaUrlMimeTypes[url]}
 											mode="card"
 											alt={mediaUrlFilenames[url] ?? `Media ${i + 1}`}
+											blockSubresourceLoad={isRemoteFeedUrl(url)}
 										/>
 									</div>
 									<!-- Invisible click overlay (opens preview, sits below arrows) -->
@@ -260,52 +300,56 @@
 					{post.type === 'blog' ? 'Blog post' : 'No media items'}
 				</p>
 			{/if}
-			<div class="flex gap-1">
-				{#if showPinButton && onPinToggle}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							{#snippet child({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8 {isPinned
-										? 'text-primary hover:bg-primary/10'
-										: 'text-muted-foreground hover:bg-muted'}"
-									onclick={handlePinToggle}
-									disabled={pinLoading}
-								>
-									{#if isPinned}
-										<PinOff class="h-4 w-4" />
-									{:else}
-										<Pin class="h-4 w-4" />
-									{/if}
-								</Button>
-							{/snippet}
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isPinned ? 'Unpin post' : 'Pin post'}
-						</Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-					onclick={(e) => {
-						e.stopPropagation();
-						deleteDialogOpen = true;
-					}}
-				>
-					<Trash2 class="h-4 w-4" />
-				</Button>
-			</div>
+			{#if showOwnerActions}
+				<div class="flex gap-1">
+					{#if showPinButton && onPinToggle}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon"
+										class="h-8 w-8 {isPinned
+											? 'text-primary hover:bg-primary/10'
+											: 'text-muted-foreground hover:bg-muted'}"
+										onclick={handlePinToggle}
+										disabled={pinLoading}
+									>
+										{#if isPinned}
+											<PinOff class="h-4 w-4" />
+										{:else}
+											<Pin class="h-4 w-4" />
+										{/if}
+									</Button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{isPinned ? 'Unpin post' : 'Pin post'}
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+						onclick={(e) => {
+							e.stopPropagation();
+							deleteDialogOpen = true;
+						}}
+					>
+						<Trash2 class="h-4 w-4" />
+					</Button>
+				</div>
+			{/if}
 		</div>
 	</Card.Content>
 </Card.Root>
 
-<DeletePostDialog bind:open={deleteDialogOpen} {post} />
+{#if showOwnerActions}
+	<DeletePostDialog bind:open={deleteDialogOpen} {post} />
+{/if}
 
-{#if displayItems.length > 0}
+{#if displayItems.length > 0 && displayItems.some((_, i) => post.media_urls?.[i] && !isRemoteFeedUrl(post.media_urls[i]!))}
 	<MediaPreviewModal bind:open={previewOpen} items={displayItems} initialIndex={previewIndex} />
 {/if}

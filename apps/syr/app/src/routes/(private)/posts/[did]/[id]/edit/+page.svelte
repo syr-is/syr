@@ -10,7 +10,10 @@
 	import { zod4 } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { PostUpdateSchema, getPostId } from '@syr-is/types';
+	import { PostUpdateSchema, getPostId, type MediaDisplayMode } from '@syr-is/types';
+	import type { SignedMutationEnvelope } from '@syr-is/types';
+	import type { PostSignSnapshot } from '$lib/client/post-signed-payload';
+	import PostPublishSignDialog from '$lib/components/fragments/post-publish-sign-dialog.svelte';
 	import { Crepe } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/nord-dark.css';
@@ -30,7 +33,8 @@
 		EyeOff,
 		LayoutGrid,
 		GalleryHorizontal,
-		Grid3x3
+		Grid3x3,
+		PanelTop
 	} from 'lucide-svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
@@ -44,6 +48,12 @@
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
 	let publishLoading = $state(false);
+
+	let publishSignOpen = $state(false);
+	let publishSnapshot = $state<PostSignSnapshot>({
+		type: 'blog',
+		visibility: 'public'
+	});
 
 	// Type-switch confirmation dialog
 	let typeSwitchDialogOpen = $state(false);
@@ -142,10 +152,29 @@
 		typeSwitchDialogOpen = false;
 	}
 
-	async function handlePublish() {
-		if (publishLoading) return;
+	function buildPublishSnapshot(): PostSignSnapshot {
+		const v = $formData;
+		const p = data.post;
+		const vis = (v.visibility ?? p.visibility ?? 'public') as 'public' | 'unlisted' | 'private';
+		if (v.type === 'blog') {
+			return {
+				type: 'blog',
+				title: v.title ?? p.title,
+				description: v.description ?? p.description,
+				content: v.content ?? p.content ?? '',
+				content_type: (v.content_type ?? p.content_type ?? 'markdown') as 'markdown' | 'html',
+				visibility: vis
+			};
+		}
+		return {
+			type: 'media',
+			media_urls: [...mediaUrls],
+			display_mode: (v.display_mode ?? p.display_mode ?? 'masonry') as MediaDisplayMode,
+			visibility: vis
+		};
+	}
 
-		// Sync markdown content before publishing
+	async function syncBeforePublish() {
 		if (
 			$formData.type === 'blog' &&
 			$formData.content_type === 'markdown' &&
@@ -159,20 +188,29 @@
 				console.warn('Could not get markdown:', error);
 			}
 		}
-
-		// Sync media URLs
 		if ($formData.type === 'media') {
 			$formData.media_urls = mediaUrls;
 		}
+	}
 
+	async function beginPublishFlow() {
+		if (publishLoading) return;
+		await syncBeforePublish();
+		publishSnapshot = buildPublishSnapshot();
+		publishSignOpen = true;
+	}
+
+	async function runPublish(envelope?: SignedMutationEnvelope) {
 		publishLoading = true;
 		try {
+			await syncBeforePublish();
 			const response = await fetch(`/api/posts/${data.post.did}/${data.post.local_id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					...buildPatchBody(),
-					status: 'completed'
+					status: 'completed',
+					...(envelope ? { signed_mutation: envelope } : {})
 				})
 			});
 
@@ -181,7 +219,7 @@
 				throw new Error(errorData.error?.message || 'Failed to publish post');
 			}
 
-			toast.success('Post published successfully!');
+			toast.success(envelope ? 'Post published and signed' : 'Post published (not signed)');
 			await invalidateAll();
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			goto(`/posts/${data.post.did}/${data.post.local_id}`);
@@ -336,6 +374,7 @@
 		if (value === 'carousel') return 'Carousel';
 		if (value === 'masonry') return 'Masonry Grid';
 		if (value === 'gallery') return 'Gallery';
+		if (value === 'cards') return 'Cards';
 		return 'Select display mode';
 	}
 
@@ -711,6 +750,12 @@
 												Gallery
 											</span>
 										</Select.Item>
+										<Select.Item value="cards">
+											<span class="flex items-center gap-2">
+												<PanelTop class="h-4 w-4" />
+												Cards
+											</span>
+										</Select.Item>
 									</Select.Content>
 								</Select.Root>
 								<Form.Description>How viewers will see your media by default</Form.Description>
@@ -788,7 +833,7 @@
 				{#if isDraft}
 					<Button
 						type="button"
-						onclick={handlePublish}
+						onclick={() => void beginPublishFlow()}
 						disabled={loading || publishLoading || uploading}
 					>
 						{#if publishLoading}
@@ -826,4 +871,15 @@
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>
+
+	<PostPublishSignDialog
+		bind:open={publishSignOpen}
+		signMode="update"
+		postLocalId={data.post.local_id}
+		existingCreatedAtIso={data.post.created_at}
+		snapshot={publishSnapshot}
+		onSigned={(e) => void runPublish(e)}
+		onUnsigned={() => void runPublish()}
+		onDefer={() => {}}
+	/>
 </div>

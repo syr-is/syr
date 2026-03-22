@@ -98,6 +98,21 @@ class DatabaseService {
 			await db.query(`
 				DEFINE FIELD IF NOT EXISTS signing_warn_before_each_action ON TABLE user TYPE option<bool>;
 				DEFINE FIELD IF NOT EXISTS signing_require_explicit_sign_button ON TABLE user TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS feed_hide_unsigned_posts ON TABLE user TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS content_trust_auto_author_provider ON TABLE user TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS content_trust_allow_data_urls ON TABLE user TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS content_max_post_bytes ON TABLE user TYPE option<int>;
+			`);
+
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS user_content_trust_rule SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS user_id ON TABLE user_content_trust_rule TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS pattern ON TABLE user_content_trust_rule TYPE string;
+				DEFINE FIELD IF NOT EXISTS kind ON TABLE user_content_trust_rule TYPE string
+					ASSERT $value IN ['allow', 'deny'];
+				DEFINE FIELD IF NOT EXISTS sort_order ON TABLE user_content_trust_rule TYPE int;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_content_trust_rule TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_uctr_user ON TABLE user_content_trust_rule COLUMNS user_id;
 			`);
 
 			await db.query(`
@@ -197,6 +212,16 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity_registry TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_ir_did ON TABLE identity_registry COLUMNS identity_did;
 				DEFINE INDEX IF NOT EXISTS idx_ir_unique ON TABLE identity_registry COLUMNS identity_did, registry_url UNIQUE;
+			`);
+
+			// Discovery registry: account-scoped URLs used for directory search and follow gating (not publication)
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS discovery_registry SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS user_id ON TABLE discovery_registry TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS registry_url ON TABLE discovery_registry TYPE string;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE discovery_registry TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_dr_user ON TABLE discovery_registry COLUMNS user_id;
+				DEFINE INDEX IF NOT EXISTS idx_dr_unique ON TABLE discovery_registry COLUMNS user_id, registry_url UNIQUE;
 			`);
 
 			console.log('✅ Database schema initialized');

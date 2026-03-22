@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
+import { effectiveMaxPostPayloadBytes } from '$lib/client/content-limit-config';
 import { isValidSyrDid } from '@syr-is/did';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -35,6 +36,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			content_signature: profile.content_signature,
 			signed_payload_json: profile.signed_payload_json,
 			signing_device_public_key: profile.signing_device_public_key
-		}
+		},
+		maxPostPayloadBytes: effectiveMaxPostPayloadBytes(undefined)
 	};
 };

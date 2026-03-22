@@ -16,6 +16,8 @@ import { postRepository } from '$lib/repositories/post.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { registryRepository } from '$lib/repositories/registry.repository';
+import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
+import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
 import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { folderController } from '$lib/controllers/folder.controller';
 
@@ -49,6 +51,20 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		} catch (e) {
 			console.warn('[account-deletion] Failed to delete registry entries:', e);
 		}
+	}
+
+	// 2b. Discovery registries (by user)
+	try {
+		await discoveryRegistryRepository.deleteAllForUser(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete discovery registry entries:', e);
+	}
+
+	// 2c. Content trust rules (by user)
+	try {
+		await contentTrustRuleRepository.deleteAllForUser(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete content trust rules:', e);
 	}
 
 	// 3. Sessions

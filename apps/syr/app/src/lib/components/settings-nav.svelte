@@ -1,13 +1,25 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import * as Sidebar from '@syr-is/ui/sidebar';
-	import { User, Smartphone, Key, Monitor, Settings } from 'lucide-svelte';
+	import {
+		User,
+		Smartphone,
+		Key,
+		Monitor,
+		Settings,
+		KeyRound,
+		Compass,
+		Shield
+	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
 	const userItems: NavItem[] = [
 		{ title: 'Profile', href: '/settings/profile', icon: User },
 		{ title: 'Sync with Syner', href: '/settings/sync-syner', icon: Smartphone },
 		{ title: 'Identity', href: '/settings/identity', icon: Key },
+		{ title: 'Discovery', href: '/settings/discovery', icon: Compass },
+		{ title: 'Content trust', href: '/settings/content-trust', icon: Shield },
+		{ title: 'Signing', href: '/settings/signing', icon: KeyRound },
 		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor }
 	];
 

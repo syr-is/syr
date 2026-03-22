@@ -6,6 +6,18 @@
 	import { Badge } from '@syr-is/ui/badge';
 	import NewPost from '$lib/components/fragments/new-post.svelte';
 	import PostPreview from '$lib/components/fragments/post-preview.svelte';
+	import OversizedPostPlaceholder from '$lib/components/fragments/oversized-post-placeholder.svelte';
+	import {
+		buildOrderedFeedEntries,
+		fetchJsonWithByteLimit,
+		type FeedEntry
+	} from '$lib/client/fetch-with-content-limit.js';
+	import { MAX_JSON_RESPONSE_BYTES } from '$lib/client/content-limit-config.js';
+	import {
+		hasPostSizeOverride,
+		postSizeOverrideKeyForPost,
+		setPostSizeOverride
+	} from '$lib/client/post-size-override.js';
 	import { getPostId, type Post } from '@syr-is/types';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -15,12 +27,12 @@
 	let { data } = $props();
 
 	// Posts state
-	let posts = $state<Post[]>([]);
+	let feedEntries = $state<FeedEntry[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
 	// Pinned posts state
-	let pinnedPosts = $state<Post[]>([]);
+	let pinnedFeedEntries = $state<FeedEntry[]>([]);
 	let pinnedPostIds = $state<string[]>([]);
 	let _pinnedLoading = $state(false);
 
@@ -56,14 +68,34 @@
 				sort_order: sortOrder
 			});
 
-			const response = await fetch(`/api/posts?${params.toString()}`);
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to fetch posts');
+			const r = await fetchJsonWithByteLimit(`/api/posts?${params.toString()}`, {
+				maxRawBytes: MAX_JSON_RESPONSE_BYTES
+			});
+			if (!r.ok) {
+				if (r.error === 'too_large') {
+					throw new Error(
+						'The posts response is too large to load safely. Try a smaller page size or raise your limit in Settings → Content trust.'
+					);
+				}
+				throw new Error(r.message);
 			}
-
-			const result = await response.json();
-			posts = result.data || [];
+			const result = r.json as {
+				data?: unknown[];
+				pagination?: { total?: number };
+				mediaUrlMimeTypes?: Record<string, string>;
+				mediaUrlFilenames?: Record<string, string>;
+			};
+			const raw = result.data || [];
+			let entries = buildOrderedFeedEntries(raw, data.maxPostPayloadBytes, (rec) =>
+				hasPostSizeOverride(postSizeOverrideKeyForPost(rec as Post))
+			);
+			if (data.feedHideUnsignedPosts) {
+				entries = entries.filter((e) => {
+					const p = e.post as Post;
+					return !!(p.content_signature && String(p.content_signature).trim());
+				});
+			}
+			feedEntries = entries;
 			total = result.pagination?.total || 0;
 			const newMimeTypes: Record<string, string> = result.mediaUrlMimeTypes || {};
 			const newFilenames: Record<string, string> = result.mediaUrlFilenames || {};
@@ -71,7 +103,7 @@
 			mediaUrlFilenames = { ...mediaUrlFilenames, ...newFilenames };
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
-			posts = [];
+			feedEntries = [];
 		} finally {
 			loading = false;
 		}
@@ -83,14 +115,34 @@
 
 		_pinnedLoading = true;
 		try {
-			const response = await fetch('/api/posts/pinned');
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error?.message || 'Failed to fetch pinned posts');
+			const r = await fetchJsonWithByteLimit('/api/posts/pinned', {
+				maxRawBytes: MAX_JSON_RESPONSE_BYTES
+			});
+			if (!r.ok) {
+				if (r.error === 'too_large') {
+					throw new Error('Pinned posts response is too large to load safely.');
+				}
+				throw new Error(r.message);
 			}
-
-			const result = await response.json();
-			pinnedPosts = result.data?.posts || [];
+			const result = r.json as {
+				data?: {
+					posts?: unknown[];
+					post_ids?: string[];
+					mediaUrlMimeTypes?: Record<string, string>;
+					mediaUrlFilenames?: Record<string, string>;
+				};
+			};
+			const raw = result.data?.posts || [];
+			let pinnedEntries = buildOrderedFeedEntries(raw, data.maxPostPayloadBytes, (rec) =>
+				hasPostSizeOverride(postSizeOverrideKeyForPost(rec as Post))
+			);
+			if (data.feedHideUnsignedPosts) {
+				pinnedEntries = pinnedEntries.filter((e) => {
+					const p = e.post as Post;
+					return !!(p.content_signature && String(p.content_signature).trim());
+				});
+			}
+			pinnedFeedEntries = pinnedEntries;
 			pinnedPostIds = result.data?.post_ids || [];
 			const newMimeTypes: Record<string, string> = result.data?.mediaUrlMimeTypes || {};
 			const newFilenames: Record<string, string> = result.data?.mediaUrlFilenames || {};
@@ -98,7 +150,7 @@
 			mediaUrlFilenames = { ...mediaUrlFilenames, ...newFilenames };
 		} catch (err) {
 			console.error('Failed to fetch pinned posts:', err);
-			pinnedPosts = [];
+			pinnedFeedEntries = [];
 			pinnedPostIds = [];
 		} finally {
 			_pinnedLoading = false;
@@ -161,19 +213,12 @@
 			return;
 		}
 
-		// Reorder the array locally first for immediate feedback
-		const newOrder = [...pinnedPostIds];
-		const [removed] = newOrder.splice(draggedIndex, 1);
-		newOrder.splice(targetIndex, 0, removed);
-
-		// Update local state immediately
-		pinnedPostIds = newOrder;
-
-		// Reorder pinnedPosts array to match
-		const newPinnedPosts = [...pinnedPosts];
-		const [removedPost] = newPinnedPosts.splice(draggedIndex, 1);
-		newPinnedPosts.splice(targetIndex, 0, removedPost);
-		pinnedPosts = newPinnedPosts;
+		const newEntries = [...pinnedFeedEntries];
+		const [removedEntry] = newEntries.splice(draggedIndex, 1);
+		newEntries.splice(targetIndex, 0, removedEntry);
+		pinnedFeedEntries = newEntries;
+		const reorderedIds = newEntries.map((e) => getPostId(e.post));
+		pinnedPostIds = reorderedIds;
 
 		draggedIndex = null;
 		dragOverIndex = null;
@@ -183,7 +228,7 @@
 			const response = await fetch('/api/posts/pinned', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ post_ids: newOrder })
+				body: JSON.stringify({ post_ids: reorderedIds })
 			});
 
 			if (!response.ok) {
@@ -257,6 +302,12 @@
 		const postId = getPostId(post);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		goto(`/posts/${postId}`);
+	}
+
+	function handleOversizeOverride(post: Post) {
+		setPostSizeOverride(postSizeOverrideKeyForPost(post));
+		void fetchPosts();
+		void fetchPinnedPosts();
 	}
 
 	// Calculate total pages
@@ -343,15 +394,15 @@
 		</div>
 
 		<!-- Pinned Posts Section -->
-		{#if pinnedPosts.length > 0}
+		{#if pinnedFeedEntries.length > 0}
 			<div class="space-y-3">
 				<div class="flex items-center gap-2">
 					<Pin class="h-4 w-4 text-primary" />
 					<h2 class="text-lg font-semibold">Pinned Posts</h2>
-					<Badge variant="secondary" class="text-xs">{pinnedPosts.length}/10</Badge>
+					<Badge variant="secondary" class="text-xs">{pinnedFeedEntries.length}/10</Badge>
 				</div>
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each pinnedPosts as post, index (getPostId(post))}
+					{#each pinnedFeedEntries as entry, index (getPostId(entry.post))}
 						<DraggableItem
 							{index}
 							{draggedIndex}
@@ -362,26 +413,37 @@
 							onDrop={handleDrop}
 							onDragEnd={handleDragEnd}
 						>
-							<button
-								type="button"
-								class="w-full text-left"
-								onclick={() => handlePostClick(post)}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' || e.key === ' ') {
-										e.preventDefault();
-										handlePostClick(post);
-									}
-								}}
-							>
-								<PostPreview
-									{post}
-									isPinned={true}
-									onPinToggle={handlePinToggle}
-									showPinButton={true}
-									{mediaUrlMimeTypes}
-									{mediaUrlFilenames}
-								/>
-							</button>
+							<div class="w-full">
+								{#if entry.kind === 'post'}
+									<button
+										type="button"
+										class="w-full text-left"
+										onclick={() => handlePostClick(entry.post)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												handlePostClick(entry.post);
+											}
+										}}
+									>
+										<PostPreview
+											post={entry.post}
+											isPinned={true}
+											onPinToggle={handlePinToggle}
+											showPinButton={true}
+											{mediaUrlMimeTypes}
+											{mediaUrlFilenames}
+										/>
+									</button>
+								{:else}
+									<OversizedPostPlaceholder
+										post={entry.post}
+										estimatedBytes={entry.estimatedBytes}
+										limitBytes={data.maxPostPayloadBytes}
+										onLoadAnyway={() => handleOversizeOverride(entry.post)}
+									/>
+								{/if}
+							</div>
 						</DraggableItem>
 					{/each}
 				</div>
@@ -410,7 +472,7 @@
 					<p class="text-center text-destructive">{error}</p>
 				</Card.Content>
 			</Card.Root>
-		{:else if posts.length === 0}
+		{:else if feedEntries.length === 0}
 			<Card.Root>
 				<Card.Content class="py-12">
 					<div class="space-y-2 text-center">
@@ -423,27 +485,38 @@
 			<div class="space-y-3">
 				<h2 class="text-lg font-semibold">All Posts</h2>
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each posts as post (getPostId(post))}
-						<button
-							type="button"
-							class="w-full text-left"
-							onclick={() => handlePostClick(post)}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									handlePostClick(post);
-								}
-							}}
-						>
-							<PostPreview
-								{post}
-								isPinned={isPostPinned(getPostId(post))}
-								onPinToggle={handlePinToggle}
-								showPinButton={true}
-								{mediaUrlMimeTypes}
-								{mediaUrlFilenames}
-							/>
-						</button>
+					{#each feedEntries as entry (getPostId(entry.post))}
+						<div class="w-full">
+							{#if entry.kind === 'post'}
+								<button
+									type="button"
+									class="w-full text-left"
+									onclick={() => handlePostClick(entry.post)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											handlePostClick(entry.post);
+										}
+									}}
+								>
+									<PostPreview
+										post={entry.post}
+										isPinned={isPostPinned(getPostId(entry.post))}
+										onPinToggle={handlePinToggle}
+										showPinButton={true}
+										{mediaUrlMimeTypes}
+										{mediaUrlFilenames}
+									/>
+								</button>
+							{:else}
+								<OversizedPostPlaceholder
+									post={entry.post}
+									estimatedBytes={entry.estimatedBytes}
+									limitBytes={data.maxPostPayloadBytes}
+									onLoadAnyway={() => handleOversizeOverride(entry.post)}
+								/>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			</div>

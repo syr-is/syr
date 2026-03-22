@@ -103,6 +103,26 @@ export class FollowRepository {
 		);
 		return (result[0]?.[0] as UserFollow | undefined) ?? null;
 	}
+
+	/** Accounts (on this instance) that follow the given DID. */
+	async countFollowersOfDid(followedDid: string): Promise<number> {
+		const result = await this.db.query<[{ count: number }[]]>(
+			'SELECT count() AS count FROM user_follow WHERE followed_did = $did GROUP ALL',
+			{ did: followedDid }
+		);
+		return Number(result[0]?.[0]?.count ?? 0);
+	}
+
+	/** How many distinct DIDs this user follows. */
+	async countByFollower(followerUserId: RecordId | string): Promise<number> {
+		const uid =
+			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
+		const result = await this.db.query<[{ count: number }[]]>(
+			'SELECT count() AS count FROM user_follow WHERE follower_user_id = $uid GROUP ALL',
+			{ uid }
+		);
+		return Number(result[0]?.[0]?.count ?? 0);
+	}
 }
 
 export const followRepository = new FollowRepository();

@@ -23,7 +23,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 ### 2.1 Goals
 
 - **Follows** keyed only by **`did:syr`** (canonical follow target).
-- **Discovery** limited to identities that appear **listed on at least one registry** the viewer has **manually configured** on the client (or equivalent user-controlled registry list).
+- **Discovery** limited to identities that appear **listed on at least one registry** in the viewer’s **discovery registry list** (Settings → Discovery), which is **separate** from publication registries (where the viewer’s own DID is registered).
 - **Home timeline** for the logged-in user: merged view of posts from **followed** identities, loading **post metadata** first and **full posts** on demand as the user scrolls.
 - Clear **ordering** and **pagination** semantics for a virtualized list.
 - UI expectation: use Svelte **await blocks** (or equivalent) for async loads (meta batches, full post fetch, media).
@@ -33,7 +33,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 - ActivityPub or other federation protocols.
 - Global search without registry or provider participation.
 - Trust scoring, moderation, or recommendation algorithms.
-- Server-side timeline aggregation on the home instance (out of scope for v1; see §8).
+- Server-side timeline aggregation on the home instance (out of scope for v1; see §9).
 
 ---
 
@@ -47,32 +47,43 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 
 ---
 
-## 4. “Followable” and registry gating
+## 4. Publication vs discovery registries
 
-### 4.1 Definition
+Syr keeps two **independent** per-user concepts:
 
-A DID is **followable from this client** only if it is **publicly listed** on at least one registry in the **viewing user’s configured registry list**:
+- **Publication registries** (`identity_registry` in the app DB): where **this account’s DID** is registered, synced, and listed for others. These drive outbox jobs (`registry_sync`) and “where I’m hosted” updates.
+- **Discovery registries** (`discovery_registry`): registry base URLs the **account** trusts for **directory search** and **follow gating** (whether someone else’s DID resolves with a valid hosting record). This set can be a **subset**, a **superset**, or **disjoint** from publication registries.
+
+UI: **Settings → Identity** manages publication; **Settings → Discovery** manages the discovery list.
+
+---
+
+## 5. “Followable” and registry gating
+
+### 5.1 Definition
+
+A DID is **followable from this client** only if it is **publicly listed** on at least one registry in the **viewing user’s discovery registry list** (not necessarily the same as where the viewer publishes their own DID):
 
 - For a candidate DID, the client (or trusted home API) performs `GET {registryBase}/resolve/{did}` (see [resolver flow](/architecture/registry-protocol)).
 - If the response is a **valid hosting record** (signature verifies per registry protocol), the DID is **listed** on that registry.
-- **Union across registries**: if the user configured multiple registry URLs, listing on **any** of them satisfies “listed.”
+- **Union across registries**: if the user configured multiple discovery registry URLs, listing on **any** of them satisfies “listed.”
 
-### 4.2 Edge cases
+### 5.2 Edge cases
 
-- **Valid DID syntax** but **404 / not found** on all configured registries → **not followable** from this client; UI explains that the user is not found on the viewer’s registries.
+- **Valid DID syntax** but **404 / not found** on all discovery registries → **not followable** from this client; UI explains that the user is not found on the viewer’s discovery registries.
 - **Unreachable registry** → treat as transient error; do not imply the DID is unlisted globally.
 - Registry gating is a **product and discovery rule**, not a cryptographic proof that only those users exist; anyone may add arbitrary registry URLs.
 
 ---
 
-## 5. Discovery UX (routes and search)
+## 6. Discovery UX (routes and search)
 
-### 5.1 Profile entry routes
+### 6.1 Profile entry routes
 
 - **`u/<username>`** — resolve to a user profile by **local username** on a provider (after the viewer knows which provider to ask, or via a future search/directory).
 - **`u/<did>`** — profile entry by DID. The path segment **must be URL-encoded** (e.g. `:` → `%3A`) so the DID is a single path parameter.
 
-### 5.2 Resolution order for `u/<param>`
+### 6.2 Resolution order for `u/<param>`
 
 To avoid ambiguity between usernames and DIDs:
 
@@ -81,17 +92,17 @@ To avoid ambiguity between usernames and DIDs:
 
 Implementations should document any reserved username patterns that could collide with DID-like strings.
 
-### 5.3 Search (registry directory)
+### 6.3 Search (registry directory)
 
 **Contract:** The **registry** exposes **directory search** for identities that **opt in** to public listing (`GET …/directory/search` on the registry HTTP API; signed directory upserts per [registry protocol](/architecture/registry-protocol)).
 
-The **Syr web app** calls that endpoint on **each** of the viewer’s configured registry base URLs (normalized to the registry API root), **merges** and **dedupes by DID**, and links results to **`u/<did>`** (and direct profile flows).
+The **Syr web app** calls that endpoint on **each** of the viewer’s **discovery** registry base URLs (normalized to the registry API root), **merges** and **dedupes by DID**, and links results to **`u/<did>`** (and direct profile flows).
 
-**Also:** resolve-by-DID (`GET …/resolve/:did`) remains the source of truth for whether a DID is **listed** for follow gating (§4).
+**Also:** resolve-by-DID (`GET …/resolve/:did`) remains the source of truth for whether a DID is **listed** for follow gating (§5).
 
 ---
 
-## 6. Data stored for follows
+## 7. Data stored for follows
 
 Minimum fields (logical model):
 
@@ -106,14 +117,14 @@ Minimum fields (logical model):
 
 ---
 
-## 7. Home timeline architecture
+## 8. Home timeline architecture
 
-### 7.1 High-level flow
+### 8.1 High-level flow
 
 ```mermaid
 sequenceDiagram
   participant UI as HomeTimeline
-  participant Reg as ConfiguredRegistries
+  participant Reg as DiscoveryRegistries
   participant Prov as RemoteProviders
 
   Note over UI: v1: aggregation in the browser (no home merge API)
@@ -128,34 +139,34 @@ sequenceDiagram
   Prov-->>UI: full post
 ```
 
-### 7.2 Meta pull and merge
+### 8.2 Meta pull and merge
 
 - For each followed DID, resolve **provider base URL** via registry, then request a **post meta** index for a **time window** (e.g. recent N days or cursor-based).
 - **Merge** all meta rows into a **single timeline** ordered by **`created_at` descending** (server-issued timestamps on meta).
 - Use a **k-way merge** or min-heap over per-author streams so global order stays correct when each author paginates independently.
 - **Cursors**: **per-followed-DID cursors** are recommended (robust under uneven post rates). A single global cursor is simpler but can skew ordering.
 
-### 7.3 Full post fetch
+### 8.3 Full post fetch
 
 - Fetch the **full post** from the resolved provider **on demand** (e.g. when the row is expanded or the user taps **Load details**) or when a row enters the **viewport** once a **virtual scroll** list is in place.
 - Requests should be **idempotent**; failures surface **per row** (retry, error state). Avoid uncapped automatic cross-origin fetches for every row on initial render.
 
-### 7.4 Consistency and tie-breakers
+### 8.4 Consistency and tie-breakers
 
 - Sort key: **`created_at`** from the **author’s provider** on meta and full payload.
 - **Tie-breaker**: `(followed_did, post_composite_id)` lexicographic order so ordering is stable.
 
 ---
 
-## 8. Aggregation location
+## 9. Aggregation location
 
-**v1 (locked):** Timeline aggregation runs in the **browser** — the client loads follows and configured registries, resolves each followed DID to a provider URL, fetches each provider’s **public** post APIs, and **merges** streams client-side. Implications: **CORS** and provider availability affect what the user sees; there is **no** `GET /api/timeline/…` merge endpoint on the home instance for this version.
+**v1 (locked):** Timeline aggregation runs in the **browser** — the client loads follows and **discovery** registries, resolves each followed DID to a provider URL, fetches each provider’s **public** post APIs, and **merges** streams client-side. Implications: **CORS** and provider availability affect what the user sees; there is **no** `GET /api/timeline/…` merge endpoint on the home instance for this version.
 
 A future **home-server aggregator** (single merge API, optional caching, rate limits) remains a possible optimization but is **not** part of the current product scope described here.
 
 ---
 
-## 9. Provider and public API contracts (targets)
+## 10. Provider and public API contracts (targets)
 
 Today, **posts are authenticated** for the owner; **public read** of others’ posts requires **new** endpoints or **capability-scoped** tokens. Target shapes (illustrative names, version under `/api/public/v1/...` or similar):
 
@@ -170,7 +181,7 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 
 ---
 
-## 10. UI — virtual scroll and await blocks
+## 11. UI — virtual scroll and await blocks
 
 - Use **Svelte await blocks** (or promise-bound components) for:
   - initial timeline **meta** load;
@@ -182,7 +193,7 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 
 ---
 
-## 11. Security and privacy
+## 12. Security and privacy
 
 - Following someone does **not** grant access to private data; only **public** (or capability-gated) resources defined by each provider.
 - **Signed posts/profiles**: verifiers use **DID → public key** and the stored **signature** over the canonical payload (see [verification UI](/architecture/signature-verification-ui)).
@@ -190,7 +201,7 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 
 ---
 
-## 12. Implementation checklist (post-approval)
+## 13. Implementation checklist (post-approval)
 
 - [ ] Follows storage (DB) and CRUD API (`followed_did`, uniqueness, optional registry provenance).
 - [ ] `u/<username>` and `u/<did>` routes and resolution rules.
@@ -203,9 +214,9 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 
 ---
 
-## 13. Resolved choices (this doc)
+## 14. Resolved choices (this doc)
 
-1. **Search:** Registry directory (**§5.3**); Syr merges multi-registry results.
-2. **Follow persistence:** **Server-persisted** on the home instance (§6).
-3. **Timeline aggregation:** **Pure client** for v1 (§8).
+1. **Search:** Registry directory (**§6.3**); Syr merges multi-registry results.
+2. **Follow persistence:** **Server-persisted** on the home instance (§7).
+3. **Timeline aggregation:** **Pure client** for v1 (§9).
 4. **Public API paths:** Implementations use shapes such as `GET …/api/public/posts/{did}` and `GET …/api/public/posts/{did}/{localId}`; exact versioning (`/api/public/v1/…`) may evolve — keep provider and client in sync.

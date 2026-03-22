@@ -1,5 +1,5 @@
 import { followRepository } from '$lib/repositories/follow.repository';
-import { registryRepository } from '$lib/repositories/registry.repository';
+import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
 import { assertFollowableFromRegistries } from '$lib/server/follow-registry-gate.server';
 import { isValidSyrDid } from '@syr-is/did';
 import type { RecordId } from 'surrealdb';
@@ -13,7 +13,7 @@ export class FollowController {
 			return (await followRepository.findOne(followerUserId, followedDid)) ?? null;
 		}
 
-		const registries = await registryRepository.findByDid(followerDid);
+		const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
 		const urls = registries.map((r) => r.registry_url);
 		const { sourceRegistry } = await assertFollowableFromRegistries(followedDid, urls);
 

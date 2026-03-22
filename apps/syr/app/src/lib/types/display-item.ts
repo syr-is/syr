@@ -21,7 +21,7 @@ export type DisplayItem =
 	  }
 	| { kind: 'media-url'; id: string; url: string; mimeType?: string; filename?: string };
 
-export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel';
+export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel' | 'cards';
 
 /** Convert an array of bare URLs (from post media_urls) into DisplayItems */
 export function urlsToDisplayItems(

@@ -7,7 +7,6 @@
 	import Github from '@lucide/svelte/icons/github';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Settings from '@lucide/svelte/icons/settings';
-	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import * as Avatar from '@syr-is/ui/avatar';
@@ -94,12 +93,6 @@
 						<DropdownMenu.Item>
 							<Settings />
 							Settings
-						</DropdownMenu.Item>
-					</a>
-					<a href="/settings/signing">
-						<DropdownMenu.Item>
-							<KeyRound />
-							Signing preferences
 						</DropdownMenu.Item>
 					</a>
 					<!-- <DropdownMenu.Item>

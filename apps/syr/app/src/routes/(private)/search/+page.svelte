@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
-	import * as Card from '@syr-is/ui/card';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import PersonaDirectoryRow from '$lib/components/fragments/persona-directory-row.svelte';
 
 	let q = $state('');
 	let loading = $state(false);
@@ -15,12 +15,16 @@
 			displayName: string;
 			provider: string;
 			registryUrl: string;
+			avatarUrl: string | null;
+			bannerUrl: string | null;
 		}>
 	>([]);
+	let directoryHint = $state<string | null>(null);
 
 	async function runSearch() {
 		loading = true;
 		searchError = null;
+		directoryHint = null;
 		try {
 			const trimmed = q.trim();
 			const qs = trimmed ? `?q=${encodeURIComponent(trimmed)}` : '';
@@ -37,8 +41,13 @@
 				searchError = msg;
 				return;
 			}
-			const j = (await res.json()) as { data?: typeof results };
+			const j = (await res.json()) as {
+				data?: typeof results;
+				meta?: { message?: string };
+			};
 			results = j.data ?? [];
+			directoryHint =
+				results.length === 0 && j.meta?.message?.trim() ? j.meta.message.trim() : null;
 		} finally {
 			loading = false;
 		}
@@ -48,8 +57,9 @@
 <div class="mx-auto max-w-3xl space-y-6 p-4">
 	<h1 class="text-2xl font-semibold">Search directory</h1>
 	<p class="text-sm text-muted-foreground">
-		Queries each registry you have configured for your identity and merges public, opted-in
-		listings.
+		Queries each <strong class="font-medium text-foreground">discovery registry</strong> you added under
+		Settings → Discovery and merges public, opted-in listings. This list is separate from publication
+		registries (where your own DID is listed).
 	</p>
 	<form
 		class="flex gap-2"
@@ -66,25 +76,21 @@
 		<p class="text-sm text-destructive">{searchError}</p>
 	{/if}
 
-	<ul class="space-y-2">
+	{#if directoryHint && !searchError}
+		<p class="text-sm text-muted-foreground">{directoryHint}</p>
+	{/if}
+
+	<ul class="space-y-4">
 		{#each results as row (row.did)}
 			<li>
-				<Card.Root>
-					<Card.Header class="flex flex-row items-center justify-between gap-2 py-3">
-						<div>
-							<Card.Title class="text-base">{row.displayName}</Card.Title>
-							<Card.Description class="font-mono text-xs">@{row.username}</Card.Description>
-							<p class="mt-1 font-mono text-xs text-muted-foreground">{row.did}</p>
-						</div>
-						<Button
-							size="sm"
-							variant="outline"
-							onclick={() => goto(resolve(`/u/${encodeURIComponent(row.did)}`))}
-						>
-							Open
-						</Button>
-					</Card.Header>
-				</Card.Root>
+				<PersonaDirectoryRow
+					displayName={row.displayName}
+					username={row.username}
+					did={row.did}
+					avatarUrl={row.avatarUrl}
+					bannerUrl={row.bannerUrl}
+					onOpen={() => goto(resolve(`/u/${encodeURIComponent(row.did)}`))}
+				/>
 			</li>
 		{/each}
 	</ul>

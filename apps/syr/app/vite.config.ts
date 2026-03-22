@@ -10,9 +10,15 @@ export default defineConfig({
 	envDir: workspaceRoot,
 	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
 	server: {
+		port: 5173,
+		strictPort: true,
 		fs: {
 			allow: [searchForWorkspaceRoot(process.cwd())]
 		}
+	},
+	preview: {
+		port: 5173,
+		strictPort: true
 	},
 	ssr: {
 		noExternal: [/^@syr-is\/ui($|\/)/],

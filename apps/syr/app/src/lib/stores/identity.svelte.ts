@@ -10,6 +10,12 @@ export type IdentityContextClient = {
 	hasIdentity: boolean;
 	hasAegis: boolean;
 	did: string | null;
+	/** Multibase root public key — required for in-browser post signing envelopes */
+	identityPublicKey: string | null;
+	/** When true, API rejects unsigned post mutations */
+	requireSignedMutations: boolean;
+	/** Active delegated device keys (Syner / other devices) */
+	hasDelegatedDeviceKeys: boolean;
 };
 
 export class IdentityStore {
