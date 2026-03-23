@@ -1,8 +1,8 @@
 import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { userRepository } from '$lib/repositories/user.repository';
 import { followController, FollowValidationError } from '$lib/controllers/follow.controller';
+import { userRepository } from '$lib/repositories/user.repository';
 import { isValidSyrDid } from '@syr-is/did';
 
 const FollowBodySchema = z.object({
@@ -12,10 +12,6 @@ const FollowBodySchema = z.object({
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
 		throw error(401, { code: 'AUTHENTICATION_ERROR', message: 'Unauthorized' });
-	}
-	const user = await userRepository.findById(locals.user.id);
-	if (!user?.did) {
-		throw error(400, { code: 'IDENTITY_REQUIRED', message: 'Identity required to list follows' });
 	}
 	const rows = await followController.listFollowing(locals.user.id);
 	return json({

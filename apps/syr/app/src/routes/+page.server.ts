@@ -8,15 +8,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 	let followerCount = 0;
 	let followingCount = 0;
 	if (locals.user) {
-		const user = await userRepository.findById(locals.user.id);
-		if (user) {
-			maxPostPayloadBytes = effectiveMaxPostPayloadBytes(user.content_max_post_bytes ?? undefined);
-			const [following, followers] = await Promise.all([
-				followRepository.countByFollower(locals.user.id),
-				user.did ? followRepository.countFollowersOfDid(user.did) : Promise.resolve(0)
-			]);
-			followingCount = following;
-			followerCount = followers;
+		try {
+			const user = await userRepository.findById(locals.user.id);
+			if (user) {
+				maxPostPayloadBytes = effectiveMaxPostPayloadBytes(
+					user.content_max_post_bytes ?? undefined
+				);
+				const [following, followers] = await Promise.all([
+					followRepository.countByFollower(locals.user.id),
+					user.did ? followRepository.countFollowersOfDid(user.did) : Promise.resolve(0)
+				]);
+				followingCount = following;
+				followerCount = followers;
+			}
+		} catch (e) {
+			console.error('[+page.server] load user/follow counts:', e);
 		}
 	}
 	return {

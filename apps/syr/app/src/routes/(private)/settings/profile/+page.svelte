@@ -67,19 +67,22 @@
 			if (!form.valid) return;
 
 			const fields = form.data as ProfileUpdate;
-			const ctx = identityStore.identityContext;
-			if (ctx?.did?.startsWith('did:syr:')) {
+			const pageDid = data.user?.did?.trim() ?? '';
+			const ctxDid = identityStore.identityContext?.did?.trim() ?? '';
+			const effectiveDid = pageDid.startsWith('did:syr:') ? pageDid : ctxDid;
+			if (effectiveDid.startsWith('did:syr:')) {
 				if (!fields.display_name?.trim()) {
 					toast.error('Display name is required to save your profile.');
 					return;
 				}
-				pendingProfileFields = fields;
+				const clone = structuredClone(fields) as ProfileUpdate;
+				pendingProfileFields = clone;
 				pendingSignSnapshot = {
-					display_name: fields.display_name.trim(),
-					bio: fields.bio,
-					avatar_url: fields.avatar_url,
-					banner_url: fields.banner_url,
-					metadata: fields.metadata
+					display_name: (clone.display_name ?? '').trim(),
+					bio: clone.bio,
+					avatar_url: clone.avatar_url,
+					banner_url: clone.banner_url,
+					metadata: clone.metadata
 				};
 				signDialogOpen = true;
 				return;
@@ -94,7 +97,7 @@
 	async function submitProfile(
 		fields: ProfileUpdate,
 		envelope: SignedMutationEnvelope | undefined
-	) {
+	): Promise<boolean> {
 		loading = true;
 		try {
 			const body = envelope !== undefined ? { ...fields, signed_mutation: envelope } : fields;
@@ -109,16 +112,18 @@
 				toast.error(
 					(errBody as { error?: { message?: string } }).error?.message || 'Failed to update profile'
 				);
-				return;
+				return false;
 			}
 
 			toast.success('Profile updated successfully');
 			pendingProfileFields = null;
 			pendingSignSnapshot = null;
 			await invalidateAll();
+			return true;
 		} catch (_error) {
 			console.error('Failed to update profile:', _error);
 			toast.error('An unexpected error occurred');
+			return false;
 		} finally {
 			loading = false;
 		}
@@ -294,12 +299,12 @@
 			bind:open={signDialogOpen}
 			snapshot={pendingSignSnapshot}
 			onSigned={async (envelope) => {
-				if (!pendingProfileFields) return;
-				await submitProfile(pendingProfileFields, envelope);
+				if (!pendingProfileFields) return false;
+				return submitProfile(pendingProfileFields, envelope);
 			}}
 			onUnsigned={async () => {
-				if (!pendingProfileFields) return;
-				await submitProfile(pendingProfileFields, undefined);
+				if (!pendingProfileFields) return false;
+				return submitProfile(pendingProfileFields, undefined);
 			}}
 			onDefer={() => {
 				signDialogOpen = false;

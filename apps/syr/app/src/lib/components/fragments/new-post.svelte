@@ -188,7 +188,7 @@
 		publishSignOpen = true;
 	}
 
-	async function runPublish(envelope?: SignedMutationEnvelope) {
+	async function runPublish(envelope?: SignedMutationEnvelope): Promise<boolean> {
 		loading = true;
 		try {
 			await syncFormForPublish();
@@ -223,15 +223,17 @@
 			if (!response.ok) {
 				const errBody = await response.json().catch(() => ({}));
 				toast.error(errBody.error?.message || 'Failed to publish post');
-				return;
+				return false;
 			}
 
 			toast.success(envelope ? 'Post published and signed' : 'Post published (not signed)');
 			resetForm();
 			dialogOpen = false;
 			await invalidateAll();
+			return true;
 		} catch (_error) {
 			toast.error('An unexpected error occurred');
+			return false;
 		} finally {
 			loading = false;
 		}
@@ -889,7 +891,7 @@
 	postLocalId={signPostLocalId}
 	existingCreatedAtIso={signExistingCreatedAtIso}
 	snapshot={publishSnapshot}
-	onSigned={(e) => void runPublish(e)}
-	onUnsigned={() => void runPublish()}
+	onSigned={(e) => runPublish(e)}
+	onUnsigned={() => runPublish()}
 	onDefer={() => {}}
 />

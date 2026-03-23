@@ -17,10 +17,10 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	if (!isValidSyrDid(did)) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}
-	const limit = Math.min(
-		100,
-		Math.max(1, parseInt(url.searchParams.get('limit') ?? '24', 10) || 24)
-	);
+	const limitRaw = url.searchParams.get('limit');
+	const limitParsed = limitRaw !== null ? parseInt(limitRaw, 10) : NaN;
+	const limitDefault = Number.isNaN(limitParsed) ? 24 : limitParsed;
+	const limit = Math.min(100, Math.max(1, limitDefault));
 	const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
 
 	const [total, { uploads }] = await Promise.all([
@@ -29,12 +29,17 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	]);
 
 	const data = uploads.map((u) => ({
-		...u,
 		id: u.id.toString(),
 		did: extractDid(u.id),
 		local_id: extractLocalId(u.id),
 		owner_id: u.owner_id.toString(),
 		folder_id: u.folder_id != null ? u.folder_id.toString() : null,
+		filename: u.filename,
+		mime_type: u.mime_type,
+		size: u.size,
+		url: u.url,
+		status: u.status,
+		is_public: u.is_public,
 		created_at: u.created_at.toISOString(),
 		updated_at: u.updated_at.toISOString()
 	}));

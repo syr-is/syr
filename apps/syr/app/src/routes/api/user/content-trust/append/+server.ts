@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
 import { stringToRecordId } from '@syr-is/types';
+import { assertContentTrustPatternUrl } from '$lib/server/content-trust-pattern';
 
 const BodySchema = z.object({
 	pattern: z.string().min(1).max(2048),
@@ -30,17 +31,16 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			details: z.treeifyError(parsed.error)
 		});
 	}
-	const trimmedPattern = parsed.data.pattern.trim();
-	try {
-		new URL(trimmedPattern);
-	} catch {
-		throw error(400, {
+	const canonicalPattern = assertContentTrustPatternUrl(parsed.data.pattern);
+	const uid = stringToRecordId.decode(locals.user.id);
+	const existing = await contentTrustRuleRepository.findByUserId(uid);
+	if (existing.length >= 200) {
+		throw error(422, {
 			code: 'VALIDATION_ERROR',
-			message: 'Pattern must be a valid absolute URL'
+			message: 'Content trust rules are limited to 200 entries'
 		});
 	}
-	const uid = stringToRecordId.decode(locals.user.id);
-	await contentTrustRuleRepository.appendRule(uid, trimmedPattern, parsed.data.kind);
+	await contentTrustRuleRepository.appendRule(uid, canonicalPattern, parsed.data.kind);
 	const rules = await contentTrustRuleRepository.findByUserId(uid);
 	return json({
 		status: 'success',

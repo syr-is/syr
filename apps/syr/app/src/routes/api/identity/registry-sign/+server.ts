@@ -217,7 +217,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} finally {
 		if (!completed) {
 			try {
-				await outboxRepository.retry(job.id);
+				const current = await outboxRepository.findByIdForUser(job.id, userId);
+				if (current?.status === 'processing') {
+					await outboxRepository.retry(job.id);
+				}
 			} catch (re) {
 				console.error('[registry-sign] failed to release claimed job:', re);
 			}

@@ -21,14 +21,19 @@
 	>([]);
 	let directoryHint = $state<string | null>(null);
 
+	let activeSearchController: AbortController | null = null;
+
 	async function runSearch() {
+		activeSearchController?.abort();
+		const ac = new AbortController();
+		activeSearchController = ac;
 		loading = true;
 		searchError = null;
 		directoryHint = null;
 		try {
 			const trimmed = q.trim();
 			const qs = trimmed ? `?q=${encodeURIComponent(trimmed)}` : '';
-			const res = await fetch(`${resolve('/api/search/directory')}${qs}`);
+			const res = await fetch(`${resolve('/api/search/directory')}${qs}`, { signal: ac.signal });
 			if (!res.ok) {
 				results = [];
 				let msg = 'Search failed';
@@ -49,11 +54,13 @@
 			directoryHint =
 				results.length === 0 && j.meta?.message?.trim() ? j.meta.message.trim() : null;
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error(err);
 			results = [];
 			directoryHint = null;
 			searchError = err instanceof Error ? err.message : 'Network error';
 		} finally {
+			if (activeSearchController === ac) activeSearchController = null;
 			loading = false;
 		}
 	}
@@ -73,7 +80,13 @@
 			void runSearch();
 		}}
 	>
-		<Input placeholder="Username, display name, or DID fragment" bind:value={q} class="flex-1" />
+		<Input
+			id="directory-search-q"
+			placeholder="Username, display name, or DID fragment"
+			aria-label="Search users in directory"
+			bind:value={q}
+			class="flex-1"
+		/>
 		<Button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
 	</form>
 

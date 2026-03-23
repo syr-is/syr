@@ -237,6 +237,29 @@ class OutboxRepository {
 		const entries = result[0] ?? [];
 		return entries[0] ?? null;
 	}
+
+	/** Current row for id + user regardless of status (for guards after handler errors). */
+	async findByIdForUser(jobId: RecordId | string, userId: RecordId): Promise<OutboxEntry | null> {
+		const isString = typeof jobId === 'string';
+		const [query, params] = isString
+			? [
+					`SELECT * FROM outbox
+				WHERE id = type::thing($jobId)
+				AND user_id = $userId
+				LIMIT 1`,
+					{ jobId, userId }
+				]
+			: [
+					`SELECT * FROM outbox
+				WHERE id = $jobId
+				AND user_id = $userId
+				LIMIT 1`,
+					{ jobId, userId }
+				];
+		const result = await this.db.query<[OutboxEntry[]]>(query, params);
+		const entries = result[0] ?? [];
+		return entries[0] ?? null;
+	}
 }
 
 export const outboxRepository = new OutboxRepository();

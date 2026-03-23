@@ -410,9 +410,9 @@ export type SigilHandoffSessionData = {
 	user_id: string;
 	/** DID of the SYR account starting handoff; uploaded Sigil must advertise the same key. */
 	expected_did: string;
-	status: 'pending' | 'complete';
+	status: 'pending' | 'complete' | 'consumed';
 	created_at: number;
-	/** Encrypted Sigil JSON string when status === 'complete'. */
+	/** Encrypted Sigil JSON string when status === 'complete' (cleared after one-time consume). */
 	sigil_json?: string;
 };
 
@@ -466,17 +466,38 @@ export async function completeSigilHandoffSession(id: string, sigilJson: string)
 }
 
 /**
- * Browser picks up encrypted Sigil once; entry is removed atomically.
+ * Browser picks up encrypted Sigil once: read + validate, then CAS to `consumed` (no delete-before-check).
  */
 export async function consumeSigilHandoffPayload(
 	id: string,
 	userId: string
 ): Promise<string | null> {
-	const cur = await kvService.getAndDelete<SigilHandoffSessionData>(KV_SIGIL_HANDOFF_SESSION, id);
-	if (!cur || cur.user_id !== userId || cur.status !== 'complete' || !cur.sigil_json) {
-		return null;
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<SigilHandoffSessionData>(KV_SIGIL_HANDOFF_SESSION, id);
+		if (!cur || cur.user_id !== userId || cur.status !== 'complete' || !cur.sigil_json) {
+			return null;
+		}
+		const sigilJson = cur.sigil_json;
+		const expectedVersion = cur.version ?? 1;
+		const next: SigilHandoffSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'consumed',
+			sigil_json: undefined
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_SIGIL_HANDOFF_SESSION,
+				id,
+				expectedVersion,
+				next,
+				SIGIL_HANDOFF_TTL_SEC
+			)
+		) {
+			return sigilJson;
+		}
 	}
-	return cur.sigil_json;
+	return null;
 }
 
 // --- Post mutation signing (Syner → SYR browser, session-bound) ---

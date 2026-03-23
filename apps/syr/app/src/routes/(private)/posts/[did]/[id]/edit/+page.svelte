@@ -200,7 +200,7 @@
 		publishSignOpen = true;
 	}
 
-	async function runPublish(envelope?: SignedMutationEnvelope) {
+	async function runPublish(envelope?: SignedMutationEnvelope): Promise<boolean> {
 		publishLoading = true;
 		try {
 			await syncBeforePublish();
@@ -223,8 +223,10 @@
 			await invalidateAll();
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			goto(`/posts/${data.post.did}/${data.post.local_id}`);
+			return true;
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to publish post');
+			return false;
 		} finally {
 			publishLoading = false;
 		}
@@ -878,8 +880,8 @@
 		postLocalId={data.post.local_id}
 		existingCreatedAtIso={data.post.created_at}
 		snapshot={publishSnapshot}
-		onSigned={(e) => void runPublish(e)}
-		onUnsigned={() => void runPublish()}
+		onSigned={(e) => runPublish(e)}
+		onUnsigned={() => runPublish()}
 		onDefer={() => {}}
 	/>
 </div>

@@ -38,6 +38,16 @@
 		return bases;
 	}
 
+	function httpHttpsProviderUrl(raw: string): string | null {
+		try {
+			const u = new URL(raw.trim());
+			if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+			return raw.trim().replace(/\/$/, '');
+		} catch {
+			return null;
+		}
+	}
+
 	async function resolveProviderForFollow(
 		f: FollowRow,
 		discoveryBases: string[]
@@ -47,7 +57,8 @@
 			try {
 				const root = registryApiRoot(reg);
 				const p = await resolveProvider(f.followed_did, { registryUrl: root, timeout: 10_000 });
-				return p.replace(/\/$/, '');
+				const safe = httpHttpsProviderUrl(p);
+				if (safe) return safe;
 			} catch {
 				/* fall through */
 			}
@@ -55,7 +66,8 @@
 		for (const b of discoveryBases) {
 			try {
 				const p = await resolveProvider(f.followed_did, { registryUrl: b, timeout: 8_000 });
-				return p.replace(/\/$/, '');
+				const safe = httpHttpsProviderUrl(p);
+				if (safe) return safe;
 			} catch {
 				/* try next */
 			}

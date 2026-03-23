@@ -42,6 +42,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	const prepped: PrepRow[] = [];
 	const accountDid = locals.user.did?.trim() ?? '';
+	if (!accountDid.startsWith('did:syr:')) {
+		throw error(403, {
+			code: 'FORBIDDEN',
+			message: 'A verified did:syr identity is required to prepare registry signatures'
+		});
+	}
 
 	const displayNameForDirectory = (): string => {
 		const u = locals.user?.username ?? '';
@@ -56,7 +62,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			registryUrl?: string;
 			provider?: string;
 		};
-		if (p.did && accountDid.startsWith('did:syr:') && p.did !== accountDid) {
+		if (p.did && p.did !== accountDid) {
 			throw error(403, {
 				code: 'FORBIDDEN',
 				message: 'Registry job payload DID does not match your account'

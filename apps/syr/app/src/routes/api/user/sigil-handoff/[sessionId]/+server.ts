@@ -25,6 +25,9 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 	if (pending.status === 'pending') {
 		return json({ data: { status: 'pending' as const } });
 	}
+	if (pending.status !== 'complete') {
+		return json({ data: { status: 'gone' as const } });
+	}
 
 	const sigilJson = await consumeSigilHandoffPayload(sessionId, locals.user.id);
 	if (!sigilJson) {

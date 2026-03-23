@@ -401,9 +401,10 @@
 						{#each feedEntries as entry (entry.kind === 'post' ? getPostId(entry.post) : `os-${getPostId(entry.post)}`)}
 							<div class="w-full">
 								{#if entry.kind === 'post'}
-									<button
-										type="button"
-										class="w-full text-left"
+									<div
+										role="button"
+										tabindex="0"
+										class="w-full cursor-pointer text-left"
 										onclick={() => handlePostClick(entry.post)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -419,11 +420,12 @@
 											{mediaUrlMimeTypes}
 											{mediaUrlFilenames}
 										/>
-									</button>
+									</div>
 								{:else}
-									<button
-										type="button"
-										class="w-full text-left"
+									<div
+										role="button"
+										tabindex="0"
+										class="w-full cursor-pointer text-left"
 										onclick={() => handlePostClick(entry.post)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -439,7 +441,7 @@
 											postViewPath={postPublicPath(entry.post)}
 											onLoadAnyway={() => handlePostClick(entry.post)}
 										/>
-									</button>
+									</div>
 								{/if}
 							</div>
 						{/each}

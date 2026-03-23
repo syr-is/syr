@@ -121,6 +121,7 @@
 			loadingList = false;
 			return;
 		}
+		loadingList = true;
 		void invoke<Persona[]>('list_personas_cmd')
 			.then((list) => {
 				personas = list ?? [];
@@ -140,12 +141,16 @@
 			payload = null;
 			requestedDevicePk = null;
 			loadError = null;
+			userConfirmed = false;
+			passphrase = '';
 			return;
 		}
 		fetchSeq++;
 		const seq = fetchSeq;
 		loadError = null;
 		payload = null;
+		userConfirmed = false;
+		passphrase = '';
 		void (async () => {
 			try {
 				const base = instanceUrl.replace(/\/$/, '');
@@ -204,7 +209,7 @@
 
 			const seed = await invoke<number[]>('decrypt_persona_sigil_cmd', {
 				personaId: targetPersona.id,
-				passphrase: passphrase.trim()
+				passphrase
 			});
 			const seedB64 = bytesToBase64(seed);
 			const canonicalStr = await invoke<string>('canonicalize_cmd', {

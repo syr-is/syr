@@ -164,20 +164,24 @@ export async function unlockSigilSession(passphrase: string): Promise<void> {
 	const { decryptSigil } = await import('@syr-is/crypto/sigil');
 	const { initCryptoWasm, decodePublicKey, sign, verify } = await import('@syr-is/crypto');
 	await initCryptoWasm();
-	const seed = await decryptSigil(sigil, passphrase);
-	if (seed.length !== 32) {
-		throw new Error('Invalid decrypted key length');
+	let seed: Uint8Array | null = await decryptSigil(sigil, passphrase);
+	try {
+		if (seed.length !== 32) {
+			throw new Error('Invalid decrypted key length');
+		}
+		const pk = decodePublicKey(sigil.pub);
+		const signature = await sign(SIGIL_SEED_PUB_BINDING_MSG, seed);
+		const ok = await verify(SIGIL_SEED_PUB_BINDING_MSG, signature, pk);
+		if (!ok) {
+			throw new Error(
+				'Decrypted key does not match this Sigil public key. The file may be damaged or tampered with.'
+			);
+		}
+		unlockedSeed = seed;
+		seed = null;
+	} finally {
+		if (seed) seed.fill(0);
 	}
-	const pk = decodePublicKey(sigil.pub);
-	const signature = await sign(SIGIL_SEED_PUB_BINDING_MSG, seed);
-	const ok = await verify(SIGIL_SEED_PUB_BINDING_MSG, signature, pk);
-	if (!ok) {
-		seed.fill(0);
-		throw new Error(
-			'Decrypted key does not match this Sigil public key. The file may be damaged or tampered with.'
-		);
-	}
-	unlockedSeed = seed;
 }
 
 /**

@@ -33,8 +33,8 @@
 	}: {
 		open: boolean;
 		snapshot: ProfileSignSnapshot;
-		onSigned: (envelope: SignedMutationEnvelope) => void | Promise<void>;
-		onUnsigned: () => void | Promise<void>;
+		onSigned: (envelope: SignedMutationEnvelope) => boolean | void | Promise<boolean | void>;
+		onUnsigned: () => boolean | void | Promise<boolean | void>;
 		onDefer: () => void;
 	} = $props();
 
@@ -94,7 +94,8 @@
 			unsignedWarnOpen = true;
 			return;
 		}
-		await onSigned(envelope);
+		const saved = await onSigned(envelope);
+		if (saved === false) return;
 		open = false;
 		resetSynerUi();
 		sigilUiTick++;
@@ -203,7 +204,6 @@
 			void pollSyner(sid);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Syner session failed');
-		} finally {
 			busy = false;
 		}
 	}
@@ -220,18 +220,25 @@
 			await finishWithEnvelope(env);
 		} catch (e) {
 			synerPolling = false;
-			if (e instanceof DOMException && e.name === 'AbortError') return;
+			resetSynerUi();
+			if (e instanceof DOMException && e.name === 'AbortError') {
+				return;
+			}
 			if (open) {
 				toast.error(e instanceof Error ? e.message : 'Syner signing failed');
 			}
+		} finally {
+			busy = false;
 		}
 	}
 
-	function confirmUnsignedAnyway() {
+	async function confirmUnsignedAnyway() {
 		unsignedWarnOpen = false;
 		resetSynerUi();
-		open = false;
-		void onUnsigned();
+		const ok = await onUnsigned();
+		if (ok !== false) {
+			open = false;
+		}
 	}
 
 	function handleDefer() {
@@ -276,7 +283,7 @@
 					<Button
 						type="button"
 						variant="secondary"
-						disabled={busy}
+						disabled={busy || synerPolling}
 						onclick={() => void signWithUnlockedSigil()}
 						class="justify-start"
 					>
@@ -302,7 +309,7 @@
 						<Button
 							type="button"
 							size="sm"
-							disabled={busy || !sigilPassphrase.trim()}
+							disabled={busy || synerPolling || !sigilPassphrase.trim()}
 							onclick={() => void signAfterUnlockSigil()}
 						>
 							Unlock &amp; sign with Sigil
@@ -332,7 +339,7 @@
 						<Button
 							type="button"
 							size="sm"
-							disabled={busy || !aegisPassword.trim()}
+							disabled={busy || synerPolling || !aegisPassword.trim()}
 							onclick={() => void signWithAegis()}
 						>
 							Sign with Aegis (custodial)
@@ -388,7 +395,7 @@
 				<Button
 					type="button"
 					variant="secondary"
-					disabled={busy}
+					disabled={busy || synerPolling}
 					onclick={() => {
 						unsignedWarnOpen = true;
 					}}
@@ -396,7 +403,9 @@
 					Save without signing
 				</Button>
 			{/if}
-			<Button type="button" variant="ghost" disabled={busy} onclick={handleDefer}>Cancel</Button>
+			<Button type="button" variant="ghost" disabled={busy || synerPolling} onclick={handleDefer}>
+				Cancel
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

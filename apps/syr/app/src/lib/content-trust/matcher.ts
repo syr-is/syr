@@ -4,6 +4,7 @@ export type TrustRuleKind = 'allow' | 'deny';
 
 /** Server-backed rule row (pattern without leading `!`; kind encodes deny vs allow). */
 export type TrustRuleRow = {
+	/** Absolute URL; path segment may use picomatch glob chars `* ? [ ] { }` for matching. */
 	pattern: string;
 	kind: TrustRuleKind;
 	sort_order: number;
@@ -47,8 +48,9 @@ function originsMatch(a: URL, b: URL): boolean {
 	return a.origin === b.origin;
 }
 
+/** True when pathname uses picomatch glob syntax (not only `*`). */
 function pathIsGlob(pathname: string): boolean {
-	return pathname.includes('*');
+	return /[*?[\]{}]/.test(pathname);
 }
 
 function prefixMatch(candidate: URL, pattern: URL): boolean {
@@ -63,13 +65,29 @@ function prefixMatch(candidate: URL, pattern: URL): boolean {
 	return cpp === ppp || cpp.startsWith(ppp + '/');
 }
 
+/** Max compiled picomatch instances; LRU evicts oldest to cap memory across tenants. */
+const GLOB_MATCHER_CACHE_MAX = 128;
+const globMatcherOrder: string[] = [];
 const compiledGlobMatchers = new Map<string, ReturnType<typeof picomatch>>();
+
+function touchGlobCache(key: string) {
+	const i = globMatcherOrder.indexOf(key);
+	if (i >= 0) globMatcherOrder.splice(i, 1);
+	globMatcherOrder.push(key);
+}
 
 function getCompiledGlobMatcher(glob: string) {
 	let m = compiledGlobMatchers.get(glob);
-	if (!m) {
-		m = picomatch(glob, { dot: true });
-		compiledGlobMatchers.set(glob, m);
+	if (m) {
+		touchGlobCache(glob);
+		return m;
+	}
+	m = picomatch(glob, { dot: true });
+	compiledGlobMatchers.set(glob, m);
+	globMatcherOrder.push(glob);
+	while (globMatcherOrder.length > GLOB_MATCHER_CACHE_MAX) {
+		const evict = globMatcherOrder.shift();
+		if (evict) compiledGlobMatchers.delete(evict);
 	}
 	return m;
 }

@@ -210,7 +210,7 @@
 		publishSignOpen = true;
 	}
 
-	async function runPublishFromView(envelope?: SignedMutationEnvelope) {
+	async function runPublishFromView(envelope?: SignedMutationEnvelope): Promise<boolean> {
 		publishLoading = true;
 		try {
 			const response = await fetch(postApiUrl(), {
@@ -229,8 +229,10 @@
 
 			toast.success(envelope ? 'Post published and signed' : 'Post published (not signed)');
 			window.location.reload();
+			return true;
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to publish post');
+			return false;
 		} finally {
 			publishLoading = false;
 		}
@@ -705,8 +707,8 @@
 		postLocalId={data.post.local_id ?? ''}
 		existingCreatedAtIso={data.post.created_at}
 		snapshot={publishSnapshot}
-		onSigned={(e) => void runPublishFromView(e)}
-		onUnsigned={() => void runPublishFromView()}
+		onSigned={(e) => runPublishFromView(e)}
+		onUnsigned={() => runPublishFromView()}
 		onDefer={() => {}}
 	/>
 

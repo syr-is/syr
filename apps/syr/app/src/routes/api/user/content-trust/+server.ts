@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
 import { stringToRecordId } from '@syr-is/types';
+import { assertContentTrustPatternUrl } from '$lib/server/content-trust-pattern';
 
 const RuleSchema = z.object({
 	pattern: z.string().min(1).max(2048),
@@ -15,18 +16,6 @@ const PutSchema = z.object({
 	content_trust_auto_author_provider: z.boolean().optional(),
 	content_trust_allow_data_urls: z.boolean().optional()
 });
-
-function assertPatternLooksLikeUrlOrPath(pattern: string): void {
-	const t = pattern.trim();
-	try {
-		new URL(t);
-	} catch {
-		throw error(400, {
-			code: 'VALIDATION_ERROR',
-			message: 'Each pattern must be a valid absolute URL (e.g. https://example.com/path)'
-		});
-	}
-}
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -74,9 +63,10 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 			details: z.treeifyError(parsed.error)
 		});
 	}
-	for (const r of parsed.data.rules) {
-		assertPatternLooksLikeUrlOrPath(r.pattern);
-	}
+	const normalizedRules = parsed.data.rules.map((r) => ({
+		pattern: assertContentTrustPatternUrl(r.pattern),
+		kind: r.kind
+	}));
 	const uid = stringToRecordId.decode(locals.user.id);
 	const mergePatch: {
 		updated_at: Date;
@@ -91,7 +81,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 	}
 	const updated = await userRepository.merge(uid, mergePatch);
 	if (!updated) throw error(404, { code: 'NOT_FOUND', message: 'User not found' });
-	await contentTrustRuleRepository.replaceAllForUser(uid, parsed.data.rules);
+	await contentTrustRuleRepository.replaceAllForUser(uid, normalizedRules);
 	const rules = await contentTrustRuleRepository.findByUserId(uid);
 	return json({
 		status: 'success',

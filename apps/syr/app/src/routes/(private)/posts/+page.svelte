@@ -316,10 +316,9 @@
 		goto(`/posts/${postId}`);
 	}
 
-	function handleOversizeOverride(post: Post) {
+	async function handleOversizeOverride(post: Post) {
 		setPostSizeOverride(postSizeOverrideKeyForPost(post));
-		void fetchPosts();
-		void fetchPinnedPosts();
+		await Promise.all([fetchPosts(), fetchPinnedPosts()]);
 	}
 
 	// Calculate total pages

@@ -188,7 +188,6 @@
 			void pollRegistrySyner(start.session_id);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Syner session failed');
-		} finally {
 			registryBusy = false;
 		}
 	}
@@ -207,8 +206,13 @@
 			await invalidateAll();
 		} catch (e) {
 			registrySynerPolling = false;
-			if (e instanceof DOMException && e.name === 'AbortError') return;
+			resetRegistrySynerUi();
+			if (e instanceof DOMException && e.name === 'AbortError') {
+				return;
+			}
 			toast.error(e instanceof Error ? e.message : 'Syner signing failed');
+		} finally {
+			registryBusy = false;
 		}
 	}
 
@@ -562,7 +566,7 @@
 									<Button
 										type="button"
 										variant="secondary"
-										disabled={registryBusy}
+										disabled={registryBusy || registrySynerPolling}
 										onclick={() => void signRegistryWithUnlockedSigil()}
 										class="justify-start"
 									>
@@ -583,12 +587,14 @@
 											autocomplete="off"
 											bind:value={registrySigilPassphrase}
 											placeholder="Unlock Sigil in this tab…"
-											disabled={registryBusy}
+											disabled={registryBusy || registrySynerPolling}
 										/>
 										<Button
 											type="button"
 											size="sm"
-											disabled={registryBusy || !registrySigilPassphrase.trim()}
+											disabled={registryBusy ||
+												registrySynerPolling ||
+												!registrySigilPassphrase.trim()}
 											onclick={() => void signRegistryAfterUnlockSigil()}
 										>
 											Unlock &amp; sign with Sigil
@@ -611,12 +617,14 @@
 											type="password"
 											autocomplete="off"
 											bind:value={registryAegisPassword}
-											disabled={registryBusy}
+											disabled={registryBusy || registrySynerPolling}
 										/>
 										<Button
 											type="button"
 											size="sm"
-											disabled={registryBusy || !registryAegisPassword.trim()}
+											disabled={registryBusy ||
+												registrySynerPolling ||
+												!registryAegisPassword.trim()}
 											onclick={() => void signRegistryWithAegis()}
 										>
 											Sign with Aegis (custodial)
