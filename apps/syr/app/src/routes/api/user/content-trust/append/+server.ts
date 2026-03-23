@@ -1,7 +1,10 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
+import {
+	contentTrustRuleRepository,
+	ContentTrustRuleLimitExceededError
+} from '$lib/repositories/content-trust-rule.repository';
 import { stringToRecordId } from '@syr-is/types';
 import { assertContentTrustPatternUrl } from '$lib/server/content-trust-pattern';
 
@@ -33,14 +36,17 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	}
 	const canonicalPattern = assertContentTrustPatternUrl(parsed.data.pattern);
 	const uid = stringToRecordId.decode(locals.user.id);
-	const existing = await contentTrustRuleRepository.findByUserId(uid);
-	if (existing.length >= 200) {
-		throw error(422, {
-			code: 'VALIDATION_ERROR',
-			message: 'Content trust rules are limited to 200 entries'
-		});
+	try {
+		await contentTrustRuleRepository.appendRuleWithLimit(uid, canonicalPattern, parsed.data.kind);
+	} catch (e) {
+		if (e instanceof ContentTrustRuleLimitExceededError) {
+			throw error(422, {
+				code: 'VALIDATION_ERROR',
+				message: e.message
+			});
+		}
+		throw e;
 	}
-	await contentTrustRuleRepository.appendRule(uid, canonicalPattern, parsed.data.kind);
 	const rules = await contentTrustRuleRepository.findByUserId(uid);
 	return json({
 		status: 'success',

@@ -138,6 +138,7 @@
 	let fetchSeq = 0;
 	$effect(() => {
 		if (!instanceUrl || !sessionId.trim()) {
+			fetchSeq++;
 			payload = null;
 			requestedDevicePk = null;
 			loadError = null;

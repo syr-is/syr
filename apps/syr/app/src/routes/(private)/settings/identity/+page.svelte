@@ -61,7 +61,6 @@
 	let registrySigilUiTick = $state(0);
 	let registrySynerDeeplink = $state<string | null>(null);
 	let registrySynerQr = $state<string | null>(null);
-	let _registrySynerSessionId = $state<string | null>(null);
 	let registrySynerPolling = $state(false);
 	let registrySynerPollAbort: AbortController | null = null;
 
@@ -69,6 +68,8 @@
 	const registryIdentityPk = $derived(identityStore.identityContext?.identityPublicKey ?? null);
 	const registryHasAegis = $derived(identityStore.identityContext?.hasAegis ?? false);
 
+	// `void registrySigilUiTick` ties this derived to the tick counter so we re-run when
+	// `registrySigilUiTick++` runs after unlock; `getSigilSessionStatus()` returns the real value.
 	const registrySigilStatus = $derived.by(() => {
 		void registrySigilUiTick;
 		return getSigilSessionStatus();
@@ -86,7 +87,6 @@
 		registrySynerPollAbort = null;
 		registrySynerDeeplink = null;
 		registrySynerQr = null;
-		_registrySynerSessionId = null;
 		registrySynerPolling = false;
 	}
 
@@ -153,9 +153,15 @@
 		registryBusy = true;
 		try {
 			const res = await fetch('/api/identity/aegis-bundle');
-			const j = await res.json();
+			const text = await res.text();
+			let j: { error?: { message?: string }; data?: { aegisBundle?: AegisBundle } };
+			try {
+				j = text ? (JSON.parse(text) as typeof j) : {};
+			} catch {
+				throw new Error(!res.ok ? text.trim() || `HTTP ${res.status}` : 'Invalid JSON from server');
+			}
 			if (!res.ok) {
-				throw new Error(j.error?.message ?? 'Could not load Aegis bundle');
+				throw new Error((j.error?.message ?? text.trim()) || 'Could not load Aegis bundle');
 			}
 			const bundle = j.data?.aegisBundle as AegisBundle;
 			if (!bundle) throw new Error('No Aegis bundle');
@@ -182,7 +188,6 @@
 		resetRegistrySynerUi();
 		try {
 			const start = await startRegistrySynerSession(jobId);
-			_registrySynerSessionId = start.session_id;
 			registrySynerDeeplink = start.deeplink_url;
 			registrySynerQr = await QRCode.toDataURL(start.deeplink_url, { margin: 1, width: 220 });
 			void pollRegistrySyner(start.session_id);
@@ -301,6 +306,7 @@
 			case 'processing':
 				return 'text-yellow-600';
 			case 'failed':
+			case 'finalization_failed':
 			case 'error':
 				return 'text-red-600';
 			case 'cancelled':
@@ -701,6 +707,7 @@
 											onclick={() => retryJob(job.id)}
 											disabled={retryingJob === job.id ||
 												job.status === 'completed' ||
+												job.status === 'finalization_failed' ||
 												(job.type === 'registry_sync' && job.status === 'pending')}
 										>
 											{retryingJob === job.id ? 'Retrying...' : 'Retry now'}

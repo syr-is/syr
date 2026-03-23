@@ -201,6 +201,7 @@
 		const d = p.did ?? '';
 		if (!d) return;
 		const _page = postsPage;
+		// Touch pagination so this effect re-runs when `postsPage` changes (see fetchPublicPosts).
 		void _page;
 		void fetchPublicPosts().catch((e) => console.error('fetchPublicPosts:', e));
 	});
@@ -209,6 +210,7 @@
 		const d = p.did ?? '';
 		if (!d || catalogTab !== 'media') return;
 		const _page = uploadsPage;
+		// Touch pagination so this effect re-runs when `uploadsPage` changes (see fetchPublicUploads).
 		void _page;
 		void fetchPublicUploads().catch((e) => console.error('fetchPublicUploads:', e));
 	});
@@ -404,7 +406,7 @@
 									<div
 										role="button"
 										tabindex="0"
-										class="w-full cursor-pointer text-left"
+										class="w-full cursor-pointer rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 										onclick={() => handlePostClick(entry.post)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -425,7 +427,7 @@
 									<div
 										role="button"
 										tabindex="0"
-										class="w-full cursor-pointer text-left"
+										class="w-full cursor-pointer rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 										onclick={() => handlePostClick(entry.post)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {

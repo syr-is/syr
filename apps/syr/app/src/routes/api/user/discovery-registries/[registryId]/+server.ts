@@ -25,11 +25,9 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
 	}
 
 	const registry = await discoveryRegistryRepository.findById(registryId);
-	if (!registry) throw error(404, 'Registry not found');
-
 	const userId = stringToRecordId.decode(locals.user.id);
-	if (registry.user_id.toString() !== userId.toString()) {
-		throw error(403, 'Not authorized');
+	if (!registry || registry.user_id.toString() !== userId.toString()) {
+		throw error(404, 'Registry not found');
 	}
 
 	const removed = await discoveryRegistryRepository.remove(registryId);

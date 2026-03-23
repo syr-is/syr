@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
@@ -75,6 +76,15 @@
 		_synerSessionId = null;
 		synerPolling = false;
 	}
+
+	onDestroy(() => {
+		synerPollAbort?.abort();
+		synerPollAbort = null;
+		synerDeeplink = null;
+		synerQr = null;
+		_synerSessionId = null;
+		synerPolling = false;
+	});
 
 	function assertSigningPrereqs(): void {
 		if (!did?.startsWith('did:syr:')) throw new Error('Not signed in with a DID.');
@@ -233,11 +243,19 @@
 	}
 
 	async function confirmUnsignedAnyway() {
-		unsignedWarnOpen = false;
-		resetSynerUi();
-		const ok = await onUnsigned();
-		if (ok !== false) {
-			open = false;
+		busy = true;
+		try {
+			const ok = await onUnsigned();
+			if (ok !== false) {
+				open = false;
+				unsignedWarnOpen = false;
+				resetSynerUi();
+				sigilUiTick++;
+			}
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Save failed');
+		} finally {
+			busy = false;
 		}
 	}
 
@@ -420,10 +438,18 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer class="gap-2">
-			<Button type="button" variant="outline" onclick={() => (unsignedWarnOpen = false)}>
+			<Button
+				type="button"
+				variant="outline"
+				disabled={busy}
+				onclick={() => (unsignedWarnOpen = false)}
+			>
 				Back
 			</Button>
-			<Button type="button" variant="destructive" onclick={confirmUnsignedAnyway}>
+			<Button type="button" variant="destructive" disabled={busy} onclick={confirmUnsignedAnyway}>
+				{#if busy}
+					<Loader class="mr-2 h-4 w-4 animate-spin" />
+				{/if}
 				Save anyway
 			</Button>
 		</Dialog.Footer>

@@ -60,8 +60,10 @@
 			directoryHint = null;
 			searchError = err instanceof Error ? err.message : 'Network error';
 		} finally {
-			if (activeSearchController === ac) activeSearchController = null;
-			loading = false;
+			if (activeSearchController === ac) {
+				activeSearchController = null;
+				loading = false;
+			}
 		}
 	}
 </script>

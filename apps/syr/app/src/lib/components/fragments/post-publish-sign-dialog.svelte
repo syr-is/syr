@@ -118,13 +118,14 @@
 	}
 
 	async function signWithUnlockedSigil() {
+		let seed: Uint8Array | null = null;
 		busy = true;
 		try {
 			const loadedDid = await getLoadedSigilDid();
 			if (loadedDid !== did) {
 				throw new Error('Loaded Sigil is for a different identity.');
 			}
-			const seed = getUnlockedSigningSeed();
+			seed = getUnlockedSigningSeed();
 			if (!seed) throw new Error('Unlock your Sigil first.');
 			const payload = buildPayload();
 			const env = await signPostMutationWithRootKey(payload, seed, identityPublicKey!);
@@ -132,6 +133,7 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			seed?.fill(0);
 			busy = false;
 		}
 	}
@@ -141,6 +143,7 @@
 			toast.error('Enter your Sigil passphrase');
 			return;
 		}
+		let seed: Uint8Array | null = null;
 		busy = true;
 		try {
 			const loadedDid = await getLoadedSigilDid();
@@ -150,7 +153,7 @@
 			await unlockSigilSession(sigilPassphrase);
 			sigilPassphrase = '';
 			sigilUiTick++;
-			const seed = getUnlockedSigningSeed();
+			seed = getUnlockedSigningSeed();
 			if (!seed) throw new Error('Unlock failed.');
 			const payload = buildPayload();
 			const env = await signPostMutationWithRootKey(payload, seed, identityPublicKey!);
@@ -158,6 +161,8 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			seed?.fill(0);
+			sigilPassphrase = '';
 			busy = false;
 		}
 	}
@@ -249,11 +254,19 @@
 	}
 
 	async function confirmUnsignedAnyway() {
-		unsignedWarnOpen = false;
-		resetSynerUi();
-		const ok = await onUnsigned();
-		if (ok !== false) {
-			open = false;
+		busy = true;
+		try {
+			const ok = await onUnsigned();
+			if (ok !== false) {
+				open = false;
+				unsignedWarnOpen = false;
+				resetSynerUi();
+				sigilUiTick++;
+			}
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Publish failed');
+		} finally {
+			busy = false;
 		}
 	}
 
@@ -434,10 +447,18 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer class="gap-2">
-			<Button type="button" variant="outline" onclick={() => (unsignedWarnOpen = false)}>
+			<Button
+				type="button"
+				variant="outline"
+				disabled={busy}
+				onclick={() => (unsignedWarnOpen = false)}
+			>
 				Back
 			</Button>
-			<Button type="button" variant="destructive" onclick={confirmUnsignedAnyway}>
+			<Button type="button" variant="destructive" disabled={busy} onclick={confirmUnsignedAnyway}>
+				{#if busy}
+					<Loader class="mr-2 h-4 w-4 animate-spin" />
+				{/if}
 				Publish anyway
 			</Button>
 		</Dialog.Footer>

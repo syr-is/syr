@@ -179,7 +179,7 @@ async function failSessionAndRetryJob(
 	try {
 		const userId = stringToRecordId.decode(session.user_id);
 		const job = await outboxRepository.findActiveByIdAndUser(session.job_thing_id, userId);
-		if (job) {
+		if (job && job.status !== 'finalization_failed') {
 			await outboxRepository.retry(job.id);
 		}
 	} catch (re) {

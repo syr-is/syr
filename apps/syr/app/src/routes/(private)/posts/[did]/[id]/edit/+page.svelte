@@ -168,6 +168,8 @@
 		}
 		return {
 			type: 'media',
+			title: v.title ?? p.title,
+			description: v.description ?? p.description,
 			media_urls: [...mediaUrls],
 			display_mode: (v.display_mode ?? p.display_mode ?? 'masonry') as MediaDisplayMode,
 			visibility: vis

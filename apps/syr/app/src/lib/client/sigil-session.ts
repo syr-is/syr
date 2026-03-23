@@ -68,19 +68,12 @@ export async function getLoadedSigilDid(): Promise<string | null> {
 }
 
 /**
- * Ensure encrypted Sigil JSON advertises the given DID (from `pub`). Does not persist.
- * For tests and callers that validate before storage.
+ * Ensure parsed encrypted Sigil JSON advertises the given DID (from `pub`). Does not persist.
  */
-export async function assertEncryptedSigilJsonMatchesDid(
-	text: string,
+async function assertParsedEncryptedSigilJsonMatchesDid(
+	json: unknown,
 	expectedDid: string
 ): Promise<void> {
-	let json: unknown;
-	try {
-		json = JSON.parse(text);
-	} catch {
-		throw new Error('Invalid Sigil (not JSON)');
-	}
 	if (!isValidSigilJson(json)) {
 		throw new Error('Not a valid encrypted Sigil');
 	}
@@ -99,6 +92,23 @@ export async function assertEncryptedSigilJsonMatchesDid(
 	}
 }
 
+/**
+ * Ensure encrypted Sigil JSON advertises the given DID (from `pub`). Does not persist.
+ * For tests and callers that validate before storage.
+ */
+export async function assertEncryptedSigilJsonMatchesDid(
+	text: string,
+	expectedDid: string
+): Promise<void> {
+	let json: unknown;
+	try {
+		json = JSON.parse(text);
+	} catch {
+		throw new Error('Invalid Sigil (not JSON)');
+	}
+	await assertParsedEncryptedSigilJsonMatchesDid(json, expectedDid);
+}
+
 export type LoadSigilFromEncryptedJsonOptions = {
 	/** When set (e.g. Syner handoff), refuse to store if `pub` does not derive to this DID. */
 	expectedDid?: string;
@@ -112,16 +122,15 @@ export async function loadSigilFromEncryptedJsonText(
 	meta: SigilSessionMeta,
 	options?: LoadSigilFromEncryptedJsonOptions
 ): Promise<void> {
-	if (options?.expectedDid?.trim()) {
-		await assertEncryptedSigilJsonMatchesDid(text, options.expectedDid);
-	}
 	let json: unknown;
 	try {
 		json = JSON.parse(text);
 	} catch {
 		throw new Error('Invalid Sigil (not JSON)');
 	}
-	if (!isValidSigilJson(json)) {
+	if (options?.expectedDid?.trim()) {
+		await assertParsedEncryptedSigilJsonMatchesDid(json, options.expectedDid);
+	} else if (!isValidSigilJson(json)) {
 		throw new Error('Not a valid encrypted Sigil');
 	}
 	if (typeof sessionStorage === 'undefined') {

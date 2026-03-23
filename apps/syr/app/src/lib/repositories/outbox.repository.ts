@@ -5,7 +5,7 @@ export interface OutboxEntry {
 	id: RecordId;
 	type: string;
 	payload: Record<string, unknown>;
-	status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+	status: 'pending' | 'processing' | 'completed' | 'failed' | 'finalization_failed' | 'cancelled';
 	attempts: number;
 	max_attempts: number;
 	next_retry_at: string;
@@ -116,7 +116,7 @@ class OutboxRepository {
 	async markFinalizationFailed(id: RecordId, error: string, maxAttempts: number): Promise<void> {
 		await this.db.query(
 			`UPDATE $id SET
-				status = "failed",
+				status = "finalization_failed",
 				attempts = $maxAttempts,
 				last_error = $error,
 				next_retry_at = time::now(),
@@ -163,13 +163,15 @@ class OutboxRepository {
 
 	/**
 	 * Retry a job immediately (user-initiated). Resets next_retry_at to now.
+	 * Does not requeue {@link markFinalizationFailed} jobs (remote mutation already accepted).
 	 */
 	async retry(id: RecordId): Promise<void> {
 		await this.db.query(
-			`UPDATE $id SET
+			`UPDATE outbox SET
 				status = "pending",
 				next_retry_at = time::now(),
-				updated_at = time::now()`,
+				updated_at = time::now()
+				WHERE id = $id AND status != "finalization_failed"`,
 			{ id }
 		);
 	}

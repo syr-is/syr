@@ -20,6 +20,13 @@ export const POST: RequestHandler = async ({ locals, params }) => {
 		throw error(400, `Cannot retry a ${job.status} job`);
 	}
 
+	if (job.status === 'finalization_failed') {
+		throw error(400, {
+			message:
+				'This job cannot be retried: the registry already accepted the update but local finalization failed. Contact support or reconcile manually.'
+		});
+	}
+
 	await outboxRepository.retry(jobId);
 	return json({ status: 'ok', message: 'Job queued for immediate retry.' });
 };

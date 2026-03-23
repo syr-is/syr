@@ -75,6 +75,10 @@ export function buildPostSignedPayloadV1(params: {
 		if (content !== undefined) base.content = content;
 		if (snapshot.content_type != null) base.content_type = snapshot.content_type;
 	} else {
+		const title = trimOpt(snapshot.title);
+		const description = trimOpt(snapshot.description);
+		if (title !== undefined) base.title = title;
+		if (description !== undefined) base.description = description;
 		const urls = [...(snapshot.media_urls ?? [])].map((u) => String(u).trim()).filter(Boolean);
 		base.media_urls = urls;
 		const dm = snapshot.display_mode;

@@ -2,6 +2,17 @@ import { dbService } from '$lib/services/db';
 import type { RecordId } from 'surrealdb';
 import type { TrustRuleKind } from '$lib/content-trust/matcher';
 
+const CONTENT_TRUST_RULE_MAX = 200;
+
+/** Thrown when the per-user rule cap is hit inside {@link ContentTrustRuleRepository.appendRuleWithLimit}. */
+export class ContentTrustRuleLimitExceededError extends Error {
+	readonly code = 'CONTENT_TRUST_LIMIT';
+	constructor() {
+		super('Content trust rules are limited to 200 entries');
+		this.name = 'ContentTrustRuleLimitExceededError';
+	}
+}
+
 export interface UserContentTrustRule {
 	id: RecordId;
 	user_id: RecordId;
@@ -57,6 +68,40 @@ class ContentTrustRuleRepository {
 			 COMMIT TRANSACTION;`,
 			{ userId, pattern: p, kind, now }
 		);
+	}
+
+	/**
+	 * Append one rule after verifying the per-user count in the same transaction (avoids TOCTOU vs separate SELECT).
+	 */
+	async appendRuleWithLimit(
+		userId: RecordId | string,
+		pattern: string,
+		kind: TrustRuleKind,
+		maxRules: number = CONTENT_TRUST_RULE_MAX
+	): Promise<void> {
+		const now = new Date();
+		const p = pattern.trim();
+		try {
+			await this.db.query(
+				`BEGIN TRANSACTION;
+				 LET $cntRow = SELECT count() AS count FROM user_content_trust_rule WHERE user_id = $userId GROUP ALL;
+				 LET $count = IF array::len($cntRow) = 0 { 0 } ELSE { $cntRow[0].count };
+				 IF $count >= $maxRules {
+					 THROW "CONTENT_TRUST_LIMIT";
+				 };
+				 LET $top = SELECT sort_order FROM user_content_trust_rule WHERE user_id = $userId ORDER BY sort_order DESC LIMIT 1;
+				 LET $next = IF array::len($top) = 0 { 0 } ELSE { $top[0].sort_order + 1 };
+				 CREATE user_content_trust_rule SET user_id = $userId, pattern = $pattern, kind = $kind, sort_order = $next, created_at = $now;
+				 COMMIT TRANSACTION;`,
+				{ userId, pattern: p, kind, now, maxRules }
+			);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (msg.includes('CONTENT_TRUST_LIMIT')) {
+				throw new ContentTrustRuleLimitExceededError();
+			}
+			throw e;
+		}
 	}
 
 	async deleteAllForUser(userId: RecordId | string): Promise<void> {

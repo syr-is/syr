@@ -139,6 +139,8 @@
 		}
 		return {
 			type: 'media',
+			title: v.title,
+			description: v.description,
 			media_urls: [...mediaUrls],
 			display_mode: v.display_mode,
 			visibility: vis
