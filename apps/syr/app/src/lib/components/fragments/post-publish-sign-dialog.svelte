@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
@@ -81,6 +82,10 @@
 		_synerSessionId = null;
 		synerPolling = false;
 	}
+
+	onDestroy(() => {
+		resetSynerUi();
+	});
 
 	function assertSigningPrereqs(): void {
 		if (!did?.startsWith('did:syr:')) throw new Error('Not signed in with a DID.');

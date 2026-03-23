@@ -159,7 +159,11 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Registry request failed';
 		await completeRegistrySignSessionFailed(sessionId, msg);
-		throw e;
+		console.error('[registry-sign signature] pushSignedRegistryJobToRemoteAndComplete:', e);
+		throw error(500, {
+			code: 'INTERNAL_ERROR',
+			message: 'Registry update failed'
+		});
 	}
 
 	await completeRegistrySignSessionSuccess(sessionId);
@@ -179,7 +183,7 @@ async function failSessionAndRetryJob(
 	try {
 		const userId = stringToRecordId.decode(session.user_id);
 		const job = await outboxRepository.findActiveByIdAndUser(session.job_thing_id, userId);
-		if (job && job.status !== 'finalization_failed') {
+		if (job) {
 			await outboxRepository.retry(job.id);
 		}
 	} catch (re) {

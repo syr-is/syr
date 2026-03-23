@@ -48,13 +48,16 @@ export function buildPostSignedPayloadV1(params: {
 }): PostSignedPayloadV1 {
 	const { did, postLocalId, status, snapshot, mode, existingCreatedAtIso } = params;
 
-	const created_at =
-		mode === 'create'
-			? new Date().toISOString()
-			: (existingCreatedAtIso?.trim() ??
-				(() => {
-					throw new Error('existingCreatedAtIso is required when mode is "update"');
-				})());
+	let created_at: string;
+	if (mode === 'create') {
+		created_at = new Date().toISOString();
+	} else {
+		const t = existingCreatedAtIso?.trim();
+		if (!t) {
+			throw new Error('existingCreatedAtIso is required and non-empty when mode is "update"');
+		}
+		created_at = t;
+	}
 
 	const base: Record<string, unknown> = {
 		type: 'post@v1',

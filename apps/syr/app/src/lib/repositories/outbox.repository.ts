@@ -164,16 +164,20 @@ class OutboxRepository {
 	/**
 	 * Retry a job immediately (user-initiated). Resets next_retry_at to now.
 	 * Does not requeue {@link markFinalizationFailed} jobs (remote mutation already accepted).
+	 * @returns true if a row was updated
 	 */
-	async retry(id: RecordId): Promise<void> {
-		await this.db.query(
+	async retry(id: RecordId): Promise<boolean> {
+		const result = await this.db.query<[OutboxEntry[]]>(
 			`UPDATE outbox SET
 				status = "pending",
 				next_retry_at = time::now(),
 				updated_at = time::now()
-				WHERE id = $id AND status != "finalization_failed"`,
+				WHERE id = $id AND status != "finalization_failed"
+				RETURN AFTER`,
 			{ id }
 		);
+		const updated = result[0] ?? [];
+		return updated.length > 0;
 	}
 
 	/**
@@ -210,7 +214,8 @@ class OutboxRepository {
 	}
 
 	/**
-	 * Find a single active job by id and user. Returns null if not found or completed/cancelled.
+	 * Find a single active job by id and user. Returns null if not found or in a terminal state
+	 * (completed, cancelled, finalization_failed).
 	 * @param jobId - RecordId or string (e.g. "outbox:xxxx")
 	 */
 	async findActiveByIdAndUser(
@@ -223,7 +228,7 @@ class OutboxRepository {
 					`SELECT * FROM outbox
 				WHERE id = type::thing($jobId)
 				AND user_id = $userId
-				AND status NOT IN ["completed", "cancelled"]
+				AND status NOT IN ["completed", "cancelled", "finalization_failed"]
 				LIMIT 1`,
 					{ jobId, userId }
 				]
@@ -231,7 +236,7 @@ class OutboxRepository {
 					`SELECT * FROM outbox
 				WHERE id = $jobId
 				AND user_id = $userId
-				AND status NOT IN ["completed", "cancelled"]
+				AND status NOT IN ["completed", "cancelled", "finalization_failed"]
 				LIMIT 1`,
 					{ jobId, userId }
 				];

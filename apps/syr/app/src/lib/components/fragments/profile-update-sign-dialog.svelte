@@ -112,13 +112,14 @@
 	}
 
 	async function signWithUnlockedSigil() {
+		let seed: Uint8Array | null = null;
 		busy = true;
 		try {
 			const loadedDid = await getLoadedSigilDid();
 			if (loadedDid !== did) {
 				throw new Error('Loaded Sigil is for a different identity.');
 			}
-			const seed = getUnlockedSigningSeed();
+			seed = getUnlockedSigningSeed();
 			if (!seed) throw new Error('Unlock your Sigil first.');
 			const payload = buildPayload();
 			const env = await signProfileMutationWithRootKey(payload, seed, identityPublicKey!);
@@ -126,6 +127,7 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			seed?.fill(0);
 			busy = false;
 		}
 	}
@@ -135,6 +137,7 @@
 			toast.error('Enter your Sigil passphrase');
 			return;
 		}
+		let seed: Uint8Array | null = null;
 		busy = true;
 		try {
 			const loadedDid = await getLoadedSigilDid();
@@ -143,7 +146,7 @@
 			}
 			await unlockSigilSession(sigilPassphrase);
 			sigilUiTick++;
-			const seed = getUnlockedSigningSeed();
+			seed = getUnlockedSigningSeed();
 			if (!seed) throw new Error('Unlock failed.');
 			const payload = buildPayload();
 			const env = await signProfileMutationWithRootKey(payload, seed, identityPublicKey!);
@@ -151,6 +154,7 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			seed?.fill(0);
 			sigilPassphrase = '';
 			busy = false;
 		}

@@ -7,8 +7,8 @@ const CONTENT_TRUST_RULE_MAX = 200;
 /** Thrown when the per-user rule cap is hit inside {@link ContentTrustRuleRepository.appendRuleWithLimit}. */
 export class ContentTrustRuleLimitExceededError extends Error {
 	readonly code = 'CONTENT_TRUST_LIMIT';
-	constructor() {
-		super('Content trust rules are limited to 200 entries');
+	constructor(maxRules: number) {
+		super(`Content trust rules are limited to ${maxRules} entries`);
 		this.name = 'ContentTrustRuleLimitExceededError';
 	}
 }
@@ -43,6 +43,9 @@ class ContentTrustRuleRepository {
 		userId: RecordId | string,
 		rules: Array<{ pattern: string; kind: TrustRuleKind }>
 	): Promise<void> {
+		if (rules.length > CONTENT_TRUST_RULE_MAX) {
+			throw new ContentTrustRuleLimitExceededError(CONTENT_TRUST_RULE_MAX);
+		}
 		const now = new Date();
 		let query =
 			'BEGIN TRANSACTION;\nDELETE FROM user_content_trust_rule WHERE user_id = $userId;\n';
@@ -58,16 +61,7 @@ class ContentTrustRuleRepository {
 	}
 
 	async appendRule(userId: RecordId | string, pattern: string, kind: TrustRuleKind): Promise<void> {
-		const now = new Date();
-		const p = pattern.trim();
-		await this.db.query(
-			`BEGIN TRANSACTION;
-			 LET $top = SELECT sort_order FROM user_content_trust_rule WHERE user_id = $userId ORDER BY sort_order DESC LIMIT 1;
-			 LET $next = IF array::len($top) = 0 { 0 } ELSE { $top[0].sort_order + 1 };
-			 CREATE user_content_trust_rule SET user_id = $userId, pattern = $pattern, kind = $kind, sort_order = $next, created_at = $now;
-			 COMMIT TRANSACTION;`,
-			{ userId, pattern: p, kind, now }
-		);
+		await this.appendRuleWithLimit(userId, pattern, kind, CONTENT_TRUST_RULE_MAX);
 	}
 
 	/**
@@ -98,7 +92,7 @@ class ContentTrustRuleRepository {
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			if (msg.includes('CONTENT_TRUST_LIMIT')) {
-				throw new ContentTrustRuleLimitExceededError();
+				throw new ContentTrustRuleLimitExceededError(maxRules);
 			}
 			throw e;
 		}

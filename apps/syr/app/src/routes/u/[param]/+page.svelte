@@ -24,6 +24,12 @@
 
 	let { data } = $props();
 
+	type FollowsApiJson = {
+		error?: { message?: string };
+		message?: string;
+		data?: unknown | null;
+	};
+
 	const POST_PAGE_SIZE = 24;
 	const UPLOAD_PAGE_SIZE = 24;
 
@@ -268,10 +274,7 @@
 				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(p.did)}`, {
 					method: 'DELETE'
 				});
-				const j = (await res.json().catch(() => ({}))) as {
-					error?: { message?: string };
-					message?: string;
-				};
+				const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
 				if (!res.ok) {
 					toast.error(j.error?.message ?? j.message ?? 'Unfollow failed');
 					return;
@@ -286,7 +289,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ followed_did: p.did })
 			});
-			const j = await res.json();
+			const j: FollowsApiJson = (await res.json()) as FollowsApiJson;
 			if (!res.ok) {
 				toast.error(j.error?.message ?? j.message ?? 'Follow failed');
 				return;

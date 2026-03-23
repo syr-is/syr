@@ -93,7 +93,7 @@
 	</form>
 
 	{#if searchError}
-		<p class="text-sm text-destructive">{searchError}</p>
+		<p class="text-sm text-destructive" role="alert" aria-live="assertive">{searchError}</p>
 	{/if}
 
 	{#if directoryHint && !searchError}

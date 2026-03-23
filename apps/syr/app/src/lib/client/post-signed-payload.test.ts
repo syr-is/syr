@@ -54,6 +54,24 @@ describe('buildPostSignedPayloadV1', () => {
 		expect(p.post_type).toBe('media');
 		expect(p.media_urls).toEqual(['https://x.example/a.jpg']);
 	});
+
+	it('throws when update mode has no existingCreatedAtIso', () => {
+		expect(() =>
+			buildPostSignedPayloadV1({
+				did: 'did:syr:z6MkhaXgBZDvotDkLBT7pETLi3x5eR1iKXuUp',
+				postLocalId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+				status: 'completed',
+				mode: 'update',
+				snapshot: {
+					type: 'blog',
+					title: 'Hi',
+					content: 'Body',
+					content_type: 'markdown',
+					visibility: 'public'
+				}
+			})
+		).toThrow(/existingCreatedAtIso/);
+	});
 });
 
 describe('signPostMutationWithRootKey', () => {
