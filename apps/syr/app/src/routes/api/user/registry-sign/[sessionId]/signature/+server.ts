@@ -178,10 +178,18 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 
 	const finalized = await completeRegistrySignSessionSuccess(sessionId);
 	if (!finalized) {
-		console.error('[registry-sign signature] completeRegistrySignSessionSuccess no-op', sessionId);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Could not finalize signing session'
+		console.error(
+			'[registry-sign signature] completeRegistrySignSessionSuccess returned false after remote push succeeded',
+			{ sessionId, jobId: session.job_thing_id }
+		);
+		return json({
+			status: 'partial',
+			data: {
+				remote_ok: true,
+				session_finalized: false,
+				sessionId
+			},
+			meta: { timestamp: new Date().toISOString() }
 		});
 	}
 

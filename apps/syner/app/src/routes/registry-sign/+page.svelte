@@ -334,11 +334,20 @@
 					device_public_key: expectedMb
 				})
 			});
+			const putBody = (await res.json().catch(() => ({}))) as {
+				status?: string;
+				error?: { message?: string };
+			};
 			if (!res.ok) {
-				const errJ = await res.json().catch(() => ({}));
-				const msg =
-					(errJ as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`;
+				const msg = putBody.error?.message ?? `HTTP ${res.status}`;
 				throw new Error(msg);
+			}
+			if (putBody.status === 'partial') {
+				toast.warning(
+					'The registry accepted your signature, but SYR could not finalize the signing session. Open SYR → Identity to check status or retry.'
+				);
+				userConfirmed = false;
+				return;
 			}
 			toast.success('Registry signature sent. Return to SYR.');
 			userConfirmed = false;

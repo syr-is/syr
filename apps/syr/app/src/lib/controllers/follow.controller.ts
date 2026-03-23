@@ -1,4 +1,4 @@
-import { followRepository } from '$lib/repositories/follow.repository';
+import { followRepository, type UserFollow } from '$lib/repositories/follow.repository';
 import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
 import { assertFollowableFromRegistries } from '$lib/server/follow-registry-gate.server';
 import { isValidSyrDid } from '@syr-is/did';
@@ -12,12 +12,16 @@ export class FollowValidationError extends Error {
 }
 
 export class FollowController {
-	async follow(followerUserId: RecordId | string, followerDid: string, followedDid: string) {
+	async follow(
+		followerUserId: RecordId | string,
+		followerDid: string,
+		followedDid: string
+	): Promise<UserFollow | null> {
 		if (!isValidSyrDid(followedDid)) {
 			throw new FollowValidationError('Invalid follow target DID.');
 		}
 		if (followerDid === followedDid) {
-			return (await followRepository.findOne(followerUserId, followedDid)) ?? null;
+			return await followRepository.findOne(followerUserId, followedDid);
 		}
 
 		const existing = await followRepository.findOne(followerUserId, followedDid);

@@ -128,6 +128,9 @@
 		if (!did) return;
 		const seq = ++postsFetchSeq;
 		const page = postsPage;
+		postsRaw = [];
+		mediaUrlMimeTypes = {};
+		mediaUrlFilenames = {};
 		postsLoading = true;
 		postsError = null;
 		try {
@@ -174,6 +177,7 @@
 		if (!did) return;
 		const seq = ++uploadsFetchSeq;
 		const page = uploadsPage;
+		uploadsRaw = [];
 		uploadsLoading = true;
 		uploadsError = null;
 		try {
@@ -266,14 +270,17 @@
 	}
 
 	async function toggleFollow() {
-		if (!p.did || !viewer) return;
+		if (!p.did || !viewer || followBusy || followStateLoading) return;
+		const currentDid = p.did;
 		followBusy = true;
 		try {
 			if (isFollowing) {
-				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(p.did)}`, {
+				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(currentDid)}`, {
 					method: 'DELETE'
 				});
+				if (p.did !== currentDid) return;
 				const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
+				if (p.did !== currentDid) return;
 				if (!res.ok) {
 					toast.error(j.error?.message ?? j.message ?? 'Unfollow failed');
 					return;
@@ -286,9 +293,11 @@
 			const res = await fetch('/api/follows', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ followed_did: p.did })
+				body: JSON.stringify({ followed_did: currentDid })
 			});
+			if (p.did !== currentDid) return;
 			const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
+			if (p.did !== currentDid) return;
 			if (!res.ok) {
 				toast.error(j.error?.message ?? j.message ?? 'Follow failed');
 				return;
@@ -300,6 +309,7 @@
 			isFollowing = true;
 			toast.success('Now following');
 		} catch (e) {
+			if (p.did !== currentDid) return;
 			toast.error(e instanceof Error ? e.message : 'Follow failed');
 		} finally {
 			followBusy = false;
