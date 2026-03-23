@@ -1,11 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { scanOutcome } from '$lib/stores/scanner';
-	import {
-		parseSyrLoginUrl,
-		parseSyrSyncProfileUrl,
-		parseSyrChallengeSignUrlAny
-	} from '$lib/utils/syr-url';
+	import { syrUrlToInternalRoute } from '$lib/utils/syr-url';
 	import { openAppSettings } from '@tauri-apps/plugin-barcode-scanner';
 	import { toast } from 'svelte-sonner';
 	import Scanner from '$lib/components/scanner.svelte';
@@ -32,21 +28,10 @@
 		const content = outcome.content;
 		scanOutcome.set(null);
 
-		const login = parseSyrLoginUrl(content);
-		if (login) {
-			goto(`/scan-confirm?${new URLSearchParams(login)}`);
-			return;
-		}
-
-		const sign = parseSyrChallengeSignUrlAny(content);
-		if (sign) {
-			goto(`/export-verify?${new URLSearchParams(sign)}`);
-			return;
-		}
-
-		const sync = parseSyrSyncProfileUrl(content);
-		if (sync) {
-			goto(`/sync-profile?${new URLSearchParams(sync)}`);
+		const route = syrUrlToInternalRoute(content);
+		if (route) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto(route);
 			return;
 		}
 

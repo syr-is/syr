@@ -5,7 +5,7 @@ export interface OutboxEntry {
 	id: RecordId;
 	type: string;
 	payload: Record<string, unknown>;
-	status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+	status: 'pending' | 'processing' | 'completed' | 'failed' | 'finalization_failed' | 'cancelled';
 	attempts: number;
 	max_attempts: number;
 	next_retry_at: string;
@@ -110,6 +110,22 @@ class OutboxRepository {
 	}
 
 	/**
+	 * Terminal failure after remote registry already accepted the mutation but local DB finalization failed.
+	 * Does not return the job to pending (unlike markFailed with room to retry).
+	 */
+	async markFinalizationFailed(id: RecordId, error: string, maxAttempts: number): Promise<void> {
+		await this.db.query(
+			`UPDATE $id SET
+				status = "finalization_failed",
+				attempts = $maxAttempts,
+				last_error = $error,
+				next_retry_at = time::now(),
+				updated_at = time::now()`,
+			{ id, maxAttempts, error }
+		);
+	}
+
+	/**
 	 * Mark a job as failed, increment attempts, and calculate next retry.
 	 */
 	async markFailed(
@@ -147,15 +163,21 @@ class OutboxRepository {
 
 	/**
 	 * Retry a job immediately (user-initiated). Resets next_retry_at to now.
+	 * Does not requeue terminal jobs (finalization_failed, completed, cancelled).
+	 * @returns true if a row was updated
 	 */
-	async retry(id: RecordId): Promise<void> {
-		await this.db.query(
-			`UPDATE $id SET
+	async retry(id: RecordId): Promise<boolean> {
+		const result = await this.db.query<[OutboxEntry[]]>(
+			`UPDATE outbox SET
 				status = "pending",
 				next_retry_at = time::now(),
-				updated_at = time::now()`,
+				updated_at = time::now()
+				WHERE id = $id AND status NOT IN ["finalization_failed", "completed", "cancelled"]
+				RETURN AFTER`,
 			{ id }
 		);
+		const updated = result[0] ?? [];
+		return updated.length > 0;
 	}
 
 	/**
@@ -177,14 +199,14 @@ class OutboxRepository {
 	}
 
 	/**
-	 * Find outbox jobs for a user by type, excluding completed/cancelled.
+	 * Find outbox jobs for a user by type, excluding terminal rows (completed, cancelled, finalization_failed).
 	 */
 	async findActiveByUserAndType(userId: RecordId, type: string): Promise<OutboxEntry[]> {
 		const result = await this.db.query<[OutboxEntry[]]>(
 			`SELECT * FROM outbox
 				WHERE user_id = $userId
 				AND type = $type
-				AND status NOT IN ["completed", "cancelled"]
+				AND status NOT IN ["completed", "cancelled", "finalization_failed"]
 				ORDER BY created_at DESC`,
 			{ userId, type }
 		);
@@ -192,7 +214,8 @@ class OutboxRepository {
 	}
 
 	/**
-	 * Find a single active job by id and user. Returns null if not found or completed/cancelled.
+	 * Find a single active job by id and user. Returns null if not found or in a terminal state
+	 * (completed, cancelled, finalization_failed).
 	 * @param jobId - RecordId or string (e.g. "outbox:xxxx")
 	 */
 	async findActiveByIdAndUser(
@@ -205,7 +228,7 @@ class OutboxRepository {
 					`SELECT * FROM outbox
 				WHERE id = type::thing($jobId)
 				AND user_id = $userId
-				AND status NOT IN ["completed", "cancelled"]
+				AND status NOT IN ["completed", "cancelled", "finalization_failed"]
 				LIMIT 1`,
 					{ jobId, userId }
 				]
@@ -213,7 +236,30 @@ class OutboxRepository {
 					`SELECT * FROM outbox
 				WHERE id = $jobId
 				AND user_id = $userId
-				AND status NOT IN ["completed", "cancelled"]
+				AND status NOT IN ["completed", "cancelled", "finalization_failed"]
+				LIMIT 1`,
+					{ jobId, userId }
+				];
+		const result = await this.db.query<[OutboxEntry[]]>(query, params);
+		const entries = result[0] ?? [];
+		return entries[0] ?? null;
+	}
+
+	/** Current row for id + user regardless of status (for guards after handler errors). */
+	async findByIdForUser(jobId: RecordId | string, userId: RecordId): Promise<OutboxEntry | null> {
+		const isString = typeof jobId === 'string';
+		const [query, params] = isString
+			? [
+					`SELECT * FROM outbox
+				WHERE id = type::thing($jobId)
+				AND user_id = $userId
+				LIMIT 1`,
+					{ jobId, userId }
+				]
+			: [
+					`SELECT * FROM outbox
+				WHERE id = $jobId
+				AND user_id = $userId
 				LIMIT 1`,
 					{ jobId, userId }
 				];

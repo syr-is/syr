@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { UpdateRecordDto } from './dto/update-record.dto';
 import { DeleteRecordDto } from './dto/delete-record.dto';
+import { DirectoryUpsertDto } from './dto/directory-upsert.dto';
 import { verify, canonicalize, decodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
 
@@ -12,9 +13,47 @@ export interface HostingRecord {
 	signature: string;
 }
 
+export interface DirectoryEntry {
+	did: string;
+	provider: string;
+	username: string;
+	displayName: string;
+	listed: boolean;
+	updatedAt: string;
+	signature: string;
+}
+
+interface DirectoryRow {
+	did: string;
+	provider: string;
+	username: string;
+	display_name: string;
+	listed: boolean;
+	updated_at: string;
+	signature: string;
+}
+
 @Injectable()
 export class RegistryService {
 	constructor(private readonly dbService: DbService) {}
+
+	private static isUniqueConstraintError(error: unknown): boolean {
+		if (error && typeof error === 'object') {
+			if ('code' in error && (error as { code: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION') {
+				return true;
+			}
+			if ('message' in error) {
+				const msg = String((error as { message: string }).message).toLowerCase();
+				return (
+					msg.includes('unique') ||
+					msg.includes('duplicate') ||
+					msg.includes('already exists') ||
+					msg.includes('constraint')
+				);
+			}
+		}
+		return false;
+	}
 
 	/**
 	 * Resolve a DID to its hosting record.
@@ -163,5 +202,145 @@ export class RegistryService {
 		await db.query('DELETE FROM hosting_record WHERE did = $did', {
 			did: dto.did
 		});
+	}
+
+	async upsertDirectory(dto: DirectoryUpsertDto): Promise<DirectoryEntry> {
+		const parsed = parseDid(dto.did);
+		const publicKey = parsed.publicKey;
+
+		const payload = canonicalize({
+			did: dto.did,
+			provider: dto.provider,
+			username: dto.username,
+			displayName: dto.displayName,
+			listed: dto.listed,
+			updatedAt: dto.updatedAt
+		});
+
+		const signatureBytes = decodeMultibase(dto.signature);
+		const isValid = await verify(payload, signatureBytes, publicKey);
+		if (!isValid) {
+			throw new Error('Invalid signature: directory upsert verification failed');
+		}
+
+		const db = this.dbService.getDb();
+		const selectRow = async (): Promise<DirectoryRow | undefined> => {
+			const existing = await db.query<[DirectoryRow[]]>(
+				'SELECT * FROM directory_entry WHERE did = $did LIMIT 1',
+				{ did: dto.did }
+			);
+			return existing[0]?.[0];
+		};
+
+		let prev = await selectRow();
+		const newTime = new Date(dto.updatedAt).getTime();
+		const runDirectoryUpdate = async () => {
+			if (!prev) return;
+			const oldTime = new Date(prev.updated_at).getTime();
+			if (newTime <= oldTime) {
+				throw new Error(
+					'Stale update: updatedAt must be strictly newer than the existing directory row'
+				);
+			}
+			await db.query(
+				`UPDATE directory_entry SET
+          provider = $provider,
+          username = $username,
+          display_name = $displayName,
+          listed = $listed,
+          updated_at = $updatedAt,
+          signature = $signature
+        WHERE did = $did AND updated_at < $updatedAt`,
+				{
+					did: dto.did,
+					provider: dto.provider,
+					username: dto.username,
+					displayName: dto.displayName,
+					listed: dto.listed,
+					updatedAt: new Date(dto.updatedAt),
+					signature: dto.signature
+				}
+			);
+		};
+
+		if (prev) {
+			await runDirectoryUpdate();
+		} else {
+			try {
+				await db.query(
+					`CREATE directory_entry SET
+          did = $did,
+          provider = $provider,
+          username = $username,
+          display_name = $displayName,
+          listed = $listed,
+          updated_at = $updatedAt,
+          signature = $signature`,
+					{
+						did: dto.did,
+						provider: dto.provider,
+						username: dto.username,
+						displayName: dto.displayName,
+						listed: dto.listed,
+						updatedAt: new Date(dto.updatedAt),
+						signature: dto.signature
+					}
+				);
+			} catch (createErr) {
+				if (!RegistryService.isUniqueConstraintError(createErr)) {
+					throw createErr;
+				}
+				prev = await selectRow();
+				if (!prev) {
+					throw createErr;
+				}
+				await runDirectoryUpdate();
+			}
+		}
+
+		return {
+			did: dto.did,
+			provider: dto.provider,
+			username: dto.username,
+			displayName: dto.displayName,
+			listed: dto.listed,
+			updatedAt: dto.updatedAt,
+			signature: dto.signature
+		};
+	}
+
+	async searchDirectory(q: string, limit: number): Promise<DirectoryEntry[]> {
+		const db = this.dbService.getDb();
+		const cap = Math.min(Math.max(limit, 1), 100);
+		const needle = q.trim().toLowerCase();
+		const result = await db.query<[DirectoryRow[]]>(
+			needle
+				? `SELECT * FROM directory_entry
+           WHERE listed = true AND (
+             string::contains(string::lowercase(did), $needle)
+             OR string::contains(string::lowercase(username), $needle)
+             OR string::contains(string::lowercase(display_name ?? ''), $needle)
+           )
+           ORDER BY updated_at DESC
+           LIMIT $cap`
+				: `SELECT * FROM directory_entry
+           WHERE listed = true
+           ORDER BY updated_at DESC
+           LIMIT $cap`,
+			needle ? { needle, cap } : { cap }
+		);
+		const rows = result[0] ?? [];
+		return rows.map((r) => ({
+			did: r.did,
+			provider: r.provider,
+			username: r.username,
+			displayName: r.display_name,
+			listed: r.listed,
+			updatedAt:
+				typeof r.updated_at === 'string'
+					? r.updated_at
+					: new Date(r.updated_at as Date).toISOString(),
+			signature: r.signature
+		}));
 	}
 }

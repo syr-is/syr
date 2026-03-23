@@ -20,7 +20,17 @@
 	let unlockLoading = $state(false);
 	let error = $state<string | null>(null);
 	let signature = $state<string | null>(null);
+	let signatureRawBase64 = $state<string | null>(null);
 	let seedFromStore = $state<string | null>(null);
+
+	type SigOutputEncoding = 'multibase' | 'base64';
+	let sigOutputEncoding = $state<SigOutputEncoding>('multibase');
+
+	type PayloadPreviewView = 'pretty' | 'jcs';
+	let payloadPreviewView = $state<PayloadPreviewView>('pretty');
+	let previewCanonicalJcs = $state<string | null>(null);
+	let previewJcsError = $state(false);
+
 	let persona = $state<{
 		id: string;
 		displayName: string;
@@ -49,8 +59,67 @@
 		seedFromStore ?? (pastedKey.trim().length > 0 ? pastedKey.trim() : null)
 	);
 
-	function bytesToBase64(bytes: number[]): string {
-		return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+	/** Any JSON value (object, array, etc.) — matches what “canonicalize JSON” can sign. */
+	const parsedPayloadJson = $derived.by((): unknown | null => {
+		const t = payload.trim();
+		if (!t) return null;
+		try {
+			return JSON.parse(t) as unknown;
+		} catch {
+			return null;
+		}
+	});
+
+	const prettyPreviewText = $derived(
+		parsedPayloadJson !== null ? JSON.stringify(parsedPayloadJson, null, 2) : ''
+	);
+
+	const payloadPreviewText = $derived.by(() => {
+		if (parsedPayloadJson === null) return '';
+		if (payloadPreviewView === 'pretty') return prettyPreviewText;
+		if (previewCanonicalJcs !== null) return previewCanonicalJcs;
+		if (previewJcsError) return '(Could not produce RFC 8785 JCS for this payload.)';
+		return 'Loading canonical form…';
+	});
+
+	$effect(() => {
+		if (parsedPayloadJson === null) {
+			previewCanonicalJcs = null;
+			previewJcsError = false;
+			return;
+		}
+		const obj = parsedPayloadJson;
+		previewJcsError = false;
+		let cancelled = false;
+		void invoke<string>('canonicalize_cmd', { objJson: JSON.stringify(obj) })
+			.then((s) => {
+				if (cancelled) return;
+				previewCanonicalJcs = s;
+			})
+			.catch(() => {
+				if (cancelled) return;
+				previewJcsError = true;
+				previewCanonicalJcs = null;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	const signatureDisplay = $derived.by(() => {
+		if (!signature) return '';
+		if (sigOutputEncoding === 'multibase') return signature;
+		return signatureRawBase64 ?? '';
+	});
+
+	function bytesToBase64(bytes: number[] | Uint8Array): string {
+		const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+		const chunk = 0x8000;
+		let binary = '';
+		for (let i = 0; i < u8.length; i += chunk) {
+			binary += String.fromCharCode(...u8.subarray(i, i + chunk));
+		}
+		return btoa(binary);
 	}
 
 	function lockSession() {
@@ -59,6 +128,8 @@
 		pastedKey = '';
 		personaPassphrase = '';
 		signature = null;
+		signatureRawBase64 = null;
+		sigOutputEncoding = 'multibase';
 		error = null;
 	}
 
@@ -104,6 +175,7 @@
 		loading = true;
 		error = null;
 		signature = null;
+		signatureRawBase64 = null;
 		try {
 			let payloadStr = payload;
 			if (canonicalizeJson) {
@@ -128,6 +200,7 @@
 				bytes: sigBytes
 			});
 			signature = sigMultibase;
+			signatureRawBase64 = bytesToBase64(sigBytes);
 			toast.success('Payload signed');
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -260,6 +333,47 @@
 				/>
 			</div>
 
+			{#if parsedPayloadJson !== null}
+				<div class="space-y-2">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<span class="text-sm font-medium">
+							{payloadPreviewView === 'pretty'
+								? 'Preview: pretty JSON'
+								: 'Preview: RFC 8785 JCS (what you sign if canonicalize is on)'}
+						</span>
+						<div
+							class="border-border bg-muted/40 inline-flex rounded-md border p-0.5 text-[11px]"
+							role="group"
+							aria-label="Payload preview format"
+						>
+							<button
+								type="button"
+								class="rounded px-2 py-1 font-medium transition-colors {payloadPreviewView ===
+								'pretty'
+									? 'bg-background shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => (payloadPreviewView = 'pretty')}
+							>
+								Pretty
+							</button>
+							<button
+								type="button"
+								class="rounded px-2 py-1 font-medium transition-colors {payloadPreviewView === 'jcs'
+									? 'bg-background shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => (payloadPreviewView = 'jcs')}
+							>
+								JCS
+							</button>
+						</div>
+					</div>
+					<div class="bg-muted/50 rounded-md border p-3 font-mono text-xs break-all">
+						<pre
+							class="max-h-48 overflow-auto whitespace-pre-wrap select-all">{payloadPreviewText}</pre>
+					</div>
+				</div>
+			{/if}
+
 			<div class="flex items-center gap-2">
 				<input
 					type="checkbox"
@@ -283,8 +397,57 @@
 
 			{#if signature}
 				<div class="border-border bg-muted/50 space-y-2 rounded-lg border p-4">
-					<p class="text-muted-foreground text-sm font-medium">Signature (multibase)</p>
-					<p class="font-mono text-sm break-all select-all">{signature}</p>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<p class="text-muted-foreground text-sm font-medium">
+							Signature ({sigOutputEncoding === 'multibase'
+								? 'multibase z…'
+								: 'raw 64 bytes, base64'})
+						</p>
+						<div
+							class="border-border bg-background inline-flex rounded-md border p-0.5 text-[11px]"
+							role="group"
+							aria-label="Signature encoding"
+						>
+							<button
+								type="button"
+								class="rounded px-2 py-1 font-medium transition-colors {sigOutputEncoding ===
+								'multibase'
+									? 'bg-muted shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => (sigOutputEncoding = 'multibase')}
+							>
+								Multibase
+							</button>
+							<button
+								type="button"
+								class="rounded px-2 py-1 font-medium transition-colors {sigOutputEncoding ===
+								'base64'
+									? 'bg-muted shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={() => (sigOutputEncoding = 'base64')}
+							>
+								Base64
+							</button>
+						</div>
+					</div>
+					<p class="font-mono text-sm break-all select-all">{signatureDisplay}</p>
+					<p class="text-muted-foreground text-xs leading-relaxed">
+						Syner uses <strong class="text-foreground">Ed25519</strong> over the exact bytes you
+						sign (UTF-8 of the payload or JCS). For a third-party browser check, the
+						<a
+							class="text-primary underline underline-offset-2"
+							href="https://cyphr.me/ed25519_tool/ed.html"
+							target="_blank"
+							rel="noopener noreferrer">Cyphr.me Ed25519 tool</a
+						>
+						accepts <strong class="text-foreground">Text (UTF-8)</strong> for the message and
+						<strong class="text-foreground">base64</strong> for the public key and signature (use
+						the
+						<strong class="text-foreground">JCS</strong> preview and
+						<strong class="text-foreground">Base64</strong>
+						toggles above). Use <strong class="text-foreground">Ed25519</strong>, not Ed25519ph; the
+						site runs client-side—only use it if you trust it.
+					</p>
 				</div>
 			{/if}
 

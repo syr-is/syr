@@ -60,7 +60,10 @@ const ConfigSchema = z.object({
 	// CORS - ALLOWED_ORIGINS overrides; when unset, defaults to [PUBLIC_URL]
 	ALLOWED_ORIGINS: z.string().optional(),
 	CORS_ORIGIN: z.string().optional(),
-	CORS_CREDENTIALS: z.coerce.boolean().default(true)
+	CORS_CREDENTIALS: z.coerce.boolean().default(true),
+
+	/** When true, profile/post mutations require a verified client signature if the user has a DID */
+	SYR_REQUIRE_SIGNED_MUTATIONS: z.coerce.boolean().default(false)
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -212,4 +215,8 @@ export const cors = {
 	/** Primary origin (first in allowed list); use allowedOrigins for multi-origin checks. */
 	origin: config.CORS_ORIGIN,
 	credentials: config.CORS_CREDENTIALS
+} as const;
+
+export const signedMutations = {
+	requireSigned: config.SYR_REQUIRE_SIGNED_MUTATIONS
 } as const;

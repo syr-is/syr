@@ -64,9 +64,9 @@ Make identity truly portable across SYR instances.
 - `.well-known/syr` discovery endpoint (instance capabilities, supported features)
 - Registry improvements: batch resolution, caching, health checks
 - Full migration flow: export from provider A, import on provider B, update registry
-- Root key rotation API endpoint (leveraging existing `createRotationStatement`)
-- Key history chain (append-only rotation log)
 - Provider-to-provider identity verification
+
+**Not in scope (simplified lifecycle):** In-place **root key rotation** and **append-only key history** are deferred. See [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified). Changing keys is modeled as a **new DID** plus export/import, not rotation of an existing DID. Helper routines such as `createRotationStatement()` in `@syr-is/crypto` may remain for hypothetical future use but are not roadmap commitments.
 
 ---
 
@@ -114,7 +114,7 @@ Architectural maturation for production readiness.
 - OpenTelemetry integration (traces, metrics, logs)
 - Structured logging with correlation IDs
 - Rate limiting and abuse prevention
-- Audit trail for identity operations (key generation, delegation, export, rotation)
+- Audit trail for identity operations (key generation, delegation, export)
 
 ---
 
@@ -127,7 +127,7 @@ Prepare for real-world deployment.
 - Backup and disaster recovery procedures
 - Horizontal scaling (load-balanced API, read replicas)
 - Improved identity export/import with incremental sync
-- Social recovery guardians (threshold key recovery)
+- Social recovery guardians (threshold key recovery) — **deferred**; conflicts with [simplified identity lifecycle](/architecture/identity-lifecycle-simplified) until explicitly replanned
 - Hardware-backed key attestation support
 
 ---

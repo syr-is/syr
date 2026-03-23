@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '@syr-is/ui/button';
-	import { List, Grid3x3, LayoutGrid, GalleryHorizontal } from 'lucide-svelte';
+	import { List, Grid3x3, LayoutGrid, GalleryHorizontal, PanelTop } from 'lucide-svelte';
 	import type { ViewMode } from '$lib/types/display-item';
 
 	let {
@@ -15,7 +15,8 @@
 		list: { icon: List, label: 'List' },
 		gallery: { icon: Grid3x3, label: 'Gallery' },
 		masonry: { icon: LayoutGrid, label: 'Grid' },
-		carousel: { icon: GalleryHorizontal, label: 'Carousel' }
+		carousel: { icon: GalleryHorizontal, label: 'Carousel' },
+		cards: { icon: PanelTop, label: 'Cards' }
 	};
 </script>
 

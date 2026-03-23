@@ -3,7 +3,17 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { postController } from '$lib/controllers/post.controller';
-import { recordIdFromDidAndLocal, PostUpdateSchema } from '@syr-is/types';
+import {
+	recordIdFromDidAndLocal,
+	PostUpdateSchema,
+	PostUpdateByUrlRequestSchema,
+	PostDeleteRequestSchema,
+	type SignedMutationEnvelope
+} from '@syr-is/types';
+import {
+	assertPostUpdateSignedMutation,
+	assertPostDeleteSigned
+} from '$lib/server/signed-mutation.server';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -92,10 +102,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			});
 		}
 
-		const body = await request.json();
+		const parsedBody = PostUpdateByUrlRequestSchema.parse(await request.json());
+		const { signed_mutation, ...rest } = parsedBody;
 
 		// Parse the update data (without id since it's in the URL)
-		const data = PostUpdateSchema.omit({ id: true }).partial().parse(body);
+		const data = PostUpdateSchema.omit({ id: true }).partial().parse(rest);
 
 		const resolvedType = data.type ?? existingPost.type;
 
@@ -134,7 +145,26 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				? ['media_urls', 'display_mode']
 				: ['content_type', 'content']
 			: undefined;
-		const result = await postController.updatePost(updatePayload, keysToUnset);
+
+		const { signature } = await assertPostUpdateSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			existingPost,
+			{
+				type: updatePayload.type,
+				title: updatePayload.title,
+				description: updatePayload.description,
+				content: updatePayload.content,
+				content_type: updatePayload.content_type,
+				media_urls: updatePayload.media_urls,
+				display_mode: updatePayload.display_mode,
+				visibility: updatePayload.visibility,
+				status: updatePayload.status
+			},
+			postId
+		);
+
+		const result = await postController.updatePost(updatePayload, keysToUnset, signature);
 
 		return json({
 			status: 'success',
@@ -163,7 +193,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+export const DELETE: RequestHandler = async ({ params, locals, request }) => {
 	if (!locals.user) {
 		throw error(401, {
 			code: 'AUTHENTICATION_ERROR',
@@ -198,6 +228,28 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 				message: 'You do not have permission to delete this post'
 			});
 		}
+
+		let signed_mutation: SignedMutationEnvelope | undefined;
+		const text = await request.text();
+		if (text.trim()) {
+			let parsedJson: unknown;
+			try {
+				parsedJson = JSON.parse(text);
+			} catch {
+				throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' });
+			}
+			const parsed = PostDeleteRequestSchema.safeParse(parsedJson);
+			if (!parsed.success) {
+				throw error(400, {
+					code: 'VALIDATION_ERROR',
+					message: 'Invalid delete request body',
+					details: z.treeifyError(parsed.error)
+				});
+			}
+			signed_mutation = parsed.data.signed_mutation;
+		}
+
+		await assertPostDeleteSigned(locals.user.id, signed_mutation, postId);
 
 		// Delete the post record (uploads are preserved in user storage)
 		await postController.deletePost(postId, user.id);

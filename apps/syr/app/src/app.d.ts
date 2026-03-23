@@ -18,12 +18,17 @@ declare global {
 				sessionId: string;
 				created_at: Date;
 				updated_at: Date;
+				signing_warn_before_each_action?: boolean;
+				signing_require_explicit_sign_button?: boolean;
 				profile?: {
 					id: string;
 					display_name: string;
 					bio?: string;
 					avatar_url?: string;
 					banner_url?: string;
+					content_signature?: string;
+					signed_payload_json?: string;
+					signing_device_public_key?: string;
 				};
 			};
 		}

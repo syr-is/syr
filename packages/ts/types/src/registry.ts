@@ -43,3 +43,21 @@ export const DeleteRecordSchema = z
 	.meta({ id: 'DeleteRecord' });
 
 export type DeleteRecord = z.infer<typeof DeleteRecordSchema>;
+
+/**
+ * Opt-in public directory row (registry search).
+ * Signature is over canonical JSON of { did, provider, username, displayName, listed, updatedAt }.
+ */
+export const DirectoryUpsertSchema = z
+	.object({
+		did: didSyr,
+		provider: z.string().url(),
+		username: z.string().min(1).max(64),
+		displayName: z.string().min(1).max(100),
+		listed: z.boolean(),
+		updatedAt: isoTimestamp,
+		signature
+	})
+	.meta({ id: 'DirectoryUpsert' });
+
+export type DirectoryUpsert = z.infer<typeof DirectoryUpsertSchema>;

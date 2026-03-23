@@ -769,6 +769,21 @@ fn did_short_for_filename(did: &str) -> String {
         .collect()
 }
 
+/// Encrypted Sigil JSON only (for browser signing handoff — no plaintext keys on the wire).
+#[tauri::command]
+pub fn read_persona_encrypted_sigil_json_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+) -> Result<String, String> {
+    validate_persona_id(&persona_id)?;
+    let base = get_base_path(&app)?;
+    let sigil_path = base.join(&persona_id).join("identity.sigil");
+    if !sigil_path.exists() {
+        return Err("This persona has no encrypted Sigil file.".to_string());
+    }
+    std::fs::read_to_string(&sigil_path).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn export_persona_as_file_cmd(
     app: tauri::AppHandle,

@@ -13,6 +13,16 @@ const KV_IMPORT_TOKEN = 'identity_import_token';
 const KV_PUBLIC_IMPORT_TOKEN = 'identity_public_import_token';
 const KV_DELETE_AEGIS_TOKEN = 'identity_delete_aegis_token';
 const KV_DELETE_ACCOUNT_TOKEN = 'identity_delete_account_token';
+const KV_SIGIL_HANDOFF_SESSION = 'user_sigil_handoff_session';
+const KV_POST_SIGN_SESSION = 'user_post_sign_session';
+const KV_REGISTRY_SIGN_SESSION = 'user_registry_sign_session';
+
+/** Longer than typical login challenges so the user can scan, unlock Syner, and upload. */
+const SIGIL_HANDOFF_TTL_SEC = 300;
+
+const POST_SIGN_TTL_SEC = 300;
+
+const KV_SESSION_CAS_RETRIES = 3;
 
 const CHALLENGE_TTL = independentLogin.challengeTtl;
 const TOKEN_TTL = independentLogin.callbackTokenTtl;
@@ -390,4 +400,307 @@ export function consumeDeleteAccountToken(token: string): Promise<string | null>
 	return kvService
 		.getAndDelete<{ user_id: string }>(KV_DELETE_ACCOUNT_TOKEN, token)
 		.then((entry) => entry?.user_id ?? null);
+}
+
+// --- Sigil handoff (Syner → browser signing session) ---
+
+export type SigilHandoffSessionData = {
+	/** Optimistic locking for compare-and-swap updates */
+	version: number;
+	user_id: string;
+	/** DID of the SYR account starting handoff; uploaded Sigil must advertise the same key. */
+	expected_did: string;
+	status: 'pending' | 'complete' | 'consumed';
+	created_at: number;
+	/** Encrypted Sigil JSON string when status === 'complete' (cleared after one-time consume). */
+	sigil_json?: string;
+};
+
+export async function createSigilHandoffSession(
+	userId: string,
+	expectedDid: string
+): Promise<string> {
+	const sessionId = crypto.randomUUID();
+	const full: SigilHandoffSessionData = {
+		version: 1,
+		user_id: userId,
+		expected_did: expectedDid,
+		status: 'pending',
+		created_at: Date.now()
+	};
+	await kvService.set(KV_SIGIL_HANDOFF_SESSION, sessionId, full, SIGIL_HANDOFF_TTL_SEC);
+	return sessionId;
+}
+
+export async function getSigilHandoffSession(id: string): Promise<SigilHandoffSessionData | null> {
+	return kvService.get<SigilHandoffSessionData>(KV_SIGIL_HANDOFF_SESSION, id);
+}
+
+/**
+ * Syner POSTs encrypted Sigil here. Returns false if session missing or not pending.
+ */
+export async function completeSigilHandoffSession(id: string, sigilJson: string): Promise<boolean> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<SigilHandoffSessionData>(KV_SIGIL_HANDOFF_SESSION, id);
+		if (!cur || cur.status !== 'pending') return false;
+		const expectedVersion = cur.version ?? 1;
+		const next: SigilHandoffSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'complete',
+			sigil_json: sigilJson
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_SIGIL_HANDOFF_SESSION,
+				id,
+				expectedVersion,
+				next,
+				SIGIL_HANDOFF_TTL_SEC
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Browser picks up encrypted Sigil once: read + validate, then CAS to `consumed` (no delete-before-check).
+ */
+export async function consumeSigilHandoffPayload(
+	id: string,
+	userId: string
+): Promise<string | null> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<SigilHandoffSessionData>(KV_SIGIL_HANDOFF_SESSION, id);
+		if (!cur || cur.user_id !== userId || cur.status !== 'complete' || !cur.sigil_json) {
+			return null;
+		}
+		const sigilJson = cur.sigil_json;
+		const expectedVersion = cur.version ?? 1;
+		const next: SigilHandoffSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'consumed',
+			sigil_json: undefined
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_SIGIL_HANDOFF_SESSION,
+				id,
+				expectedVersion,
+				next,
+				SIGIL_HANDOFF_TTL_SEC
+			)
+		) {
+			return sigilJson;
+		}
+	}
+	return null;
+}
+
+// --- Post mutation signing (Syner → SYR browser, session-bound) ---
+
+export type PostSignSessionSignedMutation = {
+	payload: Record<string, unknown>;
+	signature: string;
+	device_public_key: string;
+};
+
+export type PostSignSessionData = {
+	version: number;
+	user_id: string;
+	expected_did: string;
+	requested_device_public_key: string;
+	payload: Record<string, unknown>;
+	status: 'pending' | 'complete';
+	signed_mutation?: PostSignSessionSignedMutation;
+	created_at: number;
+};
+
+export async function createPostSignSession(
+	data: Omit<PostSignSessionData, 'status' | 'created_at' | 'signed_mutation' | 'version'>
+): Promise<string> {
+	const sessionId = crypto.randomUUID();
+	const full: PostSignSessionData = {
+		...data,
+		version: 1,
+		status: 'pending',
+		created_at: Date.now()
+	};
+	await kvService.set(KV_POST_SIGN_SESSION, sessionId, full, POST_SIGN_TTL_SEC);
+	return sessionId;
+}
+
+export async function getPostSignSession(id: string): Promise<PostSignSessionData | null> {
+	return kvService.get<PostSignSessionData>(KV_POST_SIGN_SESSION, id);
+}
+
+export async function completePostSignSession(
+	id: string,
+	signed: PostSignSessionSignedMutation
+): Promise<boolean> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<PostSignSessionData>(KV_POST_SIGN_SESSION, id);
+		if (!cur || cur.status !== 'pending') return false;
+		const expectedVersion = cur.version ?? 1;
+		const next: PostSignSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'complete',
+			signed_mutation: signed
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_POST_SIGN_SESSION,
+				id,
+				expectedVersion,
+				next,
+				POST_SIGN_TTL_SEC
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export async function deletePostSignSession(id: string): Promise<void> {
+	await kvService.delete(KV_POST_SIGN_SESSION, id);
+}
+
+// --- Publication registry signing (Syner → SYR browser, session-bound) ---
+
+export type RegistrySignSessionData = {
+	version: number;
+	user_id: string;
+	expected_did: string;
+	requested_device_public_key: string;
+	/** Surreal thing id string e.g. outbox:ulid */
+	job_thing_id: string;
+	action: 'update' | 'delete';
+	did: string;
+	registry_url: string;
+	provider?: string;
+	updated_at?: string;
+	deleted_at?: string;
+	/** Object Syner canonicalizes (same shape as server JCS input). */
+	sign_object: Record<string, unknown>;
+	canonical_payload: string;
+	/** Second signature: `POST …/directory/upsert` (searchable directory row). */
+	directory_sign_object: Record<string, unknown>;
+	directory_canonical_payload: string;
+	status: 'pending' | 'in_progress' | 'complete' | 'failed';
+	result_error?: string;
+	created_at: number;
+};
+
+const REGISTRY_SIGN_TTL_SEC = POST_SIGN_TTL_SEC;
+
+export async function createRegistrySignSession(
+	data: Omit<RegistrySignSessionData, 'status' | 'created_at' | 'result_error' | 'version'>
+): Promise<string> {
+	const sessionId = crypto.randomUUID();
+	const full: RegistrySignSessionData = {
+		...data,
+		version: 1,
+		status: 'pending',
+		created_at: Date.now()
+	};
+	await kvService.set(KV_REGISTRY_SIGN_SESSION, sessionId, full, REGISTRY_SIGN_TTL_SEC);
+	return sessionId;
+}
+
+export async function getRegistrySignSession(id: string): Promise<RegistrySignSessionData | null> {
+	return kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
+}
+
+/**
+ * Atomically transition a registry sign session from `pending` to `in_progress` so only one
+ * consumer performs the remote registry write. Returns the updated session or null if not pending.
+ */
+export async function claimRegistrySignSessionIfPending(
+	id: string
+): Promise<RegistrySignSessionData | null> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
+		if (!cur || cur.status !== 'pending') return null;
+		const expectedVersion = cur.version ?? 1;
+		const next: RegistrySignSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'in_progress'
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_REGISTRY_SIGN_SESSION,
+				id,
+				expectedVersion,
+				next,
+				REGISTRY_SIGN_TTL_SEC
+			)
+		) {
+			return next;
+		}
+	}
+	return null;
+}
+
+export async function completeRegistrySignSessionSuccess(id: string): Promise<boolean> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
+		if (!cur || cur.status !== 'in_progress') return false;
+		const expectedVersion = cur.version ?? 1;
+		const next: RegistrySignSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'complete'
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_REGISTRY_SIGN_SESSION,
+				id,
+				expectedVersion,
+				next,
+				REGISTRY_SIGN_TTL_SEC
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export async function completeRegistrySignSessionFailed(
+	id: string,
+	message: string
+): Promise<boolean> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
+		if (!cur || (cur.status !== 'pending' && cur.status !== 'in_progress')) return false;
+		const expectedVersion = cur.version ?? 1;
+		const next: RegistrySignSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'failed',
+			result_error: message
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_REGISTRY_SIGN_SESSION,
+				id,
+				expectedVersion,
+				next,
+				REGISTRY_SIGN_TTL_SEC
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export async function deleteRegistrySignSession(id: string): Promise<void> {
+	await kvService.delete(KV_REGISTRY_SIGN_SESSION, id);
 }

@@ -10,14 +10,15 @@ All SYR-compatible flows use the `syr://` custom URL scheme for deep links. Web 
 
 ## URL Patterns
 
-| Action         | Host             | URL Pattern                                      | Params         | Use                           |
-| -------------- | ---------------- | ------------------------------------------------ | -------------- | ----------------------------- |
-| Login          | `login`          | `syr://login?challenge=&instance=&callback=`     | All required   | Independent login             |
-| Export         | `export`         | `syr://export?challenge=&instance=&did=`         | `did` required | Export verification           |
-| Import         | `import`         | `syr://import?challenge=&instance=&did=`         | `did` optional | Import/migration verification |
-| Delete Aegis   | `delete-aegis`   | `syr://delete-aegis?challenge=&instance=&did=`   | All required   | Remove Aegis (prove backup)   |
-| Delete Account | `delete-account` | `syr://delete-account?challenge=&instance=&did=` | All required   | Permanently delete account    |
-| Sync Profile   | `sync-profile`   | `syr://sync-profile?instance=&did=`              | Both required  | Profile sync from Syner       |
+| Action         | Host             | URL Pattern                                      | Params                                                | Use                                                                                                                                                |
+| -------------- | ---------------- | ------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Login          | `login`          | `syr://login?challenge=&instance=&callback=`     | All required                                          | Independent login                                                                                                                                  |
+| Export         | `export`         | `syr://export?challenge=&instance=&did=`         | `did` required                                        | Export verification                                                                                                                                |
+| Import         | `import`         | `syr://import?challenge=&instance=&did=`         | `did` optional                                        | Import/migration verification                                                                                                                      |
+| Delete Aegis   | `delete-aegis`   | `syr://delete-aegis?challenge=&instance=&did=`   | All required                                          | Remove Aegis (prove backup)                                                                                                                        |
+| Delete Account | `delete-account` | `syr://delete-account?challenge=&instance=&did=` | All required                                          | Permanently delete account                                                                                                                         |
+| Sync Profile   | `sync-profile`   | `syr://sync-profile?instance=&did=`              | Both required                                         | Profile sync from Syner                                                                                                                            |
+| Sigil handoff  | `sigil-handoff`  | `syr://sigil-handoff?origin=&session=`           | `origin` + `session` required for SYR signing session | Browser **Settings → Signing** starts `POST /api/user/sigil-handoff-session`; Syner uploads ciphertext to `POST …/sigil-handoff/{session}/payload` |
 
 ---
 

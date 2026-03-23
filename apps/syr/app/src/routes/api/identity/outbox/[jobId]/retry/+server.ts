@@ -17,9 +17,21 @@ export const POST: RequestHandler = async ({ locals, params }) => {
 	if (!job) throw error(404, 'Outbox job not found');
 
 	if (job.status === 'completed' || job.status === 'cancelled') {
-		throw error(400, `Cannot retry a ${job.status} job`);
+		throw error(400, { message: `Cannot retry a ${job.status} job` });
 	}
 
-	await outboxRepository.retry(jobId);
+	if (job.status === 'finalization_failed') {
+		throw error(400, {
+			message:
+				'This job cannot be retried: the registry already accepted the update but local finalization failed. Contact support or reconcile manually.'
+		});
+	}
+
+	const retried = await outboxRepository.retry(jobId);
+	if (!retried) {
+		throw error(400, {
+			message: 'Job could not be requeued (wrong status or missing row).'
+		});
+	}
 	return json({ status: 'ok', message: 'Job queued for immediate retry.' });
 };

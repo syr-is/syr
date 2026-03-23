@@ -39,6 +39,20 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS signature ON TABLE hosting_record TYPE string;
       DEFINE FIELD IF NOT EXISTS created_at ON TABLE hosting_record TYPE datetime DEFAULT time::now();
       DEFINE INDEX IF NOT EXISTS idx_hosting_did ON TABLE hosting_record COLUMNS did UNIQUE;
+
+      DEFINE TABLE IF NOT EXISTS directory_entry SCHEMAFULL;
+      DEFINE FIELD IF NOT EXISTS did ON TABLE directory_entry TYPE string
+        ASSERT string::starts_with($value, "did:syr:");
+      DEFINE FIELD IF NOT EXISTS provider ON TABLE directory_entry TYPE string;
+      DEFINE FIELD IF NOT EXISTS username ON TABLE directory_entry TYPE string;
+      DEFINE FIELD IF NOT EXISTS display_name ON TABLE directory_entry TYPE string;
+      DEFINE FIELD IF NOT EXISTS listed ON TABLE directory_entry TYPE bool;
+      DEFINE FIELD IF NOT EXISTS updated_at ON TABLE directory_entry TYPE datetime;
+      DEFINE FIELD IF NOT EXISTS signature ON TABLE directory_entry TYPE string;
+      DEFINE INDEX IF NOT EXISTS idx_directory_did ON TABLE directory_entry COLUMNS did UNIQUE;
+      DEFINE INDEX IF NOT EXISTS idx_directory_listed ON TABLE directory_entry COLUMNS listed;
+      DEFINE INDEX IF NOT EXISTS idx_directory_username ON TABLE directory_entry COLUMNS username;
+      DEFINE INDEX IF NOT EXISTS idx_directory_display_name ON TABLE directory_entry COLUMNS display_name;
     `);
 		console.log('✅ Registry API schema initialized');
 	}

@@ -16,14 +16,16 @@ import { postRepository } from '$lib/repositories/post.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { registryRepository } from '$lib/repositories/registry.repository';
+import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
+import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
 import { outboxRepository } from '$lib/repositories/outbox.repository';
 import { folderController } from '$lib/controllers/folder.controller';
 
 /**
  * Account Deletion Service
  * Orchestrates cascade deletion of all user data.
- * Order: outbox, registry, sessions, folders (+ S3), posts, uploads (+ S3), delegated keys, identity, profile,
- *        KV (pinned_posts, file_store_usage), user.
+ * Order: outbox, registry, discovery registries, content trust rules, sessions, folders (+ S3), posts, uploads (+ S3),
+ *        delegated keys, identity, profile, KV (pinned_posts, file_store_usage), user.
  * Note: pinned_posts and file_store_usage are deleted last so subtractUsage during folder/upload deletion
  * updates the real entry; deleting early would let subtractUsage recreate it.
  */
@@ -49,6 +51,20 @@ export async function deleteAccount(userId: RecordId | string): Promise<void> {
 		} catch (e) {
 			console.warn('[account-deletion] Failed to delete registry entries:', e);
 		}
+	}
+
+	// 2b. Discovery registries (by user)
+	try {
+		await discoveryRegistryRepository.deleteAllForUser(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete discovery registry entries:', e);
+	}
+
+	// 2c. Content trust rules (by user)
+	try {
+		await contentTrustRuleRepository.deleteAllForUser(recordId);
+	} catch (e) {
+		console.warn('[account-deletion] Failed to delete content trust rules:', e);
 	}
 
 	// 3. Sessions

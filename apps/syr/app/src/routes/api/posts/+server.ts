@@ -6,13 +6,17 @@ import { postController } from '$lib/controllers/post.controller';
 import {
 	QueryParamsSchema,
 	QueryOptionsSchema,
-	PostCreateSchema,
-	PostUpdateSchema,
+	PostCreateRequestSchema,
+	PostUpdateRequestSchema,
 	recordIdFromDidAndLocal,
 	extractDid,
 	extractLocalId
 } from '@syr-is/types';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
+import {
+	assertPostCreateSignedMutation,
+	assertPostUpdateSignedMutation
+} from '$lib/server/signed-mutation.server';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -117,10 +121,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		const data = PostCreateSchema.parse(body);
-		const result = await postController.createPost(user, data);
+		const parsed = PostCreateRequestSchema.parse(body);
+		const { post_local_id, signed_mutation, ...postCreate } = parsed;
+		const signResult = await assertPostCreateSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			post_local_id,
+			postCreate
+		);
+		const result = await postController.createPost(user, postCreate, {
+			localId: post_local_id,
+			createdAt: signResult.postCreatedAt,
+			signature: signResult.signature
+		});
 
-		// user.did guard above and postController.createPost(user, data) guarantee result.id is a composite record ID
+		// user.did guard above guarantees composite record ID
 		return json(
 			{
 				status: 'success',
@@ -181,14 +196,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const body = await request.json();
-		// Convert DID + local_id to composite RecordId
-		if (body.did && body.local_id) {
-			body.id = recordIdFromDidAndLocal('post', body.did, body.local_id);
-			delete body.did;
-			delete body.local_id;
+		const raw = await request.json();
+		if (raw === null || typeof raw !== 'object') {
+			throw error(400, { code: 'BAD_REQUEST', message: 'Expected JSON object' });
 		}
-		const data = PostUpdateSchema.parse(body);
+		const patchInput = { ...(raw as Record<string, unknown>) };
+		if (!patchInput.id && patchInput.did && patchInput.local_id) {
+			patchInput.id = recordIdFromDidAndLocal(
+				'post',
+				String(patchInput.did),
+				String(patchInput.local_id)
+			);
+			delete patchInput.did;
+			delete patchInput.local_id;
+		}
+		const parsed = PostUpdateRequestSchema.parse(patchInput);
+		const { signed_mutation, ...data } = parsed;
 
 		// Verify post exists and user owns it
 		const existingPost = await postController.getPost(data.id);
@@ -244,7 +267,25 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						display_mode: data.display_mode ?? existingPost.display_mode ?? 'masonry'
 					};
 
-		const result = await postController.updatePost(updatePayload, keysToUnset);
+		const { signature } = await assertPostUpdateSignedMutation(
+			locals.user.id,
+			signed_mutation,
+			existingPost,
+			{
+				type: updatePayload.type,
+				title: updatePayload.title,
+				description: updatePayload.description,
+				content: updatePayload.content,
+				content_type: updatePayload.content_type,
+				media_urls: updatePayload.media_urls,
+				display_mode: updatePayload.display_mode,
+				visibility: updatePayload.visibility,
+				status: updatePayload.status
+			},
+			data.id
+		);
+
+		const result = await postController.updatePost(updatePayload, keysToUnset, signature);
 
 		return json({
 			status: 'success',

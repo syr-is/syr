@@ -1,73 +1,88 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
-import { sign, canonicalize, encodeMultibase } from '@syr-is/crypto';
+import { sign, encodeMultibase } from '@syr-is/crypto';
+
+export type RegistryPrepJobRow = {
+	jobId: string;
+	action: string;
+	did: string;
+	registryUrl: string;
+	provider?: string;
+	updatedAt?: string;
+	deletedAt?: string;
+	signObject: Record<string, unknown>;
+	canonicalPayload: string;
+	directorySignObject: Record<string, unknown>;
+	directoryCanonicalPayload: string;
+};
 
 /**
- * Process all pending registry sync jobs by signing each with the provided seed
- * and submitting to the registry-sign API.
+ * Fetch server-issued canonical strings for pending registry_sync jobs (GET /api/identity/registry-sign-prep).
  */
-export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void> {
-	let res: Response;
-	try {
-		res = await fetch('/api/identity/pending-registry-jobs', { credentials: 'include' });
-	} catch (err) {
-		console.error('Failed to fetch pending registry jobs:', err);
-		toast.error('Network error loading registry jobs');
-		return;
-	}
+export async function fetchRegistrySignPrep(): Promise<RegistryPrepJobRow[]> {
+	const res = await fetch('/api/identity/registry-sign-prep', { credentials: 'include' });
 	if (!res.ok) {
 		const body = await res.text().catch(() => '');
-		console.error('Pending registry jobs failed:', res.status, body);
-		toast.error(`Failed to load registry jobs (${res.status})`);
+		console.error('registry-sign-prep failed:', res.status, body);
+		throw new Error(`Failed to load registry sign prep (${res.status})`);
+	}
+	const json = (await res.json()) as { data?: { jobs?: RegistryPrepJobRow[] } };
+	return json.data?.jobs ?? [];
+}
+
+/**
+ * Process all pending registry sync jobs: prep (server timestamps) → sign with root seed → POST registry-sign.
+ */
+export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void> {
+	let jobs: RegistryPrepJobRow[];
+	try {
+		jobs = await fetchRegistrySignPrep();
+	} catch (err) {
+		console.error('Registry sign prep:', err);
+		toast.error(err instanceof Error ? err.message : 'Failed to load registry jobs');
 		return;
 	}
 
-	const { data: jobData } = await res.json();
-	const jobs = jobData?.jobs ?? [];
 	let anySuccess = false;
 
-	for (const job of jobs) {
+	for (const row of jobs) {
 		try {
-			let canonicalPayload: string;
-			let updatedAt: string | undefined;
-			let deletedAt: string | undefined;
-
-			if (job.action === 'update') {
-				updatedAt = new Date().toISOString();
-				canonicalPayload = canonicalize({
-					did: job.did,
-					provider: job.provider,
-					updatedAt
-				});
-			} else if (job.action === 'delete') {
-				deletedAt = new Date().toISOString();
-				canonicalPayload = canonicalize({ did: job.did, deletedAt });
-			} else {
-				console.warn('Unknown registry job action, skipping:', job.action);
-				continue;
-			}
-
-			const signatureBytes = await sign(canonicalPayload, seed);
+			const signatureBytes = await sign(row.canonicalPayload, seed);
 			const signature = encodeMultibase(signatureBytes);
+			const directorySigBytes = await sign(row.directoryCanonicalPayload, seed);
+			const directorySignature = encodeMultibase(directorySigBytes);
 
 			const signRes = await fetch('/api/identity/registry-sign', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
 				body: JSON.stringify({
-					jobId: job.id,
-					action: job.action,
-					did: job.did,
-					registryUrl: job.registryUrl,
-					provider: job.provider,
-					updatedAt,
-					deletedAt,
-					signature
+					jobId: row.jobId,
+					action: row.action,
+					did: row.did,
+					registryUrl: row.registryUrl,
+					provider: row.provider,
+					updatedAt: row.updatedAt,
+					deletedAt: row.deletedAt,
+					signature,
+					directorySignature
 				})
 			});
 
+			const resJson = (await signRes.json().catch(() => ({}))) as {
+				data?: { directory_synced?: boolean };
+				error?: { message?: string };
+			};
 			if (signRes.ok) {
 				anySuccess = true;
+				if (resJson.data?.directory_synced === false) {
+					toast.warning(
+						'Registry synced, but the directory listing could not be updated. Try syncing again.'
+					);
+				}
+			} else {
+				const msg = resJson.error?.message ?? `HTTP ${signRes.status}`;
+				console.error('Registry sign failed:', msg);
 			}
 		} catch (e) {
 			console.error('Registry sign/submit failed:', e);
@@ -78,4 +93,35 @@ export async function processPendingRegistryJobs(seed: Uint8Array): Promise<void
 		toast.success('Registry synced');
 		await invalidateAll();
 	}
+}
+
+export type RegistrySignSessionStartResponse = {
+	session_id: string;
+	deeplink_url: string;
+	expires_in_sec: number;
+	requested_device_public_key: string;
+};
+
+/**
+ * Start a Syner signing session for one pending registry job (must be pending in outbox).
+ */
+export async function startRegistrySynerSession(
+	jobId: string
+): Promise<RegistrySignSessionStartResponse> {
+	const res = await fetch('/api/user/registry-sign-session', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		body: JSON.stringify({ jobId })
+	});
+	const j = await res.json().catch(() => ({}));
+	if (!res.ok) {
+		const msg = (j as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`;
+		throw new Error(msg);
+	}
+	const data = (j as { data?: RegistrySignSessionStartResponse }).data;
+	if (!data?.session_id || !data.deeplink_url) {
+		throw new Error('Invalid registry sign session response');
+	}
+	return data;
 }

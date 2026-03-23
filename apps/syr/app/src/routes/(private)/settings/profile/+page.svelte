@@ -6,19 +6,34 @@
 	import { Textarea } from '@syr-is/ui/textarea';
 	import * as Card from '@syr-is/ui/card';
 	import { Button } from '@syr-is/ui/button';
-	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
-	import { ProfileUpdateSchema } from '@syr-is/types';
+	import { ProfileUpdateSchema, type ProfileUpdate } from '@syr-is/types';
+	import type { SignedMutationEnvelope } from '@syr-is/types';
 	import type { PageData } from './$types';
+	import ProfileCard from '$lib/components/fragments/profile-card.svelte';
+	import ProfileUpdateSignDialog from '$lib/components/fragments/profile-update-sign-dialog.svelte';
+	import { getIdentityStore } from '$lib/stores/identity.svelte';
+	import type { ProfileSignSnapshot } from '$lib/client/profile-signed-payload';
 
 	let { data }: { data: PageData } = $props();
+	const identityStore = getIdentityStore();
 	let loading = $state(false);
 	let usernameValue = $state('');
 	let usernameLoading = $state(false);
+	let signDialogOpen = $state(false);
+	let pendingProfileFields = $state<ProfileUpdate | null>(null);
+	let pendingSignSnapshot = $state<ProfileSignSnapshot | null>(null);
 
 	$effect(() => {
 		if (data.user?.username) usernameValue = data.user.username;
+	});
+
+	$effect(() => {
+		if (!signDialogOpen) {
+			pendingProfileFields = null;
+			pendingSignSnapshot = null;
+		}
 	});
 
 	async function handleUsernameUpdate() {
@@ -51,32 +66,68 @@
 		onUpdate: async ({ form }) => {
 			if (!form.valid) return;
 
-			loading = true;
-			try {
-				const response = await fetch('/api/user/profile', {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(form.data)
-				});
-
-				if (!response.ok) {
-					const error = await response.json();
-					toast.error(error.error?.message || 'Failed to update profile');
+			const fields = form.data as ProfileUpdate;
+			const pageDid = data.user?.did?.trim() ?? '';
+			const ctxDid = identityStore.identityContext?.did?.trim() ?? '';
+			const effectiveDid = pageDid.startsWith('did:syr:') ? pageDid : ctxDid;
+			if (effectiveDid.startsWith('did:syr:')) {
+				if (!fields.display_name?.trim()) {
+					toast.error('Display name is required to save your profile.');
 					return;
 				}
-
-				toast.success('Profile updated successfully');
-				await invalidateAll();
-			} catch (_error) {
-				console.error('Failed to update profile:', _error);
-				toast.error('An unexpected error occurred');
-			} finally {
-				loading = false;
+				const clone = structuredClone(fields) as ProfileUpdate;
+				pendingProfileFields = clone;
+				pendingSignSnapshot = {
+					display_name: (clone.display_name ?? '').trim(),
+					bio: clone.bio,
+					avatar_url: clone.avatar_url,
+					banner_url: clone.banner_url,
+					metadata: clone.metadata
+				};
+				signDialogOpen = true;
+				return;
 			}
+
+			await submitProfile(fields, undefined);
 		}
 	});
 
 	const { form: formData, enhance } = form;
+
+	async function submitProfile(
+		fields: ProfileUpdate,
+		envelope: SignedMutationEnvelope | undefined
+	): Promise<boolean> {
+		loading = true;
+		try {
+			const body = envelope !== undefined ? { ...fields, signed_mutation: envelope } : fields;
+			const response = await fetch('/api/user/profile', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+
+			if (!response.ok) {
+				const errBody = await response.json().catch(() => ({}));
+				toast.error(
+					(errBody as { error?: { message?: string } }).error?.message || 'Failed to update profile'
+				);
+				return false;
+			}
+
+			toast.success('Profile updated successfully');
+			pendingProfileFields = null;
+			pendingSignSnapshot = null;
+			await invalidateAll();
+			return true;
+		} catch (_error) {
+			console.error('Failed to update profile:', _error);
+			toast.error('An unexpected error occurred');
+			return false;
+		} finally {
+			loading = false;
+		}
+	}
 
 	// Sync form with current user data when data changes
 	$effect(() => {
@@ -139,7 +190,10 @@
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Profile Information</Card.Title>
-					<Card.Description>Update your profile information and preferences.</Card.Description>
+					<Card.Description>
+						Update your profile information and preferences. If your account has a DID, saving runs
+						through signing (Sigil, Aegis, or Syner) so verification can succeed.
+					</Card.Description>
 				</Card.Header>
 				<form method="POST" use:enhance>
 					<Card.Content class="space-y-4">
@@ -219,43 +273,44 @@
 			</Card.Root>
 		</div>
 
-		<!-- Profile preview card with banner and avatar -->
-		<Card.Root class="shrink-0 overflow-hidden md:w-80 md:self-start">
-			{#if data.user.profile?.banner_url}
-				<div class="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
-					<img
-						src={data.user.profile.banner_url}
-						alt="Profile banner"
-						class="h-full w-full object-cover"
-					/>
-				</div>
-			{:else}
-				<div class="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-			{/if}
-			<Card.Content class="relative pt-16 pb-6">
-				<div class="absolute -top-12 left-6">
-					<Avatar class="h-24 w-24 border-4 border-background">
-						<AvatarImage
-							src={data.user.profile?.avatar_url}
-							alt={data.user.profile?.display_name || data.user.username}
-						/>
-						<AvatarFallback class="text-2xl">
-							{(data.user.profile?.display_name || data.user.username).charAt(0).toUpperCase()}
-						</AvatarFallback>
-					</Avatar>
-				</div>
-				<div class="space-y-2">
-					<h2 class="text-2xl font-bold">
-						{data.user.profile?.display_name || data.user.username}
-					</h2>
-					<p class="text-muted-foreground">@{data.user.username}</p>
-				</div>
-				{#if data.user.profile?.bio}
-					<div class="mt-4 rounded-lg bg-muted/50 p-4">
-						<p class="text-sm leading-relaxed">{data.user.profile.bio}</p>
-					</div>
-				{/if}
-			</Card.Content>
-		</Card.Root>
+		<ProfileCard
+			class="shrink-0 md:w-80 md:self-start"
+			profile={{
+				username: data.user.username,
+				display_name:
+					($formData.display_name || '').trim() ||
+					data.user.profile?.display_name ||
+					data.user.username,
+				bio: ($formData.bio ?? data.user.profile?.bio ?? '').trim() || null,
+				avatar_url: ($formData.avatar_url || '').trim() || data.user.profile?.avatar_url || null,
+				banner_url: ($formData.banner_url || '').trim() || data.user.profile?.banner_url || null,
+				did: data.user.did ?? null,
+				signed_payload_json: data.user.profile?.signed_payload_json,
+				content_signature: data.user.profile?.content_signature,
+				signing_device_public_key: data.user.profile?.signing_device_public_key
+			}}
+			showFollow={false}
+			bioVariant="muted"
+		/>
 	</div>
+
+	{#if pendingSignSnapshot}
+		<ProfileUpdateSignDialog
+			bind:open={signDialogOpen}
+			snapshot={pendingSignSnapshot}
+			onSigned={async (envelope) => {
+				if (!pendingProfileFields) return false;
+				return submitProfile(pendingProfileFields, envelope);
+			}}
+			onUnsigned={async () => {
+				if (!pendingProfileFields) return false;
+				return submitProfile(pendingProfileFields, undefined);
+			}}
+			onDefer={() => {
+				signDialogOpen = false;
+				pendingProfileFields = null;
+				pendingSignSnapshot = null;
+			}}
+		/>
+	{/if}
 {/if}

@@ -25,6 +25,7 @@
 	import FileTable from '$lib/components/fragments/file-table.svelte';
 	import FileGrid from '$lib/components/fragments/file-grid.svelte';
 	import FileCarousel from '$lib/components/fragments/file-carousel.svelte';
+	import MediaCardGrid from '$lib/components/fragments/media-card-grid.svelte';
 	import FolderCard from '$lib/components/fragments/folder-card.svelte';
 	import {
 		type ViewMode,
@@ -501,7 +502,7 @@
 			<div class="flex flex-wrap items-center gap-2">
 				<ViewModeToggle
 					bind:mode={viewMode}
-					availableModes={['list', 'gallery', 'masonry', 'carousel']}
+					availableModes={['list', 'gallery', 'masonry', 'carousel', 'cards']}
 				/>
 				<span class="text-sm text-muted-foreground">
 					{total} file{total !== 1 ? 's' : ''} total
@@ -573,6 +574,20 @@
 				</div>
 			{/if}
 			<FileCarousel items={fileDisplayItems} onItemClick={handleGridItemClick} />
+		{:else if viewMode === 'cards'}
+			{#if folders.length > 0}
+				<div class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+					{#each folders as folder (folder.id.toString())}
+						<FolderCard
+							{folder}
+							isPublic={isPublicFolder(folder)}
+							onclick={() => handleGridFolderClick(folder)}
+							onDelete={handleGridFolderDelete}
+						/>
+					{/each}
+				</div>
+			{/if}
+			<MediaCardGrid items={fileDisplayItems} onItemClick={handleGridItemClick} />
 		{:else}
 			<!-- Gallery or Masonry view -->
 			<FileGrid

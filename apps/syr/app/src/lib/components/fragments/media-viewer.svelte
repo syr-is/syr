@@ -4,6 +4,7 @@
 	import ViewModeToggle from '$lib/components/fragments/view-mode-toggle.svelte';
 	import FileGrid from '$lib/components/fragments/file-grid.svelte';
 	import FileCarousel from '$lib/components/fragments/file-carousel.svelte';
+	import MediaCardGrid from '$lib/components/fragments/media-card-grid.svelte';
 	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
 
 	interface Props {
@@ -44,11 +45,16 @@
 {:else}
 	<!-- View toggle -->
 	<div class="mb-4 flex items-center justify-end">
-		<ViewModeToggle bind:mode={currentMode} availableModes={['masonry', 'carousel', 'gallery']} />
+		<ViewModeToggle
+			bind:mode={currentMode}
+			availableModes={['masonry', 'carousel', 'gallery', 'cards']}
+		/>
 	</div>
 
 	{#if currentMode === 'carousel'}
 		<FileCarousel items={displayItems} onItemClick={openPreview} />
+	{:else if currentMode === 'cards'}
+		<MediaCardGrid items={displayItems} onItemClick={openPreview} />
 	{:else if currentMode === 'gallery'}
 		<FileGrid mode="gallery" items={displayItems} onItemClick={openPreview} />
 	{:else}

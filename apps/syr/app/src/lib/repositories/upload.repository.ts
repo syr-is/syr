@@ -101,6 +101,41 @@ export class UploadRepository extends BaseRepository<Upload> {
 	}
 
 	/**
+	 * Public uploads for a DID: completed, marked public, with a URL (for directory / profile pages).
+	 */
+	async findPublicByDidPage(
+		did: string,
+		options?: FindByDidPageOptions
+	): Promise<FindByDidPageResult> {
+		const limitNum = Math.floor(Math.max(1, Math.min(options?.limit ?? MAX_PAGE, MAX_PAGE)));
+		const offsetNum = Math.floor(Math.max(0, options?.offset ?? 0));
+
+		const result = await this.db.query<[Upload[]]>(
+			`SELECT * FROM upload
+			 WHERE id.created_by = $did AND is_public = true AND status = 'completed' AND url != NONE
+			 ORDER BY created_at DESC LIMIT ${limitNum} START ${offsetNum}`,
+			{ did }
+		);
+		const raw = result[0] ?? [];
+		const uploads = raw.map((r) => this.validate(r));
+
+		const nextCursor = uploads.length === limitNum ? { offset: offsetNum + uploads.length } : null;
+
+		return { uploads, nextCursor };
+	}
+
+	/** Count public completed uploads with URL for a DID (pagination totals). */
+	async countPublicByDid(did: string): Promise<number> {
+		const countResult = await this.db.query<[{ total: number }[]]>(
+			`SELECT count() AS total FROM upload
+			 WHERE id.created_by = $did AND is_public = true AND status = 'completed' AND url != NONE
+			 GROUP ALL`,
+			{ did }
+		);
+		return countResult[0]?.[0]?.total ?? 0;
+	}
+
+	/**
 	 * Find an upload by composite ID (did + localId).
 	 * Used for profile asset upsert (profile-avatar, profile-banner).
 	 */

@@ -293,6 +293,43 @@ export class IdentityController {
 	}
 
 	/**
+	 * Verify a signed content mutation using either a delegated device key or the identity root key
+	 * (multibase in `devicePublicKey` must match a delegated row, or exactly `identity.public_key` for root-only / Aegis flows).
+	 */
+	async verifyClientSignedContent(
+		identity: Identity,
+		payload: Record<string, unknown>,
+		signature: string,
+		devicePublicKey: string
+	): Promise<void> {
+		if (devicePublicKey === identity.public_key) {
+			const rootKeyClean = decodePublicKey(identity.public_key);
+			const canonicalPayload = canonicalize(payload);
+			const sigBytes = decodeMultibase(signature);
+			const isValid = await verify(canonicalPayload, sigBytes, rootKeyClean);
+			if (!isValid) {
+				throw new Error('Invalid payload signature.');
+			}
+			return;
+		}
+
+		const dk = await delegatedKeyRepository.findByPublicKey(devicePublicKey);
+		if (dk) {
+			const { identity: verifiedIdentity } = await this.verifySignedMutation(
+				payload,
+				signature,
+				devicePublicKey
+			);
+			if (verifiedIdentity.did !== identity.did) {
+				throw new Error('Signing key is not authorized for this identity.');
+			}
+			return;
+		}
+
+		throw new Error('Device key not found.');
+	}
+
+	/**
 	 * Check if a user has an identity.
 	 */
 	async hasIdentity(userId: UserIdInput): Promise<boolean> {

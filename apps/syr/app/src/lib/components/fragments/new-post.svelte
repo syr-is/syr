@@ -11,8 +11,11 @@
 	import { zod4 } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
-	import { PostCreateSchema } from '@syr-is/types';
+	import { PostCreateSchema, ulid } from '@syr-is/types';
+	import type { SignedMutationEnvelope } from '@syr-is/types';
 	import MediaUploadZone from '$lib/components/fragments/media-upload-zone.svelte';
+	import PostPublishSignDialog from '$lib/components/fragments/post-publish-sign-dialog.svelte';
+	import type { PostSignSnapshot } from '$lib/client/post-signed-payload';
 	import { Crepe } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/nord-dark.css';
@@ -20,7 +23,15 @@
 	import { imageBlockConfig } from '@milkdown/components/image-block';
 	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
-	import { FilePen, Send, X, LayoutGrid, GalleryHorizontal, Grid3x3 } from 'lucide-svelte';
+	import {
+		FilePen,
+		Send,
+		X,
+		LayoutGrid,
+		GalleryHorizontal,
+		Grid3x3,
+		PanelTop
+	} from 'lucide-svelte';
 
 	interface Props {
 		onDraftCreated?: () => void;
@@ -36,6 +47,16 @@
 	let draftPostId = $state<string | null>(null);
 	let draftDid = $state<string | null>(null);
 	let draftLocalId = $state<string | null>(null);
+	let draftCreatedAtIso = $state<string | null>(null);
+
+	let publishSignOpen = $state(false);
+	let signMode = $state<'create' | 'update'>('create');
+	let signPostLocalId = $state('');
+	let signExistingCreatedAtIso = $state<string | null>(null);
+	let publishSnapshot = $state<PostSignSnapshot>({
+		type: 'blog',
+		visibility: 'public'
+	});
 
 	// Media post state
 	let mediaUrls = $state<string[]>([]);
@@ -49,68 +70,7 @@
 	const form = superForm(defaults(zod4(PostCreateSchema)), {
 		validators: zod4(PostCreateSchema),
 		SPA: true,
-		resetForm: false,
-		onUpdate: async ({ form }) => {
-			if (!form.valid) return;
-
-			// Ensure markdown content is synced before submission
-			if (
-				$formData.type === 'blog' &&
-				$formData.content_type === 'markdown' &&
-				crepeInstance &&
-				crepeReady
-			) {
-				try {
-					const markdown = crepeInstance.getMarkdown();
-					$formData.content = markdown;
-				} catch (error) {
-					console.warn('Could not get markdown before submission:', error);
-				}
-			}
-
-			// For media posts, sync media_urls
-			if ($formData.type === 'media') {
-				$formData.media_urls = mediaUrls;
-			}
-
-			// Wait for any in-flight draft creation to finish so we PATCH the
-			// existing draft instead of accidentally POSTing a duplicate.
-			if (draftCreatePromise) {
-				await draftCreatePromise;
-			}
-
-			loading = true;
-			try {
-				// If we have a draft, update it; otherwise create new
-				const hasDraft = !!draftDid && !!draftLocalId;
-				const method = hasDraft ? 'PATCH' : 'POST';
-				const endpoint = hasDraft ? `/api/posts/${draftDid}/${draftLocalId}` : '/api/posts';
-
-				const response = await fetch(endpoint, {
-					method,
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						...form.data,
-						status: 'completed' // Mark as completed when publishing
-					})
-				});
-
-				if (!response.ok) {
-					const error = await response.json();
-					toast.error(error.error?.message || 'Failed to create post');
-					return;
-				}
-
-				toast.success('Post published successfully');
-				resetForm();
-				dialogOpen = false;
-				await invalidateAll();
-			} catch (_error) {
-				toast.error('An unexpected error occurred');
-			} finally {
-				loading = false;
-			}
-		}
+		resetForm: false
 	});
 
 	const { form: formData, enhance } = form;
@@ -139,7 +99,146 @@
 		draftPostId = null;
 		draftDid = null;
 		draftLocalId = null;
+		draftCreatedAtIso = null;
 		draftCreatePromise = null;
+	}
+
+	async function syncFormForPublish() {
+		if (
+			$formData.type === 'blog' &&
+			$formData.content_type === 'markdown' &&
+			crepeInstance &&
+			crepeReady
+		) {
+			try {
+				$formData.content = crepeInstance.getMarkdown();
+			} catch (error) {
+				console.warn('Could not get markdown before submission:', error);
+			}
+		}
+		if ($formData.type === 'media') {
+			$formData.media_urls = mediaUrls;
+		}
+		if (draftCreatePromise) {
+			await draftCreatePromise;
+		}
+	}
+
+	function buildPublishSnapshot(): PostSignSnapshot {
+		const v = $formData;
+		const vis = (v.visibility ?? 'public') as 'public' | 'unlisted' | 'private';
+		if (v.type === 'blog') {
+			return {
+				type: 'blog',
+				title: v.title,
+				description: v.description,
+				content: v.content,
+				content_type: v.content_type,
+				visibility: vis
+			};
+		}
+		return {
+			type: 'media',
+			title: v.title,
+			description: v.description,
+			media_urls: [...mediaUrls],
+			display_mode: v.display_mode,
+			visibility: vis
+		};
+	}
+
+	async function beginPublishFlow() {
+		if (loading || uploading) return;
+		await syncFormForPublish();
+
+		const parseInput = {
+			...$formData,
+			status: 'completed' as const,
+			media_urls: $formData.type === 'media' ? mediaUrls : $formData.media_urls
+		};
+		const parsed = PostCreateSchema.safeParse(parseInput);
+		if (!parsed.success) {
+			toast.error('Please fix validation errors before publishing');
+			return;
+		}
+
+		const hasDraft = !!draftDid && !!draftLocalId;
+		let createdIso = draftCreatedAtIso;
+		if (hasDraft && !createdIso) {
+			try {
+				const r = await fetch(`/api/posts/${draftDid}/${draftLocalId}`);
+				const j = await r.json();
+				if (r.ok && j.data?.created_at != null) {
+					createdIso = new Date(j.data.created_at).toISOString();
+					draftCreatedAtIso = createdIso;
+				}
+			} catch {
+				// continue; dialog may still error if update signing needs created_at
+			}
+		}
+
+		if (hasDraft) {
+			signMode = 'update';
+			signPostLocalId = draftLocalId!;
+			signExistingCreatedAtIso = createdIso;
+		} else {
+			signMode = 'create';
+			signPostLocalId = ulid();
+			signExistingCreatedAtIso = null;
+		}
+		publishSnapshot = buildPublishSnapshot();
+		publishSignOpen = true;
+	}
+
+	async function runPublish(envelope?: SignedMutationEnvelope): Promise<boolean> {
+		loading = true;
+		try {
+			await syncFormForPublish();
+			const hasDraft = !!draftDid && !!draftLocalId;
+			const method = hasDraft ? 'PATCH' : 'POST';
+			const endpoint = hasDraft ? `/api/posts/${draftDid}/${draftLocalId}` : '/api/posts';
+
+			const postIdFromSign = envelope
+				? String((envelope.payload as { post_id?: string }).post_id ?? '')
+				: '';
+
+			const body: Record<string, unknown> = {
+				...$formData,
+				status: 'completed'
+			};
+			if ($formData.type === 'media') {
+				body.media_urls = mediaUrls;
+			}
+			if (envelope) {
+				body.signed_mutation = envelope;
+				if (!hasDraft && postIdFromSign) {
+					body.post_local_id = postIdFromSign;
+				}
+			}
+
+			const response = await fetch(endpoint, {
+				method,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+
+			if (!response.ok) {
+				const errBody = await response.json().catch(() => ({}));
+				toast.error(errBody.error?.message || 'Failed to publish post');
+				return false;
+			}
+
+			toast.success(envelope ? 'Post published and signed' : 'Post published (not signed)');
+			resetForm();
+			dialogOpen = false;
+			await invalidateAll();
+			return true;
+		} catch (_error) {
+			toast.error('An unexpected error occurred');
+			return false;
+		} finally {
+			loading = false;
+		}
 	}
 
 	// Helper function to get display label for visibility
@@ -162,6 +261,7 @@
 		if (value === 'carousel') return 'Carousel';
 		if (value === 'masonry') return 'Masonry Grid';
 		if (value === 'gallery') return 'Gallery';
+		if (value === 'cards') return 'Cards';
 		return 'Select display mode';
 	}
 
@@ -207,6 +307,9 @@
 						draftDid = result.data.did;
 						draftLocalId = result.data.local_id;
 						draftPostId = `${draftDid}/${draftLocalId}`;
+						if (result.data.created_at != null) {
+							draftCreatedAtIso = new Date(result.data.created_at).toISOString();
+						}
 						onDraftCreated?.();
 						return draftPostId;
 					}
@@ -525,7 +628,12 @@
 				{/if}
 			</div>
 		</Dialog.Header>
-		<form method="POST" use:enhance class="flex min-h-0 flex-1 flex-col overflow-hidden">
+		<form
+			method="POST"
+			use:enhance
+			onsubmit={(e) => e.preventDefault()}
+			class="flex min-h-0 flex-1 flex-col overflow-hidden"
+		>
 			<!-- Hidden fields -->
 			<input type="hidden" name="status" value={$formData.status} />
 			<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
@@ -698,6 +806,12 @@
 												Gallery
 											</span>
 										</Select.Item>
+										<Select.Item value="cards">
+											<span class="flex items-center gap-2">
+												<PanelTop class="h-4 w-4" />
+												Cards
+											</span>
+										</Select.Item>
 									</Select.Content>
 								</Select.Root>
 								<Form.Description>How viewers will see your media by default</Form.Description>
@@ -753,7 +867,12 @@
 					<FilePen class="mr-2 h-4 w-4" />
 					Save Draft
 				</Button>
-				<Form.Button type="submit" disabled={loading || uploading} class="w-full sm:w-auto">
+				<Button
+					type="button"
+					disabled={loading || uploading}
+					class="w-full sm:w-auto"
+					onclick={() => void beginPublishFlow()}
+				>
 					{#if loading}
 						Publishing...
 					{:else if uploading}
@@ -762,8 +881,19 @@
 						<Send class="mr-2 h-4 w-4" />
 						Publish
 					{/if}
-				</Form.Button>
+				</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>
 </Dialog.Root>
+
+<PostPublishSignDialog
+	bind:open={publishSignOpen}
+	{signMode}
+	postLocalId={signPostLocalId}
+	existingCreatedAtIso={signExistingCreatedAtIso}
+	snapshot={publishSnapshot}
+	onSigned={(e) => runPublish(e)}
+	onUnsigned={() => runPublish()}
+	onDefer={() => {}}
+/>

@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => {
 			noExternal: [/^@syr-is\/ui($|\/)/]
 		},
 		server: {
+			port: 5172,
+			strictPort: true,
 			proxy: {
 				'/api/v1': {
 					target: apiBase,
@@ -23,6 +25,10 @@ export default defineConfig(({ mode }) => {
 					rewrite: (path) => path.replace(/^\/docs/, '/reference')
 				}
 			}
+		},
+		preview: {
+			port: 5172,
+			strictPort: true
 		}
 	};
 });

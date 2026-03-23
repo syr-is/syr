@@ -6,6 +6,7 @@ import {
 	RecordIdSchema,
 	DidSyrSchema
 } from './common.js';
+import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
 /**
  * User Role Schema
@@ -31,7 +32,17 @@ export const UserSchema = BaseEntitySchema.extend({
 	password_hash: z.string(),
 	did: DidSyrSchema.optional(), // Optional for backward compat; set during identity creation
 	role: UserRoleSchema.default('USER'), // Instance-level role for access control
-	username_last_updated: TimestampSchema.optional() // When username was last changed; null = never changed, allow first update
+	username_last_updated: TimestampSchema.optional(), // When username was last changed; null = never changed, allow first update
+	signing_warn_before_each_action: z.boolean().optional(),
+	signing_require_explicit_sign_button: z.boolean().optional(),
+	/** When true, hide posts without a content signature in your own posts list (client may filter). */
+	feed_hide_unsigned_posts: z.boolean().optional(),
+	/** When true, treat author publication registry bases as implicit allow prefixes in post content trust. */
+	content_trust_auto_author_provider: z.boolean().optional(),
+	/** Allow data:/blob: in sanitized post HTML (off by default). */
+	content_trust_allow_data_urls: z.boolean().optional(),
+	/** Max decoded post payload bytes the user allows the browser to load (feeds, lists); null = app default. */
+	content_max_post_bytes: z.number().int().positive().optional()
 });
 
 export type User = z.infer<typeof UserSchema>;
@@ -46,7 +57,10 @@ export const ProfileSchema = BaseEntitySchema.extend({
 	bio: z.string().max(500).optional(),
 	avatar_url: z.url().optional(),
 	banner_url: z.url().optional(),
-	metadata: MetadataSchema.optional()
+	metadata: MetadataSchema.optional(),
+	content_signature: z.string().optional(),
+	signed_payload_json: z.string().optional(),
+	signing_device_public_key: z.string().optional()
 });
 
 export type Profile = z.infer<typeof ProfileSchema>;
@@ -114,6 +128,32 @@ export const ProfileUpdateSchema = ProfileSchema.pick({
 }).partial();
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
+
+/** HTTP body for PATCH /api/user/profile (profile fields + optional signed envelope) */
+export const ProfilePatchRequestSchema = ProfileUpdateSchema.extend({
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type ProfilePatchRequest = z.infer<typeof ProfilePatchRequestSchema>;
+
+/** Fields the server may merge after verified signing (not sent as profile form fields by clients) */
+export const ProfileSignatureFieldsSchema = z.object({
+	content_signature: z.string(),
+	signed_payload_json: z.string(),
+	signing_device_public_key: z.string()
+});
+
+export type ProfileSignatureFields = z.infer<typeof ProfileSignatureFieldsSchema>;
+
+export const ProfileRepositoryMergeSchema = ProfileUpdateSchema.and(
+	z.object({
+		content_signature: z.string().optional(),
+		signed_payload_json: z.string().optional(),
+		signing_device_public_key: z.string().optional()
+	})
+);
+
+export type ProfileRepositoryMerge = z.infer<typeof ProfileRepositoryMergeSchema>;
 
 /**
  * Session Schema

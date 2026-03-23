@@ -113,6 +113,91 @@ export function parseSyrChallengeSignUrlAny(
  * Used when onboarding page shows QR for "Import from Syner".
  * Requires instance and did (no JWT).
  */
+/**
+ * syr://sigil-handoff?origin=...&session=...&did=...&nonce=...
+ * Requesting web app origin for Sigil file export (encrypted .sigil only; no plaintext keys on the wire).
+ * `session` ties to a server-side handoff slot when using SYR Settings → Signing “Receive from Syner”.
+ * Validation of ciphertext happens in the SYR browser after upload, not in Syner.
+ */
+/**
+ * syr://post-sign?origin=...&session=...&did=...
+ * Syner signs a pending post@v1 payload for the SYR browser tab.
+ */
+/**
+ * syr://registry-sign?origin=...&session=...&did=...
+ * Syner signs a pending publication registry sync for the SYR browser tab.
+ */
+export function parseSyrRegistrySignUrl(urlStr: string): {
+	origin: string;
+	session: string;
+	expectedDid: string;
+} | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'registry-sign') return null;
+		const originRaw = url.searchParams.get('origin');
+		if (!originRaw) return null;
+		const ou = new URL(originRaw);
+		if (!isValidUrlScheme(ou)) return null;
+		const session = url.searchParams.get('session')?.trim();
+		const expectedDid = url.searchParams.get('did')?.trim() ?? '';
+		if (!session || !expectedDid.startsWith('did:syr:')) {
+			return null;
+		}
+		return { origin: ou.origin, session, expectedDid };
+	} catch {
+		return null;
+	}
+}
+
+export function parseSyrPostSignUrl(urlStr: string): {
+	origin: string;
+	session: string;
+	expectedDid: string;
+} | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'post-sign') return null;
+		const originRaw = url.searchParams.get('origin');
+		if (!originRaw) return null;
+		const ou = new URL(originRaw);
+		if (!isValidUrlScheme(ou)) return null;
+		const session = url.searchParams.get('session')?.trim();
+		const expectedDid = url.searchParams.get('did')?.trim() ?? '';
+		if (!session || !expectedDid.startsWith('did:syr:')) {
+			return null;
+		}
+		return { origin: ou.origin, session, expectedDid };
+	} catch {
+		return null;
+	}
+}
+
+export function parseSyrSigilHandoffUrl(urlStr: string): {
+	origin: string;
+	nonce?: string;
+	session: string;
+	expectedDid: string;
+} | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'sigil-handoff') return null;
+		const originRaw = url.searchParams.get('origin');
+		if (!originRaw) return null;
+		const ou = new URL(originRaw);
+		if (!isValidUrlScheme(ou)) return null;
+		const session = url.searchParams.get('session')?.trim();
+		const expectedDid = url.searchParams.get('did')?.trim() ?? '';
+		if (!session || !expectedDid.startsWith('did:syr:')) {
+			return null;
+		}
+		const nonce = url.searchParams.get('nonce') ?? undefined;
+		return { origin: ou.origin, nonce, session, expectedDid };
+	} catch {
+		return null;
+	}
+}
+
 export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did: string } | null {
 	try {
 		const url = new URL(urlStr);
@@ -126,4 +211,50 @@ export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did:
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Map a scanned or deep-linked `syr://…` URL to an in-app path + query.
+ * Keeps QR scan and `syr://` OS handlers aligned.
+ */
+export function syrUrlToInternalRoute(urlStr: string): string | null {
+	const trimmed = urlStr.trim();
+	const loginParsed = parseSyrLoginUrl(trimmed);
+	if (loginParsed) {
+		return `/scan-confirm?${new URLSearchParams(loginParsed)}`;
+	}
+	const challengeSignParsed = parseSyrChallengeSignUrlAny(trimmed);
+	if (challengeSignParsed) {
+		return `/export-verify?${new URLSearchParams(challengeSignParsed)}`;
+	}
+	const syncParsed = parseSyrSyncProfileUrl(trimmed);
+	if (syncParsed) {
+		return `/sync-profile?${new URLSearchParams(syncParsed)}`;
+	}
+	const sigilParsed = parseSyrSigilHandoffUrl(trimmed);
+	if (sigilParsed) {
+		const q = new URLSearchParams();
+		q.set('origin', sigilParsed.origin);
+		q.set('session', sigilParsed.session);
+		q.set('did', sigilParsed.expectedDid);
+		if (sigilParsed.nonce) q.set('nonce', sigilParsed.nonce);
+		return `/sigil-handoff?${q.toString()}`;
+	}
+	const postSignParsed = parseSyrPostSignUrl(trimmed);
+	if (postSignParsed) {
+		const q = new URLSearchParams();
+		q.set('origin', postSignParsed.origin);
+		q.set('session', postSignParsed.session);
+		q.set('did', postSignParsed.expectedDid);
+		return `/post-sign?${q.toString()}`;
+	}
+	const registrySignParsed = parseSyrRegistrySignUrl(trimmed);
+	if (registrySignParsed) {
+		const q = new URLSearchParams();
+		q.set('origin', registrySignParsed.origin);
+		q.set('session', registrySignParsed.session);
+		q.set('did', registrySignParsed.expectedDid);
+		return `/registry-sign?${q.toString()}`;
+	}
+	return null;
 }

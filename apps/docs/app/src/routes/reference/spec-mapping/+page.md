@@ -17,22 +17,23 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Identity Model Specification
 
-| Requirement                        | Status          | Details                                                                                                                                                      |
-| ---------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Root keypair generation (Ed25519)  | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()` and `generateDeviceKeypair()` using `@noble/ed25519`.                                                |
-| DID derivation (`did:syr`)         | **Implemented** | `packages/crypto/src/encoding.ts` — `deriveDid()` produces `did:syr:z6Mk...` from Ed25519 public key.                                                        |
-| Identity independent of hosting    | **Implemented** | Identity is DID-based, derived from public key. Registry maps DID to provider.                                                                               |
-| Profile mutations signed           | **Partial**     | `verifySignedMutation()` exists in `identity.controller.ts` but is not yet enforced on all mutations.                                                        |
-| Identity exportable                | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets.                                  |
-| Identity importable                | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                                                         |
-| Delegated device keys              | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.                                               |
-| Provider hosting                   | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` discovery endpoint missing.                                         |
-| Registry resolution                | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did` and `POST /update` with signature verification.                                                 |
-| Identity-based login               | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.                                   |
-| Independent login (challenge-sign) | **Implemented** | `POST /api/auth/independent-login/challenge`, `POST /api/auth/independent-login/verify`, `/auth/independent-callback`. QR + syr:// deep link + Syner opener. |
-| Attestations / VCs                 | **Partial**     | Type schemas exist in `packages/types/src/credentials.ts`. No API endpoints yet.                                                                             |
-| Layered identity assurance         | **Partial**     | Permissionless layer exists (any user can register). Social and legal layers missing.                                                                        |
-| Migration model                    | **Implemented** | Export-bundle + import endpoints enable full migration. Registry update to point to new provider.                                                            |
+| Requirement                        | Status          | Details                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root keypair generation (Ed25519)  | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()` and `generateDeviceKeypair()` using `@noble/ed25519`.                                                                                                                            |
+| DID derivation (`did:syr`)         | **Implemented** | `packages/crypto/src/encoding.ts` — `deriveDid()` produces `did:syr:z6Mk...` from Ed25519 public key.                                                                                                                                    |
+| Identity independent of hosting    | **Implemented** | Identity is DID-based, derived from public key. Registry maps DID to provider.                                                                                                                                                           |
+| Profile mutations signed           | **Implemented** | `PATCH /api/user/profile` with optional `signed_mutation`; `assertProfileSignedMutation()`; strict mode `SYR_REQUIRE_SIGNED_MUTATIONS`. Persists signature fields on `profile`. Root or delegated key via `verifyClientSignedContent()`. |
+| Post mutations signed              | **Implemented** | Post create/update/delete accept signed envelopes; `PostCreateRequestSchema` / `signed_mutation` on updates; signatures stored on `post`.                                                                                                |
+| Identity exportable                | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets.                                                                                                              |
+| Identity importable                | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                                                                                                                                     |
+| Delegated device keys              | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.                                                                                                                           |
+| Provider hosting                   | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` stub at `apps/syr/app/src/routes/.well-known/syr/+server.ts`.                                                                                   |
+| Registry resolution                | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did`, `POST /update`, opted-in `GET /directory/search` and `POST /directory/upsert` (root-signed directory rows).                                                                |
+| Identity-based login               | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.                                                                                                               |
+| Independent login (challenge-sign) | **Implemented** | `POST /api/auth/independent-login/challenge`, `POST /api/auth/independent-login/verify`, `/auth/independent-callback`. QR + syr:// deep link + Syner opener.                                                                             |
+| Attestations / VCs                 | **Partial**     | Type schemas exist in `packages/types/src/credentials.ts`. No API endpoints yet.                                                                                                                                                         |
+| Layered identity assurance         | **Partial**     | Permissionless layer exists (any user can register). Social and legal layers missing.                                                                                                                                                    |
+| Migration model                    | **Implemented** | Export-bundle + import endpoints enable full migration. Registry update to point to new provider.                                                                                                                                        |
 
 ---
 
@@ -95,23 +96,37 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Provider Service Specification
 
-| Requirement                       | Status          | Details                                                       |
-| --------------------------------- | --------------- | ------------------------------------------------------------- |
-| `GET /.well-known/did/:did`       | **Implemented** | Returns DID Document for identities hosted on this instance.  |
-| `GET /.well-known/syr` discovery  | **Missing**     | Instance capabilities discovery endpoint not yet implemented. |
-| `GET /api/identity/export`        | **Implemented** | Returns portable identity bundle (JSON).                      |
-| `GET /api/identity/export-bundle` | **Implemented** | Returns full zip with identity, posts, and assets.            |
-| `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.        |
-| Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store. |
-| TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                          |
+| Requirement                       | Status          | Details                                                                                         |
+| --------------------------------- | --------------- | ----------------------------------------------------------------------------------------------- |
+| `GET /.well-known/did/:did`       | **Implemented** | Returns DID Document for identities hosted on this instance.                                    |
+| `GET /.well-known/syr` discovery  | **Partial**     | Stub JSON at `/.well-known/syr` with `public_url` and public API hints; extend as spec matures. |
+| `GET /api/identity/export`        | **Implemented** | Returns portable identity bundle (JSON).                                                        |
+| `GET /api/identity/export-bundle` | **Implemented** | Returns full zip with identity, posts, and assets.                                              |
+| `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.                                          |
+| Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store.                                   |
+| TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                                                            |
+
+---
+
+## Follows, Timeline, and Verification UI
+
+| Requirement                                        | Status          | Details                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DID-keyed follows and registry discovery           | **Implemented** | `user_follow` table; `GET/POST/DELETE /api/follows`; follow gating uses **discovery registries** (`discovery_registry`, `GET/POST /api/user/discovery-registries`) — separate from **publication** registries (`identity_registry`). Resolver via `@syr-is/resolver` `resolveProvider`. `u/[param]` profile route.              |
+| Home timeline (meta + full post fetch)             | **Partial**     | Home `+page.svelte` merges public post meta client-side (batched registry resolve + meta `fetch`); full post on **Load details** (not eager per-row); virtual scroll not yet added.                                                                                                                                             |
+| Public post/profile read for feeds                 | **Implemented** | `GET /api/public/profile/[param]`, `GET /api/public/posts/[did]`, `GET /api/public/posts/[did]/[localId]`.                                                                                                                                                                                                                      |
+| Registry directory search (opt-in)                 | **Partial**     | Registry `directory/search` + Syr `GET /api/search/directory` merges **discovery** registry URLs per account; Syr `/search` UI. Publication list unchanged for sync/outbox.                                                                                                                                                     |
+| Signature verification UI (profile/post)           | **Implemented** | `signature-verification.svelte` on profile settings, post view, and `u/` profile.                                                                                                                                                                                                                                               |
+| Untrusted HTML/markdown/media (sanitize + consent) | **Implemented** | DOMPurify + `marked` pipeline (`sanitize-post-body.ts`); subresource URL extraction; path/glob trust rules (`user_content_trust_rule`, Settings → Content trust); per-post consent + feed avoids cross-origin media prefetch. See [untrusted post content](/architecture/untrusted-post-content). **Signatures ≠ HTML safety.** |
+| Signing UX preferences + Syner Sigil handoff       | **Partial**     | User prefs API; **Settings → Signing**: file load + **Syner QR/deeplink** handoff (`POST /api/user/sigil-handoff-session`, poll `GET …/sigil-handoff/[id]`, Syner `POST …/payload`); `sigil-session.ts` + WASM `signMutationPayload()` / `getUnlockedSigningSeed()`. Wired-in signing in forms still evolving.                  |
 
 ---
 
 ## Syner (Self-Custody Companion)
 
-| Requirement                 | Status          | Details                                                                                                                                             |
-| --------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Syner native app (Tauri v2) | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. Phase 3 goals (platform keystores, pairing) are enhancements. |
+| Requirement                 | Status          | Details                                                                                                                                                                                                                                    |
+| --------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Syner native app (Tauri v2) | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. `syr://sigil-handoff` deep link opens trust-warning route for browser signing handoff. Phase 3 goals (platform keystores, pairing) are enhancements. |
 
 ---
 
@@ -138,13 +153,15 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Recovery & Rotation Specification
 
-| Requirement                                  | Status      | Details                                                                                       |
-| -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| Recovery key generation at identity creation | **Missing** | Future phase.                                                                                 |
-| Recovery statement format                    | **Missing** | Future phase.                                                                                 |
-| Root key rotation (signed chain)             | **Partial** | `createRotationStatement()` / `verifyRotationStatement()` in crypto package. No API endpoint. |
-| Key history chain (append-only)              | **Missing** | Data structure not yet implemented.                                                           |
-| Registry update after rotation               | **Missing** | Would require rotation endpoint + registry update.                                            |
+**Product note:** Under [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified), rotation and recovery are **out of scope** until a future phase explicitly revives them. Portability is **migration + export/import**; new root keys imply a **new DID**.
+
+| Requirement                                  | Status           | Details                                                                                                                      |
+| -------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Recovery key generation at identity creation | **Out of scope** | Deferred per simplified lifecycle; see [roadmap](/roadmap) Phase 5 note.                                                     |
+| Recovery statement format                    | **Out of scope** | Deferred.                                                                                                                    |
+| Root key rotation (signed chain)             | **Out of scope** | `createRotationStatement()` / `verifyRotationStatement()` exist in `@syr-is/crypto` but are **not** roadmap-backed features. |
+| Key history chain (append-only)              | **Out of scope** | Not planned under simplified lifecycle.                                                                                      |
+| Registry update after rotation               | **Out of scope** | Registry updates apply to **hosting** migration, not key rotation.                                                           |
 
 ---
 

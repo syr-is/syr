@@ -8,6 +8,8 @@ import {
 } from '@syr-is/types';
 
 const MAX_LIMIT = 1000;
+/** Cap public listing offset to avoid expensive full scans via huge START values */
+const MAX_PUBLIC_OFFSET = 10_000;
 
 export interface FindByDidOptions {
 	/** Max posts per page (default: 500) */
@@ -70,6 +72,41 @@ export class PostRepository extends BaseRepository<Post> {
 				: null;
 
 		return { posts, nextCursor };
+	}
+
+	/**
+	 * Public posts for a DID (composite id.created_by), visibility = public only.
+	 */
+	async findPublicByDid(
+		did: string,
+		opts: { limit?: number; offset?: number } = {}
+	): Promise<{ data: Post[]; total: number }> {
+		const limitRaw = Number(opts.limit ?? 50);
+		const offsetRaw = Number(opts.offset ?? 0);
+		const limitNum = Number.isFinite(limitRaw) ? Math.floor(limitRaw) : NaN;
+		const offsetNum = Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : NaN;
+		if (Number.isNaN(limitNum) || Number.isNaN(offsetNum)) {
+			throw new Error('findPublicByDid: limit and offset must be finite numbers');
+		}
+		const limit = Math.min(Math.max(limitNum, 1), 200);
+		const offset = Math.min(Math.max(offsetNum, 0), MAX_PUBLIC_OFFSET);
+		const dataResult = await this.db.query<[Post[]]>(
+			`SELECT * FROM post
+			 WHERE id.created_by = $did AND visibility = 'public' AND status = 'completed'
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $limit START $offset`,
+			{ did, limit, offset }
+		);
+		const countResult = await this.db.query<[{ total: number }[]]>(
+			`SELECT count() AS total FROM post
+			 WHERE id.created_by = $did AND visibility = 'public' AND status = 'completed'
+			 GROUP ALL`,
+			{ did }
+		);
+		const raw = dataResult[0] ?? [];
+		const data = raw.map((r) => this.validate(r));
+		const total = countResult[0]?.[0]?.total ?? 0;
+		return { data, total };
 	}
 }
 

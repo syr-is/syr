@@ -3,7 +3,7 @@ import { getMediaType, type MediaType } from '$lib/utils/media';
 
 /**
  * Unified display item type for rendering files and folders
- * across different view modes (list, gallery, masonry, carousel).
+ * across different view modes (list, gallery, masonry, carousel, cards).
  */
 export type DisplayItem =
 	| { kind: 'folder'; id: string; name: string; isPublic: boolean; data: Folder }
@@ -21,7 +21,8 @@ export type DisplayItem =
 	  }
 	| { kind: 'media-url'; id: string; url: string; mimeType?: string; filename?: string };
 
-export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel';
+/** View layout for uploads / media grids: list, gallery, masonry, carousel, or cards. */
+export type ViewMode = 'list' | 'gallery' | 'masonry' | 'carousel' | 'cards';
 
 /** Convert an array of bare URLs (from post media_urls) into DisplayItems */
 export function urlsToDisplayItems(

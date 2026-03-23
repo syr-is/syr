@@ -29,8 +29,18 @@ const sidebarConfig = [
 		collapsible: true,
 		items: [
 			{ title: 'Identity Model v0.1', to: '/architecture/identity-model' },
+			{
+				title: 'Identity Lifecycle (One DID, One Key)',
+				to: '/architecture/identity-lifecycle-simplified'
+			},
 			{ title: 'did:syr Method v0.1', to: '/architecture/did-method' },
 			{ title: 'Key Hierarchy & Delegation v0.1', to: '/architecture/key-hierarchy-delegation' },
+			{
+				title: 'Signed Profile & Post Mutations',
+				to: '/architecture/signed-profile-post-mutations'
+			},
+			{ title: 'Signature Verification UI', to: '/architecture/signature-verification-ui' },
+			{ title: 'Follows, Discovery & Home Timeline', to: '/architecture/follows-and-timeline' },
 			{ title: 'Sigil v1 (Export Format)', to: '/architecture/sigil' },
 			{ title: 'Export Formats (SYR, Sigil, Persona)', to: '/architecture/export' },
 			{ title: 'Identity Import', to: '/architecture/import' },

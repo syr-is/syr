@@ -265,7 +265,7 @@ export const ExportedPostSchema = z.object({
 	description: z.string().max(280).optional(),
 	content: z.string().optional(),
 	media_urls: z.array(z.string().url()).optional(),
-	display_mode: z.enum(['carousel', 'masonry', 'gallery']).optional(),
+	display_mode: z.enum(['carousel', 'masonry', 'gallery', 'cards']).optional(),
 	visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
 	status: z.enum(['draft', 'completed']).default('draft'),
 	created_at: z.string().datetime(),

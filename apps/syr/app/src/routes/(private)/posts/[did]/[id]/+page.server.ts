@@ -2,8 +2,15 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { postController } from '$lib/controllers/post.controller';
 import { userRepository } from '$lib/repositories/user.repository';
+import { contentTrustRuleRepository } from '$lib/repositories/content-trust-rule.repository';
+import { registryRepository } from '$lib/repositories/registry.repository';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
-import { recordIdFromDidAndLocal, extractDid, extractLocalId } from '@syr-is/types';
+import {
+	recordIdFromDidAndLocal,
+	extractDid,
+	extractLocalId,
+	stringToRecordId
+} from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Get post by ID
@@ -77,10 +84,53 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			? await resolveMediaUrlMetadata(post.media_urls)
 			: { mimeTypes: {}, filenames: {} };
 
+	let contentTrust: {
+		rules: Array<{ pattern: string; kind: 'allow' | 'deny'; sort_order: number }>;
+		allowDataUrls: boolean;
+		autoAuthorProvider: boolean;
+		implicitAllowPrefixes: string[];
+	};
+
+	if (locals.user) {
+		const uid = stringToRecordId.decode(locals.user.id);
+		const rules = await contentTrustRuleRepository.findByUserId(uid);
+		const implicitAllowPrefixes: string[] = [];
+		const authorDid = extractDid(post.id);
+		if (user?.content_trust_auto_author_provider && authorDid) {
+			const regs = await registryRepository.findByDid(authorDid);
+			for (const r of regs) {
+				try {
+					const u = new URL(r.registry_url);
+					implicitAllowPrefixes.push(`${u.origin}/`);
+				} catch {
+					// skip invalid registry URL
+				}
+			}
+		}
+		contentTrust = {
+			rules: rules.map((r) => ({
+				pattern: r.pattern,
+				kind: r.kind,
+				sort_order: r.sort_order
+			})),
+			allowDataUrls: user?.content_trust_allow_data_urls ?? false,
+			autoAuthorProvider: user?.content_trust_auto_author_provider ?? false,
+			implicitAllowPrefixes
+		};
+	} else {
+		contentTrust = {
+			rules: [],
+			allowDataUrls: false,
+			autoAuthorProvider: false,
+			implicitAllowPrefixes: []
+		};
+	}
+
 	return {
 		post: serializedPost,
 		user: serializedUser,
 		mediaUrlMimeTypes,
-		mediaUrlFilenames
+		mediaUrlFilenames,
+		contentTrust
 	};
 };

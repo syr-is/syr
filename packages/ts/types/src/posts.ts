@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BaseEntitySchema, RecordIdSchema, DidSyrSchema } from './common.js';
+import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
 export const PostTypeSchema = z.enum(['blog', 'media']);
 
@@ -19,7 +20,7 @@ export type PostBlogVisibilityType = z.infer<typeof PostBlogVisibilityTypeSchema
  * - masonry: Display media in a CSS masonry grid layout
  * - gallery: Display media in a uniform grid with a preview modal
  */
-export const MediaDisplayModeSchema = z.enum(['carousel', 'masonry', 'gallery']);
+export const MediaDisplayModeSchema = z.enum(['carousel', 'masonry', 'gallery', 'cards']);
 
 export type MediaDisplayMode = z.infer<typeof MediaDisplayModeSchema>;
 
@@ -80,7 +81,10 @@ const PostObjectSchema = BaseEntitySchema.extend({
 	/** DID from composite record ID (present when serialized for API) */
 	did: DidSyrSchema.optional(),
 	/** Local ID/ULID from composite record ID (present when serialized for API) */
-	local_id: z.string().optional()
+	local_id: z.string().optional(),
+	content_signature: z.string().optional(),
+	signed_payload_json: z.string().optional(),
+	signing_device_public_key: z.string().optional()
 });
 
 export const PostSchema = PostObjectSchema.superRefine(refinePostType);
@@ -93,7 +97,10 @@ export const PostCreateSchema = PostObjectSchema.omit({
 	updated_at: true,
 	author_id: true,
 	did: true,
-	local_id: true
+	local_id: true,
+	content_signature: true,
+	signed_payload_json: true,
+	signing_device_public_key: true
 }).superRefine(refinePostType);
 
 export type PostCreate = z.infer<typeof PostCreateSchema>;
@@ -103,7 +110,39 @@ export const PostUpdateSchema = PostObjectSchema.omit({
 	updated_at: true,
 	author_id: true,
 	did: true,
-	local_id: true
+	local_id: true,
+	content_signature: true,
+	signed_payload_json: true,
+	signing_device_public_key: true
 }).superRefine(refineMediaNoContentType);
 
 export type PostUpdate = z.infer<typeof PostUpdateSchema>;
+
+export const PostUpdateRequestSchema = PostUpdateSchema.safeExtend({
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostUpdateRequest = z.infer<typeof PostUpdateRequestSchema>;
+
+/** PATCH body when post id comes from URL (`/api/posts/[did]/[id]`), not from JSON. */
+export const PostUpdateByUrlRequestSchema = PostUpdateSchema.omit({ id: true })
+	.partial()
+	.safeExtend({
+		signed_mutation: SignedMutationEnvelopeSchema.optional()
+	});
+
+export type PostUpdateByUrlRequest = z.infer<typeof PostUpdateByUrlRequestSchema>;
+
+/** POST /api/posts — optional client-chosen ULID + signed envelope */
+export const PostCreateRequestSchema = PostCreateSchema.safeExtend({
+	post_local_id: z.string().min(1).optional(),
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostCreateRequest = z.infer<typeof PostCreateRequestSchema>;
+
+export const PostDeleteRequestSchema = z.object({
+	signed_mutation: SignedMutationEnvelopeSchema.optional()
+});
+
+export type PostDeleteRequest = z.infer<typeof PostDeleteRequestSchema>;
