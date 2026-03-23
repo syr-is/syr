@@ -52,7 +52,15 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Identity missing for session' });
 	}
 
-	await initCryptoWasm();
+	try {
+		await initCryptoWasm();
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		throw error(500, {
+			code: 'WASM_INIT_FAILED',
+			message: `Failed to initialize crypto WASM: ${msg}`
+		});
+	}
 	const sessionCanon = canonicalize(session.payload);
 	const envelopeCanon = canonicalize(envelope.payload as Record<string, unknown>);
 	if (sessionCanon !== envelopeCanon) {

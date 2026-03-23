@@ -184,10 +184,10 @@
 					await finishWithEnvelope(env);
 				}
 			});
-			aegisPassword = '';
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Aegis signing failed');
 		} finally {
+			aegisPassword = '';
 			busy = false;
 		}
 	}

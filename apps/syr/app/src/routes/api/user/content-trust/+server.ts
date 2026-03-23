@@ -78,7 +78,6 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 		assertPatternLooksLikeUrlOrPath(r.pattern);
 	}
 	const uid = stringToRecordId.decode(locals.user.id);
-	await contentTrustRuleRepository.replaceAllForUser(uid, parsed.data.rules);
 	const mergePatch: {
 		updated_at: Date;
 		content_trust_auto_author_provider?: boolean;
@@ -92,6 +91,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 	}
 	const updated = await userRepository.merge(uid, mergePatch);
 	if (!updated) throw error(404, { code: 'NOT_FOUND', message: 'User not found' });
+	await contentTrustRuleRepository.replaceAllForUser(uid, parsed.data.rules);
 	const rules = await contentTrustRuleRepository.findByUserId(uid);
 	return json({
 		status: 'success',

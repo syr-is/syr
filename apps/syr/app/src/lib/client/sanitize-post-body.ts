@@ -82,8 +82,8 @@ export async function sanitizeMarkdownToHtml(
 	markdown: string,
 	allowDataUrls = false
 ): Promise<string> {
-	const raw = marked.parse(markdown, { gfm: true, breaks: true });
-	const html = typeof raw === 'string' ? raw : '';
+	const raw = await marked.parse(markdown, { gfm: true, breaks: true });
+	const html = typeof raw === 'string' ? raw : String(raw ?? '');
 	return sanitizePostHtmlFragment(html, allowDataUrls);
 }
 

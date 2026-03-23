@@ -80,7 +80,14 @@
 	let targetPersona = $derived(matchingPersonas.length === 1 ? matchingPersonas[0]! : null);
 
 	function bytesToBase64(bytes: number[]): string {
-		return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+		const u8 = new Uint8Array(bytes);
+		const step = 8192;
+		let bin = '';
+		for (let i = 0; i < u8.length; i += step) {
+			const slice = u8.subarray(i, Math.min(i + step, u8.length));
+			bin += String.fromCharCode(...slice);
+		}
+		return btoa(bin);
 	}
 
 	/** Syner `profile.json` stores the raw Ed25519 pubkey as standard base64; SYR stores multibase(`z…`) of multicodec-prefixed key (same as `did:syr` method id). */
@@ -234,11 +241,11 @@
 					? 'Signature sent. Return to SYR to finish saving your profile.'
 					: 'Signature sent. Return to SYR to finish publishing.'
 			);
-			passphrase = '';
 			userConfirmed = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			passphrase = '';
 			sending = false;
 		}
 	}

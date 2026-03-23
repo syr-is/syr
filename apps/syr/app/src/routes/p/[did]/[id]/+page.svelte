@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import * as Card from '@syr-is/ui/card';
 	import { Badge } from '@syr-is/ui/badge';
 	import { Button } from '@syr-is/ui/button';
@@ -17,6 +16,8 @@
 	let blogHtml = $state('');
 	let bodyReady = $state(false);
 
+	let sanitizeGen = 0;
+
 	function formatDate(iso: string): string {
 		const d = new Date(iso);
 		if (Number.isNaN(d.getTime())) return '—';
@@ -27,19 +28,24 @@
 		}).format(d);
 	}
 
-	onMount(() => {
+	$effect(() => {
+		const p = data.post as unknown as Post;
+		const gen = ++sanitizeGen;
+		bodyReady = false;
+		blogHtml = '';
 		void (async () => {
 			try {
-				const p = data.post as unknown as Post;
 				if (p.type === 'blog') {
 					if (p.content_type === 'markdown' && p.content?.trim()) {
-						blogHtml = await sanitizeMarkdownToHtml(p.content, false);
+						const html = await sanitizeMarkdownToHtml(p.content, false);
+						if (gen === sanitizeGen) blogHtml = html;
 					} else if (p.content_type === 'html' && p.content?.trim()) {
-						blogHtml = await sanitizePostHtmlFragment(p.content, false);
+						const html = await sanitizePostHtmlFragment(p.content, false);
+						if (gen === sanitizeGen) blogHtml = html;
 					}
 				}
 			} finally {
-				bodyReady = true;
+				if (gen === sanitizeGen) bodyReady = true;
 			}
 		})();
 	});

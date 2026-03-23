@@ -32,35 +32,30 @@ class ContentTrustRuleRepository {
 		userId: RecordId | string,
 		rules: Array<{ pattern: string; kind: TrustRuleKind }>
 	): Promise<void> {
-		await this.db.query('DELETE FROM user_content_trust_rule WHERE user_id = $userId', { userId });
 		const now = new Date();
+		let query =
+			'BEGIN TRANSACTION;\nDELETE FROM user_content_trust_rule WHERE user_id = $userId;\n';
+		const params: Record<string, unknown> = { userId, now };
 		for (let i = 0; i < rules.length; i++) {
 			const r = rules[i];
-			await this.db.query(
-				`CREATE user_content_trust_rule SET
-					user_id = $userId,
-					pattern = $pattern,
-					kind = $kind,
-					sort_order = $sortOrder,
-					created_at = $now`,
-				{ userId, pattern: r.pattern.trim(), kind: r.kind, sortOrder: i, now }
-			);
+			query += `CREATE user_content_trust_rule SET user_id = $userId, pattern = $pattern${i}, kind = $kind${i}, sort_order = ${i}, created_at = $now;\n`;
+			params[`pattern${i}`] = r.pattern.trim();
+			params[`kind${i}`] = r.kind;
 		}
+		query += 'COMMIT TRANSACTION;';
+		await this.db.query(query, params);
 	}
 
 	async appendRule(userId: RecordId | string, pattern: string, kind: TrustRuleKind): Promise<void> {
-		const existing = await this.findByUserId(userId);
-		const nextOrder =
-			existing.length === 0 ? 0 : Math.max(...existing.map((r) => r.sort_order)) + 1;
 		const now = new Date();
+		const p = pattern.trim();
 		await this.db.query(
-			`CREATE user_content_trust_rule SET
-				user_id = $userId,
-				pattern = $pattern,
-				kind = $kind,
-				sort_order = $nextOrder,
-				created_at = $now`,
-			{ userId, pattern: pattern.trim(), kind, nextOrder, now }
+			`BEGIN TRANSACTION;
+			 LET $top = SELECT sort_order FROM user_content_trust_rule WHERE user_id = $userId ORDER BY sort_order DESC LIMIT 1;
+			 LET $next = IF array::len($top) = 0 { 0 } ELSE { $top[0].sort_order + 1 };
+			 CREATE user_content_trust_rule SET user_id = $userId, pattern = $pattern, kind = $kind, sort_order = $next, created_at = $now;
+			 COMMIT TRANSACTION;`,
+			{ userId, pattern: p, kind, now }
 		);
 	}
 

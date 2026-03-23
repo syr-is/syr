@@ -41,6 +41,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	};
 
 	const prepped: PrepRow[] = [];
+	const accountDid = locals.user.did?.trim() ?? '';
 
 	const displayNameForDirectory = (): string => {
 		const u = locals.user?.username ?? '';
@@ -55,6 +56,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 			registryUrl?: string;
 			provider?: string;
 		};
+		if (p.did && accountDid.startsWith('did:syr:') && p.did !== accountDid) {
+			throw error(403, {
+				code: 'FORBIDDEN',
+				message: 'Registry job payload DID does not match your account'
+			});
+		}
 		if (!p.did || !p.registryUrl || !p.action) continue;
 
 		if (p.action === 'update') {

@@ -96,6 +96,14 @@
 		}
 	}
 
+	const hasLocalMedia = $derived.by(() => {
+		if (displayItems.length === 0) return false;
+		return displayItems.some((_, i) => {
+			const url = post.media_urls?.[i];
+			return !!(url && !isRemoteFeedUrl(url));
+		});
+	});
+
 	function openPreview(index: number, e: MouseEvent) {
 		const u = post.media_urls?.[index];
 		if (u && isRemoteFeedUrl(u)) return;
@@ -350,6 +358,6 @@
 	<DeletePostDialog bind:open={deleteDialogOpen} {post} />
 {/if}
 
-{#if displayItems.length > 0 && displayItems.some((_, i) => post.media_urls?.[i] && !isRemoteFeedUrl(post.media_urls[i]!))}
+{#if hasLocalMedia}
 	<MediaPreviewModal bind:open={previewOpen} items={displayItems} initialIndex={previewIndex} />
 {/if}

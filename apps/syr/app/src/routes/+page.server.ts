@@ -11,10 +11,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const user = await userRepository.findById(locals.user.id);
 		if (user) {
 			maxPostPayloadBytes = effectiveMaxPostPayloadBytes(user.content_max_post_bytes ?? undefined);
-			followingCount = await followRepository.countByFollower(locals.user.id);
-			if (user.did) {
-				followerCount = await followRepository.countFollowersOfDid(user.did);
-			}
+			const [following, followers] = await Promise.all([
+				followRepository.countByFollower(locals.user.id),
+				user.did ? followRepository.countFollowersOfDid(user.did) : Promise.resolve(0)
+			]);
+			followingCount = following;
+			followerCount = followers;
 		}
 	}
 	return {

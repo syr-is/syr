@@ -92,12 +92,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	};
 
 	if (locals.user) {
-		const trustUser = await userRepository.findById(locals.user.id);
 		const uid = stringToRecordId.decode(locals.user.id);
 		const rules = await contentTrustRuleRepository.findByUserId(uid);
 		const implicitAllowPrefixes: string[] = [];
 		const authorDid = extractDid(post.id);
-		if (trustUser?.content_trust_auto_author_provider && authorDid) {
+		if (user?.content_trust_auto_author_provider && authorDid) {
 			const regs = await registryRepository.findByDid(authorDid);
 			for (const r of regs) {
 				try {
@@ -114,8 +113,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				kind: r.kind,
 				sort_order: r.sort_order
 			})),
-			allowDataUrls: trustUser?.content_trust_allow_data_urls ?? false,
-			autoAuthorProvider: trustUser?.content_trust_auto_author_provider ?? false,
+			allowDataUrls: user?.content_trust_allow_data_urls ?? false,
+			autoAuthorProvider: user?.content_trust_auto_author_provider ?? false,
 			implicitAllowPrefixes
 		};
 	} else {

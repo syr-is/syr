@@ -164,10 +164,10 @@
 				password: registryAegisPassword,
 				action: processPendingRegistryJobs
 			});
-			registryAegisPassword = '';
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Aegis signing failed');
 		} finally {
+			registryAegisPassword = '';
 			registryBusy = false;
 		}
 	}

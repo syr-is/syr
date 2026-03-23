@@ -22,8 +22,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 export const POST: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) throw error(401, 'Authentication required');
 
-	const body = await request.json();
-	const registryUrl = body.registryUrl?.trim();
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch (e) {
+		if (e instanceof SyntaxError) {
+			throw error(400, { code: 'BAD_REQUEST', message: 'Invalid JSON body' });
+		}
+		throw e;
+	}
+	const registryUrl =
+		body != null && typeof body === 'object' && 'registryUrl' in body
+			? String((body as { registryUrl?: unknown }).registryUrl ?? '').trim()
+			: '';
 
 	if (!registryUrl) {
 		throw error(400, 'registryUrl is required');

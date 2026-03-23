@@ -56,14 +56,18 @@
 		}
 		copying = true;
 		try {
+			const settled = await Promise.allSettled(
+				toAdd.map((registryUrl) =>
+					fetch('/api/user/discovery-registries', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ registryUrl })
+					})
+				)
+			);
 			let added = 0;
-			for (const registryUrl of toAdd) {
-				const res = await fetch('/api/user/discovery-registries', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ registryUrl })
-				});
-				if (res.ok) added += 1;
+			for (const s of settled) {
+				if (s.status === 'fulfilled' && s.value.ok) added += 1;
 			}
 			if (added > 0) {
 				toast.success(`Added ${added} registry URL${added === 1 ? '' : 's'} to discovery`);

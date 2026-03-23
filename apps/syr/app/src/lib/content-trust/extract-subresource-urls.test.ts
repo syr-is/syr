@@ -1,6 +1,10 @@
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { Window } from 'happy-dom';
 import { extractSubresourceUrlsFromHtml } from './extract-subresource-urls.js';
+
+const _origWindow = globalThis.window;
+const _origDocument = globalThis.document;
+const _origDOMParser = globalThis.DOMParser;
 
 beforeAll(() => {
 	const win = new Window({ url: 'https://app.test/' });
@@ -9,6 +13,12 @@ beforeAll(() => {
 		document: win.document,
 		DOMParser: win.DOMParser
 	});
+});
+
+afterAll(() => {
+	globalThis.window = _origWindow;
+	globalThis.document = _origDocument;
+	globalThis.DOMParser = _origDOMParser;
 });
 
 describe('extractSubresourceUrlsFromHtml', () => {

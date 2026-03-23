@@ -24,6 +24,16 @@ export function readPostContentConsent(
 			typeof parsed.contentVersion === 'string' &&
 			typeof parsed.at === 'number'
 		) {
+			if (parsed.mode === 'urls') {
+				if (!Array.isArray(parsed.urls) || parsed.urls.length === 0) {
+					return null;
+				}
+				for (const u of parsed.urls) {
+					if (typeof u !== 'string' || !u.trim()) {
+						return null;
+					}
+				}
+			}
 			return parsed;
 		}
 	} catch {

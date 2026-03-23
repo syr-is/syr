@@ -145,25 +145,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			signature: string;
 		};
 		if (action === 'update') {
-			if (!updatedAt) {
-				throw error(400, {
-					code: 'MISSING_FIELDS',
-					message: 'update requires updatedAt'
-				});
-			}
+			const updatedAtStr = updatedAt as string;
 			directoryCanonical = canonicalStringForDirectoryUpsert({
 				did,
 				provider: prov,
 				username,
 				displayName,
 				listed: true,
-				updatedAt
+				updatedAt: updatedAtStr
 			});
 			directoryListing = {
 				username,
 				displayName,
 				listed: true,
-				updatedAt,
+				updatedAt: updatedAtStr,
 				signature: directorySignature
 			};
 		} else {

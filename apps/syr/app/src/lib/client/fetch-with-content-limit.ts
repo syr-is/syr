@@ -36,7 +36,7 @@ export type FetchJsonLimitResult =
 	| { ok: false; error: 'network'; message: string };
 
 /**
- * Fetch URL, reject if raw body exceeds maxRawBytes, then JSON.parse.
+ * Fetch URL, reject if raw body exceeds maxRawBytes (streaming), then JSON.parse.
  */
 export async function fetchJsonWithByteLimit(
 	url: string,
@@ -47,10 +47,30 @@ export async function fetchJsonWithByteLimit(
 		if (!res.ok) {
 			return { ok: false, error: 'network', message: `HTTP ${res.status}` };
 		}
-		const buf = await res.arrayBuffer();
-		const rawByteLength = buf.byteLength;
-		if (rawByteLength > options.maxRawBytes) {
-			return { ok: false, error: 'too_large', rawByteLength, limit: options.maxRawBytes };
+		const reader = res.body?.getReader();
+		if (!reader) {
+			return { ok: false, error: 'network', message: 'No response body' };
+		}
+		const chunks: Uint8Array[] = [];
+		let rawByteLength = 0;
+		const max = options.maxRawBytes;
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (value?.byteLength) {
+				rawByteLength += value.byteLength;
+				if (rawByteLength > max) {
+					await reader.cancel().catch(() => {});
+					return { ok: false, error: 'too_large', rawByteLength, limit: max };
+				}
+				chunks.push(value);
+			}
+		}
+		const buf = new Uint8Array(rawByteLength);
+		let offset = 0;
+		for (const c of chunks) {
+			buf.set(c, offset);
+			offset += c.byteLength;
 		}
 		const text = new TextDecoder().decode(buf);
 		try {

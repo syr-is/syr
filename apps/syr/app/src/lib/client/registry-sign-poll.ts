@@ -33,9 +33,18 @@ export async function pollRegistrySignSessionResult(
 			throw new Error(json.error?.message ?? `HTTP ${res.status}`);
 		}
 		if (json.status === 'failed') {
-			throw new Error(json.data?.error ?? 'Registry signing failed');
+			const err = new Error(json.data?.error ?? 'Registry signing failed');
+			await fetch(`/api/user/registry-sign/${encodeURIComponent(sessionId)}/result`, {
+				method: 'DELETE',
+				credentials: 'include'
+			}).catch(() => {});
+			throw err;
 		}
 		if (json.status === 'success') {
+			await fetch(`/api/user/registry-sign/${encodeURIComponent(sessionId)}/result`, {
+				method: 'DELETE',
+				credentials: 'include'
+			}).catch(() => {});
 			return;
 		}
 		throw new Error('Invalid registry sign session response');

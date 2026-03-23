@@ -63,7 +63,7 @@ export async function signProfileMutationWithRootKey(
 	identityPublicKeyMultibase: string
 ): Promise<SignedMutationEnvelope> {
 	const p = ProfileSignedPayloadV1Schema.parse(payload);
-	const record = { ...p } as unknown as Record<string, unknown>;
+	const record: Record<string, unknown> = { ...p };
 	const signature = await signMutationPayload(record, rootSeed32);
 	return {
 		payload: record,

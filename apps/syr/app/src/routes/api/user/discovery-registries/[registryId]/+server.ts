@@ -22,6 +22,9 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
 		throw error(403, 'Not authorized');
 	}
 
-	await discoveryRegistryRepository.remove(registryId);
+	const removed = await discoveryRegistryRepository.remove(registryId);
+	if (!removed) {
+		throw error(404, { code: 'NOT_FOUND', message: 'Registry not found' });
+	}
 	return json({ status: 'ok', message: 'Discovery registry removed.' });
 };

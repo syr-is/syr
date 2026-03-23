@@ -29,6 +29,13 @@
 		if (data.user?.username) usernameValue = data.user.username;
 	});
 
+	$effect(() => {
+		if (!signDialogOpen) {
+			pendingProfileFields = null;
+			pendingSignSnapshot = null;
+		}
+	});
+
 	async function handleUsernameUpdate() {
 		const trimmed = usernameValue.trim();
 		if (!trimmed || trimmed === data.user?.username) return;

@@ -28,11 +28,21 @@ class DiscoveryRegistryRepository {
 				created_at = $now`,
 			{ userId: uid, registryUrl, now }
 		);
-		return result[0][0];
+		const rows = Array.isArray(result[0]) ? result[0] : [];
+		const row = rows[0];
+		if (!row) {
+			throw new Error('discovery_registry.add: CREATE returned no row');
+		}
+		return row;
 	}
 
-	async remove(id: RecordId): Promise<void> {
-		await this.db.query('DELETE FROM discovery_registry WHERE id = $id', { id });
+	async remove(id: RecordId): Promise<boolean> {
+		const result = await this.db.query<[DiscoveryRegistry[]]>(
+			'DELETE FROM discovery_registry WHERE id = $id RETURN BEFORE',
+			{ id }
+		);
+		const deleted = result[0] ?? [];
+		return deleted.length > 0;
 	}
 
 	async findByUserId(userId: RecordId | string): Promise<DiscoveryRegistry[]> {

@@ -8,7 +8,12 @@ import { extractDid, extractLocalId } from '@syr-is/types';
  * Paginated public uploads for a DID (is_public, completed, with URL).
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-	const did = decodeURIComponent(params.did);
+	let did: string;
+	try {
+		did = decodeURIComponent(params.did);
+	} catch {
+		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
+	}
 	if (!isValidSyrDid(did)) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}

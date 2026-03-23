@@ -8,6 +8,8 @@ import {
 } from '@syr-is/types';
 
 const MAX_LIMIT = 1000;
+/** Cap public listing offset to avoid expensive full scans via huge START values */
+const MAX_PUBLIC_OFFSET = 10_000;
 
 export interface FindByDidOptions {
 	/** Max posts per page (default: 500) */
@@ -87,7 +89,7 @@ export class PostRepository extends BaseRepository<Post> {
 			throw new Error('findPublicByDid: limit and offset must be finite numbers');
 		}
 		const limit = Math.min(Math.max(limitNum, 1), 200);
-		const offset = Math.max(offsetNum, 0);
+		const offset = Math.min(Math.max(offsetNum, 0), MAX_PUBLIC_OFFSET);
 		const dataResult = await this.db.query<[Post[]]>(
 			`SELECT * FROM post
 			 WHERE id.created_by = $did AND visibility = 'public' AND status = 'completed'

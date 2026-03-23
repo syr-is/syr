@@ -196,5 +196,5 @@ export function clearSigilSession(): void {
  * Future signed-mutation UI should use this with `signMutationPayload`.
  */
 export function getUnlockedSigningSeed(): Uint8Array | null {
-	return unlockedSeed;
+	return unlockedSeed ? new Uint8Array(unlockedSeed) : null;
 }

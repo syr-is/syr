@@ -202,7 +202,7 @@
 		if (!d) return;
 		const _page = postsPage;
 		void _page;
-		void fetchPublicPosts();
+		void fetchPublicPosts().catch((e) => console.error('fetchPublicPosts:', e));
 	});
 
 	$effect(() => {
@@ -210,7 +210,7 @@
 		if (!d || catalogTab !== 'media') return;
 		const _page = uploadsPage;
 		void _page;
-		void fetchPublicUploads();
+		void fetchPublicUploads().catch((e) => console.error('fetchPublicUploads:', e));
 	});
 
 	$effect(() => {

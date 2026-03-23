@@ -17,5 +17,10 @@ export function hasPostSizeOverride(key: string): boolean {
 }
 
 export function setPostSizeOverride(key: string): void {
-	sessionStorage.setItem(key, '1');
+	if (typeof sessionStorage === 'undefined') return;
+	try {
+		sessionStorage.setItem(key, '1');
+	} catch (e) {
+		console.warn('[post-size-override] sessionStorage.setItem failed:', e);
+	}
 }

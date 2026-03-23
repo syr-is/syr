@@ -63,13 +63,23 @@ function prefixMatch(candidate: URL, pattern: URL): boolean {
 	return cpp === ppp || cpp.startsWith(ppp + '/');
 }
 
+const compiledGlobMatchers = new Map<string, ReturnType<typeof picomatch>>();
+
+function getCompiledGlobMatcher(glob: string) {
+	let m = compiledGlobMatchers.get(glob);
+	if (!m) {
+		m = picomatch(glob, { dot: true });
+		compiledGlobMatchers.set(glob, m);
+	}
+	return m;
+}
+
 function globMatch(candidate: URL, pattern: URL): boolean {
 	if (!originsMatch(candidate, pattern)) return false;
 	const glob = normalizePathname(pattern.pathname);
 	const path = normalizePathname(candidate.pathname);
 	if (!glob) return true;
-	const isMatch = picomatch(glob, { dot: true });
-	return isMatch(path);
+	return getCompiledGlobMatcher(glob)(path);
 }
 
 function ruleMatches(candidate: URL, patternStr: string): boolean {

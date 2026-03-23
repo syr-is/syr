@@ -131,7 +131,6 @@
 				throw new Error('Loaded Sigil is for a different identity.');
 			}
 			await unlockSigilSession(sigilPassphrase);
-			sigilPassphrase = '';
 			sigilUiTick++;
 			const seed = getUnlockedSigningSeed();
 			if (!seed) throw new Error('Unlock failed.');
@@ -141,6 +140,7 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			sigilPassphrase = '';
 			busy = false;
 		}
 	}

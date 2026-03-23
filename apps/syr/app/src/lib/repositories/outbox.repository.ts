@@ -110,6 +110,22 @@ class OutboxRepository {
 	}
 
 	/**
+	 * Terminal failure after remote registry already accepted the mutation but local DB finalization failed.
+	 * Does not return the job to pending (unlike markFailed with room to retry).
+	 */
+	async markFinalizationFailed(id: RecordId, error: string, maxAttempts: number): Promise<void> {
+		await this.db.query(
+			`UPDATE $id SET
+				status = "failed",
+				attempts = $maxAttempts,
+				last_error = $error,
+				next_retry_at = time::now(),
+				updated_at = time::now()`,
+			{ id, maxAttempts, error }
+		);
+	}
+
+	/**
 	 * Mark a job as failed, increment attempts, and calculate next retry.
 	 */
 	async markFailed(

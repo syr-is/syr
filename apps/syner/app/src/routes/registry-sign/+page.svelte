@@ -121,7 +121,14 @@
 	let targetPersona = $derived(matchingPersonas.length === 1 ? matchingPersonas[0]! : null);
 
 	function bytesToBase64(bytes: number[]): string {
-		return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+		const u8 = new Uint8Array(bytes);
+		const step = 8192;
+		let bin = '';
+		for (let i = 0; i < u8.length; i += step) {
+			const slice = u8.subarray(i, Math.min(i + step, u8.length));
+			bin += String.fromCharCode(...slice);
+		}
+		return btoa(bin);
 	}
 
 	const ED25519_PUB_MULTICODEC = new Uint8Array([0xed, 0x01]);
@@ -192,13 +199,26 @@
 				const base = instanceUrl.replace(/\/$/, '');
 				const url = `${base}/api/user/registry-sign/${encodeURIComponent(sessionId)}/payload`;
 				const res = await fetch(url, { method: 'GET' });
-				const j = await res.json().catch(() => ({}));
 				if (seq !== fetchSeq) return;
 				if (!res.ok) {
-					loadError =
-						(j as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`;
+					loadError = `HTTP ${res.status}`;
+					try {
+						const j = (await res.json()) as { error?: { message?: string } };
+						loadError = j.error?.message ?? loadError;
+					} catch {
+						/* non-JSON error body */
+					}
 					return;
 				}
+				let j: unknown;
+				try {
+					j = await res.json();
+				} catch {
+					if (seq !== fetchSeq) return;
+					loadError = 'Invalid JSON from server';
+					return;
+				}
+				if (seq !== fetchSeq) return;
 				const data = (
 					j as {
 						data?: {
@@ -211,7 +231,7 @@
 							requested_device_public_key?: string;
 						};
 					}
-				).data;
+				)?.data;
 				const so = data?.sign_object;
 				if (!so || typeof so !== 'object' || Array.isArray(so)) {
 					loadError = 'Invalid payload from server';
@@ -321,11 +341,12 @@
 				throw new Error(msg);
 			}
 			toast.success('Registry signature sent. Return to SYR.');
-			passphrase = '';
 			userConfirmed = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
 		} finally {
+			passphrase = '';
+			userConfirmed = false;
 			sending = false;
 		}
 	}

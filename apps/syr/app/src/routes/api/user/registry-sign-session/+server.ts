@@ -79,6 +79,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!jp.did || !jp.registryUrl || !jp.action || jp.did !== did) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid job payload' });
 	}
+	if (jp.action !== 'update' && jp.action !== 'delete') {
+		throw error(400, {
+			code: 'VALIDATION_ERROR',
+			message: 'Invalid job action (expected update or delete)'
+		});
+	}
+	if (!jp.provider?.trim()) {
+		throw error(400, {
+			code: 'VALIDATION_ERROR',
+			message: 'Invalid job payload: provider is required'
+		});
+	}
 
 	const claimed = await outboxRepository.claimIfPending(job.id, userId);
 	if (!claimed) {

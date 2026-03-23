@@ -24,8 +24,8 @@ import { folderController } from '$lib/controllers/folder.controller';
 /**
  * Account Deletion Service
  * Orchestrates cascade deletion of all user data.
- * Order: outbox, registry, sessions, folders (+ S3), posts, uploads (+ S3), delegated keys, identity, profile,
- *        KV (pinned_posts, file_store_usage), user.
+ * Order: outbox, registry, discovery registries, content trust rules, sessions, folders (+ S3), posts, uploads (+ S3),
+ *        delegated keys, identity, profile, KV (pinned_posts, file_store_usage), user.
  * Note: pinned_posts and file_store_usage are deleted last so subtractUsage during folder/upload deletion
  * updates the real entry; deleting early would let subtractUsage recreate it.
  */

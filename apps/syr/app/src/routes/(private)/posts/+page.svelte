@@ -96,7 +96,7 @@
 				});
 			}
 			feedEntries = entries;
-			total = result.pagination?.total || 0;
+			total = data.feedHideUnsignedPosts ? entries.length : result.pagination?.total || 0;
 			const newMimeTypes: Record<string, string> = result.mediaUrlMimeTypes || {};
 			const newFilenames: Record<string, string> = result.mediaUrlFilenames || {};
 			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
@@ -104,6 +104,7 @@
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			feedEntries = [];
+			total = 0;
 		} finally {
 			loading = false;
 		}
@@ -143,7 +144,7 @@
 				});
 			}
 			pinnedFeedEntries = pinnedEntries;
-			pinnedPostIds = result.data?.post_ids || [];
+			pinnedPostIds = [...(result.data?.post_ids || [])];
 			const newMimeTypes: Record<string, string> = result.data?.mediaUrlMimeTypes || {};
 			const newFilenames: Record<string, string> = result.data?.mediaUrlFilenames || {};
 			mediaUrlMimeTypes = { ...mediaUrlMimeTypes, ...newMimeTypes };
@@ -217,8 +218,19 @@
 		const [removedEntry] = newEntries.splice(draggedIndex, 1);
 		newEntries.splice(targetIndex, 0, removedEntry);
 		pinnedFeedEntries = newEntries;
-		const reorderedIds = newEntries.map((e) => getPostId(e.post));
-		pinnedPostIds = reorderedIds;
+		const newVisibleIds = newEntries.map((e) => getPostId(e.post));
+		let nvi = 0;
+		const mergedMaster: string[] = [];
+		for (const id of pinnedPostIds) {
+			if (newVisibleIds.includes(id)) {
+				if (nvi < newVisibleIds.length) {
+					mergedMaster.push(newVisibleIds[nvi++]);
+				}
+			} else {
+				mergedMaster.push(id);
+			}
+		}
+		pinnedPostIds = mergedMaster;
 
 		draggedIndex = null;
 		dragOverIndex = null;
@@ -228,7 +240,7 @@
 			const response = await fetch('/api/posts/pinned', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ post_ids: reorderedIds })
+				body: JSON.stringify({ post_ids: mergedMaster })
 			});
 
 			if (!response.ok) {
@@ -394,59 +406,67 @@
 		</div>
 
 		<!-- Pinned Posts Section -->
-		{#if pinnedFeedEntries.length > 0}
+		{#if pinnedPostIds.length > 0}
 			<div class="space-y-3">
 				<div class="flex items-center gap-2">
 					<Pin class="h-4 w-4 text-primary" />
 					<h2 class="text-lg font-semibold">Pinned Posts</h2>
-					<Badge variant="secondary" class="text-xs">{pinnedFeedEntries.length}/10</Badge>
+					<Badge variant="secondary" class="text-xs">{pinnedPostIds.length}/10</Badge>
 				</div>
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each pinnedFeedEntries as entry, index (getPostId(entry.post))}
-						<DraggableItem
-							{index}
-							{draggedIndex}
-							{dragOverIndex}
-							onDragStart={handleDragStart}
-							onDragOver={handleDragOver}
-							onDragLeave={handleDragLeave}
-							onDrop={handleDrop}
-							onDragEnd={handleDragEnd}
-						>
-							<div class="w-full">
-								{#if entry.kind === 'post'}
-									<button
-										type="button"
-										class="w-full text-left"
-										onclick={() => handlePostClick(entry.post)}
-										onkeydown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												handlePostClick(entry.post);
-											}
-										}}
-									>
-										<PostPreview
+				{#if pinnedFeedEntries.length === 0}
+					<p class="text-sm text-muted-foreground">
+						All pinned posts are hidden while “Hide unsigned posts” is on. Turn it off in Settings →
+						Signing to reorder or view them here.
+					</p>
+				{:else}
+					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+						{#each pinnedFeedEntries as entry, index (getPostId(entry.post))}
+							<DraggableItem
+								{index}
+								{draggedIndex}
+								{dragOverIndex}
+								onDragStart={handleDragStart}
+								onDragOver={handleDragOver}
+								onDragLeave={handleDragLeave}
+								onDrop={handleDrop}
+								onDragEnd={handleDragEnd}
+							>
+								<div class="w-full">
+									{#if entry.kind === 'post'}
+										<div
+											role="button"
+											tabindex="0"
+											class="w-full cursor-pointer rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+											onclick={() => handlePostClick(entry.post)}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													handlePostClick(entry.post);
+												}
+											}}
+										>
+											<PostPreview
+												post={entry.post}
+												isPinned={true}
+												onPinToggle={handlePinToggle}
+												showPinButton={true}
+												{mediaUrlMimeTypes}
+												{mediaUrlFilenames}
+											/>
+										</div>
+									{:else}
+										<OversizedPostPlaceholder
 											post={entry.post}
-											isPinned={true}
-											onPinToggle={handlePinToggle}
-											showPinButton={true}
-											{mediaUrlMimeTypes}
-											{mediaUrlFilenames}
+											estimatedBytes={entry.estimatedBytes}
+											limitBytes={data.maxPostPayloadBytes}
+											onLoadAnyway={() => handleOversizeOverride(entry.post)}
 										/>
-									</button>
-								{:else}
-									<OversizedPostPlaceholder
-										post={entry.post}
-										estimatedBytes={entry.estimatedBytes}
-										limitBytes={data.maxPostPayloadBytes}
-										onLoadAnyway={() => handleOversizeOverride(entry.post)}
-									/>
-								{/if}
-							</div>
-						</DraggableItem>
-					{/each}
-				</div>
+									{/if}
+								</div>
+							</DraggableItem>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -488,9 +508,10 @@
 					{#each feedEntries as entry (getPostId(entry.post))}
 						<div class="w-full">
 							{#if entry.kind === 'post'}
-								<button
-									type="button"
-									class="w-full text-left"
+								<div
+									role="button"
+									tabindex="0"
+									class="w-full cursor-pointer rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 									onclick={() => handlePostClick(entry.post)}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -507,7 +528,7 @@
 										{mediaUrlMimeTypes}
 										{mediaUrlFilenames}
 									/>
-								</button>
+								</div>
 							{:else}
 								<OversizedPostPlaceholder
 									post={entry.post}

@@ -48,6 +48,11 @@
 			results = j.data ?? [];
 			directoryHint =
 				results.length === 0 && j.meta?.message?.trim() ? j.meta.message.trim() : null;
+		} catch (err) {
+			console.error(err);
+			results = [];
+			directoryHint = null;
+			searchError = err instanceof Error ? err.message : 'Network error';
 		} finally {
 			loading = false;
 		}

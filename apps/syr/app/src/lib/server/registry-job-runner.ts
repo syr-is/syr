@@ -143,12 +143,12 @@ export async function pushSignedRegistryJobToRemoteAndComplete(
 		}
 		await outboxRepository.markCompleted(job.id);
 	} catch (dbErr) {
-		// Remote registry already accepted the signed update; mirror legacy registry-sign behavior.
+		// Remote registry already accepted the signed update; do not re-queue the same remote mutation.
 		const msg = dbErr instanceof Error ? dbErr.message : 'Database update failed';
 		try {
-			await outboxRepository.markFailed(job.id, msg, job.attempts + 1, job.max_attempts);
+			await outboxRepository.markFinalizationFailed(job.id, msg, job.max_attempts);
 		} catch (markErr) {
-			console.error('[registry-job-runner] markFailed threw:', markErr);
+			console.error('[registry-job-runner] markFinalizationFailed threw:', markErr);
 		}
 	}
 

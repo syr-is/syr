@@ -2,7 +2,7 @@ import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
-import { followController } from '$lib/controllers/follow.controller';
+import { followController, FollowValidationError } from '$lib/controllers/follow.controller';
 import { isValidSyrDid } from '@syr-is/did';
 
 const FollowBodySchema = z.object({
@@ -67,17 +67,13 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		});
 	} catch (e) {
 		if (isHttpError(e)) throw e;
-		const msg = e instanceof Error ? e.message : 'Follow failed';
-		const clientFacing =
-			msg.includes('Add at least one identity registry') ||
-			msg.includes('Add at least one discovery registry') ||
-			msg.includes('not listed on any of your configured registries') ||
-			msg.includes('not listed on any of your discovery registries') ||
-			msg.startsWith('registryApiRoot:') ||
-			msg === 'Invalid follow target DID.';
-		throw error(clientFacing ? 400 : 500, {
-			code: clientFacing ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
-			message: msg
+		if (e instanceof FollowValidationError) {
+			throw error(400, { code: 'VALIDATION_ERROR', message: e.message });
+		}
+		console.error('follow POST:', e);
+		throw error(500, {
+			code: 'INTERNAL_SERVER_ERROR',
+			message: e instanceof Error ? e.message : 'Follow failed'
 		});
 	}
 };
@@ -90,6 +86,15 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
 	if (!followed || !isValidSyrDid(followed)) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'followed_did query required' });
 	}
-	await followController.unfollow(locals.user.id, followed);
+	try {
+		await followController.unfollow(locals.user.id, followed);
+	} catch (e) {
+		if (isHttpError(e)) throw e;
+		console.error('follow DELETE:', e);
+		throw error(500, {
+			code: 'UNFOLLOW_ERROR',
+			message: e instanceof Error ? e.message : 'Unfollow failed'
+		});
+	}
 	return json({ status: 'success' });
 };

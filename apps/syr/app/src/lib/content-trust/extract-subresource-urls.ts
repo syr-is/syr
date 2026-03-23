@@ -52,8 +52,13 @@ export function extractSubresourceUrlsFromHtml(html: string, baseHref?: string):
 			pushUrl(el.getAttribute('href'));
 		}
 	}
-	for (const el of doc.querySelectorAll('image[href], use[href]')) {
-		pushUrl(el.getAttribute('href'));
+	for (const el of doc.querySelectorAll('image[href], use[href], image, use')) {
+		const href = el.getAttribute('href');
+		const xlink =
+			href?.trim() ||
+			el.getAttribute('xlink:href') ||
+			el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+		pushUrl(xlink);
 	}
 
 	for (const el of doc.querySelectorAll('[style]')) {

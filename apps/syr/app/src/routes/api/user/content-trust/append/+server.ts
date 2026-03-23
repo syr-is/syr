@@ -30,8 +30,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			details: z.treeifyError(parsed.error)
 		});
 	}
+	const trimmedPattern = parsed.data.pattern.trim();
 	try {
-		new URL(parsed.data.pattern.trim());
+		new URL(trimmedPattern);
 	} catch {
 		throw error(400, {
 			code: 'VALIDATION_ERROR',
@@ -39,7 +40,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		});
 	}
 	const uid = stringToRecordId.decode(locals.user.id);
-	await contentTrustRuleRepository.appendRule(uid, parsed.data.pattern, parsed.data.kind);
+	await contentTrustRuleRepository.appendRule(uid, trimmedPattern, parsed.data.kind);
 	const rules = await contentTrustRuleRepository.findByUserId(uid);
 	return json({
 		status: 'success',

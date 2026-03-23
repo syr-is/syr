@@ -73,7 +73,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	const payload = JSON.parse(JSON.stringify(parsed.data)) as Record<string, unknown>;
+	const payload = structuredClone(parsed.data) as Record<string, unknown>;
 
 	const sessionId = await createPostSignSession({
 		user_id: locals.user.id,

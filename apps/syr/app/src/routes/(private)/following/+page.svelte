@@ -124,14 +124,20 @@
 		let cancelled = false;
 
 		void (async () => {
-			const discoveryBases = await loadDiscoveryBases();
-			const out: EnrichedFollow[] = [];
-			for (const f of raw) {
-				if (cancelled) return;
-				out.push(await enrichFollow(f, discoveryBases));
-				enriched = [...out];
+			try {
+				const discoveryBases = await loadDiscoveryBases();
+				const out: EnrichedFollow[] = [];
+				for (const f of raw) {
+					if (cancelled) return;
+					out.push(await enrichFollow(f, discoveryBases));
+					enriched = [...out];
+				}
+			} catch (e) {
+				console.error('Following enrich failed:', e);
+				if (!cancelled) enriched = [];
+			} finally {
+				if (!cancelled) loading = false;
 			}
-			if (!cancelled) loading = false;
 		})();
 
 		return () => {

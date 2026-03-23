@@ -47,11 +47,21 @@
 
 	let { row, author, detail, onLoadDetail, onOversizeOverride }: Props = $props();
 
-	const origin = $derived(row.provider.replace(/\/$/, ''));
+	const safeOrigin = $derived.by(() => {
+		try {
+			const u = new URL(row.provider);
+			if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+			return u.origin;
+		} catch {
+			return '';
+		}
+	});
 	const postHref = $derived(
-		`${origin}/p/${encodeURIComponent(row.did)}/${encodeURIComponent(row.local_id)}`
+		safeOrigin
+			? `${safeOrigin}/p/${encodeURIComponent(row.did)}/${encodeURIComponent(row.local_id)}`
+			: '#'
 	);
-	const profileHref = $derived(`${origin}/u/${encodeURIComponent(row.did)}`);
+	const profileHref = $derived(safeOrigin ? `${safeOrigin}/u/${encodeURIComponent(row.did)}` : '#');
 
 	const displayName = $derived(
 		author?.displayName?.trim() || author?.username || shortDid(row.did)

@@ -36,6 +36,8 @@
 	let handoffQrDataUrl = $state<string | null>(null);
 	let handoffPollTimer: ReturnType<typeof setInterval> | null = null;
 	let handoffExpiredToast = $state(false);
+	/** Bumps on each new handoff so stale poll callbacks exit without touching UI. */
+	let handoffPollGen = 0;
 
 	function stopHandoffPolling() {
 		if (handoffPollTimer) {
@@ -146,8 +148,11 @@
 	}
 
 	async function startSynerHandoff() {
+		if (sigilBusy) return;
 		sigilBusy = true;
 		handoffExpiredToast = false;
+		handoffPollGen++;
+		const pollGen = handoffPollGen;
 		cancelSynerHandoff();
 		try {
 			const res = await fetch('/api/user/sigil-handoff-session', { method: 'POST' });
@@ -167,7 +172,7 @@
 			handoffDeeplink = link;
 			handoffQrDataUrl = await QRCode.toDataURL(link, { width: 256, margin: 2 });
 			handoffPollTimer = setInterval(() => {
-				void pollSynerHandoff(sid);
+				void pollSynerHandoff(sid, pollGen);
 			}, 1500);
 			toast.message('Scan the QR with Syner or open the link, then send the Sigil from Syner.');
 		} catch (e) {
@@ -177,13 +182,16 @@
 		}
 	}
 
-	async function pollSynerHandoff(sessionId: string) {
+	async function pollSynerHandoff(sessionId: string, pollGen: number) {
+		if (pollGen !== handoffPollGen) return;
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
 		try {
 			const res = await fetch(`/api/user/sigil-handoff/${encodeURIComponent(sessionId)}`);
+			if (pollGen !== handoffPollGen) return;
 			const j = (await res.json()) as {
 				data?: { status?: string; sigil_json?: string };
 			};
+			if (pollGen !== handoffPollGen) return;
 			const d = j.data;
 			if (d?.status === 'ready' && typeof d.sigil_json === 'string') {
 				const accountDid = data.identityContext?.did?.trim() ?? data.user?.did?.trim() ?? '';
