@@ -5,6 +5,8 @@
 
 import {
 	PostSignedPayloadV1Schema,
+	PostDeleteSignedPayloadV1Schema,
+	ProfileSignedPayloadV1Schema,
 	type PostSignedPayloadV1,
 	type SignedMutationEnvelope
 } from '@syr-is/types';
@@ -82,7 +84,11 @@ export function buildPostSignedPayloadV1(params: {
 		const description = trimOpt(snapshot.description);
 		if (title !== undefined) base.title = title;
 		if (description !== undefined) base.description = description;
-		const urls = [...(snapshot.media_urls ?? [])].map((u) => String(u).trim()).filter(Boolean);
+		const raw = snapshot.media_urls;
+		const urls =
+			Array.isArray(raw) && raw.every((u) => typeof u === 'string')
+				? raw.map((u) => u.trim()).filter(Boolean)
+				: [];
 		base.media_urls = urls;
 		const dm = snapshot.display_mode;
 		if (dm != null) base.display_mode = dm;
@@ -107,10 +113,22 @@ export async function signPostMutationWithRootKey(
 	};
 }
 
+function mutationPayloadShapeValid(payload: Record<string, unknown>): boolean {
+	const t = payload.type;
+	if (t === 'post@v1') return PostSignedPayloadV1Schema.safeParse(payload).success;
+	if (t === 'profile@v1') return ProfileSignedPayloadV1Schema.safeParse(payload).success;
+	if (t === 'post-delete@v1') return PostDeleteSignedPayloadV1Schema.safeParse(payload).success;
+	return false;
+}
+
 /** Local Ed25519 verify over JCS — same idea as `signature-verification.svelte`. */
 export async function verifySignedMutationEnvelopeLocally(
 	envelope: SignedMutationEnvelope
 ): Promise<boolean> {
+	const payload = envelope.payload as Record<string, unknown>;
+	if (!mutationPayloadShapeValid(payload)) {
+		return false;
+	}
 	await initCryptoWasm();
 	try {
 		const msg = canonicalize(envelope.payload);

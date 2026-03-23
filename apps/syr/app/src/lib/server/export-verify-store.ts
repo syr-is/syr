@@ -591,7 +591,7 @@ export type RegistrySignSessionData = {
 	/** Second signature: `POST …/directory/upsert` (searchable directory row). */
 	directory_sign_object: Record<string, unknown>;
 	directory_canonical_payload: string;
-	status: 'pending' | 'complete' | 'failed';
+	status: 'pending' | 'in_progress' | 'complete' | 'failed';
 	result_error?: string;
 	created_at: number;
 };
@@ -616,10 +616,41 @@ export async function getRegistrySignSession(id: string): Promise<RegistrySignSe
 	return kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
 }
 
+/**
+ * Atomically transition a registry sign session from `pending` to `in_progress` so only one
+ * consumer performs the remote registry write. Returns the updated session or null if not pending.
+ */
+export async function claimRegistrySignSessionIfPending(
+	id: string
+): Promise<RegistrySignSessionData | null> {
+	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
+		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
+		if (!cur || cur.status !== 'pending') return null;
+		const expectedVersion = cur.version ?? 1;
+		const next: RegistrySignSessionData = {
+			...cur,
+			version: expectedVersion + 1,
+			status: 'in_progress'
+		};
+		if (
+			await kvService.updateValueIfVersionMatch(
+				KV_REGISTRY_SIGN_SESSION,
+				id,
+				expectedVersion,
+				next,
+				REGISTRY_SIGN_TTL_SEC
+			)
+		) {
+			return next;
+		}
+	}
+	return null;
+}
+
 export async function completeRegistrySignSessionSuccess(id: string): Promise<boolean> {
 	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
 		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
-		if (!cur || cur.status !== 'pending') return false;
+		if (!cur || cur.status !== 'in_progress') return false;
 		const expectedVersion = cur.version ?? 1;
 		const next: RegistrySignSessionData = {
 			...cur,
@@ -647,7 +678,7 @@ export async function completeRegistrySignSessionFailed(
 ): Promise<boolean> {
 	for (let attempt = 0; attempt < KV_SESSION_CAS_RETRIES; attempt++) {
 		const cur = await kvService.get<RegistrySignSessionData>(KV_REGISTRY_SIGN_SESSION, id);
-		if (!cur || cur.status !== 'pending') return false;
+		if (!cur || (cur.status !== 'pending' && cur.status !== 'in_progress')) return false;
 		const expectedVersion = cur.version ?? 1;
 		const next: RegistrySignSessionData = {
 			...cur,

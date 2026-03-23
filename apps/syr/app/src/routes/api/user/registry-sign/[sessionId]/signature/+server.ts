@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
+	claimRegistrySignSessionIfPending,
 	completeRegistrySignSessionFailed,
 	completeRegistrySignSessionSuccess,
 	getRegistrySignSession
@@ -143,30 +144,46 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 		signature: directory_signature
 	};
 
+	const claimed = await claimRegistrySignSessionIfPending(sessionId);
+	if (!claimed) {
+		throw error(409, {
+			code: 'CONFLICT',
+			message:
+				'Could not claim signing session (already in use or finished). Try again or start a new session.'
+		});
+	}
+
 	try {
 		await pushSignedRegistryJobToRemoteAndComplete({
 			job,
-			action: session.action,
-			did: session.did,
-			registryUrl: session.registry_url,
+			action: claimed.action,
+			did: claimed.did,
+			registryUrl: claimed.registry_url,
 			jobPayload: jp,
-			providerForUpdate: session.provider,
-			updatedAt: session.updated_at,
-			deletedAt: session.deleted_at,
+			providerForUpdate: claimed.provider,
+			updatedAt: claimed.updated_at,
+			deletedAt: claimed.deleted_at,
 			signature,
 			directory
 		});
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Registry request failed';
-		await completeRegistrySignSessionFailed(sessionId, msg);
 		console.error('[registry-sign signature] pushSignedRegistryJobToRemoteAndComplete:', e);
+		await failSessionAndRetryJob(sessionId, session, msg);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Registry update failed'
 		});
 	}
 
-	await completeRegistrySignSessionSuccess(sessionId);
+	const finalized = await completeRegistrySignSessionSuccess(sessionId);
+	if (!finalized) {
+		console.error('[registry-sign signature] completeRegistrySignSessionSuccess no-op', sessionId);
+		throw error(500, {
+			code: 'INTERNAL_ERROR',
+			message: 'Could not finalize signing session'
+		});
+	}
 
 	return json({
 		status: 'success',
@@ -180,6 +197,11 @@ async function failSessionAndRetryJob(
 	session: NonNullable<Awaited<ReturnType<typeof getRegistrySignSession>>>,
 	reason = 'Signing failed'
 ): Promise<void> {
+	const casOk = await completeRegistrySignSessionFailed(sessionId, reason);
+	if (!casOk) {
+		console.warn('[registry-sign signature] completeRegistrySignSessionFailed no-op', sessionId);
+		return;
+	}
 	try {
 		const userId = stringToRecordId.decode(session.user_id);
 		const job = await outboxRepository.findActiveByIdAndUser(session.job_thing_id, userId);
@@ -189,5 +211,4 @@ async function failSessionAndRetryJob(
 	} catch (re) {
 		console.error('[registry-sign signature] retry job:', re);
 	}
-	await completeRegistrySignSessionFailed(sessionId, reason);
 }

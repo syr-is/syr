@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 		throw error(403, { code: 'FORBIDDEN', message: 'This session belongs to another account' });
 	}
 
-	if (session.status === 'pending') {
+	if (session.status === 'pending' || session.status === 'in_progress') {
 		return json(
 			{
 				status: 'pending',
@@ -72,10 +72,10 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
 	if (session.user_id !== locals.user.id) {
 		throw error(403, { code: 'FORBIDDEN', message: 'This session belongs to another account' });
 	}
-	if (session.status === 'pending') {
+	if (session.status === 'pending' || session.status === 'in_progress') {
 		throw error(409, {
 			code: 'CONFLICT',
-			message: 'Session is still pending; cannot ack yet'
+			message: 'Session is still in progress; cannot ack yet'
 		});
 	}
 

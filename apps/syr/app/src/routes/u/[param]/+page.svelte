@@ -234,15 +234,18 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				const res = await fetch('/api/follows');
-				const j = (await res.json()) as { data?: { followed_did: string }[] };
+				const res = await fetch(`/api/follows/check?did=${encodeURIComponent(did)}`, {
+					credentials: 'include'
+				});
+				const j = (await res.json().catch(() => ({}))) as {
+					data?: { following?: boolean };
+				};
 				if (cancelled) return;
 				if (!res.ok) {
 					isFollowing = false;
 					return;
 				}
-				const rows = j.data ?? [];
-				isFollowing = rows.some((r) => r.followed_did === did);
+				isFollowing = Boolean(j.data?.following);
 			} catch {
 				if (!cancelled) isFollowing = false;
 			} finally {
@@ -254,16 +257,12 @@
 		};
 	});
 
-	function postPublicPath(post: Post): string {
-		const did = post.did ?? '';
-		const lid = post.local_id ?? '';
-		return resolve(`/p/${encodeURIComponent(did)}/${encodeURIComponent(lid)}`);
+	function postPublicRouteParams(post: Post): { did: string; id: string } {
+		return { did: post.did ?? '', id: post.local_id ?? '' };
 	}
 
 	function handlePostClick(post: Post) {
-		const did = post.did ?? '';
-		const lid = post.local_id ?? '';
-		void goto(resolve(`/p/${encodeURIComponent(did)}/${encodeURIComponent(lid)}`));
+		void goto(resolve('/p/[did]/[id]', postPublicRouteParams(post)));
 	}
 
 	async function toggleFollow() {
@@ -289,7 +288,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ followed_did: p.did })
 			});
-			const j: FollowsApiJson = (await res.json()) as FollowsApiJson;
+			const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
 			if (!res.ok) {
 				toast.error(j.error?.message ?? j.message ?? 'Follow failed');
 				return;
@@ -443,7 +442,7 @@
 											post={entry.post}
 											estimatedBytes={entry.estimatedBytes}
 											limitBytes={data.maxPostPayloadBytes}
-											postViewPath={postPublicPath(entry.post)}
+											postViewPath={resolve('/p/[did]/[id]', postPublicRouteParams(entry.post))}
 											onLoadAnyway={() => handlePostClick(entry.post)}
 										/>
 									</div>

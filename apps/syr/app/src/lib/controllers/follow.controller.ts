@@ -44,6 +44,12 @@ export class FollowController {
 	async listFollowing(followerUserId: RecordId | string) {
 		return followRepository.findByFollower(followerUserId);
 	}
+
+	/** Whether this follower has an active follow row for the given DID. */
+	async isFollowing(followerUserId: RecordId | string, followedDid: string): Promise<boolean> {
+		const row = await followRepository.findOne(followerUserId, followedDid);
+		return row != null;
+	}
 }
 
 export const followController = new FollowController();
