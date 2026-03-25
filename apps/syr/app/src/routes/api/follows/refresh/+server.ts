@@ -52,7 +52,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		console.error('follow refresh:', e);
 		throw error(500, {
 			code: 'INTERNAL_SERVER_ERROR',
-			message: e instanceof Error ? e.message : 'Refresh failed'
+			message: 'Refresh failed'
 		});
 	}
 };

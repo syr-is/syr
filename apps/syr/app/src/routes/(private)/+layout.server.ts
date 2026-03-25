@@ -3,7 +3,8 @@ import type { LayoutServerLoad } from './$types';
 import { getIdentityContext } from '$lib/server/identity-context';
 import { delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { signedMutations } from '$lib/config';
-import { safePostLoginRedirectPath } from '$lib/server/safe-post-login-redirect.server';
+import { config } from '$lib/config';
+import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 
 export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 	if (!locals.user) {
@@ -14,7 +15,8 @@ export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 				path: '/',
 				maxAge: 600,
 				sameSite: 'lax',
-				httpOnly: false
+				httpOnly: false,
+				secure: config.NODE_ENV === 'production'
 			});
 		}
 		throw redirect(303, '/login');

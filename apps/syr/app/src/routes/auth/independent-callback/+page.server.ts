@@ -4,7 +4,7 @@ import { config } from '$lib/config';
 import { consumeCallbackToken } from '$lib/server/independent-login-store';
 import { verifyAccessToken } from '$lib/server/auth';
 import { profileRepository } from '$lib/repositories/profile.repository';
-import { safePostLoginRedirectPath } from '$lib/server/safe-post-login-redirect.server';
+import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 
 /** Profile needs onboarding when display_name is auto-generated (il_xxx pattern). */
 function needsOnboarding(displayName: string | null | undefined): boolean {

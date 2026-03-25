@@ -56,10 +56,6 @@
 		return bases;
 	}
 
-	function httpHttpsProviderUrl(raw: string): string | null {
-		return normalizeProviderBaseUrl(raw);
-	}
-
 	async function resolveProviderForFollow(
 		f: FollowRow,
 		discoveryBases: string[]
@@ -74,7 +70,7 @@
 			try {
 				const root = registryApiRoot(reg);
 				const p = await resolveProvider(f.followed_did, { registryUrl: root, timeout: 10_000 });
-				const safe = httpHttpsProviderUrl(p);
+				const safe = normalizeProviderBaseUrl(p);
 				if (safe) return safe;
 			} catch {
 				/* fall through */
@@ -83,7 +79,7 @@
 		for (const b of discoveryBases) {
 			try {
 				const p = await resolveProvider(f.followed_did, { registryUrl: b, timeout: 8_000 });
-				const safe = httpHttpsProviderUrl(p);
+				const safe = normalizeProviderBaseUrl(p);
 				if (safe) return safe;
 			} catch {
 				/* try next */

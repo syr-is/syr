@@ -9,9 +9,9 @@ export function normalizeProviderBaseUrl(raw: string): string | null {
 		const u = new URL(trimmed);
 		if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
 		if (u.username || u.password) return null;
-		const path = u.pathname.replace(/\/$/, '');
+		const path = u.pathname.replace(/\/+$/, '');
 		const base = path ? `${u.origin}${path}` : u.origin;
-		return base.replace(/\/$/, '');
+		return base.replace(/\/+$/, '');
 	} catch {
 		return null;
 	}

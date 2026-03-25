@@ -60,9 +60,11 @@ export class FollowController {
 					await followRepository.updateFollowProviderUrl(followerUserId, followedDid, normalized);
 					return (await followRepository.findOne(followerUserId, followedDid)) ?? existing;
 				} catch (e) {
-					throw new FollowValidationError(
-						e instanceof Error ? e.message : 'Could not backfill provider URL for this follow.'
-					);
+					console.error('[follow.controller] Legacy provider URL backfill failed', {
+						followedDid,
+						error: e instanceof Error ? e.message : String(e)
+					});
+					return existing;
 				}
 			}
 			return existing;

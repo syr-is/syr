@@ -4,7 +4,8 @@ import {
 	MetadataSchema,
 	TimestampSchema,
 	RecordIdSchema,
-	DidSyrSchema
+	DidSyrSchema,
+	IdentityHostUrlSchema
 } from './common.js';
 import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
@@ -46,9 +47,6 @@ export const UserSchema = BaseEntitySchema.extend({
 });
 
 export type User = z.infer<typeof UserSchema>;
-
-/** Public URL where this identity’s “home” on the web is hosted (Syr /u/…, personal site, etc.). */
-export const IdentityHostUrlSchema = z.string().url().max(2048);
 
 /**
  * Profile Schema
@@ -133,7 +131,7 @@ export const ProfileUpdateSchema = ProfileSchema.pick({
 	.extend({
 		avatar_url: z.union([z.literal(''), z.string().url()]).optional(),
 		banner_url: z.union([z.literal(''), z.string().url()]).optional(),
-		identity_host_url: z.union([z.literal(''), z.string().url().max(2048)]).optional()
+		identity_host_url: z.union([z.literal(''), IdentityHostUrlSchema]).optional()
 	});
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;

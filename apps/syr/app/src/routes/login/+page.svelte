@@ -12,6 +12,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { readAndClearPostLoginRedirectCookie } from '$lib/client/post-login-redirect';
+	import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import QRCode from 'qrcode';
 	import { Button } from '@syr-is/ui/button';
@@ -162,14 +163,7 @@
 				toast.success('Welcome back!');
 				const fromCookie = readAndClearPostLoginRedirectCookie();
 				const fromQuery = page.url.searchParams.get('redirectTo');
-				const fromQuerySafe =
-					fromQuery &&
-					fromQuery.startsWith('/') &&
-					!fromQuery.startsWith('//') &&
-					!fromQuery.includes('://') &&
-					fromQuery.length <= 2048
-						? fromQuery
-						: null;
+				const fromQuerySafe = safePostLoginRedirectPath(fromQuery);
 				const target = fromCookie ?? fromQuerySafe ?? '/';
 				const href =
 					target === '/'

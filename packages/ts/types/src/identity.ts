@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { BaseEntitySchema, RecordIdSchema, DidSyrSchema, TimestampSchema } from './common.js';
+import {
+	BaseEntitySchema,
+	RecordIdSchema,
+	DidSyrSchema,
+	TimestampSchema,
+	IdentityHostUrlSchema,
+	ProfileSignedImageUrlSchema
+} from './common.js';
 
 /**
  * Identity Schema
@@ -152,9 +159,9 @@ export const IdentityExportBundleSchema = z.object({
 	profile: z.object({
 		displayName: z.string(),
 		bio: z.string().optional(),
-		avatarUrl: z.string().optional(),
-		bannerUrl: z.string().optional(),
-		identityHostUrl: z.string().url().max(2048).optional()
+		avatarUrl: ProfileSignedImageUrlSchema.optional(),
+		bannerUrl: ProfileSignedImageUrlSchema.optional(),
+		identityHostUrl: IdentityHostUrlSchema.optional()
 	}),
 	exportedAt: z.string().datetime()
 });

@@ -122,6 +122,17 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+fn validate_identity_host_url(s: &str) -> Result<(), String> {
+    if s.len() > 2048 {
+        return Err("Identity page URL is too long (max 2048 characters)".to_string());
+    }
+    let u = url::Url::parse(s).map_err(|_| "Invalid identity page URL".to_string())?;
+    match u.scheme() {
+        "http" | "https" => Ok(()),
+        _ => Err("Identity page URL must use http or https".to_string()),
+    }
+}
+
 fn validate_persona_id(persona_id: &str) -> Result<(), String> {
     for c in Path::new(persona_id).components() {
         if !matches!(c, Component::Normal(_)) {
@@ -686,11 +697,12 @@ pub fn update_persona_profile_cmd(
     }
     if let Some(h) = identity_host_url {
         let t = h.trim();
-        persona.identity_host_url = if t.is_empty() {
-            None
+        if t.is_empty() {
+            persona.identity_host_url = None;
         } else {
-            Some(t.to_string())
-        };
+            validate_identity_host_url(t)?;
+            persona.identity_host_url = Some(t.to_string());
+        }
     }
 
     let updated = serde_json::to_string_pretty(&persona).map_err(|e| e.to_string())?;

@@ -199,10 +199,13 @@ export const POST: RequestHandler = async ({ request }) => {
 				display_name: updates.display_name ?? user.username,
 				bio: updates.bio
 			});
-			if (profile && (updates.avatar_url || updates.banner_url)) {
+			if (profile && (updates.avatar_url || updates.banner_url || updates.identity_host_url)) {
 				profile = await profileRepository.mergeByUserId(userId, {
-					avatar_url: updates.avatar_url,
-					banner_url: updates.banner_url
+					...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
+					...(updates.banner_url !== undefined && { banner_url: updates.banner_url }),
+					...(updates.identity_host_url !== undefined && {
+						identity_host_url: updates.identity_host_url
+					})
 				});
 			}
 		}

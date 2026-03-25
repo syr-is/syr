@@ -20,8 +20,25 @@
 	let followStateLoading = $state(true);
 	let isFollowing = $state(false);
 
+	/** Only allow real http(s) links in the DOM (profile field is not guaranteed normalized). */
+	function safeIdentityHostHref(url: string | null | undefined): string | null {
+		if (url == null || url === '') return null;
+		try {
+			const u = new URL(url);
+			if (u.protocol === 'http:' || u.protocol === 'https:') return url;
+		} catch {
+			/* invalid */
+		}
+		return null;
+	}
+
 	const targetDid = $derived(data.targetDid ?? '');
 	const viewerDid = $derived(data.user?.did ?? '');
+	const identityHostHref = $derived(
+		data.targetProfile?.identity_host_url
+			? safeIdentityHostHref(data.targetProfile.identity_host_url)
+			: null
+	);
 
 	$effect(() => {
 		const did = targetDid;
@@ -136,15 +153,19 @@
 					onFollow={toggleFollow}
 					bioVariant="muted"
 				/>
-				{#if data.targetProfile.identity_host_url}
+				{#if identityHostHref}
 					<p class="text-xs text-muted-foreground">
 						Their public page:
 						<a
 							class="text-primary underline"
-							href={data.targetProfile.identity_host_url}
+							href={identityHostHref}
 							target="_blank"
-							rel="noopener noreferrer">{data.targetProfile.identity_host_url}</a
+							rel="noopener noreferrer">{identityHostHref}</a
 						>
+					</p>
+				{:else if data.targetProfile.identity_host_url}
+					<p class="text-xs text-muted-foreground">
+						Their public page URL is set but is not a safe http(s) link to open from here.
 					</p>
 				{/if}
 			{:else}

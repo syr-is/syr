@@ -65,3 +65,29 @@ export const DidSyrSchema = z
 	.describe('did:syr identifier');
 
 export type DidSyr = z.infer<typeof DidSyrSchema>;
+
+function isHttpOrHttpsUrl(s: string): boolean {
+	try {
+		const u = new URL(s);
+		return u.protocol === 'http:' || u.protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Public identity “home” URL (http or https only, max length for DB/API).
+ * `z.string().url()` alone allows non-http(s) schemes; this refines to browser-safe origins.
+ */
+export const IdentityHostUrlSchema = z
+	.string()
+	.max(2048)
+	.refine(isHttpOrHttpsUrl, { message: 'Must be a valid http(s) URL' });
+
+export type IdentityHostUrl = z.infer<typeof IdentityHostUrlSchema>;
+
+/** Avatar/banner URLs in signed profile payloads — http(s) only, bounded length. */
+export const ProfileSignedImageUrlSchema = z
+	.string()
+	.max(2048)
+	.refine(isHttpOrHttpsUrl, { message: 'Must be a valid http(s) URL' });

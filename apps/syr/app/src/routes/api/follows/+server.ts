@@ -5,6 +5,7 @@ import { followController, FollowValidationError } from '$lib/controllers/follow
 import { userRepository } from '$lib/repositories/user.repository';
 import type { UserFollow } from '$lib/repositories/follow.repository';
 import { isValidSyrDid } from '@syr-is/did';
+import { IdentityHostUrlSchema } from '@syr-is/types';
 
 const FollowBodySchema = z.object({
 	followed_did: z.string().min(12)
@@ -12,7 +13,7 @@ const FollowBodySchema = z.object({
 
 const PatchFollowProviderSchema = z.object({
 	followed_did: z.string().min(12),
-	followed_provider_url: z.string().min(1)
+	followed_provider_url: IdentityHostUrlSchema
 });
 
 function followRowToJson(r: UserFollow) {

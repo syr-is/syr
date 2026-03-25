@@ -1,11 +1,4 @@
-/** Same-origin relative path only (no open redirects). */
-export function safePostLoginRedirect(raw: string | null | undefined): string | null {
-	if (raw == null || raw === '') return null;
-	const s = raw.trim();
-	if (!s.startsWith('/') || s.startsWith('//') || s.includes('://')) return null;
-	if (s.length > 2048) return null;
-	return s;
-}
+import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 
 const COOKIE = 'post_login_redirect';
 
@@ -26,5 +19,5 @@ export function readAndClearPostLoginRedirectCookie(): string | null {
 		}
 	}
 	document.cookie = `${COOKIE}=; path=/; max-age=0`;
-	return safePostLoginRedirect(val);
+	return safePostLoginRedirectPath(val);
 }
