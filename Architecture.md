@@ -26,7 +26,6 @@ graph TB
         Auth[Authentication<br/>JWT + Sessions]
         IDM[Identity Manager<br/>Key Generation + DID]
         SSEBridge[SSE Signing Bridge<br/>Syner Communication]
-        AP[ActivityPub Server<br/>SYR-to-SYR Federation]
         VC[Credential Store<br/>Identity-Linked VCs]
         IDA[Identity-Based Auth<br/>Cross-Instance Login]
         TM[Tenant Manager<br/>Multi-Tenant Isolation]
@@ -40,7 +39,7 @@ graph TB
     end
 
     subgraph "External"
-        SYR2[Other SYR Instances<br/>Federation]
+        SYR2[Other SYR Providers<br/>Peer hosting]
         Services[Third-party Services<br/>Identity-Based Login]
         Registry[DID Registry<br/>did:syr Resolution]
     end
@@ -51,7 +50,6 @@ graph TB
     API --> Auth
     API --> IDM
     API --> SSEBridge
-    API --> AP
     API --> VC
     API --> IDA
     API --> TM
@@ -59,14 +57,13 @@ graph TB
     Auth --> DB
     IDM --> DB
     IDM --> Crypto
-    AP --> DB
     VC --> DB
     IDA --> Registry
 
     API --> Types
     SDK --> Types
 
-    AP <--> SYR2
+    API <-->|"registry resolve + public APIs"| SYR2
     Services --> IDA
 ```
 
@@ -161,81 +158,31 @@ erDiagram
     }
 ```
 
-### 2. ActivityPub Federation (SYR-to-SYR)
+### 2. Cross-provider social (DID + registry + public APIs)
 
-Federation enables users on different SYR instances to view each other's activity. Posts are part of identity — sharing them across instances is a core function.
+Users on one SYR instance can **follow** other identities by **`did:syr`** and read their **public** profiles and posts from the **author’s Syr instance**. Follow rows persist **`followed_provider_url`** (the provider base URL) after a **registry-verified** resolve at follow time (or after an explicit **refresh from registry**). The home timeline and Following page **fetch public APIs using that stored URL** so routine reads do not depend on discovery registries being reachable. **Legacy rows** without a stored URL fall back to resolving via registries in the browser. Advanced users may **manually edit** the instance URL on the Following page (URL validation only—no cryptographic proof that the host matches the DID). See _Follows, Discovery, and Home Timeline_ in the docs app.
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant SYR as SYR Instance A
-    participant RemoteServer as SYR Instance B
-    participant Follower
+    participant Viewer as Viewer client
+    participant Home as Home Syr API
+    participant Registry as Discovery registry
+    participant Author as Author provider
 
-    User->>SYR: Create Post
-    SYR->>SYR: Generate Activity<br/>(Create + Note)
-    SYR->>SYR: Store in Outbox
-    SYR->>SYR: Sign with HTTP Signature
+    Note over Viewer,Home: Create follow
+    Viewer->>Home: POST /api/follows
+    Home->>Registry: resolve did via gate
+    Registry-->>Home: Signed hosting record
+    Home->>Home: Store user_follow.followed_provider_url
 
-    loop For each follower
-        SYR->>RemoteServer: POST to Inbox<br/>(signed activity)
-        RemoteServer->>RemoteServer: Verify Signature
-        RemoteServer->>RemoteServer: Process Activity
-        RemoteServer->>Follower: Deliver to User
-    end
-
-    Note over SYR,RemoteServer: SYR-to-SYR federation<br/>for viewing activity
+    Note over Viewer,Author: Timeline or following list
+    Viewer->>Home: GET /api/follows
+    Home-->>Viewer: rows with followed_provider_url
+    Viewer->>Author: GET /api/public/posts using stored base URL
+    Author->>Viewer: Post metadata or full post (public)
 ```
 
-### 3. ActivityPub Data Model
-
-```mermaid
-erDiagram
-    ACTOR ||--o{ ACTIVITY : publishes
-    ACTIVITY ||--o| OBJECT : contains
-    ACTOR ||--o{ FOLLOWER : "has followers"
-    ACTOR ||--o{ FOLLOWING : follows
-
-    ACTOR {
-        string id PK
-        string user_id FK
-        string type
-        string inbox
-        string outbox
-        string followers
-        string following
-        json public_key
-    }
-
-    ACTIVITY {
-        string id PK
-        string actor_id FK
-        string type
-        json object
-        datetime published
-        array to
-        array cc
-    }
-
-    OBJECT {
-        string id PK
-        string type
-        string content
-        datetime published
-        string attributed_to
-        array attachment
-    }
-
-    FOLLOWER {
-        string id PK
-        string actor_id FK
-        string follower_actor_id FK
-        string status
-        datetime created_at
-    }
-```
-
-### 4. Verifiable Credentials
+### 3. Verifiable Credentials
 
 VCs in SYR are **credentials that others issue to you**, linked to your identity. They represent attestations like memberships, roles, KYC verifications, or qualifications that enrich your identity. VC exchange for platforms with specific credential requirements to join is planned for a future phase.
 
@@ -261,7 +208,7 @@ sequenceDiagram
     Platform->>User: Access granted
 ```
 
-### 5. Verifiable Credentials Data Model
+### 4. Verifiable Credentials Data Model
 
 ```mermaid
 erDiagram
@@ -298,7 +245,7 @@ erDiagram
     }
 ```
 
-### 6. Identity-Based Login Flow
+### 5. Identity-Based Login Flow
 
 Third-party platforms authenticate users through their SYR instance. Instead of generic OAuth, users enter their instance name and username (or DID), which is resolved via the registry to locate their SYR instance.
 
@@ -324,7 +271,7 @@ sequenceDiagram
     Note over User,SYR: Future: signing challenge<br/>for offloaded keys
 ```
 
-### 7. Identity-Based Auth Data Model
+### 6. Identity-Based Auth Data Model
 
 ```mermaid
 erDiagram
@@ -377,7 +324,6 @@ graph LR
     end
 
     subgraph "Protocols & Standards"
-        AP_Proto[ActivityPub]
         VC_Proto[W3C VC 2.0]
         DID_Proto[did:syr Method]
         SSI[Self-Sovereign Identity]
@@ -399,7 +345,6 @@ graph LR
 
     SK_API --> SurrealDB
     SK_API --> SeaweedFS
-    SK_API --> AP_Proto
     SK_API --> VC_Proto
     SK_API --> DID_Proto
 
@@ -459,11 +404,10 @@ flowchart TB
     DB --> Transform[Transform Data]
     Transform --> Response[Return Response]
 
-    Business -.->|If federated| Federation[ActivityPub Delivery]
+    Business -.->|If registry sync| RegistryJobs[Registry sync jobs<br/>/api/identity/outbox]
     Business -.->|If signed| Sign[Server-Side Signing<br/>with Hosted Keys]
 
-    Federation --> Queue[Delivery Queue]
-    Queue --> Remote[Other SYR Instances]
+    RegistryJobs --> Remote[Registry server]
 
     style Validate fill:#fff3cd
     style Auth fill:#fff3cd
@@ -490,35 +434,15 @@ graph TD
     H -->|Yes| I[Process Request]
 ```
 
-### 2. Federation Security
+### 2. Cross-provider trust boundaries
 
-```mermaid
-sequenceDiagram
-    participant Remote as Remote SYR Instance
-    participant SYR as Local SYR Instance
-    participant Verifier
-    participant DB
+When one instance or browser loads **another** provider’s public content:
 
-    Remote->>SYR: POST Activity<br/>(with HTTP Signature)
-    SYR->>Verifier: Verify Signature
+- **Registry hosting records** are Ed25519-signed; the resolver verifies the signature before trusting `provider` URLs (`@syr-is/resolver`).
+- **HTTPS** to peer providers is required in production; treat peer responses as **untrusted** at the HTTP layer (CORS, availability, and content limits apply on the client).
+- **Signed profile and post mutations** (where implemented) establish cryptographic integrity of authored content; they are separate from transport trust.
 
-    alt Signature Invalid
-        Verifier->>SYR: Invalid
-        SYR->>Remote: 401 Unauthorized
-    else Signature Valid
-        Verifier->>SYR: Valid
-        SYR->>DB: Fetch Actor
-
-        alt Actor Unknown
-            SYR->>Remote: Fetch Actor Profile
-            Remote->>SYR: Actor Data
-            SYR->>DB: Cache Actor
-        end
-
-        SYR->>SYR: Process Activity
-        SYR->>Remote: 202 Accepted
-    end
-```
+There is no inbox protocol between instances for follows: visibility is **pull** via public endpoints using a **stored** provider base URL on the follow row (or registry resolution when no URL is stored / for discovery). **Manual** URL overrides are not registry-verified.
 
 ### 3. Password Security
 
@@ -598,12 +522,12 @@ graph TB
 
     subgraph "External"
         Users[Instance Users]
-        Federation[Other SYR Instances]
+        PeerProviders[Other SYR Providers]
         ThirdParty[Third-party Platforms<br/>Identity-Based Login]
     end
 
     Users --> Web
-    Federation --> Web
+    Web -->|"HTTPS public APIs + registry"| PeerProviders
     ThirdParty --> Web
     Web --> DB
     Web --> S3
@@ -693,9 +617,9 @@ gantt
     Identity Manager          :idm, after auth, 4d
     Profile System            :profile, after idm, 3d
 
-    section Federation
-    ActivityPub Foundation    :ap, after profile, 5d
-    SYR-to-SYR Federation    :fed, after ap, 4d
+    section SocialAndRegistry
+    FollowsTimelinePolish    :social, after profile, 5d
+    RegistryReliability      :regrel, after social, 4d
 
     section Credentials
     VC Storage Model         :vc, after profile, 4d
@@ -711,7 +635,7 @@ gantt
 
     section UI
     shadcn-svelte Setup      :ui, after auth, 2d
-    UI Polish                :polish, after fed, 5d
+    UI Polish                :polish, after regrel, 5d
 ```
 
 ## Glossary
@@ -725,9 +649,6 @@ gantt
 - **VP**: Verifiable Presentation - a collection of VCs shared for verification when joining platforms
 - **Identity-Based Login**: Authentication where users enter their SYR instance + username/DID to log into third-party platforms
 - **Multi-Tenancy**: A single SYR instance managing isolated identity pools for multiple organizations
-- **ActivityPub**: W3C standard for decentralized social networking — used for SYR-to-SYR federation
-- **HTTP Signatures**: Authentication mechanism for ActivityPub federation
-- **WebFinger**: Protocol for discovering information about people/resources
 - **SurrealDB**: Multi-model database supporting document, graph, and relational models; native composite/object record IDs enable DID-anchored keys for `post` and `upload` tables
 - **SeaweedFS**: Distributed S3-compatible object storage for files, images, and media
 - **Zod**: TypeScript-first schema validation library (v4)
@@ -736,8 +657,6 @@ gantt
 
 - [W3C Decentralized Identifiers (DIDs)](https://www.w3.org/TR/did-core/)
 - [W3C Verifiable Credentials Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
-- [ActivityPub Specification](https://www.w3.org/TR/activitypub/)
-- [WebFinger RFC 7033](https://datatracker.ietf.org/doc/html/rfc7033)
 - [SurrealDB Documentation](https://surrealdb.com/docs)
 - [SeaweedFS Documentation](https://github.com/seaweedfs/seaweedfs)
 - [Zod v4 Documentation](https://zod.dev)

@@ -4,6 +4,7 @@ import { config } from '$lib/config';
 import { consumeCallbackToken } from '$lib/server/independent-login-store';
 import { verifyAccessToken } from '$lib/server/auth';
 import { profileRepository } from '$lib/repositories/profile.repository';
+import { safePostLoginRedirectPath } from '$lib/server/safe-post-login-redirect.server';
 
 /** Profile needs onboarding when display_name is auto-generated (il_xxx pattern). */
 function needsOnboarding(displayName: string | null | undefined): boolean {
@@ -47,6 +48,15 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		if (isRedirect(err)) throw err;
 		console.error('Onboarding check failed:', err);
 		// fail-open: continue to redirect to /
+	}
+
+	const postLogin = cookies.get('post_login_redirect');
+	if (postLogin) {
+		cookies.delete('post_login_redirect', { path: '/' });
+		const safe = safePostLoginRedirectPath(postLogin);
+		if (safe) {
+			throw redirect(302, safe);
+		}
 	}
 
 	throw redirect(302, '/');

@@ -123,6 +123,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			bio?: string;
 			avatar_url?: string;
 			banner_url?: string;
+			identity_host_url?: string;
 		} = {};
 
 		if (typeof parsedPayload.display_name === 'string' && parsedPayload.display_name.trim()) {
@@ -130,6 +131,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		if (typeof parsedPayload.bio === 'string') {
 			updates.bio = parsedPayload.bio.slice(0, 500);
+		}
+		if (
+			typeof parsedPayload.identity_host_url === 'string' &&
+			parsedPayload.identity_host_url.trim()
+		) {
+			const u = parsedPayload.identity_host_url.trim().slice(0, 2048);
+			try {
+				const parsed = new URL(u);
+				if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+					updates.identity_host_url = u;
+				}
+			} catch {
+				// ignore invalid URL
+			}
 		}
 
 		if (avatarFile instanceof File && avatarFile.size > 0) {
@@ -198,7 +213,8 @@ export const POST: RequestHandler = async ({ request }) => {
 						display_name: profile.display_name,
 						bio: profile.bio,
 						avatar_url: profile.avatar_url,
-						banner_url: profile.banner_url
+						banner_url: profile.banner_url,
+						identity_host_url: profile.identity_host_url
 					}
 				: null
 		});

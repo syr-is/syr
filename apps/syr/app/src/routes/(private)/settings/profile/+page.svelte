@@ -82,6 +82,7 @@
 					bio: clone.bio,
 					avatar_url: clone.avatar_url,
 					banner_url: clone.banner_url,
+					identity_host_url: clone.identity_host_url,
 					metadata: clone.metadata
 				};
 				signDialogOpen = true;
@@ -137,6 +138,7 @@
 			$formData.bio = user.bio || '';
 			$formData.avatar_url = user.avatar_url || '';
 			$formData.banner_url = user.banner_url || '';
+			$formData.identity_host_url = user.identity_host_url || '';
 		}
 	});
 </script>
@@ -257,6 +259,25 @@
 								{/snippet}
 							</Form.Control>
 							<Form.Description>URL to your profile banner image.</Form.Description>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<Form.Field {form} name="identity_host_url">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Identity page URL</Form.Label>
+									<Input
+										{...props}
+										bind:value={$formData.identity_host_url}
+										type="url"
+										placeholder="https://yoursyr.example/u/did%3Asyr%3A…"
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.Description>
+								Where you host your public presence on the web (defaults to your profile on this
+								instance).
+							</Form.Description>
 							<Form.FieldErrors />
 						</Form.Field>
 					</Card.Content>

@@ -1,0 +1,174 @@
+<script lang="ts">
+	import type { PageData } from './$types';
+	import * as Card from '@syr-is/ui/card';
+	import { Button } from '@syr-is/ui/button';
+	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import ProfileCard from '$lib/components/fragments/profile-card.svelte';
+
+	type FollowsApiJson = {
+		status?: string;
+		data?: unknown;
+		error?: { message?: string };
+		message?: string;
+	};
+
+	let { data }: { data: PageData } = $props();
+
+	let followBusy = $state(false);
+	let followStateLoading = $state(true);
+	let isFollowing = $state(false);
+
+	const targetDid = $derived(data.targetDid ?? '');
+	const viewerDid = $derived(data.user?.did ?? '');
+
+	$effect(() => {
+		const did = targetDid;
+		const vd = viewerDid;
+		const can = !!vd && !!did && did !== vd;
+		if (!can || data.error != null) {
+			isFollowing = false;
+			followStateLoading = false;
+			return;
+		}
+		followStateLoading = true;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch(`/api/follows/check?did=${encodeURIComponent(did)}`, {
+					credentials: 'include'
+				});
+				const j = (await res.json().catch(() => ({}))) as { data?: { following?: boolean } };
+				if (cancelled) return;
+				if (!res.ok) {
+					isFollowing = false;
+					return;
+				}
+				isFollowing = Boolean(j.data?.following);
+			} catch {
+				if (!cancelled) isFollowing = false;
+			} finally {
+				if (!cancelled) followStateLoading = false;
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	async function toggleFollow() {
+		if (!targetDid || !viewerDid || followBusy || followStateLoading || data.error != null) return;
+		const currentDid = targetDid;
+		followBusy = true;
+		try {
+			if (isFollowing) {
+				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(currentDid)}`, {
+					method: 'DELETE'
+				});
+				const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
+				if (!res.ok) {
+					toast.error(j.error?.message ?? j.message ?? 'Unfollow failed');
+					return;
+				}
+				isFollowing = false;
+				toast.success('Unfollowed');
+				return;
+			}
+
+			const res = await fetch('/api/follows', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ followed_did: currentDid })
+			});
+			const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
+			if (!res.ok) {
+				toast.error(j.error?.message ?? j.message ?? 'Follow failed');
+				return;
+			}
+			if (j.data === null) {
+				toast.info('No change');
+				return;
+			}
+			isFollowing = true;
+			toast.success('Now following');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Follow failed');
+		} finally {
+			followBusy = false;
+		}
+	}
+</script>
+
+<div class="mx-auto max-w-lg space-y-6 p-4">
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Follow on Syr</Card.Title>
+			<Card.Description>
+				Confirm following this identity from your account on this instance.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if data.error === 'invalid_did'}
+				<p class="text-sm text-muted-foreground">
+					Missing or invalid <code class="text-xs">target_did</code>. Use a link like
+					<code class="text-xs">/follow?target_did=did:syr:…</code>.
+				</p>
+			{:else if data.error === 'self_follow'}
+				<p class="text-sm text-muted-foreground">You cannot follow your own DID.</p>
+			{:else if data.targetProfile}
+				<ProfileCard
+					profile={{
+						username: data.targetProfile.username,
+						display_name: data.targetProfile.display_name,
+						bio: data.targetProfile.bio,
+						avatar_url: data.targetProfile.avatar_url,
+						banner_url: null,
+						did: data.targetDid,
+						signed_payload_json: null,
+						content_signature: null,
+						signing_device_public_key: null
+					}}
+					showFollow={!!viewerDid && viewerDid !== data.targetDid}
+					{followBusy}
+					{followStateLoading}
+					{isFollowing}
+					onFollow={toggleFollow}
+					bioVariant="muted"
+				/>
+				{#if data.targetProfile.identity_host_url}
+					<p class="text-xs text-muted-foreground">
+						Their public page:
+						<a
+							class="text-primary underline"
+							href={data.targetProfile.identity_host_url}
+							target="_blank"
+							rel="noopener noreferrer">{data.targetProfile.identity_host_url}</a
+						>
+					</p>
+				{/if}
+			{:else}
+				<p class="text-sm text-muted-foreground">
+					No profile found for this DID on this instance. You can still try to follow if registry
+					resolution allows it.
+				</p>
+				{#if viewerDid && viewerDid !== data.targetDid}
+					<Button disabled={followBusy || followStateLoading} onclick={toggleFollow} class="w-full">
+						{#if followStateLoading}
+							…
+						{:else if isFollowing}
+							Unfollow
+						{:else}
+							Follow {data.targetDid}
+						{/if}
+					</Button>
+				{/if}
+			{/if}
+		</Card.Content>
+		<Card.Footer>
+			<Button variant="outline" class="w-full" onclick={() => goto(resolve('/following'))}>
+				Your following list
+			</Button>
+		</Card.Footer>
+	</Card.Root>
+</div>

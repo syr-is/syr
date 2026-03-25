@@ -151,7 +151,10 @@
 				did: fresh.did,
 				issued_at: new Date().toISOString(),
 				...(fresh.displayName ? { display_name: fresh.displayName } : {}),
-				...(fresh.bio ? { bio: fresh.bio } : {})
+				...(fresh.bio ? { bio: fresh.bio } : {}),
+				...(fresh.identityHostUrl?.trim()
+					? { identity_host_url: fresh.identityHostUrl.trim() }
+					: {})
 			};
 			const signedPayload = await invoke<string>('canonicalize_cmd', {
 				objJson: JSON.stringify(payload)
@@ -171,7 +174,8 @@
 				{
 					displayName: fresh.displayName,
 					bio: fresh.bio,
-					did: fresh.did
+					did: fresh.did,
+					identityHostUrl: fresh.identityHostUrl
 				},
 				{ signature, signedPayload }
 			);

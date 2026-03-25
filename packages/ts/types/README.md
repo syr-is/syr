@@ -7,7 +7,6 @@ Shared TypeScript types and Zod schemas for the SYR (Self-Yield Representation) 
 This package provides type-safe schemas and TypeScript definitions for all data models in the SYR ecosystem, including:
 
 - **User Management**: User accounts, profiles, authentication
-- **ActivityPub**: Actors, activities, objects, federation
 - **Verifiable Credentials**: W3C VC 2.0 data models, DIDs, proofs
 - **OAuth 2.0**: Clients, tokens, authorization flows
 - **Events**: Service integration event schemas
@@ -103,7 +102,7 @@ The SYR platform is built on principles of digital sovereignty:
   - You control your DID by controlling your domain
   - No centralized registries, no blockchain fees
   - Easy migration: just move your domain
-- **Federated**: ActivityPub support for cross-platform communication
+- **Cross-provider identity**: Registry-resolved `did:syr` hosting, public profile/post APIs, and DID-keyed follows (see Syr app and docs)
 - **Verifiable Credentials**: W3C VC 2.0 for reputation and credibility
 - **User Control**: Users own their data and digital presence
 
@@ -176,14 +175,6 @@ const isoString = isoDatetimeToDate.encode(new Date());
 - `UserRegistrationSchema` - Registration validation
 - `UserLoginSchema` - Login validation
 - `SessionSchema` - Authentication sessions
-
-### ActivityPub (`activitypub.ts`)
-
-- `ActorSchema` - ActivityPub actors (Person, Service, etc.)
-- `ActivitySchema` - Activities (Create, Follow, Accept, etc.)
-- `ObjectSchema` - Content objects (Note, Article, etc.)
-- `CollectionSchema` - Collections and paginated lists
-- `WebFingerResourceSchema` - WebFinger discovery
 
 ### Verifiable Credentials (`credentials.ts`)
 

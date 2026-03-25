@@ -145,11 +145,13 @@ describe('IdentityExportBundleSchema', () => {
 				displayName: 'Alice',
 				bio: 'Hello',
 				avatarUrl: 'https://example.com/avatar.png',
-				bannerUrl: 'https://example.com/banner.png'
+				bannerUrl: 'https://example.com/banner.png',
+				identityHostUrl: 'https://alice.example/me'
 			}
 		};
 		const result = IdentityExportBundleSchema.parse(bundle);
 		expect(result.profile.bio).toBe('Hello');
+		expect(result.profile.identityHostUrl).toBe('https://alice.example/me');
 	});
 
 	it('rejects missing did', () => {

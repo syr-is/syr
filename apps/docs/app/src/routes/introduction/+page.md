@@ -6,7 +6,7 @@ title: What is Syr?
 
 **Syr** stands for **Self Yield Identity Representation**.
 
-It is a self-hosted multi-tenant self-sovereign identity manager. Your SYR instance generates, stores, and manages your cryptographic identity — including your posts and thoughts, which are a first-class part of who you are. You can federate with other SYR instances to view each other's activity, and you can export your keys on demand if you want to take them elsewhere.
+It is a self-hosted multi-tenant self-sovereign identity manager. Your SYR instance generates, stores, and manages your cryptographic identity — including your posts and thoughts, which are a first-class part of who you are. You can follow other people by **DID** and read their public posts from whichever provider hosts them (via the registry), as described in [Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline). You can export your keys on demand if you want to take them elsewhere.
 
 ---
 
@@ -33,7 +33,7 @@ Syr inverts the model with a self-hosted identity manager:
 4. **You can export your keys** at any time. This is an explicit, user-initiated action — not the default.
 5. **You can migrate** to a different SYR instance. Your DID never changes.
 6. **Your posts are part of your identity** — what you think and share is integral to who you are. User data (posts, uploads) carries cryptographic ownership via DID-embedded record IDs.
-7. **You federate** with other SYR instances via ActivityPub to view each other's activity.
+7. **You discover and follow other identities** by `did:syr`, resolve their provider through registries, and load **public** profiles and posts from those providers (see [Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline)).
 
 No platform owns you. If your instance disappears, you export your identity bundle and set up somewhere else.
 
@@ -61,8 +61,7 @@ flowchart TD
     DID -->|registered at| Registry["Registry"]
     Registry -->|resolves to| SYR
     SYR -->|manages| ProfileData["Profile, Posts, Credentials"]
-    SYR -->|federates via| AP["ActivityPub"]
-    AP <-->|SYR-to-SYR| OtherSYR["Other SYR Instances"]
+    SYR -->|"registry resolve + public HTTPS APIs"| OtherSYR["Other Syr providers"]
     SYR -->|tenant isolation| Tenants["Tenant A | Tenant B | ..."]
     SYR <-->|"SSE signing bridge"| SynerApp
 ```
@@ -79,7 +78,7 @@ Users can **export their full identity** (keys, posts, assets) as a portable zip
 
 ### Posts as Identity
 
-In SYR, your posts and thoughts are an integral part of your identity. What you create and share defines who you are, and this content travels with your identity when you migrate between instances. Posts are federated across SYR instances via ActivityPub.
+In SYR, your posts and thoughts are an integral part of your identity. What you create and share defines who you are, and this content travels with your identity when you migrate between instances. Others can read **public** posts by resolving your DID to your provider and calling its public APIs ([Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline)).
 
 ### Decentralized Identifier (DID)
 
@@ -142,7 +141,7 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 
 - Cryptographic identity generation and management (server-side)
 - Posts as a first-class part of identity
-- SYR-to-SYR federation via ActivityPub
+- Cross-provider discovery and follows by DID (registry + public APIs)
 - Provider-portable identity with DID stability
 - Verifiable credentials linked to identity
 - Identity-based login for third-party platforms
@@ -159,7 +158,7 @@ Syr is **not** a blockchain or a centralized identity platform. It is a **self-h
 | **Phase 0.5** | Testing & hardening                    | In progress |
 | Phase 1       | Registry & provider portability        | Planned     |
 | Phase 2       | Verifiable credentials & enhanced auth | Planned     |
-| Phase 3       | Federation & Syner enhancements        | Planned     |
+| Phase 3       | Social depth & Syner enhancements      | Planned     |
 | Phase 4       | Backend migration & observability      | Planned     |
 | Phase 5       | Production hardening                   | Planned     |
 

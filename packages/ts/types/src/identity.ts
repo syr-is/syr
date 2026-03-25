@@ -153,7 +153,8 @@ export const IdentityExportBundleSchema = z.object({
 		displayName: z.string(),
 		bio: z.string().optional(),
 		avatarUrl: z.string().optional(),
-		bannerUrl: z.string().optional()
+		bannerUrl: z.string().optional(),
+		identityHostUrl: z.string().url().max(2048).optional()
 	}),
 	exportedAt: z.string().datetime()
 });

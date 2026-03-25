@@ -20,6 +20,7 @@ import type {
 	IdentityDelegateRequest,
 	IdentityExportBundle
 } from '@syr-is/types';
+import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
 
 type UserIdInput = RecordId | string;
 
@@ -119,6 +120,8 @@ export class IdentityController {
 			}
 			throw err;
 		}
+
+		await ensureDefaultIdentityHostUrl(resolvedUserId, did);
 
 		return { did };
 	}
@@ -484,7 +487,8 @@ export class IdentityController {
 				displayName: profile.display_name,
 				bio: profile.bio,
 				avatarUrl: profile.avatar_url,
-				bannerUrl: profile.banner_url
+				bannerUrl: profile.banner_url,
+				identityHostUrl: profile.identity_host_url
 			},
 			exportedAt: new Date().toISOString()
 		};

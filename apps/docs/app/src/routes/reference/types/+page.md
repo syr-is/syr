@@ -28,7 +28,6 @@ flowchart TD
     BaseEntity --> FolderSchema
     BaseEntity --> PostSchema
     BaseEntity --> OAuthClientSchema
-    BaseEntity --> DBActorSchema
     BaseEntity --> KvEntrySchema
 ```
 
@@ -281,34 +280,6 @@ BaseEntitySchema.extend({
 ```
 
 **Special folder:** The folder named `public` (case-insensitive) marks files as publicly accessible without signed URLs. All subfolders of a `public` folder inherit this behavior.
-
----
-
-## ActivityPub Domain (`activitypub.ts`)
-
-Federation schemas for ActivityPub protocol support.
-
-> **Implementation status:** Types are defined but ActivityPub federation is not yet implemented in the application. These schemas provide the foundation for future federation work.
-
-### Core Schemas
-
-| Schema                    | Description                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| `ActorSchema`             | ActivityPub actor (Person, Service, Application, Group, Organization)                    |
-| `ActivitySchema`          | Activities (Create, Update, Delete, Follow, Accept, Reject, Like, Announce, Undo, Block) |
-| `ObjectSchema`            | Content objects (Note, Article, Image, Video, Document, Page)                            |
-| `CollectionSchema`        | AP Collection / OrderedCollection                                                        |
-| `CollectionPageSchema`    | Paginated collection pages                                                               |
-| `WebFingerResourceSchema` | RFC 7033 WebFinger resource discovery                                                    |
-
-### Database Schemas
-
-| Schema                 | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `DBActorSchema`        | Internal actor representation with user_id, keypair, URLs     |
-| `FollowerSchema`       | Follower relationship with status (pending/accepted/rejected) |
-| `FollowingSchema`      | Following relationship with status                            |
-| `StoredActivitySchema` | Internal activity storage                                     |
 
 ---
 

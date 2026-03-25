@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
+import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
 import { postRepository } from '$lib/repositories/post.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
@@ -88,7 +89,13 @@ function zipPathFromUrl(url: string): string | null {
 
 async function resolveProfileUrls(
 	identity: {
-		profile: { avatarUrl?: string; bannerUrl?: string; displayName?: string; bio?: string };
+		profile: {
+			avatarUrl?: string;
+			bannerUrl?: string;
+			displayName?: string;
+			bio?: string;
+			identityHostUrl?: string;
+		};
 	},
 	zipPathToUrl: Record<string, string>,
 	resolveAssetUrl?: (path: string) => Promise<string | undefined>
@@ -97,12 +104,14 @@ async function resolveProfileUrls(
 	banner_url?: string;
 	display_name?: string;
 	bio?: string;
+	identity_host_url?: string;
 }> {
 	const updates: {
 		avatar_url?: string;
 		banner_url?: string;
 		display_name?: string;
 		bio?: string;
+		identity_host_url?: string;
 	} = {
 		display_name: identity.profile.displayName,
 		bio: identity.profile.bio ?? undefined
@@ -130,6 +139,8 @@ async function resolveProfileUrls(
 			: (identity.profile.bannerUrl ?? undefined));
 	if (avatarUrl != null && isValidProfileUrl(avatarUrl)) updates.avatar_url = avatarUrl;
 	if (bannerUrl != null && isValidProfileUrl(bannerUrl)) updates.banner_url = bannerUrl;
+	if (isValidProfileUrl(identity.profile.identityHostUrl))
+		updates.identity_host_url = identity.profile.identityHostUrl;
 	return updates;
 }
 
@@ -376,6 +387,7 @@ export async function importIdentityAndProfileExternal(
 		bio?: string;
 		avatar_url?: string;
 		banner_url?: string;
+		identity_host_url?: string;
 	} = {
 		display_name: identity.profile.displayName,
 		bio: identity.profile.bio ?? undefined
@@ -384,7 +396,10 @@ export async function importIdentityAndProfileExternal(
 		profileUpdates.avatar_url = identity.profile.avatarUrl;
 	if (isValidProfileUrl(identity.profile.bannerUrl))
 		profileUpdates.banner_url = identity.profile.bannerUrl;
+	if (isValidProfileUrl(identity.profile.identityHostUrl))
+		profileUpdates.identity_host_url = identity.profile.identityHostUrl;
 	await profileRepository.mergeByUserId(ctx.userId, profileUpdates);
+	await ensureDefaultIdentityHostUrl(ctx.userId, ctx.did);
 
 	for (const dk of identity.delegatedKeys) {
 		const canonicalDelegation = canonicalize({
@@ -449,6 +464,7 @@ export async function importIdentityAndProfile(
 		bio?: string;
 		avatar_url?: string;
 		banner_url?: string;
+		identity_host_url?: string;
 	} = {
 		display_name: identity.profile.displayName,
 		bio: identity.profile.bio ?? undefined
@@ -457,7 +473,10 @@ export async function importIdentityAndProfile(
 		aegisProfileUpdates.avatar_url = identity.profile.avatarUrl;
 	if (isValidProfileUrl(identity.profile.bannerUrl))
 		aegisProfileUpdates.banner_url = identity.profile.bannerUrl;
+	if (isValidProfileUrl(identity.profile.identityHostUrl))
+		aegisProfileUpdates.identity_host_url = identity.profile.identityHostUrl;
 	await profileRepository.mergeByUserId(ctx.userId, aegisProfileUpdates);
+	await ensureDefaultIdentityHostUrl(ctx.userId, ctx.did);
 
 	for (const dk of identity.delegatedKeys) {
 		const canonicalDelegation = canonicalize({

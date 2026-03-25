@@ -21,6 +21,7 @@ export const ProfileSignedPayloadV1Schema = z.object({
 	bio: z.string().max(500).optional(),
 	avatar_url: z.url().optional(),
 	banner_url: z.url().optional(),
+	identity_host_url: z.string().url().max(2048).optional(),
 	metadata: z.record(z.string(), z.any()).optional()
 });
 

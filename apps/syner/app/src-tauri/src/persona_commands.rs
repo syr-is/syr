@@ -36,6 +36,9 @@ pub struct Persona {
     pub bio: Option<String>,
     pub avatar_url: Option<String>,
     pub banner_url: Option<String>,
+    /// Public URL where this identity’s “home” lives (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_host_url: Option<String>,
     pub created_at: String,
     /// File mtime (Unix timestamp) for cache busting; not stored in profile.json
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -353,6 +356,7 @@ pub fn create_persona_cmd(
         bio: bio.clone(),
         avatar_url: None,
         banner_url: None,
+        identity_host_url: None,
         created_at: created_at.clone(),
         avatar_mtime: None,
         banner_mtime: None,
@@ -395,6 +399,7 @@ pub fn import_persona_from_sigil_cmd(
         bio: bio.clone(),
         avatar_url: None,
         banner_url: None,
+        identity_host_url: None,
         created_at: created_at.clone(),
         avatar_mtime: None,
         banner_mtime: None,
@@ -656,6 +661,7 @@ pub fn update_persona_profile_cmd(
     bio: Option<String>,
     avatar_url: Option<String>,
     banner_url: Option<String>,
+    identity_host_url: Option<String>,
 ) -> Result<Persona, String> {
     validate_persona_id(&persona_id)?;
     let base = get_base_path(&app)?;
@@ -677,6 +683,14 @@ pub fn update_persona_profile_cmd(
     }
     if let Some(b) = banner_url {
         persona.banner_url = Some(b);
+    }
+    if let Some(h) = identity_host_url {
+        let t = h.trim();
+        persona.identity_host_url = if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        };
     }
 
     let updated = serde_json::to_string_pretty(&persona).map_err(|e| e.to_string())?;

@@ -12,9 +12,6 @@ export * from './codecs.js';
 // User types
 export * from './user.js';
 
-// ActivityPub types
-export * from './activitypub.js';
-
 // Identity-Based Auth types (replaces OAuth)
 export * from './identity-auth.js';
 

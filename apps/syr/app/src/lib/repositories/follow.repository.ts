@@ -7,6 +7,7 @@ export interface UserFollow {
 	follower_user_id: RecordId;
 	followed_did: string;
 	source_registry?: string;
+	followed_provider_url?: string;
 	created_at: Date;
 }
 
@@ -39,7 +40,8 @@ export class FollowRepository {
 	async createFollow(
 		followerUserId: RecordId | string,
 		followedDid: string,
-		sourceRegistry?: string
+		sourceRegistry?: string,
+		followedProviderUrl?: string
 	): Promise<UserFollow> {
 		const uid =
 			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
@@ -50,6 +52,7 @@ export class FollowRepository {
 				follower_user_id: uid,
 				followed_did: followedDid,
 				source_registry: sourceRegistry,
+				followed_provider_url: followedProviderUrl,
 				created_at: now
 			});
 		} catch (e) {
@@ -70,6 +73,21 @@ export class FollowRepository {
 			throw new Error('createFollow: unexpected database response');
 		}
 		return row as unknown as UserFollow;
+	}
+
+	async updateFollowProviderUrl(
+		followerUserId: RecordId | string,
+		followedDid: string,
+		providerUrl: string
+	): Promise<UserFollow | null> {
+		const uid =
+			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
+		const result = await this.db.query<[UserFollow[]]>(
+			`UPDATE user_follow SET followed_provider_url = $url WHERE follower_user_id = $uid AND followed_did = $did RETURN AFTER`,
+			{ uid, did: followedDid, url: providerUrl }
+		);
+		const row = result[0]?.[0];
+		return row ?? null;
 	}
 
 	async deleteFollow(followerUserId: RecordId | string, followedDid: string): Promise<void> {

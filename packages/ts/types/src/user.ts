@@ -47,6 +47,9 @@ export const UserSchema = BaseEntitySchema.extend({
 
 export type User = z.infer<typeof UserSchema>;
 
+/** Public URL where this identity’s “home” on the web is hosted (Syr /u/…, personal site, etc.). */
+export const IdentityHostUrlSchema = z.string().url().max(2048);
+
 /**
  * Profile Schema
  * User profile information
@@ -57,6 +60,7 @@ export const ProfileSchema = BaseEntitySchema.extend({
 	bio: z.string().max(500).optional(),
 	avatar_url: z.url().optional(),
 	banner_url: z.url().optional(),
+	identity_host_url: IdentityHostUrlSchema.optional(),
 	metadata: MetadataSchema.optional(),
 	content_signature: z.string().optional(),
 	signed_payload_json: z.string().optional(),
@@ -119,13 +123,18 @@ export type UserLogin = z.infer<typeof UserLoginSchema>;
  * For validating profile update requests
  * Uses zod traversal to remove defaults and make all fields optional
  */
+/** Empty string allowed in forms; server/API should treat '' as “omit” or clear per field policy. */
 export const ProfileUpdateSchema = ProfileSchema.pick({
 	display_name: true,
 	bio: true,
-	avatar_url: true,
-	banner_url: true,
 	metadata: true
-}).partial();
+})
+	.partial()
+	.extend({
+		avatar_url: z.union([z.literal(''), z.string().url()]).optional(),
+		banner_url: z.union([z.literal(''), z.string().url()]).optional(),
+		identity_host_url: z.union([z.literal(''), z.string().url().max(2048)]).optional()
+	});
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
 

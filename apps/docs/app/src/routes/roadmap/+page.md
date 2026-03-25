@@ -4,7 +4,7 @@ title: Roadmap
 
 # SYR Roadmap
 
-This document outlines the implementation phases for the SYR platform, from the current proof-of-concept through to a production-ready system with full federation and native application support.
+This document outlines the implementation phases for the SYR platform, from the current proof-of-concept through to a production-ready system with cross-provider identity, social features, and native application support.
 
 ---
 
@@ -85,16 +85,14 @@ Add credential exchange and richer authentication.
 
 ---
 
-## Phase 3: Federation & Syner Enhancements
+## Phase 3: Social depth & Syner enhancements
 
-Full SYR-to-SYR federation and Syner enhancements. Core Syner app is implemented (Phase 0).
+Deeper cross-provider experience (DID-keyed follows, registry resolution, public APIs—see [Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline)) and Syner improvements. Core Syner app is implemented (Phase 0).
 
 **Goals:**
 
-- ActivityPub inbox endpoint (receive activities from remote instances)
-- HTTP Signature verification for incoming federation requests
-- WebFinger discovery endpoint
-- Outbox delivery queue with retry logic
+- Optional server-side timeline aggregation or feed reliability improvements (client-side merge remains baseline)
+- Registry sync and public-fetch observability (retries, metrics) where it helps multi-provider flows
 - **Syner enhancements** (core app exists: personas, independent login, export-verify, profile sync):
   - Platform-native secure keystore (Keychain, DPAPI, libsecret, Android Keystore)
   - SSE-based signing bridge with SYR web app
@@ -152,7 +150,7 @@ flowchart LR
     P1 --> P2["Phase 2
     VCs & Enhanced Auth"]
     P2 --> P3["Phase 3
-    Federation & Syner"]
+    Social depth & Syner"]
     P3 --> P4["Phase 4
     Backend Migration & Observability"]
     P4 --> P5["Phase 5

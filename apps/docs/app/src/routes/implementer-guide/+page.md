@@ -57,6 +57,7 @@ The flow is **challenge-sign-verify**:
 | [Export Formats and Data Structures](/implementer-guide/export-formats) | .syr, .sigil, .persona formats and API contracts                |
 | [Challenge-Sign Flows](/implementer-guide/challenge-sign-flows)         | Independent login, export verify, import verify, delete account |
 | [Profile Sync API](/implementer-guide/profile-sync)                     | Syncing profile from Syner to SYR                               |
+| [Follow on Syr](/implementer-guide/follow-on-syr)                       | Third-party “follow intent” URL (`/follow?target_did=`)         |
 
 ---
 

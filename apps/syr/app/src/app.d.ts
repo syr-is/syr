@@ -26,6 +26,7 @@ declare global {
 					bio?: string;
 					avatar_url?: string;
 					banner_url?: string;
+					identity_host_url?: string;
 					content_signature?: string;
 					signed_payload_json?: string;
 					signing_device_public_key?: string;

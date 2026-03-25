@@ -4,7 +4,7 @@ title: Profile Sync API
 
 # Profile Sync API
 
-Profile sync allows Syner to push profile data (display name, bio, avatar, banner) to a SYR instance. The user proves key control by signing a payload; the server verifies and updates the profile.
+Profile sync allows Syner to push profile data (display name, bio, avatar, banner, optional identity host URL) to a SYR instance. The user proves key control by signing a payload; the server verifies and updates the profile.
 
 ---
 
@@ -28,6 +28,8 @@ Profile sync allows Syner to push profile data (display name, bio, avatar, banne
 | `avatar`         | No       | file   | Avatar image                                            |
 | `banner`         | No       | file   | Banner image                                            |
 
+The authoritative source for **`identity_host_url`** is the signed payload (see below). The server applies updates from the parsed `signed_payload` only; do not rely on unsigned form fields for that value.
+
 ---
 
 ## Signed Payload Format
@@ -40,23 +42,25 @@ The payload must be JCS canonical JSON (RFC 8785). Structure:
 	"did": "did:syr:z6Mk...",
 	"issued_at": "2026-03-01T12:00:00.000Z",
 	"display_name": "Alice",
-	"bio": "Optional bio text"
+	"bio": "Optional bio text",
+	"identity_host_url": "https://example.com/me"
 }
 ```
 
-| Field          | Required | Description                                                                    |
-| -------------- | -------- | ------------------------------------------------------------------------------ |
-| `action`       | Yes      | Must be `"profile-sync"`                                                       |
-| `did`          | Yes      | User DID                                                                       |
-| `issued_at`    | Yes      | ISO-8601 timestamp. Replay protection: server rejects if older than 5 minutes. |
-| `display_name` | No       | Max 100 characters                                                             |
-| `bio`          | No       | Max 500 characters                                                             |
+| Field               | Required | Description                                                                              |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `action`            | Yes      | Must be `"profile-sync"`                                                                 |
+| `did`               | Yes      | User DID                                                                                 |
+| `issued_at`         | Yes      | ISO-8601 timestamp. Replay protection: server rejects if older than 5 minutes.           |
+| `display_name`      | No       | Max 100 characters                                                                       |
+| `bio`               | No       | Max 500 characters                                                                       |
+| `identity_host_url` | No       | HTTPS (or `http` in dev) URL, max 2048 chars — where this identity’s public “home” lives |
 
 ---
 
 ## Signing
 
-1. Build the payload object with `action`, `did`, `issued_at`, and optional `display_name`, `bio`.
+1. Build the payload object with `action`, `did`, `issued_at`, and optional `display_name`, `bio`, `identity_host_url`.
 2. Canonicalize with JCS (RFC 8785) to produce the string to sign.
 3. Sign the UTF-8 bytes of that string with the persona's Ed25519 private key.
 4. Encode the signature as multibase (base58btc).
