@@ -33,6 +33,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			bio: profile.bio,
 			avatar_url: profile.avatar_url,
 			banner_url: profile.banner_url,
+			identity_host_url: profile.identity_host_url,
 			content_signature: profile.content_signature,
 			signed_payload_json: profile.signed_payload_json,
 			signing_device_public_key: profile.signing_device_public_key

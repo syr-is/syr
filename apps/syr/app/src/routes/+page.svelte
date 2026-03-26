@@ -11,6 +11,7 @@
 	} from '$lib/client/post-size-override.js';
 	import { resolveProvider } from '@syr-is/resolver';
 	import { registryApiRoot } from '$lib/registry-url';
+	import { normalizeProviderBaseUrl } from '$lib/normalize-provider-base-url';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { SvelteMap } from 'svelte/reactivity';
@@ -129,7 +130,8 @@
 			}
 			const fj = await fr.json();
 			const rj = await rr.json();
-			const follows: { followed_did: string }[] = fj.data ?? [];
+			const follows: { followed_did: string; followed_provider_url?: string | null }[] =
+				fj.data ?? [];
 			followingCount = follows.length;
 			const registries: { registry_url: string }[] = rj.data ?? [];
 			const bases: string[] = [];
@@ -144,19 +146,29 @@
 			const RESOLVE_BASES_BATCH = 3;
 			const FOLLOWS_CONCURRENCY = 4;
 
-			async function loadFollowTimelineRows(f: { followed_did: string }): Promise<TimelineRow[]> {
+			async function loadFollowTimelineRows(f: {
+				followed_did: string;
+				followed_provider_url?: string | null;
+			}): Promise<TimelineRow[]> {
 				let provider: string | null = null;
-				for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
-					const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
-					const settled = await Promise.allSettled(
-						chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
-					);
-					const hit = settled.find(
-						(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
-					);
-					if (hit) {
-						provider = hit.value;
-						break;
+				const stored = f.followed_provider_url
+					? normalizeProviderBaseUrl(f.followed_provider_url)
+					: null;
+				if (stored) {
+					provider = stored;
+				} else {
+					for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
+						const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
+						const settled = await Promise.allSettled(
+							chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
+						);
+						const hit = settled.find(
+							(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
+						);
+						if (hit) {
+							provider = hit.value;
+							break;
+						}
 					}
 				}
 				if (!provider) return [];

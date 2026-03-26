@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DidSyrSchema } from './common.js';
+import { DidSyrSchema, IdentityHostUrlSchema } from './common.js';
 
 /**
  * Independent Login Challenge Request
@@ -70,7 +70,8 @@ export const IndependentLoginVerifyRequestSchema = z.object({
 	profile: z
 		.object({
 			display_name: z.string().min(1).max(100).optional(),
-			bio: z.string().max(500).optional()
+			bio: z.string().max(500).optional(),
+			identity_host_url: IdentityHostUrlSchema.optional()
 		})
 		.optional()
 });
@@ -120,7 +121,8 @@ export const ProfileSyncSignedPayloadSchema = z.object({
 	/** ISO-8601 when payload was created (replay protection: reject if > 5 min old) */
 	issued_at: z.string(),
 	display_name: z.string().max(100).optional(),
-	bio: z.string().max(500).optional()
+	bio: z.string().max(500).optional(),
+	identity_host_url: IdentityHostUrlSchema.optional()
 });
 
 export type ProfileSyncSignedPayload = z.infer<typeof ProfileSyncSignedPayloadSchema>;

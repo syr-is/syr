@@ -110,15 +110,17 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Follows, Timeline, and Verification UI
 
-| Requirement                                        | Status          | Details                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DID-keyed follows and registry discovery           | **Implemented** | `user_follow` table; `GET/POST/DELETE /api/follows`; follow gating uses **discovery registries** (`discovery_registry`, `GET/POST /api/user/discovery-registries`) — separate from **publication** registries (`identity_registry`). Resolver via `@syr-is/resolver` `resolveProvider`. `u/[param]` profile route.              |
-| Home timeline (meta + full post fetch)             | **Partial**     | Home `+page.svelte` merges public post meta client-side (batched registry resolve + meta `fetch`); full post on **Load details** (not eager per-row); virtual scroll not yet added.                                                                                                                                             |
-| Public post/profile read for feeds                 | **Implemented** | `GET /api/public/profile/[param]`, `GET /api/public/posts/[did]`, `GET /api/public/posts/[did]/[localId]`.                                                                                                                                                                                                                      |
-| Registry directory search (opt-in)                 | **Partial**     | Registry `directory/search` + Syr `GET /api/search/directory` merges **discovery** registry URLs per account; Syr `/search` UI. Publication list unchanged for sync/outbox.                                                                                                                                                     |
-| Signature verification UI (profile/post)           | **Implemented** | `signature-verification.svelte` on profile settings, post view, and `u/` profile.                                                                                                                                                                                                                                               |
-| Untrusted HTML/markdown/media (sanitize + consent) | **Implemented** | DOMPurify + `marked` pipeline (`sanitize-post-body.ts`); subresource URL extraction; path/glob trust rules (`user_content_trust_rule`, Settings → Content trust); per-post consent + feed avoids cross-origin media prefetch. See [untrusted post content](/architecture/untrusted-post-content). **Signatures ≠ HTML safety.** |
-| Signing UX preferences + Syner Sigil handoff       | **Partial**     | User prefs API; **Settings → Signing**: file load + **Syner QR/deeplink** handoff (`POST /api/user/sigil-handoff-session`, poll `GET …/sigil-handoff/[id]`, Syner `POST …/payload`); `sigil-session.ts` + WASM `signMutationPayload()` / `getUnlockedSigningSeed()`. Wired-in signing in forms still evolving.                  |
+| Requirement                                        | Status          | Details                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DID-keyed follows and registry discovery           | **Implemented** | `user_follow` with `followed_provider_url` (registry-verified at follow / `POST /api/follows/refresh`); `GET/POST/DELETE/PATCH /api/follows`; `POST /api/follows/refresh`. Gating uses **discovery registries**. Legacy rows without URL still resolve via browser + `resolveProvider`. Following page: manual URL edit + refresh. `u/[param]` profile route. |
+| Profile `identity_host_url` (public “home” URL)    | **Implemented** | Optional on `profile`; public `GET /api/public/profile/…`; signed `profile@v1` + Syner `profile-sync` payload; export bundle `identityHostUrl`; defaults to `{PUBLIC_URL}/u/{encodeURIComponent(did)}` when identity is created on Syr.                                                                                                                       |
+| Cross-site follow intent (`/follow?target_did=`)   | **Implemented** | Authenticated `(private)/follow` route; post-login cookie `post_login_redirect` (same-origin paths). See [Follow on Syr](/implementer-guide/follow-on-syr).                                                                                                                                                                                                   |
+| Home timeline (meta + full post fetch)             | **Partial**     | Home `+page.svelte` uses stored provider URL per follow when set; else batched registry resolve; merges public post meta client-side; full post on **Load details**; virtual scroll not yet added.                                                                                                                                                            |
+| Public post/profile read for feeds                 | **Implemented** | `GET /api/public/profile/[param]`, `GET /api/public/posts/[did]`, `GET /api/public/posts/[did]/[localId]`.                                                                                                                                                                                                                                                    |
+| Registry directory search (opt-in)                 | **Partial**     | Registry `directory/search` + Syr `GET /api/search/directory` merges **discovery** registry URLs per account; Syr `/search` UI. Publication list unchanged for sync/outbox.                                                                                                                                                                                   |
+| Signature verification UI (profile/post)           | **Implemented** | `signature-verification.svelte` on profile settings, post view, and `u/` profile.                                                                                                                                                                                                                                                                             |
+| Untrusted HTML/markdown/media (sanitize + consent) | **Implemented** | DOMPurify + `marked` pipeline (`sanitize-post-body.ts`); subresource URL extraction; path/glob trust rules (`user_content_trust_rule`, Settings → Content trust); per-post consent + feed avoids cross-origin media prefetch. See [untrusted post content](/architecture/untrusted-post-content). **Signatures ≠ HTML safety.**                               |
+| Signing UX preferences + Syner Sigil handoff       | **Partial**     | User prefs API; **Settings → Signing**: file load + **Syner QR/deeplink** handoff (`POST /api/user/sigil-handoff-session`, poll `GET …/sigil-handoff/[id]`, Syner `POST …/payload`); `sigil-session.ts` + WASM `signMutationPayload()` / `getUnlockedSigningSeed()`. Wired-in signing in forms still evolving.                                                |
 
 ---
 
@@ -127,17 +129,6 @@ This page maps each requirement from the architecture specifications to the curr
 | Requirement                 | Status          | Details                                                                                                                                                                                                                                    |
 | --------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Syner native app (Tauri v2) | **Implemented** | Personas, Sigil storage, independent login, export/import verification, profile sync. `syr://sigil-handoff` deep link opens trust-warning route for browser signing handoff. Phase 3 goals (platform keystores, pairing) are enhancements. |
-
----
-
-## ActivityPub Federation
-
-| Requirement                    | Status      | Details                                                               |
-| ------------------------------ | ----------- | --------------------------------------------------------------------- |
-| Outbox (publishing activities) | **Partial** | Outbox routes exist (`/api/identity/outbox/*`). Registry sync outbox. |
-| Inbox (receiving activities)   | **Missing** | No inbox endpoint for receiving activities from remote instances.     |
-| HTTP Signatures                | **Partial** | Signature infrastructure exists but inbox verification missing.       |
-| Actor discovery (WebFinger)    | **Missing** | No WebFinger endpoint yet.                                            |
 
 ---
 
@@ -182,7 +173,7 @@ flowchart LR
     Phase0["Phase 0: Identity Correctness"] --> Phase05["Phase 0.5: Testing and Hardening"]
     Phase05 --> Phase1["Phase 1: Registry + Portability"]
     Phase1 --> Phase2["Phase 2: Identity-Based Auth + VCs"]
-    Phase2 --> Phase3["Phase 3: Federation + Syner"]
+    Phase2 --> Phase3["Phase 3: Social depth + Syner"]
 
     Phase0 --- P0Items["Server-managed root keypair, DID,
     device keys, signed mutations, export/import"]
@@ -192,6 +183,6 @@ flowchart LR
     migration, .well-known/syr"]
     Phase2 --- P2Items["Identity-based login, DID as sub,
     identity-linked credentials"]
-    Phase3 --- P3Items["SYR-to-SYR ActivityPub federation,
+    Phase3 --- P3Items["Cross-provider follows/timeline polish,
     Syner native app, multi-tenant isolation"]
 ```

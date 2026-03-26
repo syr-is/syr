@@ -119,6 +119,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE profile TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE profile TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE profile TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS identity_host_url ON TABLE profile TYPE option<string>;
 			`);
 
 			await db.query(`
@@ -133,6 +134,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS followed_did ON TABLE user_follow TYPE string
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS source_registry ON TABLE user_follow TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS followed_provider_url ON TABLE user_follow TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_follow TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_follow_follower ON TABLE user_follow COLUMNS follower_user_id;
 				DEFINE INDEX IF NOT EXISTS idx_follow_followed ON TABLE user_follow COLUMNS followed_did;

@@ -42,16 +42,16 @@ flowchart LR
 
 ## Tech Stack
 
-| Layer     | Technology                                    |
-| --------- | ---------------------------------------------- |
-| Frontend  | Svelte 5 runes, SvelteKit 2                    |
-| Styling   | Tailwind CSS 4, shadcn-svelte, tw-animate-css  |
-| Validation| Zod v4 (from catalog)                         |
-| Forms     | sveltekit-superforms + Zod v4                  |
-| Database  | SurrealDB                                      |
-| Storage   | SeaweedFS (S3-compatible)                      |
-| Auth      | JWT + Argon2id                                 |
-| Build     | Vite 7, Turborepo, pnpm workspaces             |
+| Layer      | Technology                                    |
+| ---------- | --------------------------------------------- |
+| Frontend   | Svelte 5 runes, SvelteKit 2                   |
+| Styling    | Tailwind CSS 4, shadcn-svelte, tw-animate-css |
+| Validation | Zod v4 (from catalog)                         |
+| Forms      | sveltekit-superforms + Zod v4                 |
+| Database   | SurrealDB                                     |
+| Storage    | SeaweedFS (S3-compatible)                     |
+| Auth       | JWT + Argon2id                                |
+| Build      | Vite 7, Turborepo, pnpm workspaces            |
 
 ---
 
@@ -86,16 +86,16 @@ flowchart LR
 
 ## What NOT to Build (Scope Boundaries)
 
-- Phase 0: No registry server, OAuth provider, attestations, federation, ActivityPub, VC
+- Phase 0: No registry server, OAuth provider, attestations, federation, VC
 - Do not expand Phase 0 scope; follow implementation order in `apps/docs/app/src/routes/implementation/phase-0-blueprint/+page.md`
 
 ---
 
 ## File References
 
-| Category           | Path                                              |
-| ------------------ | ------------------------------------------------- |
-| Architecture specs  | `apps/docs/app/src/routes/architecture/*/+page.md`|
-| Implementation     | `apps/docs/app/src/routes/implementation/*/+page.md` |
-| Reference docs     | `apps/docs/app/src/routes/reference/*/+page.md`    |
+| Category                   | Path                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| Architecture specs         | `apps/docs/app/src/routes/architecture/*/+page.md`         |
+| Implementation             | `apps/docs/app/src/routes/implementation/*/+page.md`       |
+| Reference docs             | `apps/docs/app/src/routes/reference/*/+page.md`            |
 | Spec-to-implementation map | `apps/docs/app/src/routes/reference/spec-mapping/+page.md` |

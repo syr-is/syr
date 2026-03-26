@@ -30,7 +30,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 
 ### 2.2 Non-goals (v1 of this spec)
 
-- ActivityPub or other federation protocols.
+- Third-party federation protocols (e.g. fediverse-style inbox/outbox standards).
 - Global search without registry or provider participation.
 - Trust scoring, moderation, or recommendation algorithms.
 - Server-side timeline aggregation on the home instance (out of scope for v1; see §9).
@@ -106,14 +106,17 @@ The **Syr web app** calls that endpoint on **each** of the viewer’s **discover
 
 Minimum fields (logical model):
 
-| Field                            | Description                                                  |
-| -------------------------------- | ------------------------------------------------------------ |
-| `follower_user_id` or equivalent | Local account that follows.                                  |
-| `followed_did`                   | Canonical `did:syr:...`.                                     |
-| `created_at`                     | When the follow was created.                                 |
-| Optional `source_registry`       | Which registry URL was used to confirm listing (audit / UX). |
+| Field                            | Description                                                                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `follower_user_id` or equivalent | Local account that follows.                                                                                                                                                                                        |
+| `followed_did`                   | Canonical `did:syr:...`.                                                                                                                                                                                           |
+| `followed_provider_url`          | Provider **base URL** (http/https, normalized) used for public profile/post fetches. Set from **registry-verified** `resolveProvider` at follow time or via **refresh**; optional on legacy rows until backfilled. |
+| `created_at`                     | When the follow was created.                                                                                                                                                                                       |
+| Optional `source_registry`       | Which registry URL was used to confirm listing (audit / UX).                                                                                                                                                       |
 
 **Persistence**: **Server-persisted** on the user’s Syr instance is recommended so follows sync across devices; local-only cache is a weaker alternative (document tradeoffs: no multi-device, loss on clear data).
+
+**APIs (Syr app):** `GET/POST/DELETE /api/follows`; `PATCH /api/follows` with `{ followed_did, followed_provider_url }` for **manual** instance URL override (advanced; not registry-verified); `POST /api/follows/refresh` with `{ followed_did }` to re-resolve from discovery registries and update the stored URL.
 
 ---
 
@@ -124,14 +127,21 @@ Minimum fields (logical model):
 ```mermaid
 sequenceDiagram
   participant UI as HomeTimeline
+  participant Home as HomeInstanceAPI
   participant Reg as DiscoveryRegistries
   participant Prov as RemoteProviders
 
   Note over UI: v1: aggregation in the browser (no home merge API)
+  UI->>Home: GET /api/follows
+  Home-->>UI: followed_did + followed_provider_url per row
   loop per followed DID
-    UI->>Reg: resolve did
-    Reg-->>UI: provider URL
-    UI->>Prov: fetch public post list / meta
+    alt stored provider URL present
+      UI->>Prov: fetch public post meta using stored URL
+    else legacy row (no URL)
+      UI->>Reg: resolve did
+      Reg-->>UI: provider URL
+      UI->>Prov: fetch public post meta
+    end
     Prov-->>UI: meta items
   end
   Note over UI: merge and sort by created_at client-side
@@ -141,7 +151,7 @@ sequenceDiagram
 
 ### 8.2 Meta pull and merge
 
-- For each followed DID, resolve **provider base URL** via registry, then request a **post meta** index for a **time window** (e.g. recent N days or cursor-based).
+- For each followed DID, use **`followed_provider_url`** from the follow row when present; otherwise fall back to resolving **provider base URL** via discovery registries, then request a **post meta** index for a **time window** (e.g. recent N days or cursor-based).
 - **Merge** all meta rows into a **single timeline** ordered by **`created_at` descending** (server-issued timestamps on meta).
 - Use a **k-way merge** or min-heap over per-author streams so global order stays correct when each author paginates independently.
 - **Cursors**: **per-followed-DID cursors** are recommended (robust under uneven post rates). A single global cursor is simpler but can skew ordering.
@@ -160,7 +170,7 @@ sequenceDiagram
 
 ## 9. Aggregation location
 
-**v1 (locked):** Timeline aggregation runs in the **browser** — the client loads follows and **discovery** registries, resolves each followed DID to a provider URL, fetches each provider’s **public** post APIs, and **merges** streams client-side. Implications: **CORS** and provider availability affect what the user sees; there is **no** `GET /api/timeline/…` merge endpoint on the home instance for this version.
+**v1 (locked):** Timeline aggregation runs in the **browser** — the client loads follows (including **per-row `followed_provider_url`**), loads **discovery** registries only when a row has no stored URL (legacy) or for other features, fetches each provider’s **public** post APIs using the **stored** (or resolved) base URL, and **merges** streams client-side. Implications: **CORS** and provider availability affect what the user sees; there is **no** `GET /api/timeline/…` merge endpoint on the home instance for this version.
 
 A future **home-server aggregator** (single merge API, optional caching, rate limits) remains a possible optimization but is **not** part of the current product scope described here.
 
@@ -198,18 +208,19 @@ Cross-cutting: **rate limits**, **CORS** for browser clients, **Cache-Control** 
 - Following someone does **not** grant access to private data; only **public** (or capability-gated) resources defined by each provider.
 - **Signed posts/profiles**: verifiers use **DID → public key** and the stored **signature** over the canonical payload (see [verification UI](/architecture/signature-verification-ui)).
 - **Session auth** authorizes **writes** on the home instance; **signatures** provide **integrity and attribution** for content.
+- **Stored vs manual provider URL:** Default and **refresh** paths set `followed_provider_url` from **registry-verified** hosting records. **Manual** edits (Following page) only validate URL shape—they do **not** prove the host is canonical for that DID; a wrong URL can break feeds or show unrelated content.
 
 ---
 
 ## 13. Implementation checklist (post-approval)
 
-- [ ] Follows storage (DB) and CRUD API (`followed_did`, uniqueness, optional registry provenance).
+- [x] Follows storage (DB) and CRUD API (`followed_did`, `followed_provider_url`, uniqueness, optional registry provenance; `PATCH` manual URL; `POST …/refresh`).
 - [ ] `u/<username>` and `u/<did>` routes and resolution rules.
 - [ ] Registry-gated follow action (client or server validation).
 - [x] Registry directory search + Syr app merged directory query.
 - [ ] Public post meta + full post endpoints on Syr providers.
 - [ ] Home page: replace “copy of own posts” with **timeline** virtual list + meta/full pipeline.
-- [x] Resolver / registry usage from the **browser** for timeline aggregation (v1).
+- [x] Resolver / registry usage from the **browser** for timeline aggregation when **stored provider URL** is missing (legacy); otherwise browser uses URL from `GET /api/follows`.
 - [ ] Integrate [signature verification](/architecture/signature-verification-ui) in post rows where signatures are exposed.
 
 ---

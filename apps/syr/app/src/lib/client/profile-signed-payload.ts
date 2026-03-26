@@ -16,6 +16,7 @@ export type ProfileSignSnapshot = {
 	bio?: string;
 	avatar_url?: string;
 	banner_url?: string;
+	identity_host_url?: string;
 	metadata?: Record<string, unknown>;
 };
 
@@ -49,6 +50,18 @@ export function buildProfileSignedPayloadV1(params: {
 
 	const banner_url = trimOpt(snapshot.banner_url);
 	if (banner_url !== undefined) base.banner_url = banner_url;
+
+	const identity_host_url = trimOpt(snapshot.identity_host_url);
+	if (identity_host_url !== undefined) {
+		try {
+			const u = new URL(identity_host_url);
+			if (u.protocol === 'http:' || u.protocol === 'https:') {
+				base.identity_host_url = identity_host_url;
+			}
+		} catch {
+			// omit invalid URL from signed payload
+		}
+	}
 
 	if (snapshot.metadata !== undefined && snapshot.metadata !== null) {
 		base.metadata = snapshot.metadata;

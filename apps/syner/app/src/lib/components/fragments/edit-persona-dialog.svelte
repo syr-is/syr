@@ -12,6 +12,18 @@
 	import PickedFileImage from '$lib/components/picked-file-image.svelte';
 	import type { Persona } from '$lib/types';
 
+	function isValidIdentityHostUrl(s: string): boolean {
+		const t = s.trim();
+		if (!t) return true;
+		if (t.length > 2048) return false;
+		try {
+			const u = new URL(t);
+			return u.protocol === 'http:' || u.protocol === 'https:';
+		} catch {
+			return false;
+		}
+	}
+
 	const IMAGE_FILTERS = [
 		{ name: 'Images', extensions: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
 		{ name: 'All files', extensions: ['*'] }
@@ -29,6 +41,7 @@
 
 	let displayName = $state('');
 	let bio = $state('');
+	let identityHostUrl = $state('');
 	let avatarPath = $state<string | null>(null);
 	let bannerPath = $state<string | null>(null);
 	let loading = $state(false);
@@ -54,6 +67,11 @@
 		loading = true;
 		error = null;
 		try {
+			if (!isValidIdentityHostUrl(identityHostUrl)) {
+				error = 'Identity page URL must be empty or a valid http(s) URL (max 2048 characters).';
+				toast.error(error);
+				return;
+			}
 			// Save avatar/banner assets FIRST so files are written to persona folder before profile update.
 			// Pass only string paths; picker may return array on Android - ensure we use first item.
 			const avatarSource = typeof avatarPath === 'string' && avatarPath.trim() ? avatarPath : null;
@@ -75,7 +93,8 @@
 			await invoke('update_persona_profile_cmd', {
 				personaId: persona.id,
 				displayName: displayName.trim(),
-				bio: bio.trim() === '' ? '' : bio.trim()
+				bio: bio.trim() === '' ? '' : bio.trim(),
+				identityHostUrl: identityHostUrl.trim()
 			});
 			openState = false;
 			await onSuccess?.();
@@ -92,6 +111,7 @@
 		if (openState && persona) {
 			displayName = persona.displayName;
 			bio = persona.bio || '';
+			identityHostUrl = persona.identityHostUrl || '';
 			avatarPath = null;
 			bannerPath = null;
 			error = null;
@@ -127,6 +147,19 @@
 						rows={2}
 						disabled={loading}
 					/>
+				</div>
+				<div class="space-y-2">
+					<Label for="edit-identity-host">Identity page URL (optional)</Label>
+					<Input
+						id="edit-identity-host"
+						bind:value={identityHostUrl}
+						type="url"
+						placeholder="https://…"
+						disabled={loading}
+					/>
+					<p class="text-muted-foreground text-xs">
+						Where you host your public presence on the web.
+					</p>
 				</div>
 				<div class="grid grid-cols-2 gap-4">
 					<div class="space-y-2">

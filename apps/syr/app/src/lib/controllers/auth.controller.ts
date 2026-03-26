@@ -5,6 +5,7 @@ import { sessionRepository } from '$lib/repositories/session.repository';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { identityController } from '$lib/controllers/identity.controller';
 import { getIdentityContext } from '$lib/server/identity-context';
+import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
 import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 
@@ -90,6 +91,9 @@ export class AuthController {
 			throw err;
 		}
 
+		await ensureDefaultIdentityHostUrl(user.id, did);
+		const profileForResponse = (await profileRepository.findByUserId(user.id)) ?? profile;
+
 		// Create session and return; rollback full registration if session creation fails
 		try {
 			const session = await this.createSession(user, ctx);
@@ -102,7 +106,7 @@ export class AuthController {
 
 			return {
 				user: userWithoutPassword as Omit<User, 'password_hash'>,
-				profile,
+				profile: profileForResponse,
 				token,
 				...(aegisBundle ? { aegisBundle } : {})
 			};

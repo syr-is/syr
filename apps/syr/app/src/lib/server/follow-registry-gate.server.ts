@@ -3,11 +3,12 @@ import { registryApiRoot } from '$lib/registry-url';
 
 /**
  * True when `followedDid` resolves on at least one registry the follower has configured.
+ * Returns the registry URL used for listing and the signature-verified provider base URL.
  */
 export async function assertFollowableFromRegistries(
 	followedDid: string,
 	registryUrls: string[]
-): Promise<{ sourceRegistry: string }> {
+): Promise<{ sourceRegistry: string; providerBaseUrl: string }> {
 	if (registryUrls.length === 0) {
 		throw new Error(
 			'Add at least one discovery registry in Settings → Discovery before following remote identities.'
@@ -24,8 +25,11 @@ export async function assertFollowableFromRegistries(
 			continue;
 		}
 		try {
-			await resolveProvider(followedDid, { registryUrl: apiRoot, timeout: 12_000 });
-			return { sourceRegistry: trimmed };
+			const providerBaseUrl = await resolveProvider(followedDid, {
+				registryUrl: apiRoot,
+				timeout: 12_000
+			});
+			return { sourceRegistry: trimmed, providerBaseUrl };
 		} catch {
 			continue;
 		}

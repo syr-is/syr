@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DidSyrSchema } from './common.js';
+import { DidSyrSchema, IdentityHostUrlSchema, ProfileSignedImageUrlSchema } from './common.js';
 
 /**
  * Envelope sent with profile/post mutations when using client-side signing (Option B).
@@ -19,8 +19,9 @@ export const ProfileSignedPayloadV1Schema = z.object({
 	did: DidSyrSchema,
 	display_name: z.string().min(1).max(100),
 	bio: z.string().max(500).optional(),
-	avatar_url: z.url().optional(),
-	banner_url: z.url().optional(),
+	avatar_url: ProfileSignedImageUrlSchema.optional(),
+	banner_url: ProfileSignedImageUrlSchema.optional(),
+	identity_host_url: IdentityHostUrlSchema.optional(),
 	metadata: z.record(z.string(), z.any()).optional()
 });
 

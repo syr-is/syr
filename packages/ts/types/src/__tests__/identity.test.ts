@@ -145,11 +145,13 @@ describe('IdentityExportBundleSchema', () => {
 				displayName: 'Alice',
 				bio: 'Hello',
 				avatarUrl: 'https://example.com/avatar.png',
-				bannerUrl: 'https://example.com/banner.png'
+				bannerUrl: 'https://example.com/banner.png',
+				identityHostUrl: 'https://alice.example/me'
 			}
 		};
 		const result = IdentityExportBundleSchema.parse(bundle);
 		expect(result.profile.bio).toBe('Hello');
+		expect(result.profile.identityHostUrl).toBe('https://alice.example/me');
 	});
 
 	it('rejects missing did', () => {
@@ -159,5 +161,16 @@ describe('IdentityExportBundleSchema', () => {
 
 	it('rejects invalid DID format in bundle', () => {
 		expect(() => IdentityExportBundleSchema.parse({ ...validBundle, did: 'bad' })).toThrow();
+	});
+
+	it('rejects profile image URLs that are not http(s)', () => {
+		const bundle = {
+			...validBundle,
+			profile: {
+				displayName: 'Alice',
+				avatarUrl: 'ftp://evil.example/x.png'
+			}
+		};
+		expect(() => IdentityExportBundleSchema.parse(bundle)).toThrow();
 	});
 });

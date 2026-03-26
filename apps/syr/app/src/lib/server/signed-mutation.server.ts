@@ -91,6 +91,7 @@ export async function assertProfileSignedMutation(
 		bio?: string;
 		avatar_url?: string;
 		banner_url?: string;
+		identity_host_url?: string;
 		metadata?: Record<string, unknown>;
 	}
 ): Promise<{ signature?: StoredSignatureFields }> {
@@ -163,6 +164,12 @@ export async function assertProfileSignedMutation(
 		throw error(400, {
 			code: 'INVALID_SIGNATURE',
 			message: 'Signed profile payload does not match submitted fields (banner_url).'
+		});
+	}
+	if (normalizeOptStr(p.identity_host_url) !== normalizeOptStr(profileFields.identity_host_url)) {
+		throw error(400, {
+			code: 'INVALID_SIGNATURE',
+			message: 'Signed profile payload does not match submitted fields (identity_host_url).'
 		});
 	}
 	if (stableMetadataJson(p.metadata) !== stableMetadataJson(profileFields.metadata)) {

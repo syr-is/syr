@@ -4,12 +4,14 @@
  * Aligns with IdentityExportBundle.profile shape.
  */
 import { z } from 'zod';
+import { IdentityHostUrlSchema } from './common.js';
 
 export const PersonaProfileSchema = z.object({
 	displayName: z.string(),
 	bio: z.string().optional(),
 	avatarUrl: z.string().optional(),
-	bannerUrl: z.string().optional()
+	bannerUrl: z.string().optional(),
+	identityHostUrl: IdentityHostUrlSchema.optional()
 });
 
 export type PersonaProfile = z.infer<typeof PersonaProfileSchema>;
@@ -22,6 +24,7 @@ export const PersonaSchema = z.object({
 	bio: z.string().optional(),
 	avatarUrl: z.string().optional(),
 	bannerUrl: z.string().optional(),
+	identityHostUrl: IdentityHostUrlSchema.optional(),
 	createdAt: z.string()
 });
 

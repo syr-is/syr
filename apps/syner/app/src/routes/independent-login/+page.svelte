@@ -203,7 +203,10 @@
 					profile: snapshotSelected
 						? {
 								display_name: snapshotSelected.displayName,
-								bio: snapshotSelected.bio ?? undefined
+								bio: snapshotSelected.bio ?? undefined,
+								...(snapshotSelected.identityHostUrl?.trim()
+									? { identity_host_url: snapshotSelected.identityHostUrl.trim() }
+									: {})
 							}
 						: undefined
 				})
@@ -230,7 +233,10 @@
 						did: fresh.did,
 						issued_at: new Date().toISOString(),
 						...(fresh.displayName ? { display_name: fresh.displayName } : {}),
-						...(fresh.bio ? { bio: fresh.bio } : {})
+						...(fresh.bio ? { bio: fresh.bio } : {}),
+						...(fresh.identityHostUrl?.trim()
+							? { identity_host_url: fresh.identityHostUrl.trim() }
+							: {})
 					};
 					const signedPayload = await invoke<string>('canonicalize_cmd', {
 						objJson: JSON.stringify(payload)
@@ -246,7 +252,12 @@
 					await syncProfileToSyr(
 						instanceUrl.replace(/\/$/, ''),
 						fresh.id,
-						{ displayName: fresh.displayName, bio: fresh.bio, did: fresh.did },
+						{
+							displayName: fresh.displayName,
+							bio: fresh.bio,
+							did: fresh.did,
+							identityHostUrl: fresh.identityHostUrl
+						},
 						{ signature, signedPayload }
 					);
 				} catch (e) {

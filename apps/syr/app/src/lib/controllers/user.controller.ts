@@ -28,8 +28,15 @@ export class UserController {
 			throw new Error('Profile not found');
 		}
 
+		const mergePayload: ProfileRepositoryMerge = { ...data };
+		for (const key of ['avatar_url', 'banner_url', 'identity_host_url'] as const) {
+			if (mergePayload[key] === '') {
+				delete mergePayload[key];
+			}
+		}
+
 		// Merge profile with new data using SurrealDB's MERGE operation
-		const updatedProfile = await profileRepository.mergeByUserId(userId, data);
+		const updatedProfile = await profileRepository.mergeByUserId(userId, mergePayload);
 
 		if (!updatedProfile) {
 			throw new Error('Failed to update profile');

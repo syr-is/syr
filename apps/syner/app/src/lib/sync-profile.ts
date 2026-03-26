@@ -9,7 +9,7 @@ import { fetch } from '@tauri-apps/plugin-http';
 export async function syncProfileToSyr(
 	instanceBase: string,
 	personaId: string,
-	persona: { displayName: string; bio?: string; did: string },
+	persona: { displayName: string; bio?: string; did: string; identityHostUrl?: string },
 	options: { signature: string; signedPayload: string }
 ): Promise<void> {
 	const formData = new FormData();

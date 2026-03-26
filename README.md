@@ -258,5 +258,5 @@ The repository includes `.cursor/mcp.json` with both MCP servers pre-configured.
 - **File Storage**: SeaweedFS (S3-compatible)
 - **Type System**: Zod v4
 - **Password Hashing**: Argon2id
-- **Protocols**: ActivityPub, W3C VC 2.0, Identity-Based Auth
+- **Protocols**: W3C VC 2.0, Identity-Based Auth, `did:syr` + registry discovery
 - **Identity**: Self-Sovereign Identity, did:syr DID Method, Ed25519

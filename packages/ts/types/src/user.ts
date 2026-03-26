@@ -4,7 +4,9 @@ import {
 	MetadataSchema,
 	TimestampSchema,
 	RecordIdSchema,
-	DidSyrSchema
+	DidSyrSchema,
+	IdentityHostUrlSchema,
+	ProfileSignedImageUrlSchema
 } from './common.js';
 import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
@@ -55,8 +57,9 @@ export const ProfileSchema = BaseEntitySchema.extend({
 	user_id: RecordIdSchema,
 	display_name: z.string().min(1).max(100),
 	bio: z.string().max(500).optional(),
-	avatar_url: z.url().optional(),
-	banner_url: z.url().optional(),
+	avatar_url: ProfileSignedImageUrlSchema.optional(),
+	banner_url: ProfileSignedImageUrlSchema.optional(),
+	identity_host_url: IdentityHostUrlSchema.optional(),
 	metadata: MetadataSchema.optional(),
 	content_signature: z.string().optional(),
 	signed_payload_json: z.string().optional(),
@@ -119,13 +122,18 @@ export type UserLogin = z.infer<typeof UserLoginSchema>;
  * For validating profile update requests
  * Uses zod traversal to remove defaults and make all fields optional
  */
+/** Empty string allowed in forms; server/API should treat '' as “omit” or clear per field policy. */
 export const ProfileUpdateSchema = ProfileSchema.pick({
 	display_name: true,
 	bio: true,
-	avatar_url: true,
-	banner_url: true,
 	metadata: true
-}).partial();
+})
+	.partial()
+	.extend({
+		avatar_url: z.union([z.literal(''), ProfileSignedImageUrlSchema]).optional(),
+		banner_url: z.union([z.literal(''), ProfileSignedImageUrlSchema]).optional(),
+		identity_host_url: z.union([z.literal(''), IdentityHostUrlSchema]).optional()
+	});
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
 

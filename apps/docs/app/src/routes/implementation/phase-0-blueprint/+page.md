@@ -31,7 +31,7 @@ Phase 0 intentionally avoids:
 - advanced privacy
 - social features
 - moderation
-- ActivityPub / VC
+- VC
 
 Focus is **identity correctness only**.
 

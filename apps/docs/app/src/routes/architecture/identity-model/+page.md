@@ -307,7 +307,7 @@ Migration **must not**:
 To prevent premature complexity, this version **does not define**:
 
 - full Verifiable Credential ecosystem
-- ActivityPub federation
+- Third-party federation protocols
 - complex moderation or reputation protocols
 - decentralized or blockchain registry mechanisms
 - advanced privacy or selective disclosure

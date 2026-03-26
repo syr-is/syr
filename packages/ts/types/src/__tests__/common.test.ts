@@ -5,7 +5,9 @@ import {
 	TimestampSchema,
 	BaseEntitySchema,
 	DidSyrSchema,
-	MetadataSchema
+	MetadataSchema,
+	IdentityHostUrlSchema,
+	ProfileSignedImageUrlSchema
 } from '../common.js';
 
 describe('RecordIdSchema', () => {
@@ -82,6 +84,30 @@ describe('DidSyrSchema', () => {
 
 	it('rejects did:syr without z prefix', () => {
 		expect(() => DidSyrSchema.parse('did:syr:abc')).toThrow();
+	});
+});
+
+describe('IdentityHostUrlSchema', () => {
+	it('accepts http and https URLs', () => {
+		expect(IdentityHostUrlSchema.parse('http://localhost/u/foo')).toBeTruthy();
+		expect(IdentityHostUrlSchema.parse('https://alice.example/me')).toBeTruthy();
+	});
+
+	it('rejects non-http(s) schemes', () => {
+		expect(() => IdentityHostUrlSchema.parse('ftp://example.com/x')).toThrow();
+		expect(() => IdentityHostUrlSchema.parse('javascript:alert(1)')).toThrow();
+	});
+
+	it('rejects overlong strings without parsing as URL', () => {
+		const long = 'https://x.com/' + 'a'.repeat(2100);
+		expect(() => IdentityHostUrlSchema.parse(long)).toThrow();
+	});
+});
+
+describe('ProfileSignedImageUrlSchema', () => {
+	it('matches http(s) rule like IdentityHostUrlSchema', () => {
+		expect(ProfileSignedImageUrlSchema.parse('https://cdn.example/a.png')).toBeTruthy();
+		expect(() => ProfileSignedImageUrlSchema.parse('data:image/png;base64,AAA')).toThrow();
 	});
 });
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import * as Card from '@syr-is/ui/card';
 	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import { Button } from '@syr-is/ui/button';
@@ -10,7 +11,8 @@
 		avatarUrl,
 		bannerUrl,
 		onOpen,
-		openDisabled = false
+		openDisabled = false,
+		cardFooter
 	}: {
 		displayName: string;
 		username: string;
@@ -20,6 +22,8 @@
 		onOpen: () => void;
 		/** When true, Open is disabled (e.g. profile URL unknown). */
 		openDisabled?: boolean;
+		/** Extra content inside the card (e.g. instance URL + actions on Following). */
+		cardFooter?: Snippet;
 	} = $props();
 
 	const label = $derived(displayName?.trim() || username || '—');
@@ -69,4 +73,9 @@
 			Open
 		</Button>
 	</div>
+	{#if cardFooter}
+		<div class="space-y-3 border-t border-border/60 px-4 pt-3 pb-4">
+			{@render cardFooter()}
+		</div>
+	{/if}
 </Card.Root>

@@ -10,6 +10,9 @@
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { readAndClearPostLoginRedirectCookie } from '$lib/client/post-login-redirect';
+	import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import QRCode from 'qrcode';
 	import { Button } from '@syr-is/ui/button';
@@ -158,7 +161,22 @@
 				}
 
 				toast.success('Welcome back!');
-				await goto(resolve('/'));
+				const fromCookie = readAndClearPostLoginRedirectCookie();
+				const fromQuery = page.url.searchParams.get('redirectTo');
+				const fromQuerySafe = safePostLoginRedirectPath(fromQuery);
+				const target = fromCookie ?? fromQuerySafe ?? '/';
+				const href =
+					target === '/'
+						? resolve('/')
+						: (() => {
+								const u = new URL(target, 'https://placeholder.local');
+								// `resolve` is typed for known routes only; path is same-origin validated above.
+								const resolvePath = resolve as unknown as (path: string) => string;
+								return resolvePath(u.pathname) + u.search + u.hash;
+							})();
+				// Dynamic post-login path (may include ?query); resolve() only accepts pathname.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- href is resolve(pathname)+search
+				await goto(href);
 				window.location.reload();
 			} catch (_error) {
 				toast.error('An unexpected error occurred');

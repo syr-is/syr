@@ -12,6 +12,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		follows: rows.map((r) => ({
 			followed_did: r.followed_did,
 			source_registry: r.source_registry ?? null,
+			followed_provider_url: r.followed_provider_url ?? null,
 			created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
 		}))
 	};

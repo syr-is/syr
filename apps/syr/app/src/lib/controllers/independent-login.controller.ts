@@ -4,8 +4,9 @@ import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { identityRepository } from '$lib/repositories/identity.repository';
-import { jwt } from '$lib/config';
+import { jwt, config } from '$lib/config';
 import { generateAccessToken } from '$lib/server/auth';
+import { defaultIdentityHostUrl, isValidIdentityHostUrl } from '$lib/identity-host-default';
 import type { User } from '@syr-is/types';
 
 /**
@@ -23,7 +24,7 @@ export class IndependentLoginController {
 		message: string,
 		signature: string,
 		_inviteCode?: string,
-		profileData?: { display_name?: string; bio?: string }
+		profileData?: { display_name?: string; bio?: string; identity_host_url?: string }
 	): Promise<User> {
 		const parsedDid = parseDid(did);
 		const publicKeyBytes = parsedDid.publicKey;
@@ -81,6 +82,11 @@ export class IndependentLoginController {
 			await userRepository.delete(user.id);
 			throw err;
 		}
+
+		const hostUrl = isValidIdentityHostUrl(profileData?.identity_host_url)
+			? profileData!.identity_host_url!.trim()
+			: defaultIdentityHostUrl(config.PUBLIC_URL, did);
+		await profileRepository.mergeByUserId(user.id, { identity_host_url: hostUrl });
 
 		return user;
 	}

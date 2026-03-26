@@ -21,7 +21,8 @@ const sidebarConfig = [
 			{ title: 'syr:// Scheme and QR Exchange', to: '/implementer-guide/scheme-and-qr' },
 			{ title: 'Export Formats and Data Structures', to: '/implementer-guide/export-formats' },
 			{ title: 'Challenge-Sign Flows', to: '/implementer-guide/challenge-sign-flows' },
-			{ title: 'Profile Sync API', to: '/implementer-guide/profile-sync' }
+			{ title: 'Profile Sync API', to: '/implementer-guide/profile-sync' },
+			{ title: 'Follow on Syr', to: '/implementer-guide/follow-on-syr' }
 		]
 	},
 	{
