@@ -125,8 +125,8 @@ export class UploadRepository extends BaseRepository<Upload> {
 	}
 
 	/**
-	 * Profile story slides for a DID within the rolling window (by completion time `updated_at`).
-	 * Keys live under `uploads/{did}/stories/{UTC date}/public/…`.
+	 * Profile story slides for a DID within the rolling window.
+	 * Prefers `is_story` + `published_at`; legacy rows use key path `/stories/` and `updated_at`.
 	 */
 	async findActiveStoriesByDid(did: string, since: Date): Promise<Upload[]> {
 		const result = await this.db.query<[Upload[]]>(
@@ -136,15 +136,21 @@ export class UploadRepository extends BaseRepository<Upload> {
 			   AND status = 'completed'
 			   AND url != NONE
 			   AND key != NONE
-			   AND updated_at >= $since
-			 ORDER BY updated_at ASC
+			   AND (
+			     (is_story = true AND published_at != NONE AND published_at >= $since)
+			     OR (
+			       string::contains(type::string(key), '/stories/')
+			       AND updated_at >= $since
+			       AND (is_story IS NONE OR is_story = false)
+			     )
+			   )
 			 LIMIT 200`,
 			{ did, since }
 		);
 		const raw = result[0] ?? [];
-		return raw
-			.map((r) => this.validate(r))
-			.filter((u) => typeof u.key === 'string' && u.key.includes('/stories/'));
+		const uploads = raw.map((r) => this.validate(r));
+		const effectiveTime = (u: Upload) => u.published_at?.getTime() ?? u.updated_at.getTime();
+		return uploads.sort((a, b) => effectiveTime(a) - effectiveTime(b));
 	}
 
 	/** Count public completed uploads with URL for a DID (pagination totals). */

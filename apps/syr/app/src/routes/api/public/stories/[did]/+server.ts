@@ -7,16 +7,32 @@ import { uploadRepository } from '$lib/repositories/upload.repository';
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
+function metaPositiveInt(v: unknown): number | null {
+	if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v) || v <= 0) {
+		return null;
+	}
+	return v;
+}
+
+function metaDurationSeconds(v: unknown): number | null {
+	if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v) || v < 0) {
+		return null;
+	}
+	return v;
+}
+
 function uploadToSlide(u: Upload) {
 	const meta = u.metadata as Record<string, unknown> | undefined;
+	const publishedAt =
+		u.published_at != null ? u.published_at.toISOString() : u.updated_at.toISOString();
 	return {
 		id: extractLocalId(u.id),
 		mime_type: u.mime_type,
 		url: u.url as string,
-		published_at: u.updated_at.toISOString(),
-		width: typeof meta?.width === 'number' ? meta.width : null,
-		height: typeof meta?.height === 'number' ? meta.height : null,
-		duration_seconds: typeof meta?.duration_seconds === 'number' ? meta.duration_seconds : null
+		published_at: publishedAt,
+		width: metaPositiveInt(meta?.width),
+		height: metaPositiveInt(meta?.height),
+		duration_seconds: metaDurationSeconds(meta?.duration_seconds)
 	};
 }
 

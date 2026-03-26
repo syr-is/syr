@@ -123,6 +123,11 @@ class DatabaseService {
 			`);
 
 			await db.query(`
+				DEFINE FIELD IF NOT EXISTS is_story ON TABLE upload TYPE option<bool>;
+				DEFINE FIELD IF NOT EXISTS published_at ON TABLE upload TYPE option<datetime>;
+			`);
+
+			await db.query(`
 				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE post TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE post TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE post TYPE option<string>;
@@ -225,6 +230,14 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE discovery_registry TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_dr_user ON TABLE discovery_registry COLUMNS user_id;
 				DEFINE INDEX IF NOT EXISTS idx_dr_unique ON TABLE discovery_registry COLUMNS user_id, registry_url UNIQUE;
+			`);
+
+			// Instance-wide discovery registries (admin): resolve remote DIDs for /u and public proxy
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS instance_discovery_registry SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS registry_url ON TABLE instance_discovery_registry TYPE string;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE instance_discovery_registry TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_idr_url ON TABLE instance_discovery_registry COLUMNS registry_url UNIQUE;
 			`);
 
 			console.log('✅ Database schema initialized');

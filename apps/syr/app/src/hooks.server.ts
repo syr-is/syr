@@ -6,7 +6,14 @@ import { verifyAccessToken } from '$lib/server/auth';
 import { sessionRepository } from '$lib/repositories/session.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { userRepository } from '$lib/repositories/user.repository';
-import { allowedOrigins, cors, isAllowedOrigin } from '$lib/config';
+import {
+	allowedOrigins,
+	config,
+	cors,
+	isAllowedOrigin,
+	isValidCorsReflectOrigin
+} from '$lib/config';
+import { isPublicApiReadRequest } from '$lib/server/cors-public-api.server';
 
 // Initialize database connection on server startup
 let initPromise: Promise<void> | null = null;
@@ -162,7 +169,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Handle CORS preflight (OPTIONS)
 	const origin = event.request.headers.get('origin');
-	const originAllowed = origin ? isAllowedOrigin(origin, allowedOrigins) : false;
+	const pathname = event.url.pathname;
+	const method = event.request.method;
+	const publicReadOpen =
+		!!origin &&
+		isValidCorsReflectOrigin(origin) &&
+		config.CORS_REFLECT_ANY_ORIGIN_PUBLIC_API &&
+		isPublicApiReadRequest(pathname, method);
+	const strictAllow = !!origin && isAllowedOrigin(origin, allowedOrigins);
+	const originAllowed = publicReadOpen || strictAllow;
+	const reflectCredentials = originAllowed && !publicReadOpen && cors.credentials;
+
 	if (event.request.method === 'OPTIONS') {
 		// Deny preflight when origin present but not allowed
 		if (origin && !originAllowed) {
@@ -182,7 +199,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
 				'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 				'Access-Control-Max-Age': '86400',
-				...(cors.credentials && originAllowed ? { 'Access-Control-Allow-Credentials': 'true' } : {})
+				...(reflectCredentials ? { 'Access-Control-Allow-Credentials': 'true' } : {})
 			}
 		});
 	}
@@ -198,10 +215,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	);
 	varySet.add('Origin');
 	response.headers.set('Vary', [...varySet].join(', '));
-	// Add CORS headers for cross-origin requests (allowed origins from config)
+	// Add CORS headers for cross-origin requests
 	if (origin && originAllowed) {
 		response.headers.set('Access-Control-Allow-Origin', origin);
-		if (cors.credentials) response.headers.set('Access-Control-Allow-Credentials', 'true');
+		if (reflectCredentials) {
+			response.headers.set('Access-Control-Allow-Credentials', 'true');
+		}
 	}
 
 	// Add security headers

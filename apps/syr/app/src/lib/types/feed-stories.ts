@@ -1,12 +1,7 @@
-export type StorySlide = {
-	id: string;
-	mime_type: string;
-	url: string;
-	published_at: string;
-	width?: number | null;
-	height?: number | null;
-	duration_seconds?: number | null;
-};
+import { z } from 'zod';
+import { PublicStorySlideSchema } from '@syr-is/types';
+
+export type StorySlide = z.infer<typeof PublicStorySlideSchema>;
 
 export type StoryBundle = {
 	did: string;

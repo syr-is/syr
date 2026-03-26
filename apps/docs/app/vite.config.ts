@@ -60,6 +60,7 @@ const sidebarConfig = [
 		items: [
 			{ title: 'packages/types', to: '/reference/types' },
 			{ title: 'apps/syr', to: '/reference/app' },
+			{ title: 'Public read API', to: '/reference/public-api' },
 			{ title: 'Independent Login API', to: '/reference/independent-login-api' },
 			{ title: 'Spec-to-Implementation Map', to: '/reference/spec-mapping' }
 		]

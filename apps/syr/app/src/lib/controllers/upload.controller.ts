@@ -261,6 +261,8 @@ export class UploadController {
 			folder_id: publicFolder.id,
 			status: 'pending',
 			is_public: true,
+			is_story: true,
+			published_at: null,
 			created_at: now,
 			updated_at: now
 		});
@@ -419,10 +421,15 @@ export class UploadController {
 		// but that's safer than under-counting (user can recalculate if needed)
 		let uploadRecord;
 		try {
-			uploadRecord = await uploadRepository.update(uploadId, {
+			const now = new Date();
+			const completionPatch: Parameters<typeof uploadRepository.update>[1] = {
 				status: 'completed',
-				updated_at: new Date()
-			});
+				updated_at: now
+			};
+			if (pendingUpload.is_story && pendingUpload.published_at == null) {
+				completionPatch.published_at = now;
+			}
+			uploadRecord = await uploadRepository.update(uploadId, completionPatch);
 		} catch (updateErr) {
 			// Rollback the storage usage if we fail to update the record
 			if (pendingUpload.size > 0) {

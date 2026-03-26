@@ -1,10 +1,11 @@
 <script lang="ts">
 	import * as Card from '@syr-is/ui/card';
 	import { Input } from '@syr-is/ui/input';
-	import { Button } from '@syr-is/ui/button';
+	import { Button, buttonVariants } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
+	import RemoveDiscoveryRegistryDialog from '$lib/components/fragments/remove-discovery-registry-dialog.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -12,6 +13,11 @@
 	let usernameCooldownDays = $state('');
 	let pathLoading = $state(false);
 	let cooldownLoading = $state(false);
+
+	let newInstanceRegistryUrl = $state('');
+	let addingInstanceRegistry = $state(false);
+	let removeInstanceDialogOpen = $state(false);
+	let instanceRegistryToRemove = $state<{ id: string; registryUrl: string } | null>(null);
 
 	$effect(() => {
 		profileSyncAssetPath = data.profileSyncAssetPath;
@@ -65,6 +71,39 @@
 		} finally {
 			cooldownLoading = false;
 		}
+	}
+
+	async function addInstanceRegistry() {
+		if (!newInstanceRegistryUrl.trim()) return;
+		addingInstanceRegistry = true;
+		try {
+			const res = await fetch('/api/instance/discovery-registries', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ registryUrl: newInstanceRegistryUrl.trim() })
+			});
+			const j = (await res.json().catch(() => ({}))) as {
+				message?: string;
+				error?: { message?: string };
+			};
+			if (!res.ok) {
+				throw new Error(
+					j.error?.message ?? j.message ?? 'Failed to add instance discovery registry'
+				);
+			}
+			newInstanceRegistryUrl = '';
+			toast.success('Instance discovery registry added');
+			await invalidateAll();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to add registry');
+		} finally {
+			addingInstanceRegistry = false;
+		}
+	}
+
+	function openRemoveInstance(reg: { id: string; registryUrl: string }) {
+		instanceRegistryToRemove = reg;
+		removeInstanceDialogOpen = true;
 	}
 </script>
 
@@ -120,4 +159,62 @@
 			</div>
 		</Card.Content>
 	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Instance discovery registries</Card.Title>
+			<Card.Description>
+				Registries used to resolve <strong class="font-medium text-foreground">remote</strong>
+				<code class="text-xs">did:syr</code> profiles for everyone visiting this instance (including
+				logged-out users). Personal discovery lists still apply first for signed-in users. This does
+				<strong class="font-medium text-foreground">not</strong> change who may be followed — follow
+				gating still uses each user’s own discovery settings.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex gap-2">
+				<input
+					type="url"
+					bind:value={newInstanceRegistryUrl}
+					placeholder="https://registry.example.com"
+					class="flex-1 rounded-md border px-3 py-2 text-sm"
+				/>
+				<button
+					type="button"
+					class={buttonVariants({ variant: 'default', size: 'sm' })}
+					onclick={addInstanceRegistry}
+					disabled={addingInstanceRegistry || !newInstanceRegistryUrl.trim()}
+				>
+					{addingInstanceRegistry ? 'Adding…' : 'Add'}
+				</button>
+			</div>
+			{#if data.instanceDiscoveryRegistries?.length}
+				<ul class="space-y-2">
+					{#each data.instanceDiscoveryRegistries as reg (reg.id)}
+						<li
+							class="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+						>
+							<span class="font-mono text-xs break-all">{reg.registryUrl}</span>
+							<button
+								type="button"
+								class={buttonVariants({ variant: 'destructive', size: 'sm' })}
+								onclick={() => openRemoveInstance(reg)}
+							>
+								Remove
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="text-sm text-muted-foreground">No instance discovery registries yet.</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 </div>
+
+<RemoveDiscoveryRegistryDialog
+	bind:open={removeInstanceDialogOpen}
+	registry={instanceRegistryToRemove}
+	instanceMode={true}
+	onSuccess={() => invalidateAll()}
+/>

@@ -5,6 +5,7 @@
 	import RemoteFollowingPostCard from '$lib/components/fragments/remote-following-post-card.svelte';
 	import FeedStoriesStrip from '$lib/components/fragments/feed-stories-strip.svelte';
 	import type { StoryBundle, StorySlide } from '$lib/types/feed-stories';
+	import { PublicStoriesResponseSchema, PublicStorySlideSchema } from '@syr-is/types';
 	import { fetchPublicPostWithLimits } from '$lib/client/fetch-with-content-limit.js';
 	import {
 		hasPostSizeOverride,
@@ -176,6 +177,20 @@
 		}
 	}
 
+	function validatedStorySlidesFromApi(did: string, json: unknown): StorySlide[] {
+		const body = json as { data?: { slides?: unknown } };
+		const raw = body.data?.slides;
+		const slides: StorySlide[] = [];
+		if (Array.isArray(raw)) {
+			for (const item of raw) {
+				const one = PublicStorySlideSchema.safeParse(item);
+				if (one.success) slides.push(one.data);
+			}
+		}
+		const wrapped = PublicStoriesResponseSchema.safeParse({ did, slides });
+		return wrapped.success ? wrapped.data.slides : [];
+	}
+
 	async function loadStoryBundlesForFeed(
 		userDid: string,
 		follows: { followed_did: string; followed_provider_url?: string | null }[],
@@ -190,8 +205,8 @@
 			try {
 				const res = await fetch(`/api/public/stories/${encodeURIComponent(userDid)}`);
 				if (res.ok) {
-					const j = (await res.json()) as { data?: { slides?: StorySlide[] } };
-					selfSlides = j.data?.slides ?? [];
+					const j = await res.json();
+					selfSlides = validatedStorySlidesFromApi(userDid, j);
 				}
 			} catch {
 				/* offline or error — empty reel */
@@ -230,8 +245,8 @@
 							return null;
 						}
 						if (!res.ok) return null;
-						const j = (await res.json()) as { data?: { slides?: StorySlide[] } };
-						const slides = j.data?.slides ?? [];
+						const j = await res.json();
+						const slides = validatedStorySlidesFromApi(f.followed_did, j);
 						if (slides.length === 0) return null;
 						return {
 							did: f.followed_did,

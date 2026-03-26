@@ -48,12 +48,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				message: err.message
 			});
 		}
-		if (err instanceof Error) {
-			throw error(400, {
-				code: 'BAD_REQUEST',
-				message: err.message
-			});
-		}
 		throw err;
 	}
 };

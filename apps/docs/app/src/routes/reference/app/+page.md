@@ -156,6 +156,10 @@ Controllers contain **business logic** and sit between API routes and repositori
 
 All API routes are under `src/routes/api/`.
 
+### Public read API (no auth)
+
+Anonymous, instance-scoped JSON for profiles, public posts, stories, and public uploads lives under **`/api/public/*`**. Query shapes, response fields, pagination, visibility rules, and **CORS** (`CORS_REFLECT_ANY_ORIGIN_PUBLIC_API`, `ALLOWED_ORIGINS`) are documented in **[Public read API](/reference/public-api)**.
+
 ### Authentication
 
 | Method | Path                 | Description                                            |

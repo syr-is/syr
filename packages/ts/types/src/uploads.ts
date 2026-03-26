@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseEntitySchema, RecordIdSchema, MetadataSchema } from './common.js';
+import { BaseEntitySchema, MetadataSchema, RecordIdSchema, TimestampSchema } from './common.js';
 import { stringToRecordId } from './codecs.js';
 
 /**
@@ -58,6 +58,10 @@ export const UploadSchema = BaseEntitySchema.extend({
 	url: z.url().optional(),
 	status: UploadStatusSchema.default('pending'),
 	is_public: z.boolean().default(false),
+	/** Profile story slide (presign path); completed story uploads set published_at at completion. */
+	is_story: z.boolean().default(false),
+	/** Wall-clock time the story became public (set once when status → completed). */
+	published_at: TimestampSchema.nullable().optional(),
 	metadata: MetadataSchema.optional()
 }).refine(
 	(data) => {

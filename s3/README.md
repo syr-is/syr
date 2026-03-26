@@ -9,7 +9,7 @@ Uploads use DID-namespaced S3 keys:
 - **Root / folder uploads**: `uploads/{did}/[folder_path/]{ulid}`
 - **Public files** (e.g. in a `public` folder): `uploads/{did}/.../public/{ulid}`
 - **Post assets**: `uploads/{did}/posts/{post_ulid}/public/{upload_ulid}`
-- **Profile stories** (spec / planned layout): `uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{upload_ulid}` — date is **UTC** at upload completion; public API returns only slides in the **rolling last 24h** (see [Profile stories (v1 spec)](../apps/docs/app/src/routes/architecture/profile-stories/+page.md)).
+- **Profile stories** (spec / planned layout): `uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{upload_ulid}` — date is **UTC** at upload completion; public API returns only slides in the **rolling last 24h** (see [Profile stories (v1 spec)](https://github.com/syr-is/syr/blob/main/apps/docs/app/src/routes/architecture/profile-stories/+page.md)).
 
 The `s3_config.json` anonymous identity must allow read access for public paths:
 

@@ -8,6 +8,7 @@ import {
 	DEFAULT_PATH,
 	DEFAULT_USERNAME_COOLDOWN_DAYS
 } from '$lib/instance-config';
+import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { user } = await parent();
@@ -22,9 +23,15 @@ export const load: PageServerLoad = async ({ parent }) => {
 		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_USERNAME_CHANGE_COOLDOWN_DAYS)) ??
 		String(DEFAULT_USERNAME_COOLDOWN_DAYS);
 
+	const instanceDiscoveryRows = await instanceDiscoveryRegistryRepository.findAll();
+
 	return {
 		user,
 		profileSyncAssetPath,
-		usernameCooldownDays
+		usernameCooldownDays,
+		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
+			id: r.id.toString(),
+			registryUrl: r.registry_url
+		}))
 	};
 };

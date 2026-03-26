@@ -32,8 +32,14 @@
 	}
 
 	function handleSelfRingClick(b: StoryBundle) {
+		if (uploadBusy) return;
 		if (b.slides.length > 0) openViewer(b);
 		else fileInput?.click();
+	}
+
+	function triggerStoryFilePick() {
+		if (uploadBusy) return;
+		fileInput?.click();
 	}
 
 	function nextSlide() {
@@ -121,7 +127,7 @@
 			size="sm"
 			class="h-8 text-primary"
 			disabled={uploadBusy}
-			onclick={() => fileInput?.click()}
+			onclick={triggerStoryFilePick}
 		>
 			{uploadBusy ? 'Uploading…' : 'Add story'}
 		</Button>

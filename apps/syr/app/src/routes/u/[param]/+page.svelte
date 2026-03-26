@@ -36,6 +36,13 @@
 	const p = $derived(data.publicProfile);
 	const viewer = $derived(userSessionStore.user);
 	const canFollow = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
+	const isRemoteProfile = $derived(data.profileSource === 'remote');
+	const remoteHomeHref = $derived.by(() => {
+		const host = p.identity_host_url?.trim();
+		if (host) return host;
+		const o = data.resolvedProviderOrigin?.trim();
+		return o || null;
+	});
 
 	let catalogTab = $state<'posts' | 'media'>('posts');
 	let lastProfileDid = $state('');
@@ -135,8 +142,19 @@
 		postsError = null;
 		try {
 			const offset = (page - 1) * POST_PAGE_SIZE;
-			const url = `/api/public/posts/${encodeURIComponent(did)}?full=1&limit=${POST_PAGE_SIZE}&offset=${offset}`;
-			const r = await fetchJsonWithByteLimit(url, { maxRawBytes: MAX_JSON_RESPONSE_BYTES });
+			const base =
+				data.profileSource === 'remote' && data.resolvedProviderOrigin
+					? data.resolvedProviderOrigin.replace(/\/$/, '')
+					: '';
+			const postsPath =
+				data.profileSource === 'remote' && base
+					? `${base}/api/public/posts/${encodeURIComponent(did)}`
+					: `/api/public/posts/${encodeURIComponent(did)}`;
+			const url = `${postsPath}?full=1&limit=${POST_PAGE_SIZE}&offset=${offset}`;
+			const r = await fetchJsonWithByteLimit(url, {
+				maxRawBytes: MAX_JSON_RESPONSE_BYTES,
+				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
+			});
 			if (seq !== postsFetchSeq) return;
 			if (!r.ok) {
 				if (r.error === 'too_large') {
@@ -182,8 +200,19 @@
 		uploadsError = null;
 		try {
 			const offset = (page - 1) * UPLOAD_PAGE_SIZE;
-			const url = `/api/public/uploads/${encodeURIComponent(did)}?limit=${UPLOAD_PAGE_SIZE}&offset=${offset}`;
-			const r = await fetchJsonWithByteLimit(url, { maxRawBytes: MAX_JSON_RESPONSE_BYTES });
+			const base =
+				data.profileSource === 'remote' && data.resolvedProviderOrigin
+					? data.resolvedProviderOrigin.replace(/\/$/, '')
+					: '';
+			const uploadsPath =
+				data.profileSource === 'remote' && base
+					? `${base}/api/public/uploads/${encodeURIComponent(did)}`
+					: `/api/public/uploads/${encodeURIComponent(did)}`;
+			const url = `${uploadsPath}?limit=${UPLOAD_PAGE_SIZE}&offset=${offset}`;
+			const r = await fetchJsonWithByteLimit(url, {
+				maxRawBytes: MAX_JSON_RESPONSE_BYTES,
+				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
+			});
 			if (seq !== uploadsFetchSeq) return;
 			if (!r.ok) {
 				if (r.error === 'too_large') {
@@ -209,6 +238,7 @@
 
 	$effect(() => {
 		const d = p.did ?? '';
+		void data.profileSource;
 		if (!d) return;
 		const _page = postsPage;
 		// Touch pagination so this effect re-runs when `postsPage` changes (see fetchPublicPosts).
@@ -218,6 +248,7 @@
 
 	$effect(() => {
 		const d = p.did ?? '';
+		void data.profileSource;
 		if (!d || catalogTab !== 'media') return;
 		const _page = uploadsPage;
 		// Touch pagination so this effect re-runs when `uploadsPage` changes (see fetchPublicUploads).
@@ -337,6 +368,30 @@
 		onFollow={toggleFollow}
 		bioVariant="divider"
 	/>
+
+	{#if isRemoteProfile}
+		<div
+			class="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+			role="status"
+		>
+			<p>
+				This identity is hosted on another Syr instance. Public posts and media below are loaded via
+				this instance’s discovery registries.
+			</p>
+			{#if remoteHomeHref}
+				<p class="mt-2">
+					<a
+						href={remoteHomeHref}
+						class="font-medium text-primary underline"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Open home instance
+					</a>
+				</p>
+			{/if}
+		</div>
+	{/if}
 
 	{#if p.did}
 		<Tabs.Root bind:value={catalogTab} class="w-full">
