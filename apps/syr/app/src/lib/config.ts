@@ -60,16 +60,16 @@ const ConfigSchema = z.object({
 	// CORS - ALLOWED_ORIGINS overrides; when unset, defaults to [PUBLIC_URL]
 	ALLOWED_ORIGINS: z.string().optional(),
 	CORS_ORIGIN: z.string().optional(),
-	CORS_CREDENTIALS: z.coerce.boolean().default(true),
+	CORS_CREDENTIALS: z.stringbool().default(true),
 	/**
 	 * When true, reflect any valid http(s) Origin on GET/OPTIONS to `/api/public/*` only (no
 	 * Access-Control-Allow-Credentials). Other routes use ALLOWED_ORIGINS only. Peers should enable
 	 * this for cross-instance public post/profile/story reads. Independent-login challenge is unchanged.
 	 */
-	CORS_REFLECT_ANY_ORIGIN_PUBLIC_API: z.coerce.boolean().default(false),
+	CORS_REFLECT_ANY_ORIGIN_PUBLIC_API: z.stringbool().default(false),
 
 	/** When true, profile/post mutations require a verified client signature if the user has a DID */
-	SYR_REQUIRE_SIGNED_MUTATIONS: z.coerce.boolean().default(false)
+	SYR_REQUIRE_SIGNED_MUTATIONS: z.stringbool().default(false)
 });
 
 type Config = z.infer<typeof ConfigSchema>;

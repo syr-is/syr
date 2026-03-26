@@ -422,14 +422,10 @@ export class UploadController {
 		let uploadRecord;
 		try {
 			const now = new Date();
-			const completionPatch: Parameters<typeof uploadRepository.update>[1] = {
-				status: 'completed',
-				updated_at: now
-			};
-			if (pendingUpload.is_story && pendingUpload.published_at == null) {
-				completionPatch.published_at = now;
-			}
-			uploadRecord = await uploadRepository.update(uploadId, completionPatch);
+			uploadRecord = await uploadRepository.mergeCompleteWithConditionalStoryPublishedAt(
+				uploadId,
+				now
+			);
 		} catch (updateErr) {
 			// Rollback the storage usage if we fail to update the record
 			if (pendingUpload.size > 0) {

@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { error } from '@sveltejs/kit';
+import { error, isHttpError } from '@sveltejs/kit';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { effectiveMaxPostPayloadBytes } from '$lib/client/content-limit-config';
@@ -65,25 +65,33 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const profileUrl = `${provider}/api/public/profile/${encodeURIComponent(key)}`;
 	const ctrl = new AbortController();
 	const timer = setTimeout(() => ctrl.abort(), REMOTE_FETCH_MS);
-	let pres: Response;
+	let body: { data?: Record<string, unknown> };
 	try {
-		pres = await fetch(profileUrl, { signal: ctrl.signal });
+		const pres = await fetch(profileUrl, { signal: ctrl.signal });
+		if (!pres.ok) {
+			throw error(404, 'Not found');
+		}
+		body = (await pres.json()) as { data?: Record<string, unknown> };
+	} catch (e) {
+		if (isHttpError(e)) {
+			throw e;
+		}
+		throw error(404, 'Not found');
 	} finally {
 		clearTimeout(timer);
 	}
-	if (!pres.ok) {
-		throw error(404, 'Not found');
-	}
 
-	const body = (await pres.json()) as { data?: Record<string, unknown> };
 	const d = body.data;
 	if (!d || typeof d !== 'object') {
+		throw error(404, 'Not found');
+	}
+	if (typeof d.did === 'string' && d.did !== key) {
 		throw error(404, 'Not found');
 	}
 
 	return {
 		publicProfile: {
-			did: (typeof d.did === 'string' ? d.did : key) || key,
+			did: key,
 			username: typeof d.username === 'string' ? d.username : '—',
 			display_name: typeof d.display_name === 'string' ? d.display_name : undefined,
 			bio: typeof d.bio === 'string' ? d.bio : undefined,

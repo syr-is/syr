@@ -17,17 +17,26 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
 		});
 	}
 
+	const TABLE = 'instance_discovery_registry';
 	let idStr: string;
 	try {
 		idStr = decodeURIComponent(params.registryId);
 	} catch {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid registry id' });
 	}
+	let recordIdString: string;
+	if (idStr.includes(':')) {
+		const parts = idStr.split(':');
+		if (parts.length !== 2 || parts[0] !== TABLE || !parts[1]) {
+			throw error(400, { code: 'BAD_REQUEST', message: 'Invalid registry id' });
+		}
+		recordIdString = idStr;
+	} else {
+		recordIdString = `${TABLE}:${idStr}`;
+	}
 	let registryId;
 	try {
-		registryId = idStr.includes(':')
-			? stringToRecordId.decode(idStr)
-			: stringToRecordId.decode(`instance_discovery_registry:${idStr}`);
+		registryId = stringToRecordId.decode(recordIdString);
 	} catch {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid registry id' });
 	}

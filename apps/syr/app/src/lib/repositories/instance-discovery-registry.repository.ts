@@ -1,3 +1,4 @@
+import { normalizeRegistryUrl } from '$lib/registry-url';
 import { dbService } from '$lib/services/db';
 import type { RecordId } from 'surrealdb';
 
@@ -13,12 +14,13 @@ class InstanceDiscoveryRegistryRepository {
 	}
 
 	async add(registryUrl: string): Promise<InstanceDiscoveryRegistry> {
+		const normalized = normalizeRegistryUrl(registryUrl);
 		const now = new Date();
 		const result = await this.db.query<[InstanceDiscoveryRegistry[]]>(
 			`CREATE instance_discovery_registry SET
 				registry_url = $registryUrl,
 				created_at = $now`,
-			{ registryUrl, now }
+			{ registryUrl: normalized, now }
 		);
 		const rows = Array.isArray(result[0]) ? result[0] : [];
 		const row = rows[0];
@@ -53,9 +55,10 @@ class InstanceDiscoveryRegistryRepository {
 	}
 
 	async findByUrl(registryUrl: string): Promise<InstanceDiscoveryRegistry | null> {
+		const normalized = normalizeRegistryUrl(registryUrl);
 		const result = await this.db.query<[InstanceDiscoveryRegistry[]]>(
 			'SELECT * FROM instance_discovery_registry WHERE registry_url = $registryUrl LIMIT 1',
-			{ registryUrl }
+			{ registryUrl: normalized }
 		);
 		return result[0]?.[0] ?? null;
 	}

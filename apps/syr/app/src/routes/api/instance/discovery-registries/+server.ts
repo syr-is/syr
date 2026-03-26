@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { normalizeRegistryUrl } from '$lib/registry-url';
 import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
 
 function requireAdmin(locals: { user?: { role: string } }) {
@@ -56,18 +57,22 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		throw error(400, { code: 'BAD_REQUEST', message: 'registryUrl is required' });
 	}
 
+	let normalized: string;
 	try {
-		new URL(registryUrl);
+		normalized = normalizeRegistryUrl(registryUrl);
 	} catch {
-		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid URL format' });
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'Invalid registry URL (http or https only, valid format)'
+		});
 	}
 
-	const existing = await instanceDiscoveryRegistryRepository.findByUrl(registryUrl);
+	const existing = await instanceDiscoveryRegistryRepository.findByUrl(normalized);
 	if (existing) {
 		throw error(409, { code: 'CONFLICT', message: 'Registry already added' });
 	}
 
-	const row = await instanceDiscoveryRegistryRepository.add(registryUrl);
+	const row = await instanceDiscoveryRegistryRepository.add(normalized);
 	return json({
 		status: 'success',
 		data: {

@@ -1,3 +1,7 @@
+<script lang="ts" module>
+	let storyLoadRequestId = 0;
+</script>
+
 <script lang="ts">
 	import * as Card from '@syr-is/ui/card';
 	import ProfileCard from '$lib/components/fragments/profile-card.svelte';
@@ -128,13 +132,17 @@
 		if (stored) return stored.replace(/\/$/, '');
 		for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
 			const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
-			const settled = await Promise.allSettled(
-				chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
-			);
-			const hit = settled.find(
-				(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
-			);
-			if (hit) return hit.value.replace(/\/$/, '');
+			try {
+				const origin = await Promise.any(
+					chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
+				);
+				return origin.replace(/\/$/, '');
+			} catch (e) {
+				if (e instanceof AggregateError) {
+					continue;
+				}
+				throw e;
+			}
 		}
 		return null;
 	}
@@ -196,6 +204,7 @@
 		follows: { followed_did: string; followed_provider_url?: string | null }[],
 		bases: string[]
 	) {
+		const requestId = ++storyLoadRequestId;
 		storiesLoading = true;
 		storiesError = null;
 		try {
@@ -262,11 +271,15 @@
 			}
 
 			await enrichStoryBundleProfiles(remote);
+			if (requestId !== storyLoadRequestId) return;
 			storyBundles = [...bundles, ...remote];
 		} catch (e) {
+			if (requestId !== storyLoadRequestId) return;
 			storiesError = e instanceof Error ? e.message : 'Stories failed';
 		} finally {
-			storiesLoading = false;
+			if (requestId === storyLoadRequestId) {
+				storiesLoading = false;
+			}
 		}
 	}
 

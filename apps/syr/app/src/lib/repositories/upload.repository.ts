@@ -2,9 +2,11 @@ import {
 	extractDid,
 	extractLocalId,
 	recordIdFromDidAndLocal,
+	stringToRecordId,
 	UploadSchema,
 	type Upload
 } from '@syr-is/types';
+import type { RecordId } from 'surrealdb';
 import { BaseRepository } from './base.repository';
 const MAX_PAGE = 500;
 
@@ -143,14 +145,36 @@ export class UploadRepository extends BaseRepository<Upload> {
 			       AND updated_at >= $since
 			       AND (is_story IS NONE OR is_story = false)
 			     )
-			   )
-			 LIMIT 200`,
+			   )`,
 			{ did, since }
 		);
 		const raw = result[0] ?? [];
 		const uploads = raw.map((r) => this.validate(r));
 		const effectiveTime = (u: Upload) => u.published_at?.getTime() ?? u.updated_at.getTime();
-		return uploads.sort((a, b) => effectiveTime(a) - effectiveTime(b));
+		return uploads.sort((a, b) => effectiveTime(a) - effectiveTime(b)).slice(0, 200);
+	}
+
+	/**
+	 * Mark upload completed; set published_at once at DB when is_story and published_at unset (atomic).
+	 */
+	async mergeCompleteWithConditionalStoryPublishedAt(
+		id: RecordId | string,
+		now: Date
+	): Promise<Upload> {
+		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
+		const result = await this.db.query<[unknown[]]>(
+			`UPDATE $id SET
+				status = 'completed',
+				updated_at = $now,
+				published_at = IF is_story = true AND published_at IS NONE { $now } ELSE { published_at }
+			 RETURN AFTER`,
+			{ id: recordId, now }
+		);
+		const row = result[0]?.[0];
+		if (!row) {
+			throw new Error('mergeCompleteWithConditionalStoryPublishedAt: UPDATE returned no row');
+		}
+		return this.validate(row);
 	}
 
 	/** Count public completed uploads with URL for a DID (pagination totals). */

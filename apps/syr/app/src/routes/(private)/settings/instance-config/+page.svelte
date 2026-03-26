@@ -172,13 +172,17 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<div class="flex gap-2">
-				<input
-					type="url"
-					bind:value={newInstanceRegistryUrl}
-					placeholder="https://registry.example.com"
-					class="flex-1 rounded-md border px-3 py-2 text-sm"
-				/>
+			<div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
+					<label for="instance-registry-url" class="text-sm font-medium">Registry URL</label>
+					<input
+						id="instance-registry-url"
+						type="url"
+						bind:value={newInstanceRegistryUrl}
+						placeholder="https://registry.example.com"
+						class="w-full rounded-md border px-3 py-2 text-sm"
+					/>
+				</div>
 				<button
 					type="button"
 					class={buttonVariants({ variant: 'default', size: 'sm' })}

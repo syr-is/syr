@@ -37,7 +37,12 @@ function uploadToSlide(u: Upload) {
 }
 
 export const GET: RequestHandler = async ({ params }) => {
-	const did = decodeURIComponent(params.did);
+	let did: string;
+	try {
+		did = decodeURIComponent(params.did);
+	} catch {
+		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
+	}
 	if (!isValidSyrDid(did)) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}

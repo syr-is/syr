@@ -38,10 +38,10 @@
 	const canFollow = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
 	const remoteHomeHref = $derived.by(() => {
+		const o = data.resolvedProviderOrigin?.trim().replace(/\/$/, '');
+		if (o) return o;
 		const host = p.identity_host_url?.trim();
-		if (host) return host;
-		const o = data.resolvedProviderOrigin?.trim();
-		return o || null;
+		return host || null;
 	});
 
 	let catalogTab = $state<'posts' | 'media'>('posts');
@@ -239,6 +239,7 @@
 	$effect(() => {
 		const d = p.did ?? '';
 		void data.profileSource;
+		void data.resolvedProviderOrigin;
 		if (!d) return;
 		const _page = postsPage;
 		// Touch pagination so this effect re-runs when `postsPage` changes (see fetchPublicPosts).
@@ -249,6 +250,7 @@
 	$effect(() => {
 		const d = p.did ?? '';
 		void data.profileSource;
+		void data.resolvedProviderOrigin;
 		if (!d || catalogTab !== 'media') return;
 		const _page = uploadsPage;
 		// Touch pagination so this effect re-runs when `uploadsPage` changes (see fetchPublicUploads).

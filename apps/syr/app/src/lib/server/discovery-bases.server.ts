@@ -68,13 +68,16 @@ export async function resolveProviderWithBases(
 ): Promise<string | null> {
 	for (let i = 0; i < bases.length; i += RESOLVE_BATCH) {
 		const chunk = bases.slice(i, i + RESOLVE_BATCH);
-		const settled = await Promise.allSettled(
-			chunk.map((b) => resolveProvider(did, { registryUrl: b, timeout: timeoutMs }))
-		);
-		for (const s of settled) {
-			if (s.status === 'fulfilled') {
-				return s.value.replace(/\/$/, '');
+		try {
+			const provider = await Promise.any(
+				chunk.map((b) => resolveProvider(did, { registryUrl: b, timeout: timeoutMs }))
+			);
+			return provider.replace(/\/$/, '');
+		} catch (e) {
+			if (e instanceof AggregateError) {
+				continue;
 			}
+			throw e;
 		}
 	}
 	return null;
