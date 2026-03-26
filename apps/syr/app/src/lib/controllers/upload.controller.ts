@@ -215,6 +215,89 @@ export class UploadController {
 		};
 	}
 
+	private static readonly STORY_ALLOWED_MIME = new Set([
+		'image/jpeg',
+		'image/png',
+		'image/webp',
+		'video/mp4'
+	]);
+
+	private static readonly MAX_STORY_BYTES = 50 * 1024 * 1024;
+
+	/**
+	 * Presigned PUT for a profile story slide.
+	 * Path: uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{upload_local_id}
+	 */
+	async getStoryPutUrl(user: User, upload: UploadCreate) {
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to upload stories');
+		}
+		if (!UploadController.STORY_ALLOWED_MIME.has(upload.mime_type)) {
+			throw new Error('Story media must be JPEG, PNG, WebP, or MP4');
+		}
+		if (upload.size > UploadController.MAX_STORY_BYTES) {
+			throw new Error('Story file is too large (max 50 MB)');
+		}
+		const did = user.did;
+		const now = new Date();
+
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
+
+		const utcDay = now.toISOString().slice(0, 10);
+		const storiesFolder = await folderRepository.findOrCreate(user.id, 'stories', null);
+		const dayFolder = await folderRepository.findOrCreate(user.id, utcDay, storiesFolder.id);
+		const publicFolder = await folderRepository.findOrCreate(user.id, 'public', dayFolder.id);
+
+		let uploadRecord = await uploadRepository.createWithCompositeId(did, {
+			filename: upload.filename,
+			mime_type: upload.mime_type,
+			size: upload.size,
+			sha256: upload.sha256,
+			metadata: upload.metadata,
+			owner_id: user.id,
+			folder_id: publicFolder.id,
+			status: 'pending',
+			is_public: true,
+			created_at: now,
+			updated_at: now
+		});
+
+		const uploadLocalId = extractLocalId(uploadRecord.id);
+		const key = `uploads/${did}/stories/${utcDay}/public/${uploadLocalId}`;
+		const finalUrl = this.buildUrl(key);
+
+		uploadRecord = await uploadRepository.update(uploadRecord.id, {
+			key,
+			url: finalUrl,
+			updated_at: new Date()
+		});
+
+		const command = new PutObjectCommand({
+			Key: key,
+			ContentType: uploadRecord.mime_type,
+			Bucket: s3.bucket,
+			...(uploadRecord.sha256 && {
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
+			})
+		});
+
+		const signedUrl = await getSignedUrl(s3Service.client, command, {
+			expiresIn: 3600
+		});
+
+		return {
+			signedUrl,
+			finalUrl,
+			uploadId: uploadRecord.id.toString(),
+			uploadDid: extractDid(uploadRecord.id),
+			uploadLocalId: extractLocalId(uploadRecord.id),
+			isPublic: true
+		};
+	}
+
 	async completeUpload(uploadId: string | RecordId) {
 		// Get the pending upload record
 		const pendingUpload = await uploadRepository.findById(uploadId);

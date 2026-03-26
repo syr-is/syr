@@ -10,6 +10,7 @@ import { stringToRecordId } from './codecs.js';
  * - With folder: uploads/{did}/{folder_path}/{ulid}
  * - Without folder (root): uploads/{did}/{ulid}
  * - Post assets: uploads/{did}/posts/{post_ulid}/public/{ulid}
+ * - Profile stories: uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{ulid}
  *
  * The DID prefix (did:syr:z6Mk...) namespaces all uploads by identity owner.
  * Note: folder_path can be nested like "public/images/2024"

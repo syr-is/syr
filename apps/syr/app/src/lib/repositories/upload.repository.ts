@@ -124,6 +124,29 @@ export class UploadRepository extends BaseRepository<Upload> {
 		return { uploads, nextCursor };
 	}
 
+	/**
+	 * Profile story slides for a DID within the rolling window (by completion time `updated_at`).
+	 * Keys live under `uploads/{did}/stories/{UTC date}/public/…`.
+	 */
+	async findActiveStoriesByDid(did: string, since: Date): Promise<Upload[]> {
+		const result = await this.db.query<[Upload[]]>(
+			`SELECT * FROM upload
+			 WHERE id.created_by = $did
+			   AND is_public = true
+			   AND status = 'completed'
+			   AND url != NONE
+			   AND key != NONE
+			   AND updated_at >= $since
+			 ORDER BY updated_at ASC
+			 LIMIT 200`,
+			{ did, since }
+		);
+		const raw = result[0] ?? [];
+		return raw
+			.map((r) => this.validate(r))
+			.filter((u) => typeof u.key === 'string' && u.key.includes('/stories/'));
+	}
+
 	/** Count public completed uploads with URL for a DID (pagination totals). */
 	async countPublicByDid(did: string): Promise<number> {
 		const countResult = await this.db.query<[{ total: number }[]]>(

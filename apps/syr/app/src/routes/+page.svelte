@@ -3,6 +3,8 @@
 	import ProfileCard from '$lib/components/fragments/profile-card.svelte';
 	import { Button } from '@syr-is/ui/button';
 	import RemoteFollowingPostCard from '$lib/components/fragments/remote-following-post-card.svelte';
+	import FeedStoriesStrip from '$lib/components/fragments/feed-stories-strip.svelte';
+	import type { StoryBundle, StorySlide } from '$lib/types/feed-stories';
 	import { fetchPublicPostWithLimits } from '$lib/client/fetch-with-content-limit.js';
 	import {
 		hasPostSizeOverride,
@@ -50,6 +52,13 @@
 	};
 	let remoteProfileByDid = $state<Record<string, RemoteAuthorProfile | null>>({});
 	let followingCount = $state(0);
+	let storyBundles = $state<StoryBundle[]>([]);
+	let storiesLoading = $state(false);
+	let storiesError = $state<string | null>(null);
+	let lastStoryFollows = $state<{ followed_did: string; followed_provider_url?: string | null }[]>(
+		[]
+	);
+	let lastStoryBases = $state<string[]>([]);
 
 	function setTimelineDetail(url: string, detail: TimelinePostDetail) {
 		timelinePostDetailByUrl.set(url, detail);
@@ -107,6 +116,145 @@
 		}
 	}
 
+	async function resolveFollowProviderOrigin(
+		f: { followed_did: string; followed_provider_url?: string | null },
+		bases: string[]
+	): Promise<string | null> {
+		const RESOLVE_BASES_BATCH = 3;
+		const stored = f.followed_provider_url
+			? normalizeProviderBaseUrl(f.followed_provider_url)
+			: null;
+		if (stored) return stored.replace(/\/$/, '');
+		for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
+			const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
+			const settled = await Promise.allSettled(
+				chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
+			);
+			const hit = settled.find(
+				(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
+			);
+			if (hit) return hit.value.replace(/\/$/, '');
+		}
+		return null;
+	}
+
+	async function enrichStoryBundleProfiles(bundles: StoryBundle[]) {
+		const batchSize = 5;
+		for (let i = 0; i < bundles.length; i += batchSize) {
+			const chunk = bundles.slice(i, i + batchSize);
+			await Promise.all(
+				chunk.map(async (b) => {
+					if (!b.provider || b.profile) return;
+					try {
+						const base = b.provider.replace(/\/$/, '');
+						const res = await fetch(`${base}/api/public/profile/${encodeURIComponent(b.did)}`, {
+							signal: AbortSignal.timeout(8_000)
+						});
+						if (!res.ok) return;
+						const j = (await res.json()) as {
+							data?: {
+								username?: string;
+								display_name?: string | null;
+								avatar_url?: string | null;
+								banner_url?: string | null;
+							};
+						};
+						const d = j.data;
+						if (!d) return;
+						const uname = d.username?.trim() || '';
+						b.profile = {
+							displayName: (d.display_name?.trim() || uname || b.did) as string,
+							username: uname || '—',
+							avatarUrl: d.avatar_url ?? null,
+							bannerUrl: d.banner_url ?? null
+						};
+					} catch {
+						/* skip */
+					}
+				})
+			);
+		}
+	}
+
+	async function loadStoryBundlesForFeed(
+		userDid: string,
+		follows: { followed_did: string; followed_provider_url?: string | null }[],
+		bases: string[]
+	) {
+		storiesLoading = true;
+		storiesError = null;
+		try {
+			const bundles: StoryBundle[] = [];
+
+			let selfSlides: StorySlide[] = [];
+			try {
+				const res = await fetch(`/api/public/stories/${encodeURIComponent(userDid)}`);
+				if (res.ok) {
+					const j = (await res.json()) as { data?: { slides?: StorySlide[] } };
+					selfSlides = j.data?.slides ?? [];
+				}
+			} catch {
+				/* offline or error — empty reel */
+			}
+
+			const u = data.user;
+			bundles.push({
+				did: userDid,
+				provider: '',
+				slides: selfSlides,
+				profile: u
+					? {
+							displayName: (u.profile?.display_name?.trim() || u.username) as string,
+							username: u.username,
+							avatarUrl: u.profile?.avatar_url ?? null,
+							bannerUrl: u.profile?.banner_url ?? null
+						}
+					: null
+			});
+
+			const STORY_CONCURRENCY = 4;
+			const remote: StoryBundle[] = [];
+			for (let i = 0; i < follows.length; i += STORY_CONCURRENCY) {
+				const batch = follows.slice(i, i + STORY_CONCURRENCY);
+				const settled = await Promise.allSettled(
+					batch.map(async (f) => {
+						const origin = await resolveFollowProviderOrigin(f, bases);
+						if (!origin) return null;
+						let res: Response;
+						try {
+							res = await fetch(
+								`${origin}/api/public/stories/${encodeURIComponent(f.followed_did)}`,
+								{ signal: AbortSignal.timeout(12_000) }
+							);
+						} catch {
+							return null;
+						}
+						if (!res.ok) return null;
+						const j = (await res.json()) as { data?: { slides?: StorySlide[] } };
+						const slides = j.data?.slides ?? [];
+						if (slides.length === 0) return null;
+						return {
+							did: f.followed_did,
+							provider: origin,
+							slides,
+							profile: null
+						} satisfies StoryBundle;
+					})
+				);
+				for (const s of settled) {
+					if (s.status === 'fulfilled' && s.value) remote.push(s.value);
+				}
+			}
+
+			await enrichStoryBundleProfiles(remote);
+			storyBundles = [...bundles, ...remote];
+		} catch (e) {
+			storiesError = e instanceof Error ? e.message : 'Stories failed';
+		} finally {
+			storiesLoading = false;
+		}
+	}
+
 	function handleRemoteOversizeOverride(row: TimelineRow) {
 		setPostSizeOverride(postSizeOverrideKeyForUrl(row.fullUrl));
 		void loadPostDetail(row);
@@ -119,6 +267,10 @@
 		timelinePostDetailByUrl.clear();
 		remoteProfileByDid = {};
 		followingCount = 0;
+		storyBundles = [];
+		storiesError = null;
+		lastStoryFollows = [];
+		lastStoryBases = [];
 		try {
 			const [fr, rr] = await Promise.all([
 				fetch('/api/follows'),
@@ -143,36 +295,18 @@
 				}
 			}
 
-			const RESOLVE_BASES_BATCH = 3;
 			const FOLLOWS_CONCURRENCY = 4;
+
+			lastStoryFollows = follows;
+			lastStoryBases = bases;
+			void loadStoryBundlesForFeed(data.user.did, follows, bases);
 
 			async function loadFollowTimelineRows(f: {
 				followed_did: string;
 				followed_provider_url?: string | null;
 			}): Promise<TimelineRow[]> {
-				let provider: string | null = null;
-				const stored = f.followed_provider_url
-					? normalizeProviderBaseUrl(f.followed_provider_url)
-					: null;
-				if (stored) {
-					provider = stored;
-				} else {
-					for (let i = 0; i < bases.length; i += RESOLVE_BASES_BATCH) {
-						const chunk = bases.slice(i, i + RESOLVE_BASES_BATCH);
-						const settled = await Promise.allSettled(
-							chunk.map((b) => resolveProvider(f.followed_did, { registryUrl: b, timeout: 10_000 }))
-						);
-						const hit = settled.find(
-							(s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled'
-						);
-						if (hit) {
-							provider = hit.value;
-							break;
-						}
-					}
-				}
-				if (!provider) return [];
-				const origin = provider.replace(/\/$/, '');
+				const origin = await resolveFollowProviderOrigin(f, bases);
+				if (!origin) return [];
 				let metaRes: Response;
 				try {
 					metaRes = await fetch(
@@ -291,6 +425,7 @@
 						</Card.Content>
 					</Card.Root>
 				{:else}
+					{@const feedDid = data.user.did}
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<Button href={resolve('/posts')} variant="outline" size="sm" class="shrink-0">
 							Your posts
@@ -303,6 +438,14 @@
 							Refresh feed
 						</button>
 					</div>
+
+					<FeedStoriesStrip
+						bundles={storyBundles}
+						selfDid={feedDid}
+						loading={storiesLoading}
+						error={storiesError}
+						onRefresh={() => loadStoryBundlesForFeed(feedDid, lastStoryFollows, lastStoryBases)}
+					/>
 
 					{#if timelineLoading}
 						<p class="text-sm text-muted-foreground">Loading feed…</p>

@@ -15,6 +15,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 - [Registry Protocol](/architecture/registry-protocol) — DID → provider resolution.
 - [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified) — one DID, one root key; migration instead of rotation.
 - [Signed profile/post mutations](/architecture/signed-profile-post-mutations) — integrity of posts shown in feeds.
+- [Profile stories (v1)](/architecture/profile-stories) — ephemeral public story reels, UTC storage layout, `GET /api/public/stories/{did}`, home tray + viewer (spec; implementation planned).
 
 ---
 
