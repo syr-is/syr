@@ -25,6 +25,7 @@
 		if (url == null || url === '') return null;
 		try {
 			const u = new URL(url);
+			if (u.username !== '' || u.password !== '') return null;
 			if (u.protocol === 'http:' || u.protocol === 'https:') return url;
 		} catch {
 			/* invalid */

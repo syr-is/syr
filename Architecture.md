@@ -63,7 +63,8 @@ graph TB
     API --> Types
     SDK --> Types
 
-    API <-->|"registry resolve + public APIs"| SYR2
+    API <-->|"registry resolve"| Registry
+    API <-->|"public APIs"| SYR2
     Services --> IDA
 ```
 
@@ -162,7 +163,7 @@ erDiagram
 
 Users on one SYR instance can **follow** other identities by **`did:syr`** and read their **public** profiles and posts from the **author’s Syr instance**. Follow rows persist **`followed_provider_url`** (the provider base URL) after a **registry-verified** resolve at follow time (or after an explicit **refresh from registry**). The home timeline and Following page **fetch public APIs using that stored URL** so routine reads do not depend on discovery registries being reachable. **Legacy rows** without a stored URL fall back to resolving via registries in the browser.
 
-**Manual provider URL override (guardrails):** Advanced users may **manually edit** the stored provider base URL on the Following page when registry data is wrong or a peer has moved. The UI treats this as an operational escape hatch: inputs are normalized to **http(s)** with **no userinfo**, bounded length, and trailing slashes stripped—but there is **no cryptographic proof** that the host matches the followed DID. Prefer **refresh from registry** whenever registries are trustworthy; treat manual overrides as “best effort” until the row is refreshed or re-followed. See _Follows, Discovery, and Home Timeline_ in the docs app.
+**Manual provider URL override (guardrails):** Advanced users may **manually edit** the stored provider base URL on the Following page when registry data is wrong or a peer has moved. The UI treats this as an operational escape hatch: inputs are normalized with **no userinfo**, bounded length, and trailing slashes stripped. **Production:** use **HTTPS** URLs for manual overrides and when calling peer public APIs. **Local development:** **HTTP** is allowed (e.g. `http://localhost`) so instances can be exercised without TLS. There is **no cryptographic proof** that the host matches the followed DID—treat overrides as **best effort** and **revalidate** via **refresh from registry** (or re-follow) before relying on them for security-sensitive flows. See _Follows, Discovery, and Home Timeline_ in the docs app.
 
 ```mermaid
 sequenceDiagram
@@ -525,11 +526,13 @@ graph TB
     subgraph "External"
         Users[Instance Users]
         PeerProviders[Other SYR Providers]
+        RegistryExt[DID Registry<br/>Resolution]
         ThirdParty[Third-party Platforms<br/>Identity-Based Login]
     end
 
     Users --> Web
-    Web -->|"HTTPS public APIs + registry"| PeerProviders
+    Web -->|"HTTPS public APIs"| PeerProviders
+    Web -->|"DID resolve"| RegistryExt
     ThirdParty --> Web
     Web --> DB
     Web --> S3

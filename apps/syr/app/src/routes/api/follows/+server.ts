@@ -3,9 +3,9 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { followController, FollowValidationError } from '$lib/controllers/follow.controller';
 import { userRepository } from '$lib/repositories/user.repository';
-import type { UserFollow } from '$lib/repositories/follow.repository';
 import { isValidSyrDid } from '@syr-is/did';
 import { IdentityHostUrlSchema } from '@syr-is/types';
+import { followRowToJson } from '$lib/server/follow-row-json.server';
 
 const FollowBodySchema = z.object({
 	followed_did: z.string().min(12)
@@ -15,15 +15,6 @@ const PatchFollowProviderSchema = z.object({
 	followed_did: z.string().min(12),
 	followed_provider_url: IdentityHostUrlSchema
 });
-
-function followRowToJson(r: UserFollow) {
-	return {
-		followed_did: r.followed_did,
-		source_registry: r.source_registry,
-		followed_provider_url: r.followed_provider_url ?? null,
-		created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
-	};
-}
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -137,7 +128,7 @@ export const PATCH: RequestHandler = async ({ locals, request }) => {
 		console.error('follow PATCH:', e);
 		throw error(500, {
 			code: 'INTERNAL_SERVER_ERROR',
-			message: e instanceof Error ? e.message : 'Update failed'
+			message: 'Update failed'
 		});
 	}
 };

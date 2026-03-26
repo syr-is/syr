@@ -1,4 +1,5 @@
 import { followRepository, type UserFollow } from '$lib/repositories/follow.repository';
+import { userRepository } from '$lib/repositories/user.repository';
 import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
 import { assertFollowableFromRegistries } from '$lib/server/follow-registry-gate.server';
 import { normalizeProviderBaseUrl } from '$lib/normalize-provider-base-url';
@@ -22,6 +23,14 @@ function normalizeVerifiedProvider(provider: string): string {
 }
 
 export class FollowController {
+	private async followerDidOrThrow(followerUserId: RecordId | string): Promise<string> {
+		const user = await userRepository.findById(followerUserId);
+		if (!user?.did) {
+			throw new FollowValidationError('Identity required.');
+		}
+		return user.did;
+	}
+
 	private instanceProviderBase(): string {
 		const n = normalizeProviderBaseUrl(config.PUBLIC_URL);
 		if (!n) {
@@ -99,15 +108,21 @@ export class FollowController {
 		if (!row) {
 			throw new FollowValidationError('You are not following this DID.');
 		}
-		const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
-		const urls = registries.map((r) => r.registry_url);
-		let providerBaseUrl: string;
-		try {
-			({ providerBaseUrl } = await assertFollowableFromRegistries(followedDid, urls));
-		} catch (e) {
-			throw new FollowValidationError(e instanceof Error ? e.message : 'Refresh failed');
+		const followerDid = await this.followerDidOrThrow(followerUserId);
+		let normalized: string;
+		if (followerDid === followedDid) {
+			normalized = this.instanceProviderBase();
+		} else {
+			const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
+			const urls = registries.map((r) => r.registry_url);
+			let providerBaseUrl: string;
+			try {
+				({ providerBaseUrl } = await assertFollowableFromRegistries(followedDid, urls));
+			} catch (e) {
+				throw new FollowValidationError(e instanceof Error ? e.message : 'Refresh failed');
+			}
+			normalized = normalizeVerifiedProvider(providerBaseUrl);
 		}
-		const normalized = normalizeVerifiedProvider(providerBaseUrl);
 		const updated = await followRepository.updateFollowProviderUrl(
 			followerUserId,
 			followedDid,
@@ -131,6 +146,12 @@ export class FollowController {
 		const row = await followRepository.findOne(followerUserId, followedDid);
 		if (!row) {
 			throw new FollowValidationError('You are not following this DID.');
+		}
+		const followerDid = await this.followerDidOrThrow(followerUserId);
+		if (followerDid === followedDid) {
+			throw new FollowValidationError(
+				'Manual provider URL override is not allowed for your own DID; this instance is always the provider.'
+			);
 		}
 		const normalized = normalizeProviderBaseUrl(rawUrl);
 		if (!normalized) {

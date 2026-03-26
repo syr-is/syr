@@ -5,7 +5,8 @@ import {
 	TimestampSchema,
 	RecordIdSchema,
 	DidSyrSchema,
-	IdentityHostUrlSchema
+	IdentityHostUrlSchema,
+	ProfileSignedImageUrlSchema
 } from './common.js';
 import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
@@ -56,8 +57,8 @@ export const ProfileSchema = BaseEntitySchema.extend({
 	user_id: RecordIdSchema,
 	display_name: z.string().min(1).max(100),
 	bio: z.string().max(500).optional(),
-	avatar_url: z.url().optional(),
-	banner_url: z.url().optional(),
+	avatar_url: ProfileSignedImageUrlSchema.optional(),
+	banner_url: ProfileSignedImageUrlSchema.optional(),
 	identity_host_url: IdentityHostUrlSchema.optional(),
 	metadata: MetadataSchema.optional(),
 	content_signature: z.string().optional(),
@@ -129,8 +130,8 @@ export const ProfileUpdateSchema = ProfileSchema.pick({
 })
 	.partial()
 	.extend({
-		avatar_url: z.union([z.literal(''), z.string().url()]).optional(),
-		banner_url: z.union([z.literal(''), z.string().url()]).optional(),
+		avatar_url: z.union([z.literal(''), ProfileSignedImageUrlSchema]).optional(),
+		banner_url: z.union([z.literal(''), ProfileSignedImageUrlSchema]).optional(),
 		identity_host_url: z.union([z.literal(''), IdentityHostUrlSchema]).optional()
 	});
 
