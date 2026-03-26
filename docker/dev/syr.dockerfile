@@ -16,6 +16,7 @@ COPY packages/ts/utils/package.json ./packages/ts/utils/
 COPY packages/ts/ui/package.json ./packages/ts/ui/
 COPY packages/ts/crypto/package.json ./packages/ts/crypto/
 COPY packages/ts/did/package.json ./packages/ts/did/
+COPY packages/ts/resolver/package.json ./packages/ts/resolver/
 
 # Install dependencies from workspace root
 RUN pnpm install --frozen-lockfile

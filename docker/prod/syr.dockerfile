@@ -20,6 +20,7 @@ COPY packages/ts/utils/package.json ./packages/ts/utils/
 COPY packages/ts/ui/package.json ./packages/ts/ui/
 COPY packages/ts/crypto/package.json ./packages/ts/crypto/
 COPY packages/ts/did/package.json ./packages/ts/did/
+COPY packages/ts/resolver/package.json ./packages/ts/resolver/
 
 # Enable injection only for Docker builds (required for pnpm deploy in v10)
 RUN echo "inject-workspace-packages=true" >> .npmrc
@@ -40,11 +41,12 @@ COPY apps/syr ./apps/syr
 COPY packages ./packages
 
 # Build workspace packages first (dist/ doesn't exist at install time with injection)
-# Order matters: types has no workspace deps, utils/crypto/did depend on types, ui depends on types
+# Order matters: types first; crypto/did; resolver (crypto+did); ui; app
 RUN pnpm --filter @syr-is/types build
 RUN pnpm --filter @syr-is/utils build
 RUN pnpm --filter @syr-is/crypto build
 RUN pnpm --filter @syr-is/did build
+RUN pnpm --filter @syr-is/resolver build
 RUN pnpm --filter @syr-is/ui build
 
 # Remove wasm-pack and build tools (no longer needed after WASM build)
