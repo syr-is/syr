@@ -113,7 +113,7 @@
 />
 
 <div class="mb-6">
-	<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 		<h2 class="text-sm font-medium text-muted-foreground">Stories</h2>
 		<Button
 			type="button"
@@ -133,7 +133,7 @@
 		<p class="text-sm text-muted-foreground">Loading stories…</p>
 	{:else}
 		<div
-			class="flex gap-4 overflow-x-auto pt-0.5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+			class="flex gap-4 overflow-x-auto pt-2 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 		>
 			{#each bundles as b (b.did)}
 				<div class="flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5">
