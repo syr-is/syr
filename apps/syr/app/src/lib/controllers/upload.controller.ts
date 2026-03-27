@@ -403,11 +403,22 @@ export class UploadController {
 
 		if (pendingUpload.size > 0) {
 			try {
-				await fileStoreUsageController.addUsage(
+				const usageBefore = await fileStoreUsageController.getUsage(pendingUpload.owner_id);
+				const usageAfter = await fileStoreUsageController.addUsage(
 					pendingUpload.owner_id,
 					pendingUpload.size,
 					true // enforceQuota - atomic check-and-add with max cap
 				);
+				// addUsage returns new total bytes_used, not delta; detect partial/capped increments.
+				const addedBytes = usageAfter - usageBefore;
+				if (addedBytes < pendingUpload.size) {
+					await uploadRepository.updateWithUnset(
+						uploadId,
+						{ status: 'pending', updated_at: new Date() },
+						pendingUpload.is_story ? ['published_at'] : []
+					);
+					throw new Error('Storage limit exceeded. Upload rejected.');
+				}
 			} catch (usageErr) {
 				await uploadRepository.updateWithUnset(
 					uploadId,
