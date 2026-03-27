@@ -60,10 +60,16 @@ const ConfigSchema = z.object({
 	// CORS - ALLOWED_ORIGINS overrides; when unset, defaults to [PUBLIC_URL]
 	ALLOWED_ORIGINS: z.string().optional(),
 	CORS_ORIGIN: z.string().optional(),
-	CORS_CREDENTIALS: z.coerce.boolean().default(true),
+	CORS_CREDENTIALS: z.stringbool().default(true),
+	/**
+	 * When true, reflect any valid http(s) Origin on GET/OPTIONS to `/api/public/*` only (no
+	 * Access-Control-Allow-Credentials). Other routes use ALLOWED_ORIGINS only. Peers should enable
+	 * this for cross-instance public post/profile/story reads. Independent-login challenge is unchanged.
+	 */
+	CORS_REFLECT_ANY_ORIGIN_PUBLIC_API: z.stringbool().default(false),
 
 	/** When true, profile/post mutations require a verified client signature if the user has a DID */
-	SYR_REQUIRE_SIGNED_MUTATIONS: z.coerce.boolean().default(false)
+	SYR_REQUIRE_SIGNED_MUTATIONS: z.stringbool().default(false)
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -101,6 +107,16 @@ function allowedOriginsList(parsed: Config): string[] {
  */
 export function isAllowedOrigin(origin: string, allowed: readonly string[]): boolean {
 	return isOriginAllowedUtils(origin, allowed, config.NODE_ENV);
+}
+
+/** True if Origin is a usable absolute http(s) URL for CORS reflection (not `*`). */
+export function isValidCorsReflectOrigin(origin: string): boolean {
+	try {
+		const u = new URL(origin);
+		return u.protocol === 'http:' || u.protocol === 'https:';
+	} catch {
+		return false;
+	}
 }
 
 /** Resolved config with CORS_ORIGIN always set (from PUBLIC_URL when not set). */
@@ -148,6 +164,7 @@ export const allowedOrigins = allowedOriginsList(_config);
 		ALLOWED_ORIGINS: config.ALLOWED_ORIGINS ?? '(not set, defaults to [PUBLIC_URL])',
 		CORS_ORIGIN: config.CORS_ORIGIN,
 		CORS_CREDENTIALS: config.CORS_CREDENTIALS,
+		CORS_REFLECT_ANY_ORIGIN_PUBLIC_API: config.CORS_REFLECT_ANY_ORIGIN_PUBLIC_API,
 		allowedOrigins,
 		S3_CORS_ORIGINS: config.S3_CORS_ORIGINS ?? '(not set, defaults to CORS_ORIGIN)',
 		s3CorsOrigins: s3CorsOrigins()

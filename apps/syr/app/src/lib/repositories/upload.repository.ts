@@ -2,9 +2,11 @@ import {
 	extractDid,
 	extractLocalId,
 	recordIdFromDidAndLocal,
+	stringToRecordId,
 	UploadSchema,
 	type Upload
 } from '@syr-is/types';
+import type { RecordId } from 'surrealdb';
 import { BaseRepository } from './base.repository';
 const MAX_PAGE = 500;
 
@@ -122,6 +124,71 @@ export class UploadRepository extends BaseRepository<Upload> {
 		const nextCursor = uploads.length === limitNum ? { offset: offsetNum + uploads.length } : null;
 
 		return { uploads, nextCursor };
+	}
+
+	/**
+	 * Profile story slides for a DID within the rolling window.
+	 * Prefers `is_story` + `published_at`; legacy rows use key path `/stories/` and `updated_at`.
+	 */
+	async findActiveStoriesByDid(did: string, since: Date): Promise<Upload[]> {
+		const result = await this.db.query<[Upload[]]>(
+			`SELECT * FROM upload
+			 WHERE id.created_by = $did
+			   AND is_public = true
+			   AND status = 'completed'
+			   AND url != NONE
+			   AND key != NONE
+			   AND (
+			     (is_story = true AND published_at != NONE AND published_at >= $since)
+			     OR (
+			       string::contains(type::string(key), '/stories/')
+			       AND updated_at >= $since
+			       AND (is_story IS NONE OR is_story = false)
+			     )
+			   )`,
+			{ did, since }
+		);
+		const raw = result[0] ?? [];
+		const uploads = raw.map((r) => this.validate(r));
+		const effectiveTime = (u: Upload) => u.published_at?.getTime() ?? u.updated_at.getTime();
+		return uploads.sort((a, b) => effectiveTime(a) - effectiveTime(b)).slice(0, 200);
+	}
+
+	/**
+	 * Compare-and-set: pending → finalizing (quota not yet committed; not publicly "done").
+	 */
+	async casPendingToFinalizing(id: RecordId | string, now: Date): Promise<Upload | null> {
+		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
+		const result = await this.db.query<[unknown[]]>(
+			`UPDATE $id SET status = 'finalizing', updated_at = $now WHERE status = 'pending' RETURN AFTER`,
+			{ id: recordId, now }
+		);
+		const row = result[0]?.[0];
+		if (!row) {
+			return null;
+		}
+		return this.validate(row);
+	}
+
+	/**
+	 * Compare-and-set: finalizing → completed. Sets published_at once when is_story and published_at is NONE.
+	 */
+	async casFinalizingToCompleted(id: RecordId | string, now: Date): Promise<Upload | null> {
+		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
+		const result = await this.db.query<[unknown[]]>(
+			`UPDATE $id SET
+				status = 'completed',
+				updated_at = $now,
+				published_at = IF is_story = true AND published_at IS NONE { $now } ELSE { published_at }
+			 WHERE status = 'finalizing'
+			 RETURN AFTER`,
+			{ id: recordId, now }
+		);
+		const row = result[0]?.[0];
+		if (!row) {
+			return null;
+		}
+		return this.validate(row);
 	}
 
 	/** Count public completed uploads with URL for a DID (pagination totals). */

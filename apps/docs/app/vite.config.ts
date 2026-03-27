@@ -42,6 +42,7 @@ const sidebarConfig = [
 			},
 			{ title: 'Signature Verification UI', to: '/architecture/signature-verification-ui' },
 			{ title: 'Follows, Discovery & Home Timeline', to: '/architecture/follows-and-timeline' },
+			{ title: 'Profile stories (v1 spec)', to: '/architecture/profile-stories' },
 			{ title: 'Sigil v1 (Export Format)', to: '/architecture/sigil' },
 			{ title: 'Export Formats (SYR, Sigil, Persona)', to: '/architecture/export' },
 			{ title: 'Identity Import', to: '/architecture/import' },
@@ -59,6 +60,7 @@ const sidebarConfig = [
 		items: [
 			{ title: 'packages/types', to: '/reference/types' },
 			{ title: 'apps/syr', to: '/reference/app' },
+			{ title: 'Public read API', to: '/reference/public-api' },
 			{ title: 'Independent Login API', to: '/reference/independent-login-api' },
 			{ title: 'Spec-to-Implementation Map', to: '/reference/spec-mapping' }
 		]

@@ -7,11 +7,14 @@
 	let {
 		open = $bindable(false),
 		registry = null,
-		onSuccess
+		onSuccess,
+		instanceMode = false
 	}: {
 		open?: boolean;
 		registry?: { id: string; registryUrl: string } | null;
 		onSuccess?: () => void;
+		/** When true, DELETE uses `/api/instance/discovery-registries/…` (admin instance list). */
+		instanceMode?: boolean;
 	} = $props();
 
 	let removing = $state(false);
@@ -21,7 +24,10 @@
 
 		removing = true;
 		try {
-			const res = await fetch(`/api/user/discovery-registries/${encodeURIComponent(registry.id)}`, {
+			const base = instanceMode
+				? '/api/instance/discovery-registries'
+				: '/api/user/discovery-registries';
+			const res = await fetch(`${base}/${encodeURIComponent(registry.id)}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) {
@@ -44,8 +50,13 @@
 		<Dialog.Header>
 			<Dialog.Title>Remove discovery registry</Dialog.Title>
 			<Dialog.Description>
-				Stop using {registry?.registryUrl ?? 'this registry'} for directory search and follow discovery?
-				Your identity will not be unpublished from it — use Identity settings for that.
+				{#if instanceMode}
+					Remove {registry?.registryUrl ?? 'this registry'} from the instance-wide discovery list? Visitors
+					use this list to resolve remote profiles on <code class="text-xs">/u/…</code>.
+				{:else}
+					Stop using {registry?.registryUrl ?? 'this registry'} for directory search and follow discovery?
+					Your identity will not be unpublished from it — use Identity settings for that.
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>

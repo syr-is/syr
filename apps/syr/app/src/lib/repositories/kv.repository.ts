@@ -414,6 +414,110 @@ export class KvRepository {
 	}
 
 	/**
+	 * Same atomic semantics as {@link atomicIncrementField} when both min and max are set,
+	 * but returns the applied delta from the same transaction as {@code newTotal} (avoids
+	 * mis-attributing concurrent usage changes to this caller).
+	 */
+	async atomicIncrementFieldWithApplied(
+		type: string,
+		index: string,
+		field: string,
+		amount: number,
+		minValue: number,
+		maxValue: number,
+		ttlSeconds?: number
+	): Promise<{ newTotal: number; appliedBytes: number }> {
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
+		}
+		if (ttlSeconds != null && ttlSeconds < 0) {
+			throw new Error('ttlSeconds must be non-negative');
+		}
+		if (amount <= 0) {
+			throw new Error('atomicIncrementFieldWithApplied: amount must be positive');
+		}
+
+		const recordId = createKvRecordId(type, index);
+		const now = new Date();
+		const expiresAt = ttlSeconds != null ? new Date(now.getTime() + ttlSeconds * 1000) : undefined;
+		const expiresAtSet = expiresAt !== undefined ? ', expires_at = $expiresAt' : '';
+
+		const query = `
+				BEGIN TRANSACTION;
+				LET $record = SELECT * FROM ONLY $recordId;
+				LET $current = IF $record != NONE AND ($record.expires_at IS NONE OR $record.expires_at > $now) { $record.value.${field} ?? 0 } ELSE { 0 };
+				LET $proposed = $current + $amount;
+				LET $clamped = math::max([<int> $minValue, <int> math::min([<int> $maxValue, <int> $proposed])]);
+				IF $proposed > $maxValue {
+					THROW "QUOTA_EXCEEDED";
+				};
+				UPSERT $recordId SET
+					kv_type = $type,
+					value.${field} = $clamped,
+					created_at = created_at ?? $now,
+					updated_at = $now${expiresAtSet};
+				COMMIT TRANSACTION;
+				RETURN { newTotal: $clamped, appliedBytes: $clamped - $current };
+			`;
+
+		try {
+			const params: Record<string, unknown> = {
+				recordId,
+				type,
+				amount,
+				minValue,
+				maxValue,
+				now
+			};
+			if (expiresAt !== undefined) {
+				params.expiresAt = expiresAt;
+			}
+
+			const result = await this.db.query<[unknown]>(query, params);
+
+			let parsed: { newTotal: number; appliedBytes: number } | undefined;
+
+			const tryExtract = (v: unknown): void => {
+				if (parsed !== undefined || v === null || typeof v !== 'object') return;
+				const o = v as Record<string, unknown>;
+				const nt = o.newTotal;
+				const ab = o.appliedBytes;
+				if (typeof nt === 'number' && typeof ab === 'number') {
+					parsed = { newTotal: nt, appliedBytes: ab };
+				}
+			};
+
+			for (let i = result.length - 1; i >= 0; i--) {
+				const item = result[i];
+				tryExtract(item);
+				if (parsed !== undefined) break;
+				if (Array.isArray(item) && item.length > 0) {
+					tryExtract(item[0]);
+					if (parsed !== undefined) break;
+				}
+			}
+
+			if (parsed !== undefined) {
+				return parsed;
+			}
+
+			throw new Error(
+				`atomicIncrementFieldWithApplied: unexpected SurrealDB response shape. ` +
+					`recordId=${recordId.toString()}, field=${field}, amount=${amount}, ` +
+					`result=${JSON.stringify(result)}`
+			);
+		} catch (err) {
+			const errMessage = err instanceof Error ? err.message : String(err);
+			if (errMessage.includes('QUOTA_EXCEEDED')) {
+				throw new Error('QUOTA_EXCEEDED');
+			}
+			throw err;
+		}
+	}
+
+	/**
 	 * Conditionally update a KV entry's value only if value.version equals expectedVersion.
 	 * Used for optimistic locking to prevent lost updates under concurrency.
 	 * @param type - The category/type of the entry

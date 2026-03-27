@@ -142,6 +142,45 @@ export class FileStoreUsageController {
 	}
 
 	/**
+	 * Add to user's storage usage; returns totals from the same atomic op when quota is enforced.
+	 * @param enforceQuota - If true, uses min+max atomic increment and returns appliedBytes from that transaction
+	 * @throws Error with message 'QUOTA_EXCEEDED' if enforceQuota is true and quota would be exceeded
+	 */
+	async addUsageWithResult(
+		userId: RecordId | string,
+		bytes: number,
+		enforceQuota: boolean = false
+	): Promise<{ newTotal: number; appliedBytes: number }> {
+		if (bytes <= 0) {
+			const newTotal = await this.getUsage(userId);
+			return { newTotal, appliedBytes: 0 };
+		}
+
+		const index = this.getUserIndex(userId);
+
+		if (enforceQuota) {
+			return kvService.atomicIncrementFieldWithApplied(
+				KV_TYPE,
+				index,
+				'bytes_used',
+				bytes,
+				0,
+				MAX_STORAGE_BYTES
+			);
+		}
+
+		const newTotal = await kvService.atomicIncrementField(
+			KV_TYPE,
+			index,
+			'bytes_used',
+			bytes,
+			0,
+			undefined
+		);
+		return { newTotal, appliedBytes: bytes };
+	}
+
+	/**
 	 * Add to user's storage usage (for uploads)
 	 * Uses atomic increment with max cap to prevent race conditions and enforce quota
 	 * @param userId - User ID
@@ -155,19 +194,8 @@ export class FileStoreUsageController {
 		bytes: number,
 		enforceQuota: boolean = false
 	): Promise<number> {
-		if (bytes <= 0) return this.getUsage(userId);
-
-		const index = this.getUserIndex(userId);
-
-		// Use atomic increment with optional max cap for quota enforcement
-		return kvService.atomicIncrementField(
-			KV_TYPE,
-			index,
-			'bytes_used',
-			bytes,
-			0, // minValue - never go below 0
-			enforceQuota ? MAX_STORAGE_BYTES : undefined // maxValue - enforce quota if requested
-		);
+		const { newTotal } = await this.addUsageWithResult(userId, bytes, enforceQuota);
+		return newTotal;
 	}
 
 	/**

@@ -40,10 +40,17 @@ export type FetchJsonLimitResult =
  */
 export async function fetchJsonWithByteLimit(
 	url: string,
-	options: { maxRawBytes: number; signal?: AbortSignal }
+	options: {
+		maxRawBytes: number;
+		signal?: AbortSignal;
+		credentials?: RequestCredentials;
+	}
 ): Promise<FetchJsonLimitResult> {
 	try {
-		const res = await fetch(url, { signal: options.signal });
+		const res = await fetch(url, {
+			signal: options.signal,
+			credentials: options.credentials ?? 'same-origin'
+		});
 		if (!res.ok) {
 			return { ok: false, error: 'network', message: `HTTP ${res.status}` };
 		}

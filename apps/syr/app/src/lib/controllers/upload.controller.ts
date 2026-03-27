@@ -215,6 +215,90 @@ export class UploadController {
 		};
 	}
 
+	private static readonly STORY_ALLOWED_MIME = new Set([
+		'image/jpeg',
+		'image/png',
+		'image/webp',
+		'video/mp4'
+	]);
+
+	private static readonly MAX_STORY_BYTES = 50 * 1024 * 1024;
+
+	/**
+	 * Presigned PUT for a profile story slide.
+	 * Path: uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{upload_local_id}
+	 */
+	async getStoryPutUrl(user: User, upload: UploadCreate) {
+		if (!user.did) {
+			throw new Error('User must have an identity (DID) to upload stories');
+		}
+		if (!UploadController.STORY_ALLOWED_MIME.has(upload.mime_type)) {
+			throw new Error('Story media must be JPEG, PNG, WebP, or MP4');
+		}
+		if (upload.size > UploadController.MAX_STORY_BYTES) {
+			throw new Error('Story file is too large (max 50 MB)');
+		}
+		const did = user.did;
+		const now = new Date();
+
+		const storageCheck = await fileStoreUsageController.canUpload(user.id, upload.size);
+		if (!storageCheck.allowed) {
+			throw new Error(storageCheck.message || 'Storage limit exceeded');
+		}
+
+		const utcDay = now.toISOString().slice(0, 10);
+		const storiesFolder = await folderRepository.findOrCreate(user.id, 'stories', null);
+		const dayFolder = await folderRepository.findOrCreate(user.id, utcDay, storiesFolder.id);
+		const publicFolder = await folderRepository.findOrCreate(user.id, 'public', dayFolder.id);
+
+		let uploadRecord = await uploadRepository.createWithCompositeId(did, {
+			filename: upload.filename,
+			mime_type: upload.mime_type,
+			size: upload.size,
+			sha256: upload.sha256,
+			metadata: upload.metadata,
+			owner_id: user.id,
+			folder_id: publicFolder.id,
+			status: 'pending',
+			is_public: true,
+			is_story: true,
+			created_at: now,
+			updated_at: now
+		});
+
+		const uploadLocalId = extractLocalId(uploadRecord.id);
+		const key = `uploads/${did}/stories/${utcDay}/public/${uploadLocalId}`;
+		const finalUrl = this.buildUrl(key);
+
+		uploadRecord = await uploadRepository.update(uploadRecord.id, {
+			key,
+			url: finalUrl,
+			updated_at: new Date()
+		});
+
+		const command = new PutObjectCommand({
+			Key: key,
+			ContentType: uploadRecord.mime_type,
+			Bucket: s3.bucket,
+			...(uploadRecord.sha256 && {
+				ChecksumSHA256: hexToBase64(uploadRecord.sha256)
+			})
+		});
+
+		const signedUrl = await getSignedUrl(s3Service.client, command, {
+			expiresIn: 3600
+		});
+
+		return {
+			signedUrl,
+			finalUrl,
+			uploadId: uploadRecord.id.toString(),
+			uploadDid: extractDid(uploadRecord.id),
+			uploadLocalId: extractLocalId(uploadRecord.id),
+			isPublic: true
+		};
+	}
+
 	async completeUpload(uploadId: string | RecordId) {
 		// Get the pending upload record
 		const pendingUpload = await uploadRepository.findById(uploadId);
@@ -223,7 +307,15 @@ export class UploadController {
 		}
 
 		if (pendingUpload.status === 'completed') {
-			throw new Error('Upload already completed');
+			return pendingUpload;
+		}
+
+		if (pendingUpload.status === 'finalizing') {
+			throw new Error('Upload completion already in progress');
+		}
+
+		if (pendingUpload.status !== 'pending') {
+			throw new Error('Upload cannot be completed in its current state');
 		}
 
 		if (!pendingUpload.key) {
@@ -298,57 +390,88 @@ export class UploadController {
 			throw err;
 		}
 
-		// File verified, now atomically add to storage usage with quota enforcement
-		// This is a single atomic operation that checks and updates the quota,
-		// preventing race conditions where two uploads both pass quota check then both add
-		if (pendingUpload.size > 0) {
-			try {
-				await fileStoreUsageController.addUsage(
-					pendingUpload.owner_id,
-					pendingUpload.size,
-					true // enforceQuota - atomic check-and-add with max cap
-				);
-			} catch (quotaErr) {
-				// Check if this is a quota exceeded error
-				if (quotaErr instanceof Error && quotaErr.message.includes('QUOTA_EXCEEDED')) {
-					// Delete the file from S3 since we can't accept it
-					const deleteCommand = new DeleteObjectCommand({
-						Bucket: s3.bucket,
-						Key: pendingUpload.key
-					});
-					await s3Service.client.send(deleteCommand);
-
-					// Mark upload as failed
-					await uploadRepository.update(uploadId, {
-						status: 'failed',
-						updated_at: new Date()
-					});
-
-					throw new Error('Storage limit exceeded. Upload rejected.');
-				}
-				// Re-throw other errors
-				throw quotaErr;
+		const nowFinalize = new Date();
+		const finalizingRow = await uploadRepository.casPendingToFinalizing(uploadId, nowFinalize);
+		if (!finalizingRow) {
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') {
+				return latest;
 			}
+			if (latest?.status === 'finalizing') {
+				throw new Error('Upload completion already in progress');
+			}
+			throw new Error('Upload could not be marked finalizing');
 		}
 
-		// Storage usage added successfully, now mark as completed
-		// If this fails after addUsage, we'll have slightly over-counted storage
-		// but that's safer than under-counting (user can recalculate if needed)
-		let uploadRecord;
+		let appliedBytes = 0;
+		const revertFinalizingToPending = async () => {
+			await uploadRepository.updateWithUnset(
+				uploadId,
+				{ status: 'pending', updated_at: new Date() },
+				pendingUpload.is_story ? ['published_at'] : []
+			);
+		};
+
 		try {
-			uploadRecord = await uploadRepository.update(uploadId, {
-				status: 'completed',
-				updated_at: new Date()
-			});
-		} catch (updateErr) {
-			// Rollback the storage usage if we fail to update the record
 			if (pendingUpload.size > 0) {
-				await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, pendingUpload.size);
+				try {
+					const { appliedBytes: applied } = await fileStoreUsageController.addUsageWithResult(
+						pendingUpload.owner_id,
+						pendingUpload.size,
+						true
+					);
+					appliedBytes = applied;
+					if (applied < pendingUpload.size) {
+						if (applied > 0) {
+							await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, applied);
+						}
+						await revertFinalizingToPending();
+						throw new Error('Storage limit exceeded. Upload rejected.');
+					}
+				} catch (usageErr) {
+					const cur = await uploadRepository.findById(uploadId);
+					if (cur?.status === 'finalizing') {
+						await revertFinalizingToPending();
+					}
+					if (usageErr instanceof Error && usageErr.message.includes('QUOTA_EXCEEDED')) {
+						throw new Error('Storage limit exceeded. Upload rejected.');
+					}
+					throw usageErr;
+				}
 			}
-			throw updateErr;
-		}
 
-		return uploadRecord;
+			const nowComplete = new Date();
+			const completedRow = await uploadRepository.casFinalizingToCompleted(uploadId, nowComplete);
+			if (!completedRow) {
+				const latest = await uploadRepository.findById(uploadId);
+				if (latest?.status === 'completed') {
+					return latest;
+				}
+				if (pendingUpload.size > 0 && appliedBytes > 0) {
+					await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
+				}
+				await revertFinalizingToPending();
+				throw new Error('Upload could not be marked completed');
+			}
+
+			return completedRow;
+		} catch (err) {
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') {
+				return latest;
+			}
+			if (latest?.status === 'finalizing') {
+				if (pendingUpload.size > 0 && appliedBytes > 0) {
+					try {
+						await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
+					} catch {
+						// best-effort rollback of KV after an unexpected failure path
+					}
+				}
+				await revertFinalizingToPending();
+			}
+			throw err;
+		}
 	}
 
 	async getUpload(id: RecordId | string): Promise<Upload | null> {
@@ -388,11 +511,13 @@ export class UploadController {
 		const existing = await uploadRepository.findByCompositeId(did, localId);
 		const deltaBytes = existing ? size - existing.size : size;
 
+		let storageLimitMessage: string | undefined;
 		if (deltaBytes > 0) {
 			const storageCheck = await fileStoreUsageController.canUpload(user.id, deltaBytes);
 			if (!storageCheck.allowed) {
 				throw new Error(storageCheck.message || 'Storage limit exceeded');
 			}
+			storageLimitMessage = storageCheck.message;
 		}
 
 		await s3Service.client.send(
@@ -433,7 +558,14 @@ export class UploadController {
 			const usageDelta = size - existing.size;
 			if (usageDelta !== 0) {
 				if (usageDelta > 0) {
-					await fileStoreUsageController.addUsage(user.id, usageDelta, true);
+					const { appliedBytes } = await fileStoreUsageController.addUsageWithResult(
+						user.id,
+						usageDelta,
+						true
+					);
+					if (appliedBytes !== usageDelta) {
+						throw new Error(storageLimitMessage || 'Storage limit exceeded');
+					}
 				} else {
 					await fileStoreUsageController.subtractUsage(user.id, -usageDelta);
 				}
@@ -442,7 +574,14 @@ export class UploadController {
 			await uploadRepository.update(existing.id, updatePayload);
 		} else {
 			if (size > 0) {
-				await fileStoreUsageController.addUsage(user.id, size, true);
+				const { appliedBytes } = await fileStoreUsageController.addUsageWithResult(
+					user.id,
+					size,
+					true
+				);
+				if (appliedBytes !== size) {
+					throw new Error(storageLimitMessage || 'Storage limit exceeded');
+				}
 			}
 			await uploadRepository.createWithExplicitId(did, localId, uploadData);
 		}

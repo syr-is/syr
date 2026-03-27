@@ -27,6 +27,9 @@ export * from './api.js';
 // Upload types
 export * from './uploads.js';
 
+// Profile stories (public reel)
+export * from './stories.js';
+
 // Post types
 export * from './posts.js';
 

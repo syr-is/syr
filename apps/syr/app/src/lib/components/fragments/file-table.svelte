@@ -95,6 +95,8 @@
 				return 'secondary';
 			case 'uploading':
 				return 'outline';
+			case 'finalizing':
+				return 'outline';
 			case 'failed':
 				return 'destructive';
 			case 'cancelled':

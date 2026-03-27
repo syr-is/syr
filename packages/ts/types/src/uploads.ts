@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseEntitySchema, RecordIdSchema, MetadataSchema } from './common.js';
+import { BaseEntitySchema, MetadataSchema, RecordIdSchema, TimestampSchema } from './common.js';
 import { stringToRecordId } from './codecs.js';
 
 /**
@@ -10,6 +10,7 @@ import { stringToRecordId } from './codecs.js';
  * - With folder: uploads/{did}/{folder_path}/{ulid}
  * - Without folder (root): uploads/{did}/{ulid}
  * - Post assets: uploads/{did}/posts/{post_ulid}/public/{ulid}
+ * - Profile stories: uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{ulid}
  *
  * The DID prefix (did:syr:z6Mk...) namespaces all uploads by identity owner.
  * Note: folder_path can be nested like "public/images/2024"
@@ -28,6 +29,7 @@ export type UploadKey = z.infer<typeof UploadKeySchema>;
 export const UploadStatusSchema = z.enum([
 	'pending',
 	'uploading',
+	'finalizing',
 	'completed',
 	'failed',
 	'cancelled'
@@ -57,11 +59,15 @@ export const UploadSchema = BaseEntitySchema.extend({
 	url: z.url().optional(),
 	status: UploadStatusSchema.default('pending'),
 	is_public: z.boolean().default(false),
+	/** Profile story slide (presign path); completed story uploads set published_at at completion. */
+	is_story: z.boolean().default(false),
+	/** Wall-clock time the story became public (set once when status → completed). */
+	published_at: TimestampSchema.nullable().optional(),
 	metadata: MetadataSchema.optional()
 }).refine(
 	(data) => {
-		// Pending uploads don't require key or url
-		if (data.status === 'pending') {
+		// Pending / finalizing uploads don't require key or url (finalizing is transient between S3 verify and completed)
+		if (data.status === 'pending' || data.status === 'finalizing') {
 			return true;
 		}
 		// Completed uploads require key and url

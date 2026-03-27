@@ -1,18 +1,48 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { stringToRecordId } from '@syr-is/types';
+import { normalizeRegistryUrl } from '$lib/registry-url';
 import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
+import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
 
 /**
  * GET /api/user/discovery-registries
- * List registries this account uses for directory search and follow discovery (not publication).
+ * List registries for resolution: user's list first, then instance-wide, deduped by canonical URL.
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) throw error(401, 'Authentication required');
 
 	const userId = stringToRecordId.decode(locals.user.id);
-	const registries = await discoveryRegistryRepository.findByUserId(userId);
-	return json({ data: registries });
+	const userRows = await discoveryRegistryRepository.findByUserId(userId);
+	const instanceRows = await instanceDiscoveryRegistryRepository.findAll();
+
+	const seen = new Set<string>();
+	const merged: { registry_url: string }[] = [];
+
+	for (const r of userRows) {
+		try {
+			const n = normalizeRegistryUrl(r.registry_url);
+			if (!seen.has(n)) {
+				seen.add(n);
+				merged.push({ registry_url: n });
+			}
+		} catch {
+			/* skip invalid stored URL */
+		}
+	}
+	for (const r of instanceRows) {
+		try {
+			const n = normalizeRegistryUrl(r.registry_url);
+			if (!seen.has(n)) {
+				seen.add(n);
+				merged.push({ registry_url: n });
+			}
+		} catch {
+			/* skip */
+		}
+	}
+
+	return json({ data: merged });
 };
 
 /**

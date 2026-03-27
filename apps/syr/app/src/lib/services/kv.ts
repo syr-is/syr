@@ -216,6 +216,29 @@ export class KvService {
 	}
 
 	/**
+	 * Atomic increment with min+max; returns new total and applied delta from the same transaction.
+	 */
+	async atomicIncrementFieldWithApplied(
+		type: string,
+		index: string,
+		field: string,
+		amount: number,
+		minValue: number,
+		maxValue: number,
+		ttlSeconds?: number
+	): Promise<{ newTotal: number; appliedBytes: number }> {
+		return this.repository.atomicIncrementFieldWithApplied(
+			type,
+			index,
+			field,
+			amount,
+			minValue,
+			maxValue,
+			ttlSeconds
+		);
+	}
+
+	/**
 	 * Conditionally update a KV entry's value only if value.version matches.
 	 * Used for optimistic locking. Returns true if update succeeded.
 	 */
