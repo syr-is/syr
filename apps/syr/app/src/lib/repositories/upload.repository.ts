@@ -155,24 +155,26 @@ export class UploadRepository extends BaseRepository<Upload> {
 	}
 
 	/**
-	 * Mark upload completed; set published_at once at DB when is_story and published_at unset (atomic).
+	 * Compare-and-set: only transitions pending → completed. Sets published_at once when is_story and
+	 * published_at is NONE. Second concurrent complete gets null (caller should re-fetch for idempotency).
 	 */
 	async mergeCompleteWithConditionalStoryPublishedAt(
 		id: RecordId | string,
 		now: Date
-	): Promise<Upload> {
+	): Promise<Upload | null> {
 		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
 		const result = await this.db.query<[unknown[]]>(
 			`UPDATE $id SET
 				status = 'completed',
 				updated_at = $now,
 				published_at = IF is_story = true AND published_at IS NONE { $now } ELSE { published_at }
+			 WHERE status = 'pending'
 			 RETURN AFTER`,
 			{ id: recordId, now }
 		);
 		const row = result[0]?.[0];
 		if (!row) {
-			throw new Error('mergeCompleteWithConditionalStoryPublishedAt: UPDATE returned no row');
+			return null;
 		}
 		return this.validate(row);
 	}

@@ -262,7 +262,6 @@ export class UploadController {
 			status: 'pending',
 			is_public: true,
 			is_story: true,
-			published_at: null,
 			created_at: now,
 			updated_at: now
 		});
@@ -308,7 +307,11 @@ export class UploadController {
 		}
 
 		if (pendingUpload.status === 'completed') {
-			throw new Error('Upload already completed');
+			return pendingUpload;
+		}
+
+		if (pendingUpload.status !== 'pending') {
+			throw new Error('Upload cannot be completed in its current state');
 		}
 
 		if (!pendingUpload.key) {
@@ -383,9 +386,21 @@ export class UploadController {
 			throw err;
 		}
 
-		// File verified, now atomically add to storage usage with quota enforcement
-		// This is a single atomic operation that checks and updates the quota,
-		// preventing race conditions where two uploads both pass quota check then both add
+		// Pending → completed in DB first (CAS: only one winner). Loser gets null and returns
+		// idempotently below; then addUsage so quota is not double-counted on concurrent completes.
+		const now = new Date();
+		const uploadRecord = await uploadRepository.mergeCompleteWithConditionalStoryPublishedAt(
+			uploadId,
+			now
+		);
+		if (!uploadRecord) {
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') {
+				return latest;
+			}
+			throw new Error('Upload could not be marked completed');
+		}
+
 		if (pendingUpload.size > 0) {
 			try {
 				await fileStoreUsageController.addUsage(
@@ -393,45 +408,17 @@ export class UploadController {
 					pendingUpload.size,
 					true // enforceQuota - atomic check-and-add with max cap
 				);
-			} catch (quotaErr) {
-				// Check if this is a quota exceeded error
-				if (quotaErr instanceof Error && quotaErr.message.includes('QUOTA_EXCEEDED')) {
-					// Delete the file from S3 since we can't accept it
-					const deleteCommand = new DeleteObjectCommand({
-						Bucket: s3.bucket,
-						Key: pendingUpload.key
-					});
-					await s3Service.client.send(deleteCommand);
-
-					// Mark upload as failed
-					await uploadRepository.update(uploadId, {
-						status: 'failed',
-						updated_at: new Date()
-					});
-
+			} catch (usageErr) {
+				await uploadRepository.updateWithUnset(
+					uploadId,
+					{ status: 'pending', updated_at: new Date() },
+					pendingUpload.is_story ? ['published_at'] : []
+				);
+				if (usageErr instanceof Error && usageErr.message.includes('QUOTA_EXCEEDED')) {
 					throw new Error('Storage limit exceeded. Upload rejected.');
 				}
-				// Re-throw other errors
-				throw quotaErr;
+				throw usageErr;
 			}
-		}
-
-		// Storage usage added successfully, now mark as completed
-		// If this fails after addUsage, we'll have slightly over-counted storage
-		// but that's safer than under-counting (user can recalculate if needed)
-		let uploadRecord;
-		try {
-			const now = new Date();
-			uploadRecord = await uploadRepository.mergeCompleteWithConditionalStoryPublishedAt(
-				uploadId,
-				now
-			);
-		} catch (updateErr) {
-			// Rollback the storage usage if we fail to update the record
-			if (pendingUpload.size > 0) {
-				await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, pendingUpload.size);
-			}
-			throw updateErr;
 		}
 
 		return uploadRecord;
