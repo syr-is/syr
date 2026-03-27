@@ -310,6 +310,10 @@ export class UploadController {
 			return pendingUpload;
 		}
 
+		if (pendingUpload.status === 'finalizing') {
+			throw new Error('Upload completion already in progress');
+		}
+
 		if (pendingUpload.status !== 'pending') {
 			throw new Error('Upload cannot be completed in its current state');
 		}
@@ -386,53 +390,88 @@ export class UploadController {
 			throw err;
 		}
 
-		// Pending → completed in DB first (CAS: only one winner). Loser gets null and returns
-		// idempotently below; then addUsage so quota is not double-counted on concurrent completes.
-		const now = new Date();
-		const uploadRecord = await uploadRepository.mergeCompleteWithConditionalStoryPublishedAt(
-			uploadId,
-			now
-		);
-		if (!uploadRecord) {
+		const nowFinalize = new Date();
+		const finalizingRow = await uploadRepository.casPendingToFinalizing(uploadId, nowFinalize);
+		if (!finalizingRow) {
 			const latest = await uploadRepository.findById(uploadId);
 			if (latest?.status === 'completed') {
 				return latest;
 			}
-			throw new Error('Upload could not be marked completed');
-		}
-
-		if (pendingUpload.size > 0) {
-			try {
-				const usageBefore = await fileStoreUsageController.getUsage(pendingUpload.owner_id);
-				const usageAfter = await fileStoreUsageController.addUsage(
-					pendingUpload.owner_id,
-					pendingUpload.size,
-					true // enforceQuota - atomic check-and-add with max cap
-				);
-				// addUsage returns new total bytes_used, not delta; detect partial/capped increments.
-				const addedBytes = usageAfter - usageBefore;
-				if (addedBytes < pendingUpload.size) {
-					await uploadRepository.updateWithUnset(
-						uploadId,
-						{ status: 'pending', updated_at: new Date() },
-						pendingUpload.is_story ? ['published_at'] : []
-					);
-					throw new Error('Storage limit exceeded. Upload rejected.');
-				}
-			} catch (usageErr) {
-				await uploadRepository.updateWithUnset(
-					uploadId,
-					{ status: 'pending', updated_at: new Date() },
-					pendingUpload.is_story ? ['published_at'] : []
-				);
-				if (usageErr instanceof Error && usageErr.message.includes('QUOTA_EXCEEDED')) {
-					throw new Error('Storage limit exceeded. Upload rejected.');
-				}
-				throw usageErr;
+			if (latest?.status === 'finalizing') {
+				throw new Error('Upload completion already in progress');
 			}
+			throw new Error('Upload could not be marked finalizing');
 		}
 
-		return uploadRecord;
+		let appliedBytes = 0;
+		const revertFinalizingToPending = async () => {
+			await uploadRepository.updateWithUnset(
+				uploadId,
+				{ status: 'pending', updated_at: new Date() },
+				pendingUpload.is_story ? ['published_at'] : []
+			);
+		};
+
+		try {
+			if (pendingUpload.size > 0) {
+				try {
+					const { appliedBytes: applied } = await fileStoreUsageController.addUsageWithResult(
+						pendingUpload.owner_id,
+						pendingUpload.size,
+						true
+					);
+					appliedBytes = applied;
+					if (applied < pendingUpload.size) {
+						if (applied > 0) {
+							await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, applied);
+						}
+						await revertFinalizingToPending();
+						throw new Error('Storage limit exceeded. Upload rejected.');
+					}
+				} catch (usageErr) {
+					const cur = await uploadRepository.findById(uploadId);
+					if (cur?.status === 'finalizing') {
+						await revertFinalizingToPending();
+					}
+					if (usageErr instanceof Error && usageErr.message.includes('QUOTA_EXCEEDED')) {
+						throw new Error('Storage limit exceeded. Upload rejected.');
+					}
+					throw usageErr;
+				}
+			}
+
+			const nowComplete = new Date();
+			const completedRow = await uploadRepository.casFinalizingToCompleted(uploadId, nowComplete);
+			if (!completedRow) {
+				const latest = await uploadRepository.findById(uploadId);
+				if (latest?.status === 'completed') {
+					return latest;
+				}
+				if (pendingUpload.size > 0 && appliedBytes > 0) {
+					await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
+				}
+				await revertFinalizingToPending();
+				throw new Error('Upload could not be marked completed');
+			}
+
+			return completedRow;
+		} catch (err) {
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') {
+				return latest;
+			}
+			if (latest?.status === 'finalizing') {
+				if (pendingUpload.size > 0 && appliedBytes > 0) {
+					try {
+						await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
+					} catch {
+						// best-effort rollback of KV after an unexpected failure path
+					}
+				}
+				await revertFinalizingToPending();
+			}
+			throw err;
+		}
 	}
 
 	async getUpload(id: RecordId | string): Promise<Upload | null> {
@@ -472,11 +511,13 @@ export class UploadController {
 		const existing = await uploadRepository.findByCompositeId(did, localId);
 		const deltaBytes = existing ? size - existing.size : size;
 
+		let storageLimitMessage: string | undefined;
 		if (deltaBytes > 0) {
 			const storageCheck = await fileStoreUsageController.canUpload(user.id, deltaBytes);
 			if (!storageCheck.allowed) {
 				throw new Error(storageCheck.message || 'Storage limit exceeded');
 			}
+			storageLimitMessage = storageCheck.message;
 		}
 
 		await s3Service.client.send(
@@ -517,7 +558,14 @@ export class UploadController {
 			const usageDelta = size - existing.size;
 			if (usageDelta !== 0) {
 				if (usageDelta > 0) {
-					await fileStoreUsageController.addUsage(user.id, usageDelta, true);
+					const { appliedBytes } = await fileStoreUsageController.addUsageWithResult(
+						user.id,
+						usageDelta,
+						true
+					);
+					if (appliedBytes !== usageDelta) {
+						throw new Error(storageLimitMessage || 'Storage limit exceeded');
+					}
 				} else {
 					await fileStoreUsageController.subtractUsage(user.id, -usageDelta);
 				}
@@ -526,7 +574,14 @@ export class UploadController {
 			await uploadRepository.update(existing.id, updatePayload);
 		} else {
 			if (size > 0) {
-				await fileStoreUsageController.addUsage(user.id, size, true);
+				const { appliedBytes } = await fileStoreUsageController.addUsageWithResult(
+					user.id,
+					size,
+					true
+				);
+				if (appliedBytes !== size) {
+					throw new Error(storageLimitMessage || 'Storage limit exceeded');
+				}
 			}
 			await uploadRepository.createWithExplicitId(did, localId, uploadData);
 		}

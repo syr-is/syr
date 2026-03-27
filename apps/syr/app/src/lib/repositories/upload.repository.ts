@@ -155,20 +155,32 @@ export class UploadRepository extends BaseRepository<Upload> {
 	}
 
 	/**
-	 * Compare-and-set: only transitions pending → completed. Sets published_at once when is_story and
-	 * published_at is NONE. Second concurrent complete gets null (caller should re-fetch for idempotency).
+	 * Compare-and-set: pending → finalizing (quota not yet committed; not publicly "done").
 	 */
-	async mergeCompleteWithConditionalStoryPublishedAt(
-		id: RecordId | string,
-		now: Date
-	): Promise<Upload | null> {
+	async casPendingToFinalizing(id: RecordId | string, now: Date): Promise<Upload | null> {
+		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
+		const result = await this.db.query<[unknown[]]>(
+			`UPDATE $id SET status = 'finalizing', updated_at = $now WHERE status = 'pending' RETURN AFTER`,
+			{ id: recordId, now }
+		);
+		const row = result[0]?.[0];
+		if (!row) {
+			return null;
+		}
+		return this.validate(row);
+	}
+
+	/**
+	 * Compare-and-set: finalizing → completed. Sets published_at once when is_story and published_at is NONE.
+	 */
+	async casFinalizingToCompleted(id: RecordId | string, now: Date): Promise<Upload | null> {
 		const recordId = typeof id === 'string' ? stringToRecordId.decode(id) : id;
 		const result = await this.db.query<[unknown[]]>(
 			`UPDATE $id SET
 				status = 'completed',
 				updated_at = $now,
 				published_at = IF is_story = true AND published_at IS NONE { $now } ELSE { published_at }
-			 WHERE status = 'pending'
+			 WHERE status = 'finalizing'
 			 RETURN AFTER`,
 			{ id: recordId, now }
 		);

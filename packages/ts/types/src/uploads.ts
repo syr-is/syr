@@ -29,6 +29,7 @@ export type UploadKey = z.infer<typeof UploadKeySchema>;
 export const UploadStatusSchema = z.enum([
 	'pending',
 	'uploading',
+	'finalizing',
 	'completed',
 	'failed',
 	'cancelled'
@@ -65,8 +66,8 @@ export const UploadSchema = BaseEntitySchema.extend({
 	metadata: MetadataSchema.optional()
 }).refine(
 	(data) => {
-		// Pending uploads don't require key or url
-		if (data.status === 'pending') {
+		// Pending / finalizing uploads don't require key or url (finalizing is transient between S3 verify and completed)
+		if (data.status === 'pending' || data.status === 'finalizing') {
 			return true;
 		}
 		// Completed uploads require key and url
