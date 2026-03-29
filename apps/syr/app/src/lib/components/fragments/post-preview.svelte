@@ -39,6 +39,7 @@
 			displayName: string;
 			username: string;
 			avatarUrl?: string | null;
+			instanceHost?: string | null;
 		};
 	}
 
@@ -182,7 +183,11 @@
 			<div class="flex min-w-0 flex-col justify-center gap-0.5">
 				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-sm">
 					<span class="truncate font-semibold">{feedAuthor.displayName}</span>
-					<span class="truncate text-muted-foreground">@{feedAuthor.username}</span>
+					<span class="truncate text-muted-foreground"
+						>{feedAuthor.instanceHost
+							? `${feedAuthor.username}@${feedAuthor.instanceHost}`
+							: `@${feedAuthor.username}`}</span
+					>
 				</div>
 			</div>
 		</div>

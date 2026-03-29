@@ -25,7 +25,7 @@ services:
     image: chrislusf/seaweedfs:latest
     command: >
       server -s3 -s3.config=/etc/seaweedfs/s3_config.json
-      -s3.allowedOrigins=${PUBLIC_URL:-http://localhost:5173}
+      -s3.allowedOrigins=*
       -filer=true
     ports:
       - "8333:8333" # S3 API

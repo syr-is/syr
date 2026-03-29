@@ -4,6 +4,13 @@
 	import { registryApiRoot } from '$lib/registry-url';
 	import { normalizeProviderBaseUrl } from '$lib/normalize-provider-base-url';
 	import { resolve } from '$app/paths';
+	import { fetchManifest } from '$lib/manifest-cache.js';
+	import {
+		endpointsFromManifest,
+		fallbackEndpoints,
+		manifestUrl,
+		type RemoteEndpoints
+	} from '$lib/remote-endpoints.js';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Input } from '@syr-is/ui/input';
 	import { Label } from '@syr-is/ui/label';
@@ -26,6 +33,7 @@
 		avatarUrl: string | null;
 		bannerUrl: string | null;
 		profileHref: string | null;
+		instanceHost: string | null;
 	};
 
 	let { data } = $props();
@@ -98,12 +106,14 @@
 		let profileHref: string | null = null;
 
 		if (provider) {
-			profileHref = `${provider}/u/${encodeURIComponent(f.followed_did)}`;
+			const mUrl = manifestUrl(provider, f.followed_did);
+			const manifest = await fetchManifest(mUrl, 8_000);
+			const ep: RemoteEndpoints = manifest
+				? endpointsFromManifest(manifest)
+				: fallbackEndpoints(provider, f.followed_did);
+			profileHref = ep.web_profile;
 			try {
-				const res = await fetch(
-					`${provider}/api/public/profile/${encodeURIComponent(f.followed_did)}`,
-					{ signal: AbortSignal.timeout(8_000) }
-				);
+				const res = await fetch(ep.profile, { signal: AbortSignal.timeout(8_000) });
 				if (res.ok) {
 					const j = (await res.json()) as {
 						data?: {
@@ -127,13 +137,23 @@
 			}
 		}
 
+		let instanceHost: string | null = null;
+		if (provider) {
+			try {
+				instanceHost = new URL(provider).host;
+			} catch {
+				/* skip */
+			}
+		}
+
 		return {
 			...f,
 			displayName,
 			username,
 			avatarUrl,
 			bannerUrl,
-			profileHref
+			profileHref,
+			instanceHost
 		};
 	}
 
@@ -255,6 +275,7 @@
 						did={row.followed_did}
 						avatarUrl={row.avatarUrl}
 						bannerUrl={row.bannerUrl}
+						instanceHost={row.instanceHost}
 						openDisabled={!row.profileHref}
 						onOpen={() => {
 							if (row.profileHref) {

@@ -74,6 +74,43 @@ No:
 
 ## 3. Provider Discovery
 
+### 3.0 Instance discovery
+
+`GET /.well-known/syr` returns instance-level metadata including API base paths and a template for per-identity manifest URLs:
+
+```json
+{
+	"name": "syr",
+	"public_url": "https://provider.example",
+	"api": {
+		"public_profile": "https://provider.example/api/public/profile",
+		"public_posts": "https://provider.example/api/public/posts",
+		"public_stories": "https://provider.example/api/public/stories",
+		"public_uploads": "https://provider.example/api/public/uploads"
+	},
+	"identity_manifest_template": "https://provider.example/.well-known/syr/{did}",
+	"syner": {
+		"independent_login_challenge": "https://provider.example/api/auth/independent-login/challenge/{id}",
+		"independent_login_verify": "https://provider.example/api/auth/independent-login/verify",
+		"profile_sync": "https://provider.example/api/auth/independent-login/profile-sync",
+		"export_challenge": "https://provider.example/api/identity/export-challenge/{id}",
+		"export_verify": "https://provider.example/api/identity/export-verify",
+		"export_signatures": "https://provider.example/api/identity/export-signatures",
+		"sigil_handoff_payload": "https://provider.example/api/user/sigil-handoff/{id}/payload",
+		"post_sign_payload": "https://provider.example/api/user/post-sign/{id}/payload",
+		"post_sign_signature": "https://provider.example/api/user/post-sign/{id}/signature",
+		"registry_sign_payload": "https://provider.example/api/user/registry-sign/{id}/payload",
+		"registry_sign_signature": "https://provider.example/api/user/registry-sign/{id}/signature"
+	}
+}
+```
+
+The `syner` object is optional. It provides URL templates for the Syner companion app's operational flows (independent login, export verification, signing). `{id}` is replaced with the actual challenge or session ID. Third-party providers implementing the Syr protocol advertise their own route structure here. If absent, Syner falls back to the default Syr paths.
+
+### 3.1 Per-identity manifest
+
+Each hosted identity has a manifest at `/.well-known/syr/{did}` that advertises the absolute URLs for all public API endpoints. This is the **primary discovery mechanism** for clients interacting with a remote identity.
+
 ```mermaid
 sequenceDiagram
     participant Client
@@ -82,46 +119,55 @@ sequenceDiagram
 
     Client->>Registry: GET /resolve/did:syr:z6Mkt9...
     Registry-->>Client: { provider: "https://provider.example" }
-    Client->>Provider: GET /.well-known/syr
-    Provider-->>Client: { did, endpoints: { profile, oauth_authorize, ... } }
-    Client->>Provider: GET /profile
+    Client->>Provider: GET /.well-known/syr/did:syr:z6Mkt9... (Accept: application/json)
+    Provider-->>Client: { version: 1, endpoints: { profile, posts, stories, ... }, web_profile }
+    Client->>Provider: GET {endpoints.profile}
     Provider-->>Client: { did, displayName, bio, avatar, ... }
 ```
 
-Given a resolved registry record:
+#### Content negotiation
 
-```
-did:syr → https://provider.example
-```
+The manifest URL supports content negotiation via the `Accept` header:
 
-Clients MUST query:
+- **`Accept: application/json`** → returns the manifest JSON (for API clients)
+- **`Accept: text/html`** (or default) → **302 redirect** to `web_profile` (for browsers)
 
-```
-GET /.well-known/syr
-```
+This means `identity_host_url` can point directly to the manifest URL: browsers clicking it are redirected to the human-readable profile page, while API clients receive the structured manifest.
 
----
-
-### 3.1 Discovery response
+#### Manifest response
 
 ```json
 {
+	"version": 1,
 	"did": "did:syr:...",
 	"provider": "https://provider.example",
 	"endpoints": {
-		"profile": "/profile",
-		"oauth_authorize": "/oauth/authorize",
-		"oauth_token": "/oauth/token",
-		"oauth_userinfo": "/oauth/userinfo",
-		"export": "/export"
-	}
+		"profile": "https://provider.example/api/public/profile/did%3Asyr%3A...",
+		"posts": "https://provider.example/api/public/posts/did%3Asyr%3A...",
+		"stories": "https://provider.example/api/public/stories/did%3Asyr%3A...",
+		"uploads": "https://provider.example/api/public/uploads/did%3Asyr%3A...",
+		"did_document": "https://provider.example/api/identity/did%3Asyr%3A.../document"
+	},
+	"web_profile": "https://provider.example/u/did%3Asyr%3A..."
 }
 ```
 
 Rules:
 
-- All paths are **relative to provider origin**.
-- Provider MUST ensure `did` matches served identity.
+- All URLs are **absolute** — consumers MUST NOT assume the origin.
+- Provider MUST ensure `did` matches the served identity.
+- Response includes `Cache-Control: public, max-age=300`.
+- `version` is `1`; future versions may add fields.
+
+#### Fallback behavior
+
+If a provider does not serve a manifest (404 or non-JSON response), clients SHOULD fall back to the conventional hardcoded paths:
+
+- Profile: `{provider}/api/public/profile/{did}`
+- Posts: `{provider}/api/public/posts/{did}`
+- Stories: `{provider}/api/public/stories/{did}`
+- Uploads: `{provider}/api/public/uploads/{did}`
+- DID Document: `{provider}/api/identity/{did}/document`
 
 ---
 

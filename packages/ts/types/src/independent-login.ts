@@ -7,7 +7,9 @@ import { DidSyrSchema, IdentityHostUrlSchema } from './common.js';
  */
 export const IndependentLoginChallengeRequestSchema = z.object({
 	/** Origin URL of the requesting page (for validation) */
-	origin: z.string().url()
+	origin: z.string().url(),
+	/** Optional DID to pre-select a specific persona on Syner */
+	did: DidSyrSchema.optional()
 });
 
 export type IndependentLoginChallengeRequest = z.infer<

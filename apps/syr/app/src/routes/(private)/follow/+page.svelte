@@ -54,7 +54,8 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				const res = await fetch(`/api/follows/check?did=${encodeURIComponent(did)}`, {
+				const checkQs = `did=${encodeURIComponent(did)}${data.provider ? `&provider=${encodeURIComponent(data.provider)}` : ''}`;
+				const res = await fetch(`/api/follows/check?${checkQs}`, {
 					credentials: 'include'
 				});
 				const j = (await res.json().catch(() => ({}))) as { data?: { following?: boolean } };
@@ -81,7 +82,8 @@
 		followBusy = true;
 		try {
 			if (isFollowing) {
-				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(currentDid)}`, {
+				const delQs = `followed_did=${encodeURIComponent(currentDid)}${data.provider ? `&provider_url=${encodeURIComponent(data.provider)}` : ''}`;
+				const res = await fetch(`/api/follows?${delQs}`, {
 					method: 'DELETE'
 				});
 				const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
@@ -94,10 +96,16 @@
 				return;
 			}
 
+			const followBody: { followed_did: string; provider_url?: string } = {
+				followed_did: currentDid
+			};
+			if (data.provider) {
+				followBody.provider_url = data.provider;
+			}
 			const res = await fetch('/api/follows', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ followed_did: currentDid })
+				body: JSON.stringify(followBody)
 			});
 			const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
 			if (!res.ok) {
@@ -144,6 +152,15 @@
 						banner_url: null,
 						did: data.targetDid,
 						signed_payload_json: null,
+						instanceHost: data.provider
+							? (() => {
+									try {
+										return new URL(data.provider).host;
+									} catch {
+										return null;
+									}
+								})()
+							: null,
 						content_signature: null,
 						signing_device_public_key: null
 					}}

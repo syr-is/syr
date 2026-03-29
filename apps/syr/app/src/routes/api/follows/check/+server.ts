@@ -5,8 +5,9 @@ import { stringToRecordId } from '@syr-is/types';
 import { isValidSyrDid } from '@syr-is/did';
 
 /**
- * GET /api/follows/check?did=did:syr:…
- * Returns whether the current user follows the given DID (single lookup).
+ * GET /api/follows/check?did=did:syr:…&provider=https://…
+ * Returns whether the current user follows the given DID.
+ * When provider is given, checks for that specific instance only.
  */
 export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -16,8 +17,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!did || !isValidSyrDid(did)) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'Valid did query parameter required' });
 	}
+	const provider = url.searchParams.get('provider')?.trim() || undefined;
 	const userId = stringToRecordId.decode(locals.user.id);
-	const following = await followController.isFollowing(userId, did);
+	const following = await followController.isFollowing(userId, did, provider);
 	return json({
 		status: 'success',
 		data: { following }

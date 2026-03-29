@@ -53,3 +53,6 @@ export * from './signed-mutations.js';
 
 // Persona types (Syner local identities)
 export * from './persona.js';
+
+// Identity manifest (per-identity discovery at /.well-known/syr/{did})
+export * from './identity-manifest.js';

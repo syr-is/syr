@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
+import { resolveSynerEndpoint } from './instance-manifest';
 
 /**
  * Sync persona profile (display_name, bio, avatar, banner) to SYR provisioner.
@@ -41,8 +42,8 @@ export async function syncProfileToSyr(
 		formData.set('banner', new Blob([bytes], { type: mime }), 'banner');
 	}
 
-	const base = instanceBase.replace(/\/$/, '');
-	const res = await fetch(`${base}/api/auth/independent-login/profile-sync`, {
+	const profileSyncUrl = await resolveSynerEndpoint(instanceBase, 'profile_sync');
+	const res = await fetch(profileSyncUrl, {
 		method: 'POST',
 		body: formData
 	});

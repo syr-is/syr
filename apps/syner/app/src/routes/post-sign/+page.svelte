@@ -9,6 +9,7 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader } from '@lucide/svelte';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
+	import { resolveSynerEndpoint } from '$lib/instance-manifest';
 	import type { Persona } from '$lib/types';
 	import PersonaImage from '$lib/components/persona-image.svelte';
 
@@ -154,8 +155,7 @@
 		passphrase = '';
 		void (async () => {
 			try {
-				const base = instanceUrl.replace(/\/$/, '');
-				const url = `${base}/api/user/post-sign/${encodeURIComponent(sessionId)}/payload`;
+				const url = await resolveSynerEndpoint(instanceUrl, 'post_sign_payload', sessionId);
 				const res = await fetch(url, { method: 'GET' });
 				const j = await res.json().catch(() => ({}));
 				if (seq !== fetchSeq) return;
@@ -229,8 +229,7 @@
 				device_public_key: expectedMb
 			};
 
-			const base = instanceUrl.replace(/\/$/, '');
-			const putUrl = `${base}/api/user/post-sign/${encodeURIComponent(sessionId)}/signature`;
+			const putUrl = await resolveSynerEndpoint(instanceUrl, 'post_sign_signature', sessionId);
 			const res = await fetch(putUrl, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },

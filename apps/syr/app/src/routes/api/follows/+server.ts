@@ -8,7 +8,8 @@ import { IdentityHostUrlSchema } from '@syr-is/types';
 import { followRowToJson } from '$lib/server/follow-row-json.server';
 
 const FollowBodySchema = z.object({
-	followed_did: z.string().min(12)
+	followed_did: z.string().min(12),
+	provider_url: z.string().url().optional()
 });
 
 const PatchFollowProviderSchema = z.object({
@@ -53,7 +54,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid did:syr' });
 	}
 	try {
-		const row = await followController.follow(locals.user.id, user.did, parsed.data.followed_did);
+		const row = await followController.follow(
+			locals.user.id,
+			user.did,
+			parsed.data.followed_did,
+			parsed.data.provider_url
+		);
 		return json({
 			status: 'success',
 			data: row ? followRowToJson(row) : null
@@ -79,8 +85,9 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
 	if (!followed || !isValidSyrDid(followed)) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'followed_did query required' });
 	}
+	const providerUrl = url.searchParams.get('provider_url')?.trim() || undefined;
 	try {
-		await followController.unfollow(locals.user.id, followed);
+		await followController.unfollow(locals.user.id, followed, providerUrl);
 	} catch (e) {
 		if (isHttpError(e)) throw e;
 		console.error('follow DELETE:', e);

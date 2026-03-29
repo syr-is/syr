@@ -8,10 +8,11 @@ import {
 	getMergedDiscoveryBases,
 	resolveProviderWithBases
 } from '$lib/server/discovery-bases.server';
+import { resolveRemoteEndpoints } from '$lib/server/resolve-remote-endpoints.server';
 
 const REMOTE_FETCH_MS = 12_000;
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, url, locals }) => {
 	let key: string;
 	try {
 		key = decodeURIComponent(params.param);
@@ -19,50 +20,67 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(400, 'Bad request');
 	}
 
-	const user = isValidSyrDid(key)
-		? await userRepository.findByDid(key)
-		: await userRepository.findByUsername(key);
+	// When ?provider= is present, always fetch from that provider (third-party instance)
+	const explicitProvider = url.searchParams.get('provider')?.trim().replace(/\/$/, '') || null;
 
-	if (user) {
-		const profile = await profileRepository.findByUserId(user.id);
-		if (!profile) {
-			throw error(404, 'Not found');
+	if (!explicitProvider) {
+		const user = isValidSyrDid(key)
+			? await userRepository.findByDid(key)
+			: await userRepository.findByUsername(key);
+
+		if (user) {
+			const profile = await profileRepository.findByUserId(user.id);
+			if (!profile) {
+				throw error(404, 'Not found');
+			}
+
+			return {
+				publicProfile: {
+					did: user.did ?? null,
+					username: user.username,
+					display_name: profile.display_name,
+					bio: profile.bio,
+					avatar_url: profile.avatar_url,
+					banner_url: profile.banner_url,
+					identity_host_url: profile.identity_host_url,
+					content_signature: profile.content_signature,
+					signed_payload_json: profile.signed_payload_json,
+					signing_device_public_key: profile.signing_device_public_key
+				},
+				maxPostPayloadBytes: effectiveMaxPostPayloadBytes(undefined),
+				profileSource: 'local' as const,
+				resolvedProviderOrigin: null as string | null,
+				remoteEndpoints: null as {
+					posts: string;
+					uploads: string;
+					stories: string;
+					web_profile: string | null;
+				} | null
+			};
 		}
-
-		return {
-			publicProfile: {
-				did: user.did ?? null,
-				username: user.username,
-				display_name: profile.display_name,
-				bio: profile.bio,
-				avatar_url: profile.avatar_url,
-				banner_url: profile.banner_url,
-				identity_host_url: profile.identity_host_url,
-				content_signature: profile.content_signature,
-				signed_payload_json: profile.signed_payload_json,
-				signing_device_public_key: profile.signing_device_public_key
-			},
-			maxPostPayloadBytes: effectiveMaxPostPayloadBytes(undefined),
-			profileSource: 'local' as const,
-			resolvedProviderOrigin: null as string | null
-		};
 	}
 
 	if (!isValidSyrDid(key)) {
 		throw error(404, 'Not found');
 	}
 
-	const bases = await getMergedDiscoveryBases({ userId: locals.user?.id });
-	if (bases.length === 0) {
-		throw error(404, 'Not found');
+	let provider: string;
+	if (explicitProvider) {
+		provider = explicitProvider;
+	} else {
+		const bases = await getMergedDiscoveryBases({ userId: locals.user?.id });
+		if (bases.length === 0) {
+			throw error(404, 'Not found');
+		}
+		const resolved = await resolveProviderWithBases(key, bases, REMOTE_FETCH_MS);
+		if (!resolved) {
+			throw error(404, 'Not found');
+		}
+		provider = resolved;
 	}
 
-	const provider = await resolveProviderWithBases(key, bases, REMOTE_FETCH_MS);
-	if (!provider) {
-		throw error(404, 'Not found');
-	}
-
-	const profileUrl = `${provider}/api/public/profile/${encodeURIComponent(key)}`;
+	const endpoints = await resolveRemoteEndpoints(key, provider, null, REMOTE_FETCH_MS);
+	const profileUrl = endpoints.profile;
 	const ctrl = new AbortController();
 	const timer = setTimeout(() => ctrl.abort(), REMOTE_FETCH_MS);
 	let body: { data?: Record<string, unknown> };
@@ -106,6 +124,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		},
 		maxPostPayloadBytes: effectiveMaxPostPayloadBytes(undefined),
 		profileSource: 'remote' as const,
-		resolvedProviderOrigin: provider
+		resolvedProviderOrigin: provider,
+		remoteEndpoints: {
+			posts: endpoints.posts,
+			uploads: endpoints.uploads,
+			stories: endpoints.stories,
+			web_profile: endpoints.web_profile
+		}
 	};
 };
