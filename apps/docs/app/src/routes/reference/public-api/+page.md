@@ -227,6 +227,32 @@ Array of objects with: `id`, `did`, `local_id`, `owner_id`, `folder_id`, `filena
 
 ---
 
+## `GET /api/public/following/[did]`
+
+Route file: `api/public/following/[did]/+server.ts`. Returns the list of DIDs that this user **publicly follows**. Only follows where the user has opted in to public visibility (`is_public = true`) are included.
+
+### Response `data`
+
+Array of objects:
+
+| Field                   | Type           | Description                                   |
+| ----------------------- | -------------- | --------------------------------------------- |
+| `followed_did`          | string         | The DID being followed                        |
+| `followed_provider_url` | string \| null | Provider URL where the followed DID is hosted |
+| `created_at`            | string         | ISO 8601 timestamp                            |
+
+### Response `pagination`
+
+| Field   | Type   | Description          |
+| ------- | ------ | -------------------- |
+| `total` | number | Total public follows |
+
+### Errors
+
+- **400** invalid DID.
+
+---
+
 ## Discovery
 
 ### Instance-level: `GET /.well-known/syr`
@@ -272,17 +298,18 @@ Route file: `.well-known/syr/[did]/+server.ts`. Returns a **per-identity manifes
 
 #### Manifest `data`
 
-| Field                    | Type   | Description                         |
-| ------------------------ | ------ | ----------------------------------- |
-| `version`                | `1`    | Schema version                      |
-| `did`                    | string | The identity's DID                  |
-| `provider`               | string | Canonical provider origin URL       |
-| `endpoints.profile`      | string | Absolute URL for public profile API |
-| `endpoints.posts`        | string | Absolute URL for public posts API   |
-| `endpoints.stories`      | string | Absolute URL for public stories API |
-| `endpoints.uploads`      | string | Absolute URL for public uploads API |
-| `endpoints.did_document` | string | Absolute URL for DID document       |
-| `web_profile`            | string | Human-viewable profile page URL     |
+| Field                        | Type              | Description                            |
+| ---------------------------- | ----------------- | -------------------------------------- |
+| `version`                    | `1`               | Schema version                         |
+| `did`                        | string            | The identity's DID                     |
+| `provider`                   | string            | Canonical provider origin URL          |
+| `endpoints.profile`          | string            | Absolute URL for public profile API    |
+| `endpoints.posts`            | string            | Absolute URL for public posts API      |
+| `endpoints.stories`          | string            | Absolute URL for public stories API    |
+| `endpoints.uploads`          | string            | Absolute URL for public uploads API    |
+| `endpoints.did_document`     | string            | Absolute URL for DID document          |
+| `endpoints.public_following` | string (optional) | Absolute URL for public following list |
+| `web_profile`                | string            | Human-viewable profile page URL        |
 
 #### Errors
 

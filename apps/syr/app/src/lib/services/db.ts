@@ -140,6 +140,7 @@ class DatabaseService {
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS source_registry ON TABLE user_follow TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS followed_provider_url ON TABLE user_follow TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS is_public ON TABLE user_follow TYPE bool DEFAULT false;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_follow TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_follow_follower ON TABLE user_follow COLUMNS follower_user_id;
 				DEFINE INDEX IF NOT EXISTS idx_follow_followed ON TABLE user_follow COLUMNS followed_did;

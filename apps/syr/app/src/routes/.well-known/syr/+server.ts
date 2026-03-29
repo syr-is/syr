@@ -20,7 +20,8 @@ export const GET: RequestHandler = async () => {
 			public_profile: `${base}/api/public/profile`,
 			public_posts: `${base}/api/public/posts`,
 			public_stories: `${base}/api/public/stories`,
-			public_uploads: `${base}/api/public/uploads`
+			public_uploads: `${base}/api/public/uploads`,
+			public_following: `${base}/api/public/following`
 		},
 		identity_manifest_template: `${base}/.well-known/syr/{did}`,
 		syner: {

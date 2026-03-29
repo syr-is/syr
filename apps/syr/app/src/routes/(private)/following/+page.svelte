@@ -24,6 +24,7 @@
 		source_registry: string | null;
 		/** Persisted provider base URL; may be absent on legacy rows. */
 		followed_provider_url?: string | null;
+		is_public?: boolean;
 		created_at: string;
 	};
 
@@ -214,6 +215,32 @@
 		}
 	}
 
+	async function togglePublic(row: EnrichedFollow) {
+		const newVal = !row.is_public;
+		try {
+			const res = await fetch('/api/follows/visibility', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					followed_did: row.followed_did,
+					followed_provider_url: row.followed_provider_url ?? undefined,
+					is_public: newVal
+				})
+			});
+			if (!res.ok) {
+				const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+				toast.error(j.error?.message ?? 'Could not update visibility');
+				return;
+			}
+			row.is_public = newVal;
+			enriched = [...enriched];
+			toast.success(newVal ? 'Follow is now public' : 'Follow is now private');
+		} catch {
+			toast.error('Could not update visibility');
+		}
+	}
+
 	$effect(() => {
 		const raw = data.follows;
 		if (!raw?.length) {
@@ -296,6 +323,15 @@
 								</p>
 							{/if}
 							<div class="flex flex-wrap gap-2">
+								<Button
+									type="button"
+									variant={row.is_public ? 'default' : 'outline'}
+									size="sm"
+									class="gap-1.5"
+									onclick={() => togglePublic(row)}
+								>
+									{row.is_public ? 'Public' : 'Private'}
+								</Button>
 								<Button
 									type="button"
 									variant="outline"

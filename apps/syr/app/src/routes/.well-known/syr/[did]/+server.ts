@@ -35,7 +35,8 @@ export const GET: RequestHandler = async ({ params, request }) => {
 			posts: `${base}/api/public/posts/${encoded}`,
 			stories: `${base}/api/public/stories/${encoded}`,
 			uploads: `${base}/api/public/uploads/${encoded}`,
-			did_document: `${base}/api/identity/${encoded}/document`
+			did_document: `${base}/api/identity/${encoded}/document`,
+			public_following: `${base}/api/public/following/${encoded}`
 		},
 		web_profile: `${base}/u/${encoded}`
 	};
