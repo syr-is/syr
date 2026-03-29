@@ -15,6 +15,7 @@
 	import { toast } from 'svelte-sonner';
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
+	import { resolveSynerEndpoint } from '$lib/instance-manifest';
 	import type { Persona } from '$lib/types';
 
 	function redactErrorPayload(data: unknown): string {
@@ -82,8 +83,7 @@
 		if (!challengeId || !instanceUrl) return;
 		latestFetchSeq++;
 		const seq = latestFetchSeq;
-		const base = instanceUrl.replace(/\/$/, '');
-		const url = `${base}/api/identity/export-challenge/${challengeId}`;
+		const url = await resolveSynerEndpoint(instanceUrl, 'export_challenge', challengeId);
 		info(`[export-verify] Fetching challenge`);
 		loadError = null;
 		message = null;
@@ -210,9 +210,8 @@
 		loading = true;
 		error = null;
 		signingProgress = null;
-		const base = instanceUrl.replace(/\/$/, '');
-		const verifyUrl = `${base}/api/identity/export-verify`;
-		const signaturesUrl = `${base}/api/identity/export-signatures`;
+		const verifyUrl = await resolveSynerEndpoint(instanceUrl, 'export_verify');
+		const signaturesUrl = await resolveSynerEndpoint(instanceUrl, 'export_signatures');
 		info(`[export-verify] Signing challenge and verifying at ${verifyUrl}`);
 		try {
 			const payloadBytes = Array.from(new TextEncoder().encode(message));

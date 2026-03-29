@@ -10,6 +10,7 @@
 		did,
 		avatarUrl,
 		bannerUrl,
+		instanceHost,
 		onOpen,
 		openDisabled = false,
 		cardFooter
@@ -19,6 +20,7 @@
 		did: string;
 		avatarUrl?: string | null;
 		bannerUrl?: string | null;
+		instanceHost?: string | null;
 		onOpen: () => void;
 		/** When true, Open is disabled (e.g. profile URL unknown). */
 		openDisabled?: boolean;
@@ -27,6 +29,7 @@
 	} = $props();
 
 	const label = $derived(displayName?.trim() || username || '—');
+	const handle = $derived(instanceHost ? `@${username}@${instanceHost}` : `@${username}`);
 </script>
 
 <Card.Root class="gap-0 overflow-hidden p-0 shadow-sm transition-shadow hover:shadow-md">
@@ -59,7 +62,7 @@
 			</Avatar>
 			<div class="min-w-0 flex-1 space-y-0.5 sm:pt-0.5">
 				<Card.Title class="truncate text-base font-semibold tracking-tight">{label}</Card.Title>
-				<Card.Description class="font-mono text-xs">@{username}</Card.Description>
+				<Card.Description class="font-mono text-xs">{handle}</Card.Description>
 				<p class="truncate font-mono text-[11px] text-muted-foreground" title={did}>{did}</p>
 			</div>
 		</div>

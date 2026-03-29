@@ -22,6 +22,31 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { fetchManifest } from '$lib/manifest-cache.js';
+	import {
+		endpointsFromManifest,
+		fallbackEndpoints,
+		manifestUrl,
+		type RemoteEndpoints
+	} from '$lib/remote-endpoints.js';
+
+	function extractHost(providerUrl: string): string | null {
+		try {
+			return new URL(providerUrl).host;
+		} catch {
+			return null;
+		}
+	}
+
+	async function resolveEndpointsForDid(
+		providerOrigin: string,
+		did: string
+	): Promise<RemoteEndpoints> {
+		const url = manifestUrl(providerOrigin, did);
+		const manifest = await fetchManifest(url, 8_000);
+		if (manifest) return endpointsFromManifest(manifest);
+		return fallbackEndpoints(providerOrigin, did);
+	}
 
 	let { data } = $props();
 
@@ -54,6 +79,7 @@
 		username: string;
 		avatarUrl: string | null;
 		bannerUrl: string | null;
+		instanceHost?: string | null;
 	};
 	let remoteProfileByDid = $state<Record<string, RemoteAuthorProfile | null>>({});
 	let followingCount = $state(0);
@@ -88,8 +114,8 @@
 				chunk.map(async ([did, provider]) => {
 					let profile: RemoteAuthorProfile | null = null;
 					try {
-						const base = provider.replace(/\/$/, '');
-						const res = await fetch(`${base}/api/public/profile/${encodeURIComponent(did)}`, {
+						const ep = await resolveEndpointsForDid(provider, did);
+						const res = await fetch(ep.profile, {
 							signal: AbortSignal.timeout(8_000)
 						});
 						if (res.ok) {
@@ -108,7 +134,8 @@
 									displayName: (d.display_name?.trim() || uname || did) as string,
 									username: uname || '—',
 									avatarUrl: d.avatar_url ?? null,
-									bannerUrl: d.banner_url ?? null
+									bannerUrl: d.banner_url ?? null,
+									instanceHost: extractHost(provider)
 								};
 							}
 						}
@@ -155,8 +182,8 @@
 				chunk.map(async (b) => {
 					if (!b.provider || b.profile) return;
 					try {
-						const base = b.provider.replace(/\/$/, '');
-						const res = await fetch(`${base}/api/public/profile/${encodeURIComponent(b.did)}`, {
+						const ep = await resolveEndpointsForDid(b.provider, b.did);
+						const res = await fetch(ep.profile, {
 							signal: AbortSignal.timeout(8_000)
 						});
 						if (!res.ok) return;
@@ -244,12 +271,10 @@
 					batch.map(async (f) => {
 						const origin = await resolveFollowProviderOrigin(f, bases);
 						if (!origin) return null;
+						const ep = await resolveEndpointsForDid(origin, f.followed_did);
 						let res: Response;
 						try {
-							res = await fetch(
-								`${origin}/api/public/stories/${encodeURIComponent(f.followed_did)}`,
-								{ signal: AbortSignal.timeout(12_000) }
-							);
+							res = await fetch(ep.stories, { signal: AbortSignal.timeout(12_000) });
 						} catch {
 							return null;
 						}
@@ -335,12 +360,12 @@
 			}): Promise<TimelineRow[]> {
 				const origin = await resolveFollowProviderOrigin(f, bases);
 				if (!origin) return [];
+				const ep = await resolveEndpointsForDid(origin, f.followed_did);
 				let metaRes: Response;
 				try {
-					metaRes = await fetch(
-						`${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}?limit=20`,
-						{ signal: AbortSignal.timeout(12_000) }
-					);
+					metaRes = await fetch(`${ep.posts}?limit=20`, {
+						signal: AbortSignal.timeout(12_000)
+					});
 				} catch {
 					return [];
 				}
@@ -357,7 +382,7 @@
 						description: it.description,
 						created_at: it.created_at,
 						local_id: it.local_id,
-						fullUrl: `${origin}/api/public/posts/${encodeURIComponent(f.followed_did)}/${encodeURIComponent(it.local_id)}`
+						fullUrl: `${ep.posts}/${encodeURIComponent(it.local_id)}`
 					});
 				}
 				return out;

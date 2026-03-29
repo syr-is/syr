@@ -49,7 +49,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		const callbackBase = `${config.PUBLIC_URL}/auth/independent-callback`;
-		const deeplinkUrl = `syr://login?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&callback=${encodeURIComponent(callbackBase)}`;
+		let deeplinkUrl = `syr://login?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&callback=${encodeURIComponent(callbackBase)}`;
+		if (data.did) {
+			deeplinkUrl += `&did=${encodeURIComponent(data.did)}`;
+		}
 
 		return json({
 			challenge_id: challengeId,

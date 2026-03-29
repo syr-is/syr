@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { stringToRecordId } from '@syr-is/types';
 import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
 import { registryApiRoot } from '$lib/registry-url';
+import { resolveRemoteEndpoints } from '$lib/server/resolve-remote-endpoints.server';
 
 const ERROR_BODY_MAX_CHARS = 500;
 
@@ -29,20 +30,13 @@ function isHttpOrHttpsUrl(urlStr: string): boolean {
 	}
 }
 
-/** Syr app public profile JSON for banner/avatar in search results. */
-function publicProfileFetchUrl(provider: string, did: string): string | null {
-	if (!isHttpOrHttpsUrl(provider)) return null;
-	const base = provider.replace(/\/$/, '');
-	return `${base}/api/public/profile/${encodeURIComponent(did)}`;
-}
-
 async function enrichRowWithProfileAssets(row: DirectoryRow): Promise<EnrichedDirectoryRow> {
-	const profileUrl = publicProfileFetchUrl(row.provider, row.did);
-	if (!profileUrl) {
+	if (!isHttpOrHttpsUrl(row.provider)) {
 		return { ...row, avatarUrl: null, bannerUrl: null };
 	}
 	try {
-		const res = await fetch(profileUrl, {
+		const ep = await resolveRemoteEndpoints(row.did, row.provider, null, 6_000);
+		const res = await fetch(ep.profile, {
 			signal: AbortSignal.timeout(6_000),
 			headers: { Accept: 'application/json' }
 		});

@@ -7,6 +7,7 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader } from '@lucide/svelte';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
+	import { resolveSynerEndpoint } from '$lib/instance-manifest';
 	import type { Persona } from '$lib/types';
 	import PersonaImage from '$lib/components/persona-image.svelte';
 
@@ -57,8 +58,7 @@
 				personaId: targetPersona.id
 			});
 			const sigil = JSON.parse(sigilJson) as unknown;
-			const base = instanceUrl.replace(/\/$/, '');
-			const url = `${base}/api/user/sigil-handoff/${encodeURIComponent(sessionId)}/payload`;
+			const url = await resolveSynerEndpoint(instanceUrl, 'sigil_handoff_payload', sessionId);
 			const res = await fetch(url, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },

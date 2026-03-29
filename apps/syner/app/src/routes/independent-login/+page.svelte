@@ -16,6 +16,7 @@
 	import { sessionSeed, selectedPersona } from '$lib/stores/session';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
 	import { syncProfileToSyr } from '$lib/sync-profile';
+	import { resolveSynerEndpoint } from '$lib/instance-manifest';
 	import type { Persona } from '$lib/types';
 
 	function redactErrorPayload(data: unknown): string {
@@ -30,10 +31,15 @@
 
 	let challengeId = $state<string | null>(null);
 	let instanceUrl = $state<string | null>(null);
+	let targetDid = $state<string | null>(null);
 	let message = $state<string | null>(null);
 	let domain = $state<string | null>(null);
-	let personas = $state<Persona[]>([]);
+	let allPersonas = $state<Persona[]>([]);
 	let selected = $state<Persona | null>(null);
+
+	const personas = $derived(
+		targetDid ? allPersonas.filter((p) => p.did === targetDid) : allPersonas
+	);
 	let passphrase = $state('');
 	let loading = $state(false);
 	let unlockLoading = $state(false);
@@ -62,11 +68,13 @@
 		const url = page.url;
 		const c = url.searchParams.get('challenge');
 		const i = url.searchParams.get('instance');
+		const d = url.searchParams.get('did');
 		if (c) challengeId = c;
 		if (i) {
 			const validated = validateInstanceUrl(i);
 			instanceUrl = validated ?? null;
 		}
+		if (d) targetDid = d;
 	});
 
 	$effect(() => {
@@ -77,8 +85,7 @@
 
 	async function fetchChallenge() {
 		if (!challengeId || !instanceUrl) return;
-		const base = instanceUrl.replace(/\/$/, '');
-		const url = `${base}/api/auth/independent-login/challenge/${challengeId}`;
+		const url = await resolveSynerEndpoint(instanceUrl, 'independent_login_challenge', challengeId);
 		info(`[independent-login] Fetching challenge: ${url}`);
 		try {
 			const res = await fetch(url);
@@ -114,11 +121,17 @@
 
 	async function loadPersonas() {
 		try {
-			personas = await invoke<Persona[]>('list_personas_cmd');
+			allPersonas = await invoke<Persona[]>('list_personas_cmd');
 		} catch {
-			personas = [];
+			allPersonas = [];
 		}
 	}
+
+	$effect(() => {
+		if (personas.length === 1 && !selected) {
+			selected = personas[0];
+		}
+	});
 
 	function bytesToBase64(bytes: number[]): string {
 		return btoa(String.fromCharCode(...new Uint8Array(bytes)));
@@ -180,8 +193,7 @@
 		const snapshotSelected = selected;
 		loading = true;
 		error = null;
-		const base = instanceUrl.replace(/\/$/, '');
-		const verifyUrl = `${base}/api/auth/independent-login/verify`;
+		const verifyUrl = await resolveSynerEndpoint(instanceUrl, 'independent_login_verify');
 		info(`[independent-login] Signing challenge and verifying at ${verifyUrl}`);
 		try {
 			const payloadBytes = Array.from(new TextEncoder().encode(message));
@@ -315,7 +327,13 @@
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
-				{#if personas.length === 0}
+				{#if personas.length === 0 && targetDid}
+					<p class="text-muted-foreground text-sm">
+						No persona found for <span class="font-mono text-xs">{targetDid}</span>. Import or
+						create it first.
+					</p>
+					<Button variant="outline" href="/">Go to Personas</Button>
+				{:else if personas.length === 0}
 					<p class="text-muted-foreground text-sm">No personas. Create or import one first.</p>
 					<Button variant="outline" href="/">Go to Personas</Button>
 				{:else}

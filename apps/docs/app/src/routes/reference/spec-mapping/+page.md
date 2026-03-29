@@ -27,7 +27,7 @@ This page maps each requirement from the architecture specifications to the curr
 | Identity exportable                | **Implemented** | `GET /api/identity/export` returns portable bundle. `GET /api/identity/export-bundle` returns a full zip with posts/assets.                                                                                                              |
 | Identity importable                | **Implemented** | `POST /api/identity/import` accepts a zip bundle, creates identity + posts + assets on new instance.                                                                                                                                     |
 | Delegated device keys              | **Implemented** | `POST /api/identity/delegate` endpoint. `delegated_key` table exists. Root signature verification implemented.                                                                                                                           |
-| Provider hosting                   | **Partial**     | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` stub at `apps/syr/app/src/routes/.well-known/syr/+server.ts`.                                                                                   |
+| Provider hosting                   | **Implemented** | App serves profiles and APIs. `GET /.well-known/did/:did` exists. `GET /.well-known/syr` instance discovery and `GET /.well-known/syr/{did}` per-identity manifest with content negotiation.                                             |
 | Registry resolution                | **Implemented** | `apps/registry/api` — NestJS server with `GET /resolve/:did`, `POST /update`, opted-in `GET /directory/search` and `POST /directory/upsert` (root-signed directory rows).                                                                |
 | Identity-based login               | **Implemented** | `POST /api/auth/identity-login/challenge` and `POST /api/auth/identity-login/token` endpoints. Persistent KV-backed store.                                                                                                               |
 | Independent login (challenge-sign) | **Implemented** | `POST /api/auth/independent-login/challenge`, `POST /api/auth/independent-login/verify`, `/auth/independent-callback`. QR + syr:// deep link + Syner opener.                                                                             |
@@ -96,15 +96,15 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Provider Service Specification
 
-| Requirement                       | Status          | Details                                                                                         |
-| --------------------------------- | --------------- | ----------------------------------------------------------------------------------------------- |
-| `GET /.well-known/did/:did`       | **Implemented** | Returns DID Document for identities hosted on this instance.                                    |
-| `GET /.well-known/syr` discovery  | **Partial**     | Stub JSON at `/.well-known/syr` with `public_url` and public API hints; extend as spec matures. |
-| `GET /api/identity/export`        | **Implemented** | Returns portable identity bundle (JSON).                                                        |
-| `GET /api/identity/export-bundle` | **Implemented** | Returns full zip with identity, posts, and assets.                                              |
-| `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.                                          |
-| Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store.                                   |
-| TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                                                            |
+| Requirement                       | Status          | Details                                                                                                                                                                                                                                              |
+| --------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /.well-known/did/:did`       | **Implemented** | Returns DID Document for identities hosted on this instance.                                                                                                                                                                                         |
+| `GET /.well-known/syr` discovery  | **Implemented** | Instance-level discovery at `/.well-known/syr` with `public_url`, all public API paths, and `identity_manifest_template`. Per-identity manifest at `/.well-known/syr/{did}` with content negotiation (JSON manifest or 302 redirect to web profile). |
+| `GET /api/identity/export`        | **Implemented** | Returns portable identity bundle (JSON).                                                                                                                                                                                                             |
+| `GET /api/identity/export-bundle` | **Implemented** | Returns full zip with identity, posts, and assets.                                                                                                                                                                                                   |
+| `POST /api/identity/import`       | **Implemented** | Accepts zip bundle, creates identity + posts + assets.                                                                                                                                                                                               |
+| Identity-based auth endpoints     | **Implemented** | Challenge and token exchange with persistent KV-backed store.                                                                                                                                                                                        |
+| TLS requirement                   | **Implemented** | App runs behind HTTPS in production.                                                                                                                                                                                                                 |
 
 ---
 

@@ -9,6 +9,7 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader } from '@lucide/svelte';
 	import { validateInstanceUrl } from '$lib/utils/syr-url';
+	import { resolveSynerEndpoint } from '$lib/instance-manifest';
 	import type { Persona } from '$lib/types';
 	import PersonaImage from '$lib/components/persona-image.svelte';
 
@@ -196,8 +197,7 @@
 		directoryCanonicalPayload = null;
 		void (async () => {
 			try {
-				const base = instanceUrl.replace(/\/$/, '');
-				const url = `${base}/api/user/registry-sign/${encodeURIComponent(sessionId)}/payload`;
+				const url = await resolveSynerEndpoint(instanceUrl, 'registry_sign_payload', sessionId);
 				const res = await fetch(url, { method: 'GET' });
 				if (seq !== fetchSeq) return;
 				if (!res.ok) {
@@ -323,8 +323,7 @@
 				bytes: dirSigBytes
 			});
 
-			const base = instanceUrl.replace(/\/$/, '');
-			const putUrl = `${base}/api/user/registry-sign/${encodeURIComponent(sessionId)}/signature`;
+			const putUrl = await resolveSynerEndpoint(instanceUrl, 'registry_sign_signature', sessionId);
 			const res = await fetch(putUrl, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },

@@ -3,7 +3,8 @@
     {
       "name": "anonymous",
       "actions": [
-        "Read:syr/uploads/did:syr:*/public/*"
+        "Read:syr/uploads/did:syr:*/public/*",
+        "Read:kodski/uploads/did:syr:*/public/*"
       ]
     },
     {
@@ -12,6 +13,16 @@
         {
           "accessKey": "syr-access-key",
           "secretKey": "syr-secret-key"
+        }
+      ],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    },
+    {
+      "name": "kodski-access",
+      "credentials": [
+        {
+          "accessKey": "kodski-access-key",
+          "secretKey": "kodski-secret-key"
         }
       ],
       "actions": ["Admin", "Read", "List", "Tagging", "Write"]

@@ -14,6 +14,7 @@
 		username: string;
 		avatarUrl: string | null;
 		bannerUrl: string | null;
+		instanceHost?: string | null;
 	};
 
 	export type RemotePostDetail =
@@ -66,7 +67,11 @@
 	const displayName = $derived(
 		author?.displayName?.trim() || author?.username || shortDid(row.did)
 	);
-	const handle = $derived(author?.username?.trim() || '…');
+	const handle = $derived.by(() => {
+		const u = author?.username?.trim() || '…';
+		const host = author?.instanceHost;
+		return host ? `@${u}@${host}` : `@${u}`;
+	});
 
 	function shortDid(did: string): string {
 		return did.length > 18 ? `${did.slice(0, 10)}…${did.slice(-6)}` : did;
@@ -180,7 +185,7 @@
 								rel="noopener noreferrer"
 								class="text-muted-foreground hover:text-foreground hover:underline"
 							>
-								@{handle}
+								{handle}
 							</a>
 							<span class="text-muted-foreground">·</span>
 							<time

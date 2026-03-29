@@ -90,13 +90,24 @@ export class FollowRepository {
 		return row ?? null;
 	}
 
-	async deleteFollow(followerUserId: RecordId | string, followedDid: string): Promise<void> {
+	async deleteFollow(
+		followerUserId: RecordId | string,
+		followedDid: string,
+		providerUrl?: string
+	): Promise<void> {
 		const uid =
 			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
-		await this.db.query(
-			`DELETE FROM user_follow WHERE follower_user_id = $uid AND followed_did = $did`,
-			{ uid, did: followedDid }
-		);
+		if (providerUrl) {
+			await this.db.query(
+				`DELETE FROM user_follow WHERE follower_user_id = $uid AND followed_did = $did AND followed_provider_url = $provider`,
+				{ uid, did: followedDid, provider: providerUrl }
+			);
+		} else {
+			await this.db.query(
+				`DELETE FROM user_follow WHERE follower_user_id = $uid AND followed_did = $did`,
+				{ uid, did: followedDid }
+			);
+		}
 	}
 
 	async findByFollower(followerUserId: RecordId | string): Promise<UserFollow[]> {
@@ -111,10 +122,18 @@ export class FollowRepository {
 
 	async findOne(
 		followerUserId: RecordId | string,
-		followedDid: string
+		followedDid: string,
+		providerUrl?: string
 	): Promise<UserFollow | null> {
 		const uid =
 			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
+		if (providerUrl) {
+			const result = await this.db.query<[UserFollow[]]>(
+				`SELECT * FROM user_follow WHERE follower_user_id = $uid AND followed_did = $did AND followed_provider_url = $provider LIMIT 1`,
+				{ uid, did: followedDid, provider: providerUrl }
+			);
+			return (result[0]?.[0] as UserFollow | undefined) ?? null;
+		}
 		const result = await this.db.query<[UserFollow[]]>(
 			`SELECT * FROM user_follow WHERE follower_user_id = $uid AND followed_did = $did LIMIT 1`,
 			{ uid, did: followedDid }

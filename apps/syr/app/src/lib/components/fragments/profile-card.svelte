@@ -9,6 +9,7 @@
 		signed_payload_json?: string | null;
 		content_signature?: string | null;
 		signing_device_public_key?: string | null;
+		instanceHost?: string | null;
 	};
 </script>
 
@@ -29,7 +30,7 @@
 		followBusy?: boolean;
 		/** While true, follow button is disabled (e.g. loading whether we already follow). */
 		followStateLoading?: boolean;
-		/** When true, show secondary button with check + "Following" (click still calls onFollow to unfollow). */
+		/** When true, show secondary button with check + “Following” (click still calls onFollow to unfollow). */
 		isFollowing?: boolean;
 		followLabel?: string;
 		onFollow?: () => void | Promise<void>;
@@ -40,6 +41,10 @@
 		/** Link to following list (e.g. `/following`); shows “Following N” under @username */
 		followingHref?: string;
 		followingCount?: number;
+		/** Whether this user has active stories (shows ring on avatar) */
+		hasStories?: boolean;
+		/** Called when the avatar is clicked and hasStories is true */
+		onStoryClick?: () => void;
 	};
 
 	let {
@@ -57,7 +62,9 @@
 		headerActions,
 		titleExtra,
 		followingHref,
-		followingCount = 0
+		followingCount = 0,
+		hasStories = false,
+		onStoryClick
 	}: Props = $props();
 
 	const displayName = $derived(profile.display_name?.trim() || profile.username);
@@ -86,12 +93,26 @@
 	<div class="space-y-4 px-6 pt-0 pb-6">
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
-				<Avatar
-					class="-mt-14 h-24 w-24 shrink-0 self-start border-4 border-card shadow-md sm:-mt-16 sm:h-28 sm:w-28"
-				>
-					<AvatarImage src={profile.avatar_url ?? undefined} alt="" />
-					<AvatarFallback class="text-lg">{displayName.slice(0, 2) || '?'}</AvatarFallback>
-				</Avatar>
+				{#if hasStories && onStoryClick}
+					<button
+						type="button"
+						class="relative z-10 -mt-14 h-24 w-24 shrink-0 cursor-pointer self-start rounded-full shadow-md ring-2 ring-primary ring-offset-2 ring-offset-card sm:-mt-16 sm:h-28 sm:w-28"
+						onclick={onStoryClick}
+						aria-label="View stories"
+					>
+						<Avatar class="h-full w-full">
+							<AvatarImage src={profile.avatar_url ?? undefined} alt="" />
+							<AvatarFallback class="text-lg">{displayName.slice(0, 2) || '?'}</AvatarFallback>
+						</Avatar>
+					</button>
+				{:else}
+					<Avatar
+						class="-mt-14 h-24 w-24 shrink-0 self-start border-4 border-card shadow-md sm:-mt-16 sm:h-28 sm:w-28"
+					>
+						<AvatarImage src={profile.avatar_url ?? undefined} alt="" />
+						<AvatarFallback class="text-lg">{displayName.slice(0, 2) || '?'}</AvatarFallback>
+					</Avatar>
+				{/if}
 				<div class="min-w-0 flex-1 space-y-1 sm:pt-1 sm:pb-0.5">
 					<div class="flex min-w-0 flex-wrap items-center gap-2">
 						<Card.Title class="truncate text-xl font-semibold tracking-tight sm:text-2xl">
@@ -107,7 +128,11 @@
 						{/if}
 						{@render titleExtra?.()}
 					</div>
-					<Card.Description class="font-mono text-xs">@{profile.username}</Card.Description>
+					<Card.Description class="font-mono text-xs"
+						>{profile.instanceHost
+							? `@${profile.username}@${profile.instanceHost}`
+							: `@${profile.username}`}</Card.Description
+					>
 					{#if followingHref}
 						<a
 							href={followingHref}

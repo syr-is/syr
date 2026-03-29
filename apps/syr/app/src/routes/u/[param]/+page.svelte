@@ -19,8 +19,15 @@
 		hasPostSizeOverride,
 		postSizeOverrideKeyForPost
 	} from '$lib/client/post-size-override.js';
-	import { getPostId, type Post, type UploadWithCompositeId } from '@syr-is/types';
+	import {
+		getPostId,
+		type Post,
+		type UploadWithCompositeId,
+		PublicStorySlideSchema
+	} from '@syr-is/types';
 	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
+	import * as Dialog from '@syr-is/ui/dialog';
+	import type { StorySlide } from '$lib/types/feed-stories';
 
 	let { data } = $props();
 
@@ -38,6 +45,7 @@
 	const canFollow = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
 	const remoteHomeHref = $derived.by(() => {
+		if (data.remoteEndpoints?.web_profile) return data.remoteEndpoints.web_profile;
 		const o = data.resolvedProviderOrigin?.trim().replace(/\/$/, '');
 		if (o) return o;
 		const host = p.identity_host_url?.trim();
@@ -45,7 +53,7 @@
 	});
 
 	let catalogTab = $state<'posts' | 'media'>('posts');
-	let lastProfileDid = $state('');
+	let lastProfileKey = $state('');
 
 	let postsPage = $state(1);
 	let postsRaw = $state<unknown[]>([]);
@@ -101,6 +109,53 @@
 	let isFollowing = $state(false);
 	let followStateLoading = $state(false);
 
+	let storySlides = $state<StorySlide[]>([]);
+	let storyViewerOpen = $state(false);
+	let storySlideIndex = $state(0);
+	let storiesFetchSeq = 0;
+
+	async function loadStories(did: string) {
+		const seq = ++storiesFetchSeq;
+		storySlides = [];
+		try {
+			const storiesUrl =
+				data.profileSource === 'remote' && data.remoteEndpoints
+					? data.remoteEndpoints.stories
+					: `/api/public/stories/${encodeURIComponent(did)}`;
+			const res = await fetch(storiesUrl, {
+				signal: AbortSignal.timeout(12_000),
+				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
+			});
+			if (!res.ok) return;
+			const j = (await res.json()) as { data?: { slides?: unknown[] } };
+			const raw = j.data?.slides;
+			if (!Array.isArray(raw)) return;
+			const validated: StorySlide[] = [];
+			for (const item of raw) {
+				const parsed = PublicStorySlideSchema.safeParse(item);
+				if (parsed.success) validated.push(parsed.data);
+			}
+			if (seq === storiesFetchSeq) storySlides = validated;
+		} catch {
+			// ignore
+		}
+	}
+
+	function openStoryViewer() {
+		if (storySlides.length === 0) return;
+		storySlideIndex = 0;
+		storyViewerOpen = true;
+	}
+
+	function storyNext() {
+		if (storySlideIndex < storySlides.length - 1) storySlideIndex += 1;
+		else storyViewerOpen = false;
+	}
+
+	function storyPrev() {
+		if (storySlideIndex > 0) storySlideIndex -= 1;
+	}
+
 	function resetCatalogState() {
 		postsFetchSeq++;
 		uploadsFetchSeq++;
@@ -117,17 +172,21 @@
 		catalogTab = 'posts';
 	}
 
-	/** Reset lists and page indices when navigating to a different profile. */
+	/** Reset lists and page indices when navigating to a different profile or provider. */
 	$effect(() => {
 		const d = p.did ?? '';
+		const key = `${d}::${data.resolvedProviderOrigin ?? ''}`;
 		if (d === '') {
 			resetCatalogState();
-			lastProfileDid = '';
+			storySlides = [];
+			lastProfileKey = '';
 			return;
 		}
-		if (lastProfileDid === d) return;
-		lastProfileDid = d;
+		if (lastProfileKey === key) return;
+		lastProfileKey = key;
 		resetCatalogState();
+		storySlides = [];
+		if (d) void loadStories(d);
 	});
 
 	async function fetchPublicPosts() {
@@ -142,13 +201,9 @@
 		postsError = null;
 		try {
 			const offset = (page - 1) * POST_PAGE_SIZE;
-			const base =
-				data.profileSource === 'remote' && data.resolvedProviderOrigin
-					? data.resolvedProviderOrigin.replace(/\/$/, '')
-					: '';
 			const postsPath =
-				data.profileSource === 'remote' && base
-					? `${base}/api/public/posts/${encodeURIComponent(did)}`
+				data.profileSource === 'remote' && data.remoteEndpoints
+					? data.remoteEndpoints.posts
 					: `/api/public/posts/${encodeURIComponent(did)}`;
 			const url = `${postsPath}?full=1&limit=${POST_PAGE_SIZE}&offset=${offset}`;
 			const r = await fetchJsonWithByteLimit(url, {
@@ -200,13 +255,9 @@
 		uploadsError = null;
 		try {
 			const offset = (page - 1) * UPLOAD_PAGE_SIZE;
-			const base =
-				data.profileSource === 'remote' && data.resolvedProviderOrigin
-					? data.resolvedProviderOrigin.replace(/\/$/, '')
-					: '';
 			const uploadsPath =
-				data.profileSource === 'remote' && base
-					? `${base}/api/public/uploads/${encodeURIComponent(did)}`
+				data.profileSource === 'remote' && data.remoteEndpoints
+					? data.remoteEndpoints.uploads
 					: `/api/public/uploads/${encodeURIComponent(did)}`;
 			const url = `${uploadsPath}?limit=${UPLOAD_PAGE_SIZE}&offset=${offset}`;
 			const r = await fetchJsonWithByteLimit(url, {
@@ -271,7 +322,8 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				const res = await fetch(`/api/follows/check?did=${encodeURIComponent(did)}`, {
+				const checkQs = `did=${encodeURIComponent(did)}${data.resolvedProviderOrigin ? `&provider=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const res = await fetch(`/api/follows/check?${checkQs}`, {
 					credentials: 'include'
 				});
 				const j = (await res.json().catch(() => ({}))) as {
@@ -308,7 +360,8 @@
 		followBusy = true;
 		try {
 			if (isFollowing) {
-				const res = await fetch(`/api/follows?followed_did=${encodeURIComponent(currentDid)}`, {
+				const delQs = `followed_did=${encodeURIComponent(currentDid)}${data.resolvedProviderOrigin ? `&provider_url=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const res = await fetch(`/api/follows?${delQs}`, {
 					method: 'DELETE'
 				});
 				if (p.did !== currentDid) return;
@@ -323,10 +376,16 @@
 				return;
 			}
 
+			const followBody: { followed_did: string; provider_url?: string } = {
+				followed_did: currentDid
+			};
+			if (data.resolvedProviderOrigin) {
+				followBody.provider_url = data.resolvedProviderOrigin;
+			}
 			const res = await fetch('/api/follows', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ followed_did: currentDid })
+				body: JSON.stringify(followBody)
 			});
 			if (p.did !== currentDid) return;
 			const j: FollowsApiJson = (await res.json().catch(() => ({}))) as FollowsApiJson;
@@ -361,7 +420,17 @@
 			did: p.did,
 			signed_payload_json: p.signed_payload_json,
 			content_signature: p.content_signature,
-			signing_device_public_key: p.signing_device_public_key
+			signing_device_public_key: p.signing_device_public_key,
+			instanceHost:
+				isRemoteProfile && data.resolvedProviderOrigin
+					? (() => {
+							try {
+								return new URL(data.resolvedProviderOrigin).host;
+							} catch {
+								return null;
+							}
+						})()
+					: null
 		}}
 		showFollow={canFollow}
 		{followBusy}
@@ -369,6 +438,8 @@
 		{isFollowing}
 		onFollow={toggleFollow}
 		bioVariant="divider"
+		hasStories={storySlides.length > 0}
+		onStoryClick={openStoryViewer}
 	/>
 
 	{#if isRemoteProfile}
@@ -377,8 +448,8 @@
 			role="status"
 		>
 			<p>
-				This identity is hosted on another Syr instance. Public posts and media below are loaded via
-				this instance’s discovery registries.
+				This identity is hosted on another instance. Public posts and media below are loaded from
+				their provider.
 			</p>
 			{#if remoteHomeHref}
 				<p class="mt-2">
@@ -388,7 +459,7 @@
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						Open home instance
+						Visit their instance
 					</a>
 				</p>
 			{/if}
@@ -604,3 +675,62 @@
 		</Tabs.Root>
 	{/if}
 </div>
+
+<Dialog.Root
+	bind:open={storyViewerOpen}
+	onOpenChange={(open) => {
+		if (!open) storySlideIndex = 0;
+	}}
+>
+	<Dialog.Content
+		showCloseButton={false}
+		class="fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 bg-black p-0 text-white shadow-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:max-w-none"
+	>
+		{#if storySlides.length > 0}
+			{@const s = storySlides[storySlideIndex]}
+			<div class="relative flex h-[100dvh] w-full items-center justify-center">
+				{#if s.mime_type.startsWith('video/')}
+					<video
+						src={s.url}
+						controls
+						class="max-h-full max-w-full object-contain"
+						autoplay
+						playsinline
+					>
+						<track kind="captions" label="Captions unavailable" />
+					</video>
+				{:else}
+					<img src={s.url} alt="" class="max-h-full max-w-full object-contain" />
+				{/if}
+				<button
+					type="button"
+					class="absolute top-4 right-4 rounded-md bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+					onclick={() => (storyViewerOpen = false)}
+				>
+					Close
+				</button>
+				{#if storySlides.length > 1}
+					<button
+						type="button"
+						class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
+						onclick={storyPrev}
+						aria-label="Previous slide"
+					>
+						‹
+					</button>
+					<button
+						type="button"
+						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
+						onclick={storyNext}
+						aria-label="Next slide"
+					>
+						›
+					</button>
+				{/if}
+				<p class="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/70">
+					{storySlideIndex + 1} / {storySlides.length}
+				</p>
+			</div>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>

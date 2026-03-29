@@ -143,7 +143,8 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_follow TYPE datetime;
 				DEFINE INDEX IF NOT EXISTS idx_follow_follower ON TABLE user_follow COLUMNS follower_user_id;
 				DEFINE INDEX IF NOT EXISTS idx_follow_followed ON TABLE user_follow COLUMNS followed_did;
-				DEFINE INDEX IF NOT EXISTS idx_follow_unique ON TABLE user_follow COLUMNS follower_user_id, followed_did UNIQUE;
+				REMOVE INDEX IF EXISTS idx_follow_unique ON TABLE user_follow;
+				DEFINE INDEX IF NOT EXISTS idx_follow_unique ON TABLE user_follow COLUMNS follower_user_id, followed_did, followed_provider_url UNIQUE;
 			`);
 
 			// Define index for profile lookup by user_id

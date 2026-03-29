@@ -227,15 +227,71 @@ Array of objects with: `id`, `did`, `local_id`, `owner_id`, `folder_id`, `filena
 
 ---
 
-## Discovery: `/.well-known/syr`
+## Discovery
 
-`GET /.well-known/syr` returns JSON including:
+### Instance-level: `GET /.well-known/syr`
+
+Returns JSON including:
 
 - **`public_url`**: instance public base URL
 - **`api.public_profile`**: base path for profile API; append `/` plus username or percent-encoded DID.
 - **`api.public_posts`**: base path for posts API; append `/` plus author DID, and optionally `/` plus post `localId` for one post.
+- **`api.public_stories`**: base path for stories API; append `/` plus author DID.
+- **`api.public_uploads`**: base path for uploads API; append `/` plus author DID.
+- **`identity_manifest_template`**: URL template for per-identity manifests; replace `{did}` with the percent-encoded DID.
+- **`syner`** (optional): Syner companion app endpoint URL templates with `{id}` placeholder for dynamic IDs.
 
-It does **not** yet list stories or uploads; clients should use the paths documented above when needed.
+#### Syner endpoint templates (`syner` object)
+
+URL templates for operational flows used by the Syner companion app. Third-party providers implementing the Syr protocol serve these at their own route structure. The `{id}` placeholder is replaced with the actual challenge/session ID.
+
+| Key                           | Default Syr path                             | Usage                     |
+| ----------------------------- | -------------------------------------------- | ------------------------- |
+| `independent_login_challenge` | `/api/auth/independent-login/challenge/{id}` | GET challenge by ID       |
+| `independent_login_verify`    | `/api/auth/independent-login/verify`         | POST signed challenge     |
+| `profile_sync`                | `/api/auth/independent-login/profile-sync`   | POST profile sync         |
+| `export_challenge`            | `/api/identity/export-challenge/{id}`        | GET export challenge      |
+| `export_verify`               | `/api/identity/export-verify`                | POST export verification  |
+| `export_signatures`           | `/api/identity/export-signatures`            | POST export signatures    |
+| `sigil_handoff_payload`       | `/api/user/sigil-handoff/{id}/payload`       | POST sigil handoff        |
+| `post_sign_payload`           | `/api/user/post-sign/{id}/payload`           | GET post signing payload  |
+| `post_sign_signature`         | `/api/user/post-sign/{id}/signature`         | PUT post signature        |
+| `registry_sign_payload`       | `/api/user/registry-sign/{id}/payload`       | GET registry sign payload |
+| `registry_sign_signature`     | `/api/user/registry-sign/{id}/signature`     | PUT registry signature    |
+
+If `syner` is absent from the instance manifest, clients fall back to the default Syr paths shown above.
+
+### Per-identity manifest: `GET /.well-known/syr/[did]`
+
+Route file: `.well-known/syr/[did]/+server.ts`. Returns a **per-identity manifest** that advertises the absolute URLs for all public API endpoints for the given DID.
+
+#### Content negotiation
+
+- **`Accept: application/json`** → manifest JSON with `Cache-Control: public, max-age=300`
+- **`Accept: text/html`** (or default/browser) → **302 redirect** to `web_profile`
+
+#### Manifest `data`
+
+| Field                    | Type   | Description                         |
+| ------------------------ | ------ | ----------------------------------- |
+| `version`                | `1`    | Schema version                      |
+| `did`                    | string | The identity's DID                  |
+| `provider`               | string | Canonical provider origin URL       |
+| `endpoints.profile`      | string | Absolute URL for public profile API |
+| `endpoints.posts`        | string | Absolute URL for public posts API   |
+| `endpoints.stories`      | string | Absolute URL for public stories API |
+| `endpoints.uploads`      | string | Absolute URL for public uploads API |
+| `endpoints.did_document` | string | Absolute URL for DID document       |
+| `web_profile`            | string | Human-viewable profile page URL     |
+
+#### Errors
+
+- **400** if DID is not a valid `did:syr:`.
+- **404** if the identity is not hosted on this instance.
+
+#### Fallback
+
+If a remote provider does not serve a manifest (404 or non-JSON), clients should fall back to the conventional hardcoded paths documented above.
 
 ---
 

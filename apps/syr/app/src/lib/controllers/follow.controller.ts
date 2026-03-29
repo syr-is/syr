@@ -42,7 +42,8 @@ export class FollowController {
 	async follow(
 		followerUserId: RecordId | string,
 		followerDid: string,
-		followedDid: string
+		followedDid: string,
+		explicitProviderUrl?: string
 	): Promise<UserFollow | null> {
 		if (!isValidSyrDid(followedDid)) {
 			throw new FollowValidationError('Invalid follow target DID.');
@@ -58,6 +59,19 @@ export class FollowController {
 			return row;
 		}
 
+		// When an explicit provider URL is given (e.g. from a third-party instance's follow button),
+		// check if already following this DID on this specific provider
+		if (explicitProviderUrl) {
+			const normalized = normalizeProviderBaseUrl(explicitProviderUrl);
+			if (!normalized) {
+				throw new FollowValidationError('Invalid provider URL.');
+			}
+			const existing = await followRepository.findOne(followerUserId, followedDid, normalized);
+			if (existing) return existing;
+			return followRepository.createFollow(followerUserId, followedDid, 'manual', normalized);
+		}
+
+		// No explicit provider — check if already following on any instance
 		const existing = await followRepository.findOne(followerUserId, followedDid);
 		if (existing) {
 			if (!existing.followed_provider_url) {
@@ -170,17 +184,27 @@ export class FollowController {
 		return updated;
 	}
 
-	async unfollow(followerUserId: RecordId | string, followedDid: string) {
-		await followRepository.deleteFollow(followerUserId, followedDid);
+	async unfollow(followerUserId: RecordId | string, followedDid: string, providerUrl?: string) {
+		const normalized = providerUrl
+			? (normalizeProviderBaseUrl(providerUrl) ?? providerUrl)
+			: undefined;
+		await followRepository.deleteFollow(followerUserId, followedDid, normalized);
 	}
 
 	async listFollowing(followerUserId: RecordId | string) {
 		return followRepository.findByFollower(followerUserId);
 	}
 
-	/** Whether this follower has an active follow row for the given DID. */
-	async isFollowing(followerUserId: RecordId | string, followedDid: string): Promise<boolean> {
-		const row = await followRepository.findOne(followerUserId, followedDid);
+	/** Whether this follower has an active follow row for the given DID (optionally on a specific provider). */
+	async isFollowing(
+		followerUserId: RecordId | string,
+		followedDid: string,
+		providerUrl?: string
+	): Promise<boolean> {
+		const normalized = providerUrl
+			? (normalizeProviderBaseUrl(providerUrl) ?? providerUrl)
+			: undefined;
+		const row = await followRepository.findOne(followerUserId, followedDid, normalized);
 		return row != null;
 	}
 }
