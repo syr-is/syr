@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!did || !isValidSyrDid(did)) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'Valid did query parameter required' });
 	}
-	const provider = url.searchParams.get('provider')?.trim() || undefined;
+	const provider = url.searchParams.get('provider')?.trim().replace(/\/$/, '') || undefined;
 	const userId = stringToRecordId.decode(locals.user.id);
 	const following = await followController.isFollowing(userId, did, provider);
 	return json({

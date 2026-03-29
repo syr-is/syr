@@ -70,7 +70,7 @@
 	const handle = $derived.by(() => {
 		const u = author?.username?.trim() || '…';
 		const host = author?.instanceHost;
-		return host ? `${u}@${host}` : `@${u}`;
+		return host ? `@${u}@${host}` : `@${u}`;
 	});
 
 	function shortDid(did: string): string {

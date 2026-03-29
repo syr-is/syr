@@ -2,6 +2,7 @@ import { SyrIdentityManifestSchema, type SyrIdentityManifest } from '@syr-is/typ
 
 const cache = new Map<string, { manifest: SyrIdentityManifest; expiresAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 500;
 
 /**
  * Fetch a per-identity manifest from a manifest URL (server-side).
@@ -13,7 +14,10 @@ export async function fetchManifest(
 	timeoutMs = 8_000
 ): Promise<SyrIdentityManifest | null> {
 	const cached = cache.get(manifestUrl);
-	if (cached && cached.expiresAt > Date.now()) return cached.manifest;
+	if (cached) {
+		if (cached.expiresAt > Date.now()) return cached.manifest;
+		cache.delete(manifestUrl);
+	}
 
 	try {
 		const controller = new AbortController();
@@ -31,6 +35,10 @@ export async function fetchManifest(
 		const parsed = SyrIdentityManifestSchema.safeParse(json);
 		if (!parsed.success) return null;
 
+		if (cache.size >= MAX_CACHE_ENTRIES) {
+			const oldest = cache.keys().next().value;
+			if (oldest) cache.delete(oldest);
+		}
 		cache.set(manifestUrl, { manifest: parsed.data, expiresAt: Date.now() + CACHE_TTL_MS });
 		return parsed.data;
 	} catch {

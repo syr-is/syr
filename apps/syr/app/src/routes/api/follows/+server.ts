@@ -85,9 +85,20 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
 	if (!followed || !isValidSyrDid(followed)) {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'followed_did query required' });
 	}
-	const providerUrl = url.searchParams.get('provider_url')?.trim() || undefined;
+	const rawProviderUrl = url.searchParams.get('provider_url')?.trim() || undefined;
+	if (rawProviderUrl) {
+		try {
+			const u = new URL(rawProviderUrl);
+			if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+				throw error(400, { code: 'VALIDATION_ERROR', message: 'provider_url must be http(s)' });
+			}
+		} catch (e) {
+			if (e && typeof e === 'object' && 'status' in e) throw e;
+			throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid provider_url' });
+		}
+	}
 	try {
-		await followController.unfollow(locals.user.id, followed, providerUrl);
+		await followController.unfollow(locals.user.id, followed, rawProviderUrl);
 	} catch (e) {
 		if (isHttpError(e)) throw e;
 		console.error('follow DELETE:', e);

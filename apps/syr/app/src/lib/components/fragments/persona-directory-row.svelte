@@ -29,7 +29,7 @@
 	} = $props();
 
 	const label = $derived(displayName?.trim() || username || '—');
-	const handle = $derived(instanceHost ? `${username}@${instanceHost}` : `@${username}`);
+	const handle = $derived(instanceHost ? `@${username}@${instanceHost}` : `@${username}`);
 </script>
 
 <Card.Root class="gap-0 overflow-hidden p-0 shadow-sm transition-shadow hover:shadow-md">

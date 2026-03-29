@@ -185,7 +185,10 @@ export class FollowController {
 	}
 
 	async unfollow(followerUserId: RecordId | string, followedDid: string, providerUrl?: string) {
-		await followRepository.deleteFollow(followerUserId, followedDid, providerUrl);
+		const normalized = providerUrl
+			? (normalizeProviderBaseUrl(providerUrl) ?? providerUrl)
+			: undefined;
+		await followRepository.deleteFollow(followerUserId, followedDid, normalized);
 	}
 
 	async listFollowing(followerUserId: RecordId | string) {
@@ -198,7 +201,10 @@ export class FollowController {
 		followedDid: string,
 		providerUrl?: string
 	): Promise<boolean> {
-		const row = await followRepository.findOne(followerUserId, followedDid, providerUrl);
+		const normalized = providerUrl
+			? (normalizeProviderBaseUrl(providerUrl) ?? providerUrl)
+			: undefined;
+		const row = await followRepository.findOne(followerUserId, followedDid, normalized);
 		return row != null;
 	}
 }

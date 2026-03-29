@@ -1,4 +1,4 @@
-import { json, error, redirect } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { config } from '$lib/config';
@@ -44,10 +44,17 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	if (accept.includes('application/json')) {
 		return json(manifest, {
 			headers: {
-				'Cache-Control': 'public, max-age=300'
+				'Cache-Control': 'public, max-age=300',
+				Vary: 'Accept'
 			}
 		});
 	}
 
-	redirect(302, manifest.web_profile);
+	return new Response(null, {
+		status: 302,
+		headers: {
+			Location: manifest.web_profile,
+			Vary: 'Accept'
+		}
+	});
 };

@@ -130,7 +130,7 @@
 					</div>
 					<Card.Description class="font-mono text-xs"
 						>{profile.instanceHost
-							? `${profile.username}@${profile.instanceHost}`
+							? `@${profile.username}@${profile.instanceHost}`
 							: `@${profile.username}`}</Card.Description
 					>
 					{#if followingHref}

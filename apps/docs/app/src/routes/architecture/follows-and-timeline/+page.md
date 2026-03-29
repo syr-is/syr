@@ -44,7 +44,7 @@ It is **beyond Phase 0**. [Phase 0](/implementation/phase-0-blueprint) intention
 - **Username** and **display name** are routing and search hints only; a follow is **not** stored against those identifiers.
 - **Normalization**: use the canonical DID string as produced by `did:syr` parsing (see [did:syr method](/architecture/did-method)); reject malformed DIDs.
 - **Self-follow**: product choice — typically allowed or ignored; document in implementation (dedupe by DID).
-- **Duplicate follow**: reject or idempotent accept; implementation must not create multiple follow rows for the same `(follower, followed_did)` pair.
+- **Duplicate follow**: reject or idempotent accept; implementation must not create multiple follow rows for the same `(follower, followed_did, followed_provider_url)` tuple. The same DID may be followed on multiple providers — uniqueness is per-provider.
 - **Username display**: Remote users are shown as `username@instance.host` to disambiguate identities across providers. Local users use `@username`.
 - **Provider param**: Third-party sites linking to `/u/{did}?provider={origin}` or `/follow?target_did={did}&provider={origin}` specify where to fetch the identity's data. When `provider` is given, the instance skips local lookup and fetches from that provider directly. See [Follow on Syr](/implementer-guide/follow-on-syr).
 

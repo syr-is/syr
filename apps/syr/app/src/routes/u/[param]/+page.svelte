@@ -53,7 +53,7 @@
 	});
 
 	let catalogTab = $state<'posts' | 'media'>('posts');
-	let lastProfileDid = $state('');
+	let lastProfileKey = $state('');
 
 	let postsPage = $state(1);
 	let postsRaw = $state<unknown[]>([]);
@@ -112,8 +112,10 @@
 	let storySlides = $state<StorySlide[]>([]);
 	let storyViewerOpen = $state(false);
 	let storySlideIndex = $state(0);
+	let storiesFetchSeq = 0;
 
 	async function loadStories(did: string) {
+		const seq = ++storiesFetchSeq;
 		storySlides = [];
 		try {
 			const storiesUrl =
@@ -133,7 +135,7 @@
 				const parsed = PublicStorySlideSchema.safeParse(item);
 				if (parsed.success) validated.push(parsed.data);
 			}
-			storySlides = validated;
+			if (seq === storiesFetchSeq) storySlides = validated;
 		} catch {
 			// ignore
 		}
@@ -170,17 +172,18 @@
 		catalogTab = 'posts';
 	}
 
-	/** Reset lists and page indices when navigating to a different profile. */
+	/** Reset lists and page indices when navigating to a different profile or provider. */
 	$effect(() => {
 		const d = p.did ?? '';
+		const key = `${d}::${data.resolvedProviderOrigin ?? ''}`;
 		if (d === '') {
 			resetCatalogState();
 			storySlides = [];
-			lastProfileDid = '';
+			lastProfileKey = '';
 			return;
 		}
-		if (lastProfileDid === d) return;
-		lastProfileDid = d;
+		if (lastProfileKey === key) return;
+		lastProfileKey = key;
 		resetCatalogState();
 		storySlides = [];
 		if (d) void loadStories(d);

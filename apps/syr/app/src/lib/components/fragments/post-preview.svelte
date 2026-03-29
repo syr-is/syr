@@ -185,7 +185,7 @@
 					<span class="truncate font-semibold">{feedAuthor.displayName}</span>
 					<span class="truncate text-muted-foreground"
 						>{feedAuthor.instanceHost
-							? `${feedAuthor.username}@${feedAuthor.instanceHost}`
+							? `@${feedAuthor.username}@${feedAuthor.instanceHost}`
 							: `@${feedAuthor.username}`}</span
 					>
 				</div>

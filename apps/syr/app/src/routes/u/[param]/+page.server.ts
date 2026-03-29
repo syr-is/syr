@@ -21,7 +21,18 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	}
 
 	// When ?provider= is present, always fetch from that provider (third-party instance)
-	const explicitProvider = url.searchParams.get('provider')?.trim().replace(/\/$/, '') || null;
+	let explicitProvider: string | null = null;
+	const rawProvider = url.searchParams.get('provider')?.trim().replace(/\/$/, '');
+	if (rawProvider) {
+		try {
+			const u = new URL(rawProvider);
+			if (u.protocol === 'http:' || u.protocol === 'https:') {
+				explicitProvider = u.origin;
+			}
+		} catch {
+			// invalid URL — ignore provider param
+		}
+	}
 
 	if (!explicitProvider) {
 		const user = isValidSyrDid(key)
