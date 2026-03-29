@@ -35,6 +35,12 @@ export type SyrIdentityManifest = z.infer<typeof SyrIdentityManifestSchema>;
  * URL templates use `{id}` as a placeholder for dynamic path segments
  * (challenge IDs, session IDs) — consumers replace `{id}` with the actual value.
  */
+const httpUrlTemplate = z
+	.string()
+	.refine((s) => s.startsWith('http://') || s.startsWith('https://'), {
+		message: 'Must be an absolute HTTP(S) URL or URL template'
+	});
+
 export const SyrInstanceManifestSchema = z.object({
 	name: z.literal('syr'),
 	public_url: z.string().url(),
@@ -44,20 +50,20 @@ export const SyrInstanceManifestSchema = z.object({
 		public_stories: z.string().url(),
 		public_uploads: z.string().url()
 	}),
-	identity_manifest_template: z.string(),
+	identity_manifest_template: httpUrlTemplate,
 	syner: z
 		.object({
-			independent_login_challenge: z.string(),
-			independent_login_verify: z.string(),
-			profile_sync: z.string(),
-			export_challenge: z.string(),
-			export_verify: z.string(),
-			export_signatures: z.string(),
-			sigil_handoff_payload: z.string(),
-			post_sign_payload: z.string(),
-			post_sign_signature: z.string(),
-			registry_sign_payload: z.string(),
-			registry_sign_signature: z.string()
+			independent_login_challenge: httpUrlTemplate,
+			independent_login_verify: httpUrlTemplate,
+			profile_sync: httpUrlTemplate,
+			export_challenge: httpUrlTemplate,
+			export_verify: httpUrlTemplate,
+			export_signatures: httpUrlTemplate,
+			sigil_handoff_payload: httpUrlTemplate,
+			post_sign_payload: httpUrlTemplate,
+			post_sign_signature: httpUrlTemplate,
+			registry_sign_payload: httpUrlTemplate,
+			registry_sign_signature: httpUrlTemplate
 		})
 		.optional()
 });
