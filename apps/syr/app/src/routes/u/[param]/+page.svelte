@@ -218,19 +218,31 @@
 		return base;
 	}
 
+	let publicFollowsFetchSeq = 0;
+
 	async function loadPublicFollows(did: string) {
+		const seq = ++publicFollowsFetchSeq;
 		publicFollowsLoading = true;
 		publicFollowsError = null;
 		publicFollows = [];
 		try {
-			const followingUrl =
-				data.profileSource === 'remote' && data.remoteEndpoints?.public_following
-					? data.remoteEndpoints.public_following
-					: `/api/public/following/${encodeURIComponent(did)}`;
+			let followingUrl: string;
+			if (data.profileSource === 'remote') {
+				if (data.remoteEndpoints?.public_following) {
+					followingUrl = data.remoteEndpoints.public_following;
+				} else if (data.resolvedProviderOrigin) {
+					followingUrl = fallbackEndpoints(data.resolvedProviderOrigin, did).public_following!;
+				} else {
+					followingUrl = `/api/public/following/${encodeURIComponent(did)}`;
+				}
+			} else {
+				followingUrl = `/api/public/following/${encodeURIComponent(did)}`;
+			}
 			const res = await fetch(followingUrl, {
 				signal: AbortSignal.timeout(12_000),
 				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
 			});
+			if (seq !== publicFollowsFetchSeq) return;
 			if (!res.ok) {
 				publicFollowsError = 'Could not load public follows';
 				return;
@@ -238,6 +250,7 @@
 			const j = (await res.json()) as {
 				data?: { followed_did: string; followed_provider_url: string | null; created_at: string }[];
 			};
+			if (seq !== publicFollowsFetchSeq) return;
 			const raw = j.data ?? [];
 			// Show raw data immediately, then enrich in background
 			publicFollows = raw.map((f) => ({
@@ -255,20 +268,28 @@
 						})()
 					: null
 			}));
+			publicFollowsLoading = false;
+			publicFollowsLoaded = true;
 			// Enrich in batches of 4
 			for (let i = 0; i < raw.length; i += 4) {
+				if (seq !== publicFollowsFetchSeq) return;
 				const batch = raw.slice(i, i + 4);
 				const enriched = await Promise.all(batch.map(enrichPublicFollow));
-				for (let j = 0; j < enriched.length; j++) {
-					publicFollows[i + j] = enriched[j];
+				if (seq !== publicFollowsFetchSeq) return;
+				for (let k = 0; k < enriched.length; k++) {
+					publicFollows[i + k] = enriched[k];
 				}
 				publicFollows = [...publicFollows];
 			}
 		} catch {
-			publicFollowsError = 'Could not load public follows';
+			if (seq === publicFollowsFetchSeq) {
+				publicFollowsError = 'Could not load public follows';
+			}
 		} finally {
-			publicFollowsLoading = false;
-			publicFollowsLoaded = true;
+			if (seq === publicFollowsFetchSeq) {
+				publicFollowsLoading = false;
+				publicFollowsLoaded = true;
+			}
 		}
 	}
 
@@ -805,7 +826,7 @@
 							{publicFollowsError}
 						</Card.Content>
 					</Card.Root>
-				{:else if publicFollowsLoading}
+				{:else if publicFollowsLoading && publicFollows.length === 0}
 					<Card.Root>
 						<Card.Content class="py-8 text-center text-sm text-muted-foreground">
 							Loading public follows…

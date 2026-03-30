@@ -255,8 +255,8 @@ Array of objects:
 
 The response only contains DIDs and provider URLs. To display usernames, avatars, and display names, clients should **enrich each entry** by fetching the profile from the followed DID's provider:
 
-1. Use `followed_provider_url` to build a manifest URL (`{provider}/.well-known/syr/{did}`)
-2. Fetch the manifest to get the `endpoints.profile` URL (or fall back to `{provider}/api/public/profile/{did}`)
+1. Use `followed_provider_url` to build a manifest URL — DIDs contain `:` and must be percent-encoded with `encodeURIComponent()` in path segments
+2. Fetch the manifest to get `endpoints.profile` (or fall back to `{provider}/api/public/profile/{encoded_did}`)
 3. Fetch the profile for `username`, `display_name`, `avatar_url`
 4. Display as `@username@provider.host` with avatar
 
