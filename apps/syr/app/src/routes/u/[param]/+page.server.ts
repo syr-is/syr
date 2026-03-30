@@ -65,6 +65,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 					posts: string;
 					uploads: string;
 					stories: string;
+					public_following: string | null;
 					web_profile: string | null;
 				} | null
 			};
@@ -140,6 +141,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			posts: endpoints.posts,
 			uploads: endpoints.uploads,
 			stories: endpoints.stories,
+			public_following: endpoints.public_following,
 			web_profile: endpoints.web_profile
 		}
 	};

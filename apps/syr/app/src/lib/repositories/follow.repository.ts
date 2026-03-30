@@ -186,7 +186,7 @@ export class FollowRepository {
 
 	async findPublicByDid(did: string): Promise<UserFollow[]> {
 		const result = await this.db.query<[UserFollow[]]>(
-			`SELECT * FROM user_follow WHERE follower_user_id IN (SELECT id FROM user WHERE did = $did) AND is_public = true ORDER BY created_at DESC`,
+			`SELECT * FROM user_follow WHERE follower_user_id IN (SELECT VALUE id FROM user WHERE did = $did) AND is_public = true ORDER BY created_at DESC`,
 			{ did }
 		);
 		return (result[0] ?? []) as UserFollow[];

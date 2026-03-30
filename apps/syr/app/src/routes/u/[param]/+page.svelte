@@ -27,7 +27,10 @@
 	} from '@syr-is/types';
 	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
+	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import type { StorySlide } from '$lib/types/feed-stories';
+	import { fetchManifest } from '$lib/manifest-cache.js';
+	import { endpointsFromManifest, fallbackEndpoints, manifestUrl } from '$lib/remote-endpoints.js';
 
 	let { data } = $props();
 
@@ -52,7 +55,7 @@
 		return host || null;
 	});
 
-	let catalogTab = $state<'posts' | 'media'>('posts');
+	let catalogTab = $state<'posts' | 'media' | 'following'>('posts');
 	let lastProfileKey = $state('');
 
 	let postsPage = $state(1);
@@ -156,6 +159,140 @@
 		if (storySlideIndex > 0) storySlideIndex -= 1;
 	}
 
+	type EnrichedPublicFollow = {
+		followed_did: string;
+		followed_provider_url: string | null;
+		created_at: string;
+		displayName: string | null;
+		username: string | null;
+		avatarUrl: string | null;
+		instanceHost: string | null;
+	};
+	let publicFollows = $state<EnrichedPublicFollow[]>([]);
+	let publicFollowsLoading = $state(false);
+	let publicFollowsError = $state<string | null>(null);
+	let publicFollowsLoaded = $state(false);
+
+	async function enrichPublicFollow(f: {
+		followed_did: string;
+		followed_provider_url: string | null;
+		created_at: string;
+	}): Promise<EnrichedPublicFollow> {
+		const base: EnrichedPublicFollow = {
+			...f,
+			displayName: null,
+			username: null,
+			avatarUrl: null,
+			instanceHost: null
+		};
+		const provider = f.followed_provider_url;
+		if (!provider) return base;
+		try {
+			base.instanceHost = new URL(provider).host;
+		} catch {
+			/* skip */
+		}
+		try {
+			const mUrl = manifestUrl(provider, f.followed_did);
+			const m = await fetchManifest(mUrl, 6_000);
+			const ep = m ? endpointsFromManifest(m) : fallbackEndpoints(provider, f.followed_did);
+			const res = await fetch(ep.profile, { signal: AbortSignal.timeout(6_000) });
+			if (res.ok) {
+				const j = (await res.json()) as {
+					data?: {
+						username?: string;
+						display_name?: string | null;
+						avatar_url?: string | null;
+					};
+				};
+				const d = j.data;
+				if (d) {
+					base.username = d.username?.trim() || null;
+					base.displayName = d.display_name?.trim() || base.username;
+					base.avatarUrl = d.avatar_url ?? null;
+				}
+			}
+		} catch {
+			/* enrichment is best-effort */
+		}
+		return base;
+	}
+
+	let publicFollowsFetchSeq = 0;
+
+	async function loadPublicFollows(did: string) {
+		const seq = ++publicFollowsFetchSeq;
+		publicFollowsLoading = true;
+		publicFollowsError = null;
+		publicFollows = [];
+		try {
+			let followingUrl: string;
+			if (data.profileSource === 'remote') {
+				if (data.remoteEndpoints?.public_following) {
+					followingUrl = data.remoteEndpoints.public_following;
+				} else if (data.resolvedProviderOrigin) {
+					followingUrl = fallbackEndpoints(data.resolvedProviderOrigin, did).public_following!;
+				} else {
+					followingUrl = `/api/public/following/${encodeURIComponent(did)}`;
+				}
+			} else {
+				followingUrl = `/api/public/following/${encodeURIComponent(did)}`;
+			}
+			const res = await fetch(followingUrl, {
+				signal: AbortSignal.timeout(12_000),
+				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
+			});
+			if (seq !== publicFollowsFetchSeq) return;
+			if (!res.ok) {
+				publicFollowsError = 'Could not load public follows';
+				return;
+			}
+			const j = (await res.json()) as {
+				data?: { followed_did: string; followed_provider_url: string | null; created_at: string }[];
+			};
+			if (seq !== publicFollowsFetchSeq) return;
+			const raw = j.data ?? [];
+			// Show raw data immediately, then enrich in background
+			publicFollows = raw.map((f) => ({
+				...f,
+				displayName: null,
+				username: null,
+				avatarUrl: null,
+				instanceHost: f.followed_provider_url
+					? (() => {
+							try {
+								return new URL(f.followed_provider_url).host;
+							} catch {
+								return null;
+							}
+						})()
+					: null
+			}));
+			publicFollowsLoading = false;
+			publicFollowsLoaded = true;
+			// Enrich in batches of 4
+			for (let i = 0; i < raw.length; i += 4) {
+				if (seq !== publicFollowsFetchSeq) return;
+				const batch = raw.slice(i, i + 4);
+				const enriched = await Promise.all(batch.map(enrichPublicFollow));
+				if (seq !== publicFollowsFetchSeq) return;
+				for (let k = 0; k < enriched.length; k++) {
+					publicFollows[i + k] = enriched[k];
+				}
+				publicFollows = [...publicFollows];
+			}
+		} catch {
+			if (seq === publicFollowsFetchSeq) {
+				publicFollowsError = 'Could not load public follows';
+			}
+		} finally {
+			if (seq === publicFollowsFetchSeq) {
+				publicFollowsLoading = false;
+				publicFollowsLoaded = true;
+			}
+		}
+	}
+
 	function resetCatalogState() {
 		postsFetchSeq++;
 		uploadsFetchSeq++;
@@ -169,6 +306,9 @@
 		uploadsError = null;
 		mediaUrlMimeTypes = {};
 		mediaUrlFilenames = {};
+		publicFollows = [];
+		publicFollowsLoaded = false;
+		publicFollowsError = null;
 		catalogTab = 'posts';
 	}
 
@@ -468,9 +608,15 @@
 
 	{#if p.did}
 		<Tabs.Root bind:value={catalogTab} class="w-full">
-			<Tabs.List class="grid w-full max-w-md grid-cols-2">
+			<Tabs.List class="grid w-full max-w-md grid-cols-3">
 				<Tabs.Trigger value="posts">Posts</Tabs.Trigger>
 				<Tabs.Trigger value="media">Media</Tabs.Trigger>
+				<Tabs.Trigger
+					value="following"
+					onclick={() => {
+						if (!publicFollowsLoaded && p.did) void loadPublicFollows(p.did);
+					}}>Following</Tabs.Trigger
+				>
 			</Tabs.List>
 
 			<Tabs.Content value="posts" class="mt-4 space-y-3">
@@ -670,6 +816,68 @@
 							defaultMode="cards"
 						/>
 					{/key}
+				{/if}
+			</Tabs.Content>
+
+			<Tabs.Content value="following" class="mt-4 space-y-3">
+				{#if publicFollowsError}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-destructive">
+							{publicFollowsError}
+						</Card.Content>
+					</Card.Root>
+				{:else if publicFollowsLoading && publicFollows.length === 0}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-muted-foreground">
+							Loading public follows…
+						</Card.Content>
+					</Card.Root>
+				{:else if publicFollows.length === 0}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-muted-foreground">
+							No public follows.
+						</Card.Content>
+					</Card.Root>
+				{:else}
+					<div class="space-y-2">
+						{#each publicFollows as f (f.followed_did + (f.followed_provider_url ?? ''))}
+							<button
+								type="button"
+								class="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+								onclick={() => {
+									if (f.followed_provider_url) {
+										window.open(
+											`/u/${encodeURIComponent(f.followed_did)}?provider=${encodeURIComponent(f.followed_provider_url)}`,
+											'_blank'
+										);
+									} else {
+										window.open(`/u/${encodeURIComponent(f.followed_did)}`, '_blank');
+									}
+								}}
+							>
+								<Avatar class="h-10 w-10 shrink-0 border border-border">
+									<AvatarImage src={f.avatarUrl ?? undefined} alt="" />
+									<AvatarFallback class="text-xs">
+										{(f.displayName ?? f.username ?? '?').slice(0, 2)}
+									</AvatarFallback>
+								</Avatar>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">
+										{f.displayName ?? f.username ?? f.followed_did.slice(0, 20) + '…'}
+									</p>
+									<p class="truncate font-mono text-xs text-muted-foreground">
+										{#if f.username && f.instanceHost}
+											@{f.username}@{f.instanceHost}
+										{:else if f.username}
+											@{f.username}
+										{:else}
+											{f.followed_did}
+										{/if}
+									</p>
+								</div>
+							</button>
+						{/each}
+					</div>
 				{/if}
 			</Tabs.Content>
 		</Tabs.Root>
