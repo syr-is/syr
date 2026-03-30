@@ -52,7 +52,7 @@
 		return host || null;
 	});
 
-	let catalogTab = $state<'posts' | 'media'>('posts');
+	let catalogTab = $state<'posts' | 'media' | 'following'>('posts');
 	let lastProfileKey = $state('');
 
 	let postsPage = $state(1);
@@ -156,6 +156,43 @@
 		if (storySlideIndex > 0) storySlideIndex -= 1;
 	}
 
+	type PublicFollow = {
+		followed_did: string;
+		followed_provider_url: string | null;
+		created_at: string;
+	};
+	let publicFollows = $state<PublicFollow[]>([]);
+	let publicFollowsLoading = $state(false);
+	let publicFollowsError = $state<string | null>(null);
+	let publicFollowsLoaded = $state(false);
+
+	async function loadPublicFollows(did: string) {
+		publicFollowsLoading = true;
+		publicFollowsError = null;
+		publicFollows = [];
+		try {
+			const followingUrl =
+				data.profileSource === 'remote' && data.remoteEndpoints?.public_following
+					? data.remoteEndpoints.public_following
+					: `/api/public/following/${encodeURIComponent(did)}`;
+			const res = await fetch(followingUrl, {
+				signal: AbortSignal.timeout(12_000),
+				credentials: data.profileSource === 'remote' ? 'omit' : 'same-origin'
+			});
+			if (!res.ok) {
+				publicFollowsError = 'Could not load public follows';
+				return;
+			}
+			const j = (await res.json()) as { data?: PublicFollow[] };
+			publicFollows = j.data ?? [];
+		} catch {
+			publicFollowsError = 'Could not load public follows';
+		} finally {
+			publicFollowsLoading = false;
+			publicFollowsLoaded = true;
+		}
+	}
+
 	function resetCatalogState() {
 		postsFetchSeq++;
 		uploadsFetchSeq++;
@@ -169,6 +206,9 @@
 		uploadsError = null;
 		mediaUrlMimeTypes = {};
 		mediaUrlFilenames = {};
+		publicFollows = [];
+		publicFollowsLoaded = false;
+		publicFollowsError = null;
 		catalogTab = 'posts';
 	}
 
@@ -468,9 +508,15 @@
 
 	{#if p.did}
 		<Tabs.Root bind:value={catalogTab} class="w-full">
-			<Tabs.List class="grid w-full max-w-md grid-cols-2">
+			<Tabs.List class="grid w-full max-w-md grid-cols-3">
 				<Tabs.Trigger value="posts">Posts</Tabs.Trigger>
 				<Tabs.Trigger value="media">Media</Tabs.Trigger>
+				<Tabs.Trigger
+					value="following"
+					onclick={() => {
+						if (!publicFollowsLoaded && p.did) void loadPublicFollows(p.did);
+					}}>Following</Tabs.Trigger
+				>
 			</Tabs.List>
 
 			<Tabs.Content value="posts" class="mt-4 space-y-3">
@@ -670,6 +716,61 @@
 							defaultMode="cards"
 						/>
 					{/key}
+				{/if}
+			</Tabs.Content>
+
+			<Tabs.Content value="following" class="mt-4 space-y-3">
+				{#if publicFollowsError}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-destructive">
+							{publicFollowsError}
+						</Card.Content>
+					</Card.Root>
+				{:else if publicFollowsLoading}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-muted-foreground">
+							Loading public follows…
+						</Card.Content>
+					</Card.Root>
+				{:else if publicFollows.length === 0}
+					<Card.Root>
+						<Card.Content class="py-8 text-center text-sm text-muted-foreground">
+							No public follows.
+						</Card.Content>
+					</Card.Root>
+				{:else}
+					<div class="space-y-2">
+						{#each publicFollows as f (f.followed_did + (f.followed_provider_url ?? ''))}
+							<Card.Root class="p-0">
+								<Card.Content class="flex items-center justify-between gap-3 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										<p class="truncate font-mono text-sm">{f.followed_did}</p>
+										{#if f.followed_provider_url}
+											<p class="truncate font-mono text-xs text-muted-foreground">
+												{f.followed_provider_url}
+											</p>
+										{/if}
+									</div>
+									<Button
+										variant="outline"
+										size="sm"
+										onclick={() => {
+											if (f.followed_provider_url) {
+												window.open(
+													`/u/${encodeURIComponent(f.followed_did)}?provider=${encodeURIComponent(f.followed_provider_url)}`,
+													'_blank'
+												);
+											} else {
+												window.open(`/u/${encodeURIComponent(f.followed_did)}`, '_blank');
+											}
+										}}
+									>
+										View
+									</Button>
+								</Card.Content>
+							</Card.Root>
+						{/each}
+					</div>
 				{/if}
 			</Tabs.Content>
 		</Tabs.Root>
