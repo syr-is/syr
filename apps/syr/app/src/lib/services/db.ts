@@ -140,8 +140,16 @@ class DatabaseService {
 					ASSERT string::starts_with($value, "did:syr:");
 				DEFINE FIELD IF NOT EXISTS source_registry ON TABLE user_follow TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS followed_provider_url ON TABLE user_follow TYPE option<string>;
-				DEFINE FIELD IF NOT EXISTS is_public ON TABLE user_follow TYPE bool DEFAULT false;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE user_follow TYPE datetime;
+			`);
+
+			// Backfill is_public for existing rows before enforcing the type
+			await db.query(`
+				UPDATE user_follow SET is_public = false WHERE is_public IS NONE;
+			`);
+
+			await db.query(`
+				DEFINE FIELD IF NOT EXISTS is_public ON TABLE user_follow TYPE bool DEFAULT false;
 				DEFINE INDEX IF NOT EXISTS idx_follow_follower ON TABLE user_follow COLUMNS follower_user_id;
 				DEFINE INDEX IF NOT EXISTS idx_follow_followed ON TABLE user_follow COLUMNS followed_did;
 				REMOVE INDEX IF EXISTS idx_follow_unique ON TABLE user_follow;
