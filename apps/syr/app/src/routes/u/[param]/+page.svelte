@@ -27,7 +27,10 @@
 	} from '@syr-is/types';
 	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
+	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import type { StorySlide } from '$lib/types/feed-stories';
+	import { fetchManifest } from '$lib/manifest-cache.js';
+	import { endpointsFromManifest, fallbackEndpoints, manifestUrl } from '$lib/remote-endpoints.js';
 
 	let { data } = $props();
 
@@ -156,15 +159,64 @@
 		if (storySlideIndex > 0) storySlideIndex -= 1;
 	}
 
-	type PublicFollow = {
+	type EnrichedPublicFollow = {
 		followed_did: string;
 		followed_provider_url: string | null;
 		created_at: string;
+		displayName: string | null;
+		username: string | null;
+		avatarUrl: string | null;
+		instanceHost: string | null;
 	};
-	let publicFollows = $state<PublicFollow[]>([]);
+	let publicFollows = $state<EnrichedPublicFollow[]>([]);
 	let publicFollowsLoading = $state(false);
 	let publicFollowsError = $state<string | null>(null);
 	let publicFollowsLoaded = $state(false);
+
+	async function enrichPublicFollow(f: {
+		followed_did: string;
+		followed_provider_url: string | null;
+		created_at: string;
+	}): Promise<EnrichedPublicFollow> {
+		const base: EnrichedPublicFollow = {
+			...f,
+			displayName: null,
+			username: null,
+			avatarUrl: null,
+			instanceHost: null
+		};
+		const provider = f.followed_provider_url;
+		if (!provider) return base;
+		try {
+			base.instanceHost = new URL(provider).host;
+		} catch {
+			/* skip */
+		}
+		try {
+			const mUrl = manifestUrl(provider, f.followed_did);
+			const m = await fetchManifest(mUrl, 6_000);
+			const ep = m ? endpointsFromManifest(m) : fallbackEndpoints(provider, f.followed_did);
+			const res = await fetch(ep.profile, { signal: AbortSignal.timeout(6_000) });
+			if (res.ok) {
+				const j = (await res.json()) as {
+					data?: {
+						username?: string;
+						display_name?: string | null;
+						avatar_url?: string | null;
+					};
+				};
+				const d = j.data;
+				if (d) {
+					base.username = d.username?.trim() || null;
+					base.displayName = d.display_name?.trim() || base.username;
+					base.avatarUrl = d.avatar_url ?? null;
+				}
+			}
+		} catch {
+			/* enrichment is best-effort */
+		}
+		return base;
+	}
 
 	async function loadPublicFollows(did: string) {
 		publicFollowsLoading = true;
@@ -183,8 +235,35 @@
 				publicFollowsError = 'Could not load public follows';
 				return;
 			}
-			const j = (await res.json()) as { data?: PublicFollow[] };
-			publicFollows = j.data ?? [];
+			const j = (await res.json()) as {
+				data?: { followed_did: string; followed_provider_url: string | null; created_at: string }[];
+			};
+			const raw = j.data ?? [];
+			// Show raw data immediately, then enrich in background
+			publicFollows = raw.map((f) => ({
+				...f,
+				displayName: null,
+				username: null,
+				avatarUrl: null,
+				instanceHost: f.followed_provider_url
+					? (() => {
+							try {
+								return new URL(f.followed_provider_url).host;
+							} catch {
+								return null;
+							}
+						})()
+					: null
+			}));
+			// Enrich in batches of 4
+			for (let i = 0; i < raw.length; i += 4) {
+				const batch = raw.slice(i, i + 4);
+				const enriched = await Promise.all(batch.map(enrichPublicFollow));
+				for (let j = 0; j < enriched.length; j++) {
+					publicFollows[i + j] = enriched[j];
+				}
+				publicFollows = [...publicFollows];
+			}
 		} catch {
 			publicFollowsError = 'Could not load public follows';
 		} finally {
@@ -741,34 +820,41 @@
 				{:else}
 					<div class="space-y-2">
 						{#each publicFollows as f (f.followed_did + (f.followed_provider_url ?? ''))}
-							<Card.Root class="p-0">
-								<Card.Content class="flex items-center justify-between gap-3 px-4 py-3">
-									<div class="min-w-0 flex-1">
-										<p class="truncate font-mono text-sm">{f.followed_did}</p>
-										{#if f.followed_provider_url}
-											<p class="truncate font-mono text-xs text-muted-foreground">
-												{f.followed_provider_url}
-											</p>
+							<button
+								type="button"
+								class="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+								onclick={() => {
+									if (f.followed_provider_url) {
+										window.open(
+											`/u/${encodeURIComponent(f.followed_did)}?provider=${encodeURIComponent(f.followed_provider_url)}`,
+											'_blank'
+										);
+									} else {
+										window.open(`/u/${encodeURIComponent(f.followed_did)}`, '_blank');
+									}
+								}}
+							>
+								<Avatar class="h-10 w-10 shrink-0 border border-border">
+									<AvatarImage src={f.avatarUrl ?? undefined} alt="" />
+									<AvatarFallback class="text-xs">
+										{(f.displayName ?? f.username ?? '?').slice(0, 2)}
+									</AvatarFallback>
+								</Avatar>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">
+										{f.displayName ?? f.username ?? f.followed_did.slice(0, 20) + '…'}
+									</p>
+									<p class="truncate font-mono text-xs text-muted-foreground">
+										{#if f.username && f.instanceHost}
+											@{f.username}@{f.instanceHost}
+										{:else if f.username}
+											@{f.username}
+										{:else}
+											{f.followed_did}
 										{/if}
-									</div>
-									<Button
-										variant="outline"
-										size="sm"
-										onclick={() => {
-											if (f.followed_provider_url) {
-												window.open(
-													`/u/${encodeURIComponent(f.followed_did)}?provider=${encodeURIComponent(f.followed_provider_url)}`,
-													'_blank'
-												);
-											} else {
-												window.open(`/u/${encodeURIComponent(f.followed_did)}`, '_blank');
-											}
-										}}
-									>
-										View
-									</Button>
-								</Card.Content>
-							</Card.Root>
+									</p>
+								</div>
+							</button>
 						{/each}
 					</div>
 				{/if}
