@@ -8,6 +8,7 @@ export interface UserFollow {
 	followed_did: string;
 	source_registry?: string;
 	followed_provider_url?: string;
+	is_public: boolean;
 	created_at: Date;
 }
 
@@ -159,6 +160,36 @@ export class FollowRepository {
 			{ uid }
 		);
 		return Number(result[0]?.[0]?.count ?? 0);
+	}
+
+	async setPublic(
+		followerUserId: RecordId | string,
+		followedDid: string,
+		providerUrl: string | undefined,
+		isPublic: boolean
+	): Promise<UserFollow | null> {
+		const uid =
+			typeof followerUserId === 'string' ? stringToRecordId.decode(followerUserId) : followerUserId;
+		if (providerUrl) {
+			const result = await this.db.query<[UserFollow[]]>(
+				`UPDATE user_follow SET is_public = $pub WHERE follower_user_id = $uid AND followed_did = $did AND followed_provider_url = $provider RETURN AFTER`,
+				{ uid, did: followedDid, provider: providerUrl, pub: isPublic }
+			);
+			return result[0]?.[0] ?? null;
+		}
+		const result = await this.db.query<[UserFollow[]]>(
+			`UPDATE user_follow SET is_public = $pub WHERE follower_user_id = $uid AND followed_did = $did RETURN AFTER`,
+			{ uid, did: followedDid, pub: isPublic }
+		);
+		return result[0]?.[0] ?? null;
+	}
+
+	async findPublicByDid(did: string): Promise<UserFollow[]> {
+		const result = await this.db.query<[UserFollow[]]>(
+			`SELECT * FROM user_follow WHERE follower_user_id IN (SELECT id FROM user WHERE did = $did) AND is_public = true ORDER BY created_at DESC`,
+			{ did }
+		);
+		return (result[0] ?? []) as UserFollow[];
 	}
 }
 

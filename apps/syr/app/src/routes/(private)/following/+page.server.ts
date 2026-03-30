@@ -13,6 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			followed_did: r.followed_did,
 			source_registry: r.source_registry ?? null,
 			followed_provider_url: r.followed_provider_url ?? null,
+			is_public: r.is_public ?? false,
 			created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
 		}))
 	};

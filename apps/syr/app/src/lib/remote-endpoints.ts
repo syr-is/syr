@@ -6,6 +6,7 @@ export interface RemoteEndpoints {
 	stories: string;
 	uploads: string;
 	did_document: string;
+	public_following: string | null;
 	web_profile: string | null;
 }
 
@@ -17,6 +18,7 @@ export function endpointsFromManifest(manifest: SyrIdentityManifest): RemoteEndp
 		stories: manifest.endpoints.stories,
 		uploads: manifest.endpoints.uploads,
 		did_document: manifest.endpoints.did_document,
+		public_following: manifest.endpoints.public_following ?? null,
 		web_profile: manifest.web_profile ?? null
 	};
 }
@@ -31,6 +33,7 @@ export function fallbackEndpoints(providerOrigin: string, did: string): RemoteEn
 		stories: `${base}/api/public/stories/${encoded}`,
 		uploads: `${base}/api/public/uploads/${encoded}`,
 		did_document: `${base}/api/identity/${encoded}/document`,
+		public_following: `${base}/api/public/following/${encoded}`,
 		web_profile: `${base}/u/${encoded}`
 	};
 }
