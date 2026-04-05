@@ -6,7 +6,16 @@ import { identityRepository } from '$lib/repositories/identity.repository';
 import { identityController } from '$lib/controllers/identity.controller';
 import { getIdentityContext } from '$lib/server/identity-context';
 import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
-import type { UserRegistrationInput, UserLogin, User, Profile, Session } from '@syr-is/types';
+import { getRegistrationMode, INVITE_CODE_TYPE } from '$lib/instance-config';
+import { kvService } from '$lib/services/kv';
+import type {
+	UserRegistrationInput,
+	UserLogin,
+	User,
+	Profile,
+	Session,
+	InviteCodeValue
+} from '@syr-is/types';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 
 export interface RegisterResponse {
@@ -37,7 +46,42 @@ export class AuthController {
 		data: UserRegistrationInput,
 		ctx?: { ip?: string; userAgent?: string }
 	): Promise<RegisterResponse> {
-		const { username, password, display_name } = data;
+		const { username, password, display_name, invite_code } = data;
+
+		// Check registration mode
+		const mode = await getRegistrationMode();
+		if (mode === 'closed') {
+			throw new Error('Registration is closed');
+		}
+		if (mode === 'invite_only') {
+			if (!invite_code) {
+				throw new Error('Invite code required');
+			}
+			const entry = await kvService.getEntry(INVITE_CODE_TYPE, invite_code);
+			if (!entry) {
+				throw new Error('Invalid invite code');
+			}
+			const value = entry.value as InviteCodeValue;
+			if (value.max_uses !== null && value.uses >= value.max_uses) {
+				throw new Error('Invite code exhausted');
+			}
+			// Atomically redeem the code
+			try {
+				await kvService.atomicIncrementField(
+					INVITE_CODE_TYPE,
+					invite_code,
+					'uses',
+					1,
+					0,
+					value.max_uses ?? undefined
+				);
+			} catch (err) {
+				if (err instanceof Error && err.message === 'QUOTA_EXCEEDED') {
+					throw new Error('Invite code exhausted');
+				}
+				throw err;
+			}
+		}
 
 		// Check if username already exists
 		if (await userRepository.usernameExists(username)) {

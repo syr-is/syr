@@ -53,7 +53,27 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		}
 
 		if (err instanceof Error) {
-			// Handle specific errors
+			if (err.message === 'Registration is closed') {
+				throw error(403, {
+					code: 'FORBIDDEN',
+					message: 'Registration is currently closed on this instance'
+				});
+			}
+
+			if (err.message === 'Invite code required') {
+				throw error(400, {
+					code: 'INVITE_REQUIRED',
+					message: 'An invite code is required to register on this instance'
+				});
+			}
+
+			if (err.message === 'Invalid invite code' || err.message === 'Invite code exhausted') {
+				throw error(400, {
+					code: 'INVALID_INVITE_CODE',
+					message: err.message
+				});
+			}
+
 			if (err.message.includes('already exists')) {
 				throw error(409, {
 					code: 'CONFLICT',

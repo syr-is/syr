@@ -18,6 +18,13 @@ export const UserRoleSchema = z.enum(['ADMIN', 'USER']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 /**
+ * Registration Mode Schema
+ * Controls who can create accounts on this instance
+ */
+export const RegistrationModeSchema = z.enum(['open', 'invite_only', 'closed']);
+export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
+
+/**
  * User Schema
  * Represents a user account in the SYR system
  * Designed for sovereignty - username and DID only, no email
@@ -88,7 +95,13 @@ export const UserRegistrationInputSchema = z.object({
 		.regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
 		.regex(/[a-z]/, 'Password must contain at least one lowercase letter')
 		.regex(/[0-9]/, 'Password must contain at least one number'),
-	display_name: z.string().min(1).max(100)
+	display_name: z.string().min(1).max(100),
+	invite_code: z
+		.string()
+		.min(1)
+		.max(32)
+		.regex(/^[a-zA-Z0-9]+$/, 'Invite code must be alphanumeric')
+		.optional()
 });
 
 export type UserRegistrationInput = z.infer<typeof UserRegistrationInputSchema>;
@@ -103,6 +116,19 @@ export const UserRegistrationSchema = UserRegistrationInputSchema.extend({
 	message: 'Passwords do not match',
 	path: ['confirmPassword']
 });
+
+/**
+ * Invite Code Value Schema
+ * The value stored in the KV store for each invite code
+ */
+export const InviteCodeValueSchema = z.object({
+	created_by: z.string(),
+	max_uses: z.number().int().min(1).nullable(),
+	uses: z.number().int().min(0),
+	created_at: z.string()
+});
+
+export type InviteCodeValue = z.infer<typeof InviteCodeValueSchema>;
 
 export type UserRegistration = z.infer<typeof UserRegistrationSchema>;
 
