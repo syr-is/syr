@@ -7,6 +7,10 @@
 	import * as Card from '@syr-is/ui/card';
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
+	const inviteOnly = $derived(data.registrationMode === 'invite_only');
 
 	const form = superForm(defaults(zod4(UserRegistrationSchema)), {
 		validators: zod4(UserRegistrationSchema),
@@ -16,6 +20,11 @@
 			if (!form.valid) return;
 
 			const { confirmPassword: _, ...registrationData } = form.data;
+
+			if (inviteOnly && !registrationData.invite_code?.trim()) {
+				toast.error('An invite code is required to register');
+				return;
+			}
 
 			try {
 				const response = await fetch('/api/auth/register', {
@@ -49,6 +58,24 @@
 		</Card.Header>
 		<form method="POST" use:enhance>
 			<Card.Content class="space-y-4">
+				{#if inviteOnly}
+					<Form.Field {form} name="invite_code">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Invite Code</Form.Label>
+								<Input
+									{...props}
+									bind:value={$formData.invite_code}
+									placeholder="Enter your invite code"
+									required
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.Description>This instance requires an invite code to register.</Form.Description>
+						<Form.FieldErrors />
+					</Form.Field>
+				{/if}
+
 				<Form.Field {form} name="username">
 					<Form.Control>
 						{#snippet children({ props })}

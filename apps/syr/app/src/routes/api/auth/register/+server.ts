@@ -1,7 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { UserRegistrationInputSchema } from '@syr-is/types';
-import { authController } from '$lib/controllers/auth.controller';
+import {
+	authController,
+	RegistrationClosedError,
+	InviteRequiredError,
+	InvalidInviteCodeError
+} from '$lib/controllers/auth.controller';
 import { config } from '$lib/config';
 import { z } from 'zod';
 
@@ -52,8 +57,28 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			});
 		}
 
+		if (err instanceof RegistrationClosedError) {
+			throw error(403, {
+				code: 'FORBIDDEN',
+				message: 'Registration is currently closed on this instance'
+			});
+		}
+
+		if (err instanceof InviteRequiredError) {
+			throw error(400, {
+				code: 'INVITE_REQUIRED',
+				message: 'An invite code is required to register on this instance'
+			});
+		}
+
+		if (err instanceof InvalidInviteCodeError) {
+			throw error(400, {
+				code: 'INVALID_INVITE_CODE',
+				message: err.message
+			});
+		}
+
 		if (err instanceof Error) {
-			// Handle specific errors
 			if (err.message.includes('already exists')) {
 				throw error(409, {
 					code: 'CONFLICT',

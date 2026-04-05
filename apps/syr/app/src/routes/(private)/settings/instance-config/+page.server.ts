@@ -6,9 +6,12 @@ import {
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	DEFAULT_PATH,
-	DEFAULT_USERNAME_COOLDOWN_DAYS
+	DEFAULT_USERNAME_COOLDOWN_DAYS,
+	INVITE_CODE_TYPE
 } from '$lib/instance-config';
+import { getRegistrationMode } from '$lib/instance-config';
 import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
+import { InviteCodeValueSchema } from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { user } = await parent();
@@ -23,12 +26,42 @@ export const load: PageServerLoad = async ({ parent }) => {
 		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_USERNAME_CHANGE_COOLDOWN_DAYS)) ??
 		String(DEFAULT_USERNAME_COOLDOWN_DAYS);
 
+	const registrationMode = await getRegistrationMode();
+
+	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
+	const inviteCodes: {
+		code: string;
+		created_by: string;
+		max_uses: number | null;
+		uses: number;
+		created_at: string;
+	}[] = [];
+	for (const entry of inviteCodeEntries) {
+		const raw = String(entry.id.id);
+		const prefix = `${INVITE_CODE_TYPE}:`;
+		const code = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
+		const parsed = InviteCodeValueSchema.safeParse(entry.value);
+		if (!parsed.success) {
+			console.warn(`[instance-config] Skipping malformed invite code entry ${raw}`, parsed.error);
+			continue;
+		}
+		inviteCodes.push({
+			code,
+			created_by: parsed.data.created_by,
+			max_uses: parsed.data.max_uses,
+			uses: parsed.data.uses,
+			created_at: parsed.data.created_at
+		});
+	}
+
 	const instanceDiscoveryRows = await instanceDiscoveryRegistryRepository.findAll();
 
 	return {
 		user,
 		profileSyncAssetPath,
 		usernameCooldownDays,
+		registrationMode,
+		inviteCodes,
 		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
 			id: r.id.toString(),
 			registryUrl: r.registry_url

@@ -1,10 +1,14 @@
 import { kvService } from '$lib/services/kv';
+import type { RegistrationMode } from '@syr-is/types';
 
 const INSTANCE_CONFIG_TYPE = 'instance_config';
 const KEY_PROFILE_SYNC_ASSET_PATH = 'default_profile_sync_asset_upload_path';
 const KEY_USERNAME_CHANGE_COOLDOWN_DAYS = 'username_change_cooldown_days';
+const KEY_REGISTRATION_MODE = 'registration_mode';
 const DEFAULT_PATH = ['me', 'profile', 'public'];
 const DEFAULT_USERNAME_COOLDOWN_DAYS = 7;
+const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'open';
+const INVITE_CODE_TYPE = 'invite_code';
 
 /**
  * Get the profile sync asset upload path from instance config.
@@ -38,10 +42,23 @@ export async function getUsernameChangeCooldownDays(): Promise<number> {
 	return DEFAULT_USERNAME_COOLDOWN_DAYS;
 }
 
+/**
+ * Get the registration mode for this instance.
+ * Default: 'open' when unset or invalid.
+ */
+export async function getRegistrationMode(): Promise<RegistrationMode> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_REGISTRATION_MODE);
+	if (val === 'open' || val === 'invite_only' || val === 'closed') return val;
+	return DEFAULT_REGISTRATION_MODE;
+}
+
 export {
 	INSTANCE_CONFIG_TYPE,
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
+	KEY_REGISTRATION_MODE,
 	DEFAULT_PATH,
-	DEFAULT_USERNAME_COOLDOWN_DAYS
+	DEFAULT_USERNAME_COOLDOWN_DAYS,
+	DEFAULT_REGISTRATION_MODE,
+	INVITE_CODE_TYPE
 };

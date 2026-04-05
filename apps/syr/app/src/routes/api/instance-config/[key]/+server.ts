@@ -6,12 +6,15 @@ import {
 	INSTANCE_CONFIG_TYPE,
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
+	KEY_REGISTRATION_MODE,
 	DEFAULT_PATH
 } from '$lib/instance-config';
+import { RegistrationModeSchema } from '@syr-is/types';
 
 const INSTANCE_CONFIG_KEYS = [
 	KEY_PROFILE_SYNC_ASSET_PATH,
-	KEY_USERNAME_CHANGE_COOLDOWN_DAYS
+	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
+	KEY_REGISTRATION_MODE
 ] as const;
 type AllowedKey = (typeof INSTANCE_CONFIG_KEYS)[number];
 
@@ -40,6 +43,15 @@ function validateCooldownDaysValue(val: string): string {
 		throw new Error('Value must be an integer between 1 and 365');
 	}
 	return String(n);
+}
+
+/** Validate registration mode: open | invite_only | closed */
+function validateRegistrationMode(val: string): string {
+	const result = RegistrationModeSchema.safeParse(val.trim());
+	if (!result.success) {
+		throw new Error('Value must be one of: open, invite_only, closed');
+	}
+	return result.data;
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -82,6 +94,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
 		if (key === KEY_USERNAME_CHANGE_COOLDOWN_DAYS) {
 			value = validateCooldownDaysValue(body.value);
+		} else if (key === KEY_REGISTRATION_MODE) {
+			value = validateRegistrationMode(body.value);
 		} else {
 			value = validatePathValue(body.value);
 		}
