@@ -50,7 +50,7 @@
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)} disabled={removing}>Cancel</Button>
-			<Button variant="destructive" onclick={handleDelete} disabled={removing}>
+			<Button variant="destructive" onclick={handleDelete} disabled={removing || !code}>
 				{#if removing}
 					<Loader2 class="mr-2 h-4 w-4 animate-spin" />
 					Deleting...

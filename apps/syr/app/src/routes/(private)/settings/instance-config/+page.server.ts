@@ -11,7 +11,7 @@ import {
 } from '$lib/instance-config';
 import { getRegistrationMode } from '$lib/instance-config';
 import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
-import type { InviteCodeValue } from '@syr-is/types';
+import { InviteCodeValueSchema } from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { user } = await parent();
@@ -29,19 +29,30 @@ export const load: PageServerLoad = async ({ parent }) => {
 	const registrationMode = await getRegistrationMode();
 
 	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
-	const inviteCodes = inviteCodeEntries.map((entry) => {
+	const inviteCodes: {
+		code: string;
+		created_by: string;
+		max_uses: number | null;
+		uses: number;
+		created_at: string;
+	}[] = [];
+	for (const entry of inviteCodeEntries) {
 		const raw = String(entry.id.id);
 		const prefix = `${INVITE_CODE_TYPE}:`;
 		const code = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-		const value = entry.value as InviteCodeValue;
-		return {
+		const parsed = InviteCodeValueSchema.safeParse(entry.value);
+		if (!parsed.success) {
+			console.warn(`[instance-config] Skipping malformed invite code entry ${raw}`, parsed.error);
+			continue;
+		}
+		inviteCodes.push({
 			code,
-			created_by: value.created_by,
-			max_uses: value.max_uses,
-			uses: value.uses,
-			created_at: value.created_at
-		};
-	});
+			created_by: parsed.data.created_by,
+			max_uses: parsed.data.max_uses,
+			uses: parsed.data.uses,
+			created_at: parsed.data.created_at
+		});
+	}
 
 	const instanceDiscoveryRows = await instanceDiscoveryRegistryRepository.findAll();
 

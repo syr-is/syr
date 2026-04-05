@@ -21,6 +21,11 @@
 
 			const { confirmPassword: _, ...registrationData } = form.data;
 
+			if (inviteOnly && !registrationData.invite_code?.trim()) {
+				toast.error('An invite code is required to register');
+				return;
+			}
+
 			try {
 				const response = await fetch('/api/auth/register', {
 					method: 'POST',
@@ -62,6 +67,7 @@
 									{...props}
 									bind:value={$formData.invite_code}
 									placeholder="Enter your invite code"
+									required
 								/>
 							{/snippet}
 						</Form.Control>

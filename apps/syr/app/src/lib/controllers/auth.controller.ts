@@ -18,6 +18,25 @@ import type {
 } from '@syr-is/types';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 
+export class RegistrationClosedError extends Error {
+	readonly code = 'REGISTRATION_CLOSED';
+	constructor() {
+		super('Registration is closed');
+	}
+}
+export class InviteRequiredError extends Error {
+	readonly code = 'INVITE_REQUIRED';
+	constructor() {
+		super('Invite code required');
+	}
+}
+export class InvalidInviteCodeError extends Error {
+	readonly code = 'INVALID_INVITE_CODE';
+	constructor(message = 'Invalid invite code') {
+		super(message);
+	}
+}
+
 export interface RegisterResponse {
 	user: Omit<User, 'password_hash'>;
 	profile: Profile;
@@ -51,19 +70,27 @@ export class AuthController {
 		// Check registration mode
 		const mode = await getRegistrationMode();
 		if (mode === 'closed') {
-			throw new Error('Registration is closed');
+			throw new RegistrationClosedError();
 		}
+
+		// Check username before redeeming an invite code so we don't waste a use
+		if (await userRepository.usernameExists(username)) {
+			throw new Error('Username already exists');
+		}
+
+		// Validate and redeem invite code (after username check to avoid wasting uses)
+		let inviteRedeemed: string | null = null;
 		if (mode === 'invite_only') {
 			if (!invite_code) {
-				throw new Error('Invite code required');
+				throw new InviteRequiredError();
 			}
 			const entry = await kvService.getEntry(INVITE_CODE_TYPE, invite_code);
 			if (!entry) {
-				throw new Error('Invalid invite code');
+				throw new InvalidInviteCodeError();
 			}
 			const value = entry.value as InviteCodeValue;
 			if (value.max_uses !== null && value.uses >= value.max_uses) {
-				throw new Error('Invite code exhausted');
+				throw new InvalidInviteCodeError('Invite code exhausted');
 			}
 			// Atomically redeem the code
 			try {
@@ -75,17 +102,13 @@ export class AuthController {
 					0,
 					value.max_uses ?? undefined
 				);
+				inviteRedeemed = invite_code;
 			} catch (err) {
 				if (err instanceof Error && err.message === 'QUOTA_EXCEEDED') {
-					throw new Error('Invite code exhausted');
+					throw new InvalidInviteCodeError('Invite code exhausted');
 				}
 				throw err;
 			}
-		}
-
-		// Check if username already exists
-		if (await userRepository.usernameExists(username)) {
-			throw new Error('Username already exists');
 		}
 
 		// Hash password
@@ -122,6 +145,13 @@ export class AuthController {
 			aegisBundle = result.aegisBundle;
 		} catch (err) {
 			// Rollback: remove created user and profile so caller can retry
+			if (inviteRedeemed) {
+				try {
+					await kvService.atomicIncrementField(INVITE_CODE_TYPE, inviteRedeemed, 'uses', -1, 0);
+				} catch (e) {
+					console.error('[auth.controller] Rollback: failed to decrement invite code', e);
+				}
+			}
 			try {
 				await profileRepository.delete(profile.id);
 			} catch (e) {
@@ -156,6 +186,13 @@ export class AuthController {
 			};
 		} catch (err) {
 			// Rollback: remove identity, profile, user (unset user.did before deleting identity)
+			if (inviteRedeemed) {
+				try {
+					await kvService.atomicIncrementField(INVITE_CODE_TYPE, inviteRedeemed, 'uses', -1, 0);
+				} catch (e) {
+					console.error('[auth.controller] Rollback: failed to decrement invite code', e);
+				}
+			}
 			try {
 				await userRepository.unsetDid(user.id);
 			} catch (e) {

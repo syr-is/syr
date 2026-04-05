@@ -17,7 +17,8 @@
 	let pathLoading = $state(false);
 	let cooldownLoading = $state(false);
 
-	let registrationMode = $state('open');
+	let registrationModeDraft = $state('open');
+	let registrationModePersisted = $state('open');
 	let registrationModeLoading = $state(false);
 
 	let newCodeMaxUses = $state<number | null>(null);
@@ -33,7 +34,8 @@
 	$effect(() => {
 		profileSyncAssetPath = data.profileSyncAssetPath;
 		usernameCooldownDays = data.usernameCooldownDays;
-		registrationMode = data.registrationMode;
+		registrationModeDraft = data.registrationMode;
+		registrationModePersisted = data.registrationMode;
 	});
 
 	async function saveProfileSyncPath() {
@@ -119,16 +121,19 @@
 			const res = await fetch('/api/instance-config/registration_mode', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ value: registrationMode })
+				body: JSON.stringify({ value: registrationModeDraft })
 			});
 			const json = await res.json();
 			if (!res.ok) {
+				registrationModeDraft = registrationModePersisted;
 				toast.error(json.message ?? 'Failed to update');
 				return;
 			}
+			registrationModePersisted = registrationModeDraft;
 			toast.success('Registration mode updated');
 			await invalidateAll();
 		} catch (e) {
+			registrationModeDraft = registrationModePersisted;
 			toast.error(e instanceof Error ? e.message : 'Failed to update');
 		} finally {
 			registrationModeLoading = false;
@@ -195,11 +200,11 @@
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			<div class="flex gap-2">
-				<Select.Root type="single" bind:value={registrationMode}>
+				<Select.Root type="single" bind:value={registrationModeDraft}>
 					<Select.Trigger class="w-full" aria-label="Registration mode">
-						{registrationMode === 'open'
+						{registrationModeDraft === 'open'
 							? 'Open — anyone can register'
-							: registrationMode === 'invite_only'
+							: registrationModeDraft === 'invite_only'
 								? 'Invite only — requires an invite code'
 								: 'Closed — no new registrations'}
 					</Select.Trigger>
@@ -216,7 +221,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if registrationMode === 'invite_only'}
+	{#if registrationModePersisted === 'invite_only'}
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Invite codes</Card.Title>

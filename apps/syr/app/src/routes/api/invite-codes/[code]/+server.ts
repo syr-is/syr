@@ -44,6 +44,11 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		});
 	}
 
+	const exists = await kvService.has(INVITE_CODE_TYPE, params.code);
+	if (!exists) {
+		throw error(404, { code: 'NOT_FOUND', message: 'Invite code not found' });
+	}
+
 	await kvService.delete(INVITE_CODE_TYPE, params.code);
 	return json({ status: 'success' });
 };
