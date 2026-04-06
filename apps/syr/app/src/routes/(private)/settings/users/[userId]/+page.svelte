@@ -7,7 +7,7 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { ChevronRight, Home, List, FolderOpen } from 'lucide-svelte';
+	import { ChevronRight, Home, List, FolderOpen, ExternalLink } from 'lucide-svelte';
 	import FileTable from '$lib/components/fragments/file-table.svelte';
 	import FolderCard from '$lib/components/fragments/folder-card.svelte';
 	import { type DisplayItem, uploadsToDisplayItems } from '$lib/types/display-item';
@@ -187,6 +187,7 @@
 		is_public: boolean;
 		key: string | null;
 		folder_id: string | null;
+		url: string | null;
 		created_at: string;
 	};
 	let uploads = $state<UploadRow[]>([]);
@@ -491,9 +492,22 @@
 									{formatDate(post.created_at)}
 								</Table.Cell>
 								<Table.Cell class="text-right">
-									<Button variant="destructive" size="sm" onclick={() => openDeletePost(post)}>
-										Delete
-									</Button>
+									<div class="flex items-center justify-end gap-1">
+										{#if post.did && post.local_id}
+											<a
+												href={resolve(`/posts/${post.did}/${post.local_id}`)}
+												target="_blank"
+												rel="noopener"
+												class="inline-flex h-8 items-center rounded-md border border-input bg-background px-2.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
+											>
+												<ExternalLink class="mr-1 h-3 w-3" />
+												View
+											</a>
+										{/if}
+										<Button variant="destructive" size="sm" onclick={() => openDeletePost(post)}>
+											Delete
+										</Button>
+									</div>
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -593,9 +607,24 @@
 										>{formatDate(upload.created_at)}</Table.Cell
 									>
 									<Table.Cell class="text-right">
-										<Button variant="destructive" size="sm" onclick={() => openDeleteUpload(upload)}
-											>Delete</Button
-										>
+										<div class="flex items-center justify-end gap-1">
+											{#if upload.url && upload.status === 'completed'}
+												<a
+													href={upload.url}
+													target="_blank"
+													rel="noopener"
+													class="inline-flex h-8 items-center rounded-md border border-input bg-background px-2.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
+												>
+													<ExternalLink class="mr-1 h-3 w-3" />
+													View
+												</a>
+											{/if}
+											<Button
+												variant="destructive"
+												size="sm"
+												onclick={() => openDeleteUpload(upload)}>Delete</Button
+											>
+										</div>
 									</Table.Cell>
 								</Table.Row>
 							{/each}
