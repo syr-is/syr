@@ -7,10 +7,15 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { ChevronRight, Home, List, FolderOpen } from 'lucide-svelte';
+	import FileTable from '$lib/components/fragments/file-table.svelte';
+	import FolderCard from '$lib/components/fragments/folder-card.svelte';
+	import { type DisplayItem, uploadsToDisplayItems } from '$lib/types/display-item';
 	import AdminDeleteUserDialog from '$lib/components/fragments/admin-delete-user-dialog.svelte';
 	import AdminDeletePostDialog from '$lib/components/fragments/admin-delete-post-dialog.svelte';
 	import AdminDeleteUploadDialog from '$lib/components/fragments/admin-delete-upload-dialog.svelte';
 	import type { PageData } from './$types';
+	import type { Folder, UploadWithCompositeId } from '@syr-is/types';
 
 	const { data }: { data: PageData } = $props();
 	const userId = $derived(data.userId);
@@ -46,11 +51,13 @@
 		bytes_limit: number;
 		percentage_used: number;
 		bytes_remaining: number;
+		uploads_enabled: boolean;
 	};
 	let storage = $state<StorageInfo | null>(null);
 	let storageLoading = $state(true);
 	let customLimitGb = $state('');
 	let limitSaving = $state(false);
+	let toggleSaving = $state(false);
 
 	async function loadStorage() {
 		storageLoading = true;
@@ -113,6 +120,29 @@
 		}
 	}
 
+	async function toggleUploads() {
+		if (!storage) return;
+		toggleSaving = true;
+		try {
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/storage`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ uploads_enabled: !storage.uploads_enabled })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to toggle uploads');
+				return;
+			}
+			storage = json.data;
+			toast.success(storage?.uploads_enabled ? 'Uploads enabled' : 'Uploads disabled');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to toggle');
+		} finally {
+			toggleSaving = false;
+		}
+	}
+
 	// --- Posts ---
 	type PostRow = {
 		id: string;
@@ -145,7 +175,7 @@
 		}
 	}
 
-	// --- Uploads ---
+	// --- Uploads (list view) ---
 	type UploadRow = {
 		id: string;
 		did: string | null;
@@ -155,6 +185,8 @@
 		size: number;
 		status: string;
 		is_public: boolean;
+		key: string | null;
+		folder_id: string | null;
 		created_at: string;
 	};
 	let uploads = $state<UploadRow[]>([]);
@@ -175,6 +207,89 @@
 			}
 		} finally {
 			uploadsLoading = false;
+		}
+	}
+
+	// --- Uploads (browser view) ---
+	let uploadViewMode = $state<'list' | 'browser'>('list');
+	let browserFolderId = $state<string | null>(null);
+	let browserFolders = $state<Folder[]>([]);
+	let browserUploads = $state<UploadWithCompositeId[]>([]);
+	let browserBreadcrumbs = $state<Array<{ id: string; name: string }>>([]);
+	let browserLoading = $state(false);
+	let browserPage = $state(1);
+	let browserTotal = $state(0);
+
+	const browserDisplayItems = $derived(uploadsToDisplayItems(browserFolders, browserUploads));
+	const browserTotalPages = $derived(Math.max(1, Math.ceil(browserTotal / 20)));
+
+	async function loadBrowserFolders() {
+		try {
+			let qs = '';
+			if (browserFolderId) qs = `?parent_id=${encodeURIComponent(browserFolderId)}`;
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/folders${qs}`);
+			const json = await res.json();
+			if (json.status === 'success') {
+				browserFolders = json.data.folders ?? [];
+				browserBreadcrumbs = json.data.breadcrumbs ?? [];
+			}
+		} catch {
+			browserFolders = [];
+		}
+	}
+
+	async function loadBrowserUploads() {
+		browserLoading = true;
+		try {
+			let qs = `page=${browserPage}&size=20&sort_field=created_at&sort_order=desc`;
+			if (browserFolderId === null) {
+				qs += '&folder_id=';
+			} else {
+				qs += `&folder_id=${encodeURIComponent(browserFolderId)}`;
+			}
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/uploads?${qs}`);
+			const json = await res.json();
+			if (json.status === 'success') {
+				browserUploads = json.data;
+				browserTotal = json.pagination?.total ?? 0;
+			}
+		} finally {
+			browserLoading = false;
+		}
+	}
+
+	function navigateFolder(folderId: string | null) {
+		browserFolderId = folderId;
+		browserPage = 1;
+		loadBrowserFolders();
+		loadBrowserUploads();
+	}
+
+	function handleBrowserDelete(item: DisplayItem) {
+		if (item.kind === 'file') {
+			const u = item.data as UploadWithCompositeId;
+			deleteUploadTarget = {
+				did: u.did ?? '',
+				localId: u.local_id ?? '',
+				filename: u.filename
+			};
+			deleteUploadOpen = true;
+		}
+	}
+
+	function handleFolderClick(folder: Folder) {
+		const id = typeof folder.id === 'string' ? folder.id : folder.id.toString();
+		navigateFolder(id);
+	}
+
+	// Switch between list and browser views
+	function switchUploadView(mode: 'list' | 'browser') {
+		uploadViewMode = mode;
+		if (mode === 'browser') {
+			browserFolderId = null;
+			browserPage = 1;
+			loadBrowserFolders();
+			loadBrowserUploads();
 		}
 	}
 
@@ -239,6 +354,15 @@
 		});
 	}
 
+	function extractLocation(key: string | null): string {
+		if (!key) return '/';
+		// key format: uploads/{did}/[folder_path/]{ulid}
+		const parts = key.split('/');
+		// Remove "uploads", DID, and the ULID (last segment)
+		if (parts.length <= 3) return '/';
+		return '/' + parts.slice(2, -1).join('/');
+	}
+
 	const postsTotalPages = $derived(Math.max(1, Math.ceil(postsTotal / 10)));
 	const uploadsTotalPages = $derived(Math.max(1, Math.ceil(uploadsTotal / 10)));
 </script>
@@ -294,7 +418,7 @@
 						{formatBytes(storage.bytes_remaining)} remaining
 					</p>
 				</div>
-				<div class="flex gap-2">
+				<div class="flex flex-wrap gap-2">
 					<Input
 						type="number"
 						min={0.1}
@@ -307,6 +431,20 @@
 					<Button variant="outline" onclick={resetStorageLimit} disabled={limitSaving}>
 						Reset to default
 					</Button>
+				</div>
+				<div class="flex items-center gap-3 border-t pt-3">
+					<span class="text-sm font-medium">File uploads</span>
+					<Button
+						variant={storage.uploads_enabled ? 'default' : 'destructive'}
+						size="sm"
+						onclick={toggleUploads}
+						disabled={toggleSaving}
+					>
+						{storage.uploads_enabled ? 'Enabled' : 'Disabled'}
+					</Button>
+					{#if !storage.uploads_enabled}
+						<span class="text-xs text-muted-foreground">User cannot upload files</span>
+					{/if}
 				</div>
 			{:else if storageLoading}
 				<p class="text-sm text-muted-foreground">Loading…</p>
@@ -371,10 +509,8 @@
 						onclick={() => {
 							postsPage--;
 							loadPosts();
-						}}
+						}}>Prev</Button
 					>
-						Prev
-					</Button>
 					<span class="text-xs text-muted-foreground">{postsPage} / {postsTotalPages}</span>
 					<Button
 						variant="outline"
@@ -383,10 +519,8 @@
 						onclick={() => {
 							postsPage++;
 							loadPosts();
-						}}
+						}}>Next</Button
 					>
-						Next
-					</Button>
 				</div>
 			{/if}
 		</Card.Content>
@@ -395,78 +529,174 @@
 	<!-- Uploads -->
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Uploads ({uploadsTotal})</Card.Title>
+			<div class="flex items-center justify-between">
+				<Card.Title>Uploads ({uploadsTotal})</Card.Title>
+				<div class="flex gap-1">
+					<Button
+						variant={uploadViewMode === 'list' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => switchUploadView('list')}
+					>
+						<List class="mr-1 h-3.5 w-3.5" />
+						List
+					</Button>
+					<Button
+						variant={uploadViewMode === 'browser' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => switchUploadView('browser')}
+					>
+						<FolderOpen class="mr-1 h-3.5 w-3.5" />
+						Browser
+					</Button>
+				</div>
+			</div>
 		</Card.Header>
 		<Card.Content>
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Filename</Table.Head>
-						<Table.Head>Size</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head>Public</Table.Head>
-						<Table.Head>Created</Table.Head>
-						<Table.Head class="text-right">Actions</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#if uploadsLoading}
+			{#if uploadViewMode === 'list'}
+				<!-- Flat list view with location column -->
+				<Table.Root>
+					<Table.Header>
 						<Table.Row>
-							<Table.Cell colspan={6} class="py-4 text-center text-muted-foreground">
-								Loading…
-							</Table.Cell>
+							<Table.Head>Filename</Table.Head>
+							<Table.Head>Location</Table.Head>
+							<Table.Head>Size</Table.Head>
+							<Table.Head>Status</Table.Head>
+							<Table.Head>Public</Table.Head>
+							<Table.Head>Created</Table.Head>
+							<Table.Head class="text-right">Actions</Table.Head>
 						</Table.Row>
-					{:else if uploads.length === 0}
-						<Table.Row>
-							<Table.Cell colspan={6} class="py-4 text-center text-muted-foreground">
-								No uploads.
-							</Table.Cell>
-						</Table.Row>
-					{:else}
-						{#each uploads as upload (upload.id)}
+					</Table.Header>
+					<Table.Body>
+						{#if uploadsLoading}
 							<Table.Row>
-								<Table.Cell class="max-w-[200px] truncate text-sm">{upload.filename}</Table.Cell>
-								<Table.Cell class="text-xs">{formatBytes(upload.size)}</Table.Cell>
-								<Table.Cell class="text-xs">{upload.status}</Table.Cell>
-								<Table.Cell class="text-xs">{upload.is_public ? 'Yes' : 'No'}</Table.Cell>
-								<Table.Cell class="text-xs text-muted-foreground">
-									{formatDate(upload.created_at)}
-								</Table.Cell>
-								<Table.Cell class="text-right">
-									<Button variant="destructive" size="sm" onclick={() => openDeleteUpload(upload)}>
-										Delete
-									</Button>
-								</Table.Cell>
+								<Table.Cell colspan={7} class="py-4 text-center text-muted-foreground"
+									>Loading…</Table.Cell
+								>
 							</Table.Row>
+						{:else if uploads.length === 0}
+							<Table.Row>
+								<Table.Cell colspan={7} class="py-4 text-center text-muted-foreground"
+									>No uploads.</Table.Cell
+								>
+							</Table.Row>
+						{:else}
+							{#each uploads as upload (upload.id)}
+								<Table.Row>
+									<Table.Cell class="max-w-[200px] truncate text-sm">{upload.filename}</Table.Cell>
+									<Table.Cell class="max-w-[150px] truncate font-mono text-xs text-muted-foreground"
+										>{extractLocation(upload.key)}</Table.Cell
+									>
+									<Table.Cell class="text-xs">{formatBytes(upload.size)}</Table.Cell>
+									<Table.Cell class="text-xs">{upload.status}</Table.Cell>
+									<Table.Cell class="text-xs">{upload.is_public ? 'Yes' : 'No'}</Table.Cell>
+									<Table.Cell class="text-xs text-muted-foreground"
+										>{formatDate(upload.created_at)}</Table.Cell
+									>
+									<Table.Cell class="text-right">
+										<Button variant="destructive" size="sm" onclick={() => openDeleteUpload(upload)}
+											>Delete</Button
+										>
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						{/if}
+					</Table.Body>
+				</Table.Root>
+				{#if uploadsTotalPages > 1}
+					<div class="mt-2 flex items-center justify-end gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={uploadsPage <= 1}
+							onclick={() => {
+								uploadsPage--;
+								loadUploads();
+							}}>Prev</Button
+						>
+						<span class="text-xs text-muted-foreground">{uploadsPage} / {uploadsTotalPages}</span>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={uploadsPage >= uploadsTotalPages}
+							onclick={() => {
+								uploadsPage++;
+								loadUploads();
+							}}>Next</Button
+						>
+					</div>
+				{/if}
+			{:else}
+				<!-- File browser view -->
+				<div class="space-y-3">
+					<!-- Breadcrumbs -->
+					<nav class="flex items-center gap-1 text-sm">
+						<button
+							type="button"
+							class="text-muted-foreground hover:text-foreground"
+							onclick={() => navigateFolder(null)}
+						>
+							<Home class="h-4 w-4" />
+						</button>
+						{#each browserBreadcrumbs as crumb (crumb.id)}
+							<ChevronRight class="h-3.5 w-3.5 text-muted-foreground" />
+							<button
+								type="button"
+								class="text-sm text-muted-foreground hover:text-foreground"
+								onclick={() => navigateFolder(crumb.id)}
+							>
+								{crumb.name}
+							</button>
 						{/each}
+					</nav>
+
+					{#if browserLoading}
+						<p class="py-4 text-center text-sm text-muted-foreground">Loading…</p>
+					{:else}
+						<!-- Folders -->
+						{#if browserFolders.length > 0}
+							<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+								{#each browserFolders as folder (folder.id)}
+									<FolderCard {folder} onclick={() => handleFolderClick(folder)} />
+								{/each}
+							</div>
+						{/if}
+
+						<!-- Files -->
+						{#if browserDisplayItems.filter((i) => i.kind === 'file').length > 0}
+							<FileTable
+								items={browserDisplayItems.filter((i) => i.kind === 'file')}
+								onDelete={handleBrowserDelete}
+							/>
+						{:else if browserFolders.length === 0}
+							<p class="py-4 text-center text-sm text-muted-foreground">Empty folder.</p>
+						{/if}
+
+						{#if browserTotalPages > 1}
+							<div class="flex items-center justify-end gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={browserPage <= 1}
+									onclick={() => {
+										browserPage--;
+										loadBrowserUploads();
+									}}>Prev</Button
+								>
+								<span class="text-xs text-muted-foreground"
+									>{browserPage} / {browserTotalPages}</span
+								>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={browserPage >= browserTotalPages}
+									onclick={() => {
+										browserPage++;
+										loadBrowserUploads();
+									}}>Next</Button
+								>
+							</div>
+						{/if}
 					{/if}
-				</Table.Body>
-			</Table.Root>
-			{#if uploadsTotalPages > 1}
-				<div class="mt-2 flex items-center justify-end gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={uploadsPage <= 1}
-						onclick={() => {
-							uploadsPage--;
-							loadUploads();
-						}}
-					>
-						Prev
-					</Button>
-					<span class="text-xs text-muted-foreground">{uploadsPage} / {uploadsTotalPages}</span>
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={uploadsPage >= uploadsTotalPages}
-						onclick={() => {
-							uploadsPage++;
-							loadUploads();
-						}}
-					>
-						Next
-					</Button>
 				</div>
 			{/if}
 		</Card.Content>
@@ -498,5 +728,9 @@
 	onSuccess={() => {
 		loadUploads();
 		loadStorage();
+		if (uploadViewMode === 'browser') {
+			loadBrowserFolders();
+			loadBrowserUploads();
+		}
 	}}
 />

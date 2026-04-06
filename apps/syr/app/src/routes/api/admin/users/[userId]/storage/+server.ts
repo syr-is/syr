@@ -25,6 +25,14 @@ function parseUserId(raw: string) {
 	}
 }
 
+function formatBytes(bytes: number): string {
+	if (bytes === 0) return '0 B';
+	const k = 1024;
+	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 export const GET: RequestHandler = async ({ params, locals }) => {
 	requireAdmin(locals);
 	const userId = parseUserId(params.userId);
@@ -35,16 +43,19 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	const details = await fileStoreUsageController.getUsageDetails(userId);
-	return json({ status: 'success', data: details });
+	const uploadsEnabled = !(await fileStoreUsageController.isUploadDisabled(userId));
+
+	return json({ status: 'success', data: { ...details, uploads_enabled: uploadsEnabled } });
 };
 
 const PatchBodySchema = z
 	.object({
 		bytes_limit: z.number().int().positive().optional(),
-		reset: z.boolean().optional()
+		reset: z.boolean().optional(),
+		uploads_enabled: z.boolean().optional()
 	})
-	.refine((d) => d.bytes_limit !== undefined || d.reset, {
-		message: 'Provide bytes_limit or set reset to true'
+	.refine((d) => d.bytes_limit !== undefined || d.reset || d.uploads_enabled !== undefined, {
+		message: 'Provide bytes_limit, reset, or uploads_enabled'
 	});
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
@@ -62,16 +73,30 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	} catch {
 		throw error(400, {
 			code: 'VALIDATION_ERROR',
-			message: 'Provide bytes_limit or set reset to true'
+			message: 'Provide bytes_limit, reset, or uploads_enabled'
 		});
 	}
 
 	if (body.reset) {
 		await fileStoreUsageController.clearUserLimit(userId);
 	} else if (body.bytes_limit !== undefined) {
+		// Prevent setting limit below current usage
+		const currentUsage = await fileStoreUsageController.getUsage(userId);
+		if (body.bytes_limit < currentUsage) {
+			throw error(400, {
+				code: 'VALIDATION_ERROR',
+				message: `Cannot set limit below current usage (${formatBytes(currentUsage)})`
+			});
+		}
 		await fileStoreUsageController.setUserLimit(userId, body.bytes_limit);
 	}
 
+	if (body.uploads_enabled !== undefined) {
+		await fileStoreUsageController.setUploadDisabled(userId, !body.uploads_enabled);
+	}
+
 	const details = await fileStoreUsageController.getUsageDetails(userId);
-	return json({ status: 'success', data: details });
+	const uploadsEnabled = !(await fileStoreUsageController.isUploadDisabled(userId));
+
+	return json({ status: 'success', data: { ...details, uploads_enabled: uploadsEnabled } });
 };

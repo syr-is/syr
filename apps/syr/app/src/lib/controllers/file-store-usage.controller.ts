@@ -32,6 +32,15 @@ interface FileStoreLimitOverride {
 }
 
 /**
+ * KV type for per-user upload disabled flag
+ */
+const KV_UPLOAD_DISABLED_TYPE = 'file_upload_disabled';
+
+interface FileUploadDisabledFlag {
+	disabled: boolean;
+}
+
+/**
  * File Store Usage Controller
  * Manages aggregated file storage usage for users using KV storage
  */
@@ -77,6 +86,29 @@ export class FileStoreUsageController {
 	async clearUserLimit(userId: RecordId | string): Promise<void> {
 		const index = this.getUserIndex(userId);
 		await kvService.delete(KV_LIMIT_TYPE, index);
+	}
+
+	/**
+	 * Check if uploads are disabled for a user.
+	 */
+	async isUploadDisabled(userId: RecordId | string): Promise<boolean> {
+		const index = this.getUserIndex(userId);
+		const flag = await kvService.get<FileUploadDisabledFlag>(KV_UPLOAD_DISABLED_TYPE, index);
+		return flag?.disabled === true;
+	}
+
+	/**
+	 * Enable or disable uploads for a user.
+	 */
+	async setUploadDisabled(userId: RecordId | string, disabled: boolean): Promise<void> {
+		const index = this.getUserIndex(userId);
+		if (disabled) {
+			await kvService.set<FileUploadDisabledFlag>(KV_UPLOAD_DISABLED_TYPE, index, {
+				disabled: true
+			});
+		} else {
+			await kvService.delete(KV_UPLOAD_DISABLED_TYPE, index);
+		}
 	}
 
 	/**
@@ -277,6 +309,17 @@ export class FileStoreUsageController {
 		available_space: number;
 		message?: string;
 	}> {
+		if (await this.isUploadDisabled(userId)) {
+			const currentUsage = await this.getUsage(userId);
+			return {
+				allowed: false,
+				current_usage: currentUsage,
+				required_space: bytes,
+				available_space: 0,
+				message: 'Uploads are disabled for this account'
+			};
+		}
+
 		const currentUsage = await this.getUsage(userId);
 		const limit = await this.getUserLimit(userId);
 		const availableSpace = Math.max(0, limit - currentUsage);
