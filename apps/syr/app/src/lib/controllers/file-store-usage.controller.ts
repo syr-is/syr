@@ -18,9 +18,18 @@ interface FileStoreUsageData {
 }
 
 /**
- * Maximum storage allowed per user (5GB)
+ * Maximum storage allowed per user (5GB) — instance default
  */
 export const MAX_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+
+/**
+ * KV type for per-user storage limit overrides
+ */
+const KV_LIMIT_TYPE = 'file_store_limit_override';
+
+interface FileStoreLimitOverride {
+	bytes_limit: number;
+}
 
 /**
  * File Store Usage Controller
@@ -39,6 +48,35 @@ export class FileStoreUsageController {
 	 */
 	private toRecordId(userId: RecordId | string): RecordId {
 		return typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+	}
+
+	/**
+	 * Get the effective storage limit for a user.
+	 * Checks for a per-user override in KV, falls back to instance default.
+	 */
+	async getUserLimit(userId: RecordId | string): Promise<number> {
+		const index = this.getUserIndex(userId);
+		const override = await kvService.get<FileStoreLimitOverride>(KV_LIMIT_TYPE, index);
+		if (override !== null && typeof override.bytes_limit === 'number' && override.bytes_limit > 0) {
+			return override.bytes_limit;
+		}
+		return MAX_STORAGE_BYTES;
+	}
+
+	/**
+	 * Set a per-user storage limit override.
+	 */
+	async setUserLimit(userId: RecordId | string, bytesLimit: number): Promise<void> {
+		const index = this.getUserIndex(userId);
+		await kvService.set<FileStoreLimitOverride>(KV_LIMIT_TYPE, index, { bytes_limit: bytesLimit });
+	}
+
+	/**
+	 * Clear per-user storage limit override, reverting to instance default.
+	 */
+	async clearUserLimit(userId: RecordId | string): Promise<void> {
+		const index = this.getUserIndex(userId);
+		await kvService.delete(KV_LIMIT_TYPE, index);
 	}
 
 	/**
@@ -120,7 +158,7 @@ export class FileStoreUsageController {
 		bytes_remaining: number;
 	}> {
 		const bytesUsed = await this.getUsage(userId);
-		const bytesLimit = MAX_STORAGE_BYTES;
+		const bytesLimit = await this.getUserLimit(userId);
 		const percentageUsed = (bytesUsed / bytesLimit) * 100;
 		const bytesRemaining = Math.max(0, bytesLimit - bytesUsed);
 
@@ -159,13 +197,14 @@ export class FileStoreUsageController {
 		const index = this.getUserIndex(userId);
 
 		if (enforceQuota) {
+			const limit = await this.getUserLimit(userId);
 			return kvService.atomicIncrementFieldWithApplied(
 				KV_TYPE,
 				index,
 				'bytes_used',
 				bytes,
 				0,
-				MAX_STORAGE_BYTES
+				limit
 			);
 		}
 
@@ -239,8 +278,9 @@ export class FileStoreUsageController {
 		message?: string;
 	}> {
 		const currentUsage = await this.getUsage(userId);
-		const availableSpace = Math.max(0, MAX_STORAGE_BYTES - currentUsage);
-		const allowed = currentUsage + bytes <= MAX_STORAGE_BYTES;
+		const limit = await this.getUserLimit(userId);
+		const availableSpace = Math.max(0, limit - currentUsage);
+		const allowed = currentUsage + bytes <= limit;
 
 		return {
 			allowed,

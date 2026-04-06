@@ -1,0 +1,502 @@
+<script lang="ts">
+	import * as Card from '@syr-is/ui/card';
+	import * as Table from '@syr-is/ui/table';
+	import { Button } from '@syr-is/ui/button';
+	import { Input } from '@syr-is/ui/input';
+	import { Progress } from '@syr-is/ui/progress';
+	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import AdminDeleteUserDialog from '$lib/components/fragments/admin-delete-user-dialog.svelte';
+	import AdminDeletePostDialog from '$lib/components/fragments/admin-delete-post-dialog.svelte';
+	import AdminDeleteUploadDialog from '$lib/components/fragments/admin-delete-upload-dialog.svelte';
+	import type { PageData } from './$types';
+
+	const { data }: { data: PageData } = $props();
+	const userId = $derived(data.userId);
+
+	// --- User info ---
+	type UserInfo = {
+		id: string;
+		username: string;
+		did: string | null;
+		role: string;
+		created_at: string;
+		updated_at: string;
+		display_name: string;
+		bio: string | null;
+	};
+	let userInfo = $state<UserInfo | null>(null);
+	let _userLoading = $state(true);
+
+	async function loadUser() {
+		_userLoading = true;
+		try {
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`);
+			const json = await res.json();
+			if (json.status === 'success') userInfo = json.data;
+		} finally {
+			_userLoading = false;
+		}
+	}
+
+	// --- Storage ---
+	type StorageInfo = {
+		bytes_used: number;
+		bytes_limit: number;
+		percentage_used: number;
+		bytes_remaining: number;
+	};
+	let storage = $state<StorageInfo | null>(null);
+	let storageLoading = $state(true);
+	let customLimitGb = $state('');
+	let limitSaving = $state(false);
+
+	async function loadStorage() {
+		storageLoading = true;
+		try {
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/storage`);
+			const json = await res.json();
+			if (json.status === 'success') storage = json.data;
+		} finally {
+			storageLoading = false;
+		}
+	}
+
+	async function setStorageLimit() {
+		const gb = parseFloat(customLimitGb);
+		if (isNaN(gb) || gb <= 0) {
+			toast.error('Enter a valid number of GB');
+			return;
+		}
+		limitSaving = true;
+		try {
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/storage`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ bytes_limit: Math.round(gb * 1024 * 1024 * 1024) })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to set limit');
+				return;
+			}
+			storage = json.data;
+			customLimitGb = '';
+			toast.success('Storage limit updated');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to set limit');
+		} finally {
+			limitSaving = false;
+		}
+	}
+
+	async function resetStorageLimit() {
+		limitSaving = true;
+		try {
+			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/storage`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ reset: true })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to reset');
+				return;
+			}
+			storage = json.data;
+			toast.success('Storage limit reset to default');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to reset');
+		} finally {
+			limitSaving = false;
+		}
+	}
+
+	// --- Posts ---
+	type PostRow = {
+		id: string;
+		did: string | null;
+		local_id: string | null;
+		type: string;
+		title: string | null;
+		visibility: string;
+		status: string;
+		created_at: string;
+	};
+	let posts = $state<PostRow[]>([]);
+	let postsTotal = $state(0);
+	let postsPage = $state(1);
+	let postsLoading = $state(true);
+
+	async function loadPosts() {
+		postsLoading = true;
+		try {
+			const res = await fetch(
+				`/api/admin/users/${encodeURIComponent(userId)}/posts?page=${postsPage}&size=10`
+			);
+			const json = await res.json();
+			if (json.status === 'success') {
+				posts = json.data;
+				postsTotal = json.pagination?.total ?? 0;
+			}
+		} finally {
+			postsLoading = false;
+		}
+	}
+
+	// --- Uploads ---
+	type UploadRow = {
+		id: string;
+		did: string | null;
+		local_id: string | null;
+		filename: string;
+		mime_type: string;
+		size: number;
+		status: string;
+		is_public: boolean;
+		created_at: string;
+	};
+	let uploads = $state<UploadRow[]>([]);
+	let uploadsTotal = $state(0);
+	let uploadsPage = $state(1);
+	let uploadsLoading = $state(true);
+
+	async function loadUploads() {
+		uploadsLoading = true;
+		try {
+			const res = await fetch(
+				`/api/admin/users/${encodeURIComponent(userId)}/uploads?page=${uploadsPage}&size=10`
+			);
+			const json = await res.json();
+			if (json.status === 'success') {
+				uploads = json.data;
+				uploadsTotal = json.pagination?.total ?? 0;
+			}
+		} finally {
+			uploadsLoading = false;
+		}
+	}
+
+	// --- Dialogs ---
+	let deleteUserOpen = $state(false);
+	let deletePostOpen = $state(false);
+	let deletePostTarget = $state<{ did: string; localId: string; title: string | null }>({
+		did: '',
+		localId: '',
+		title: null
+	});
+	let deleteUploadOpen = $state(false);
+	let deleteUploadTarget = $state<{ did: string; localId: string; filename: string | null }>({
+		did: '',
+		localId: '',
+		filename: null
+	});
+
+	function openDeletePost(post: PostRow) {
+		deletePostTarget = { did: post.did ?? '', localId: post.local_id ?? '', title: post.title };
+		deletePostOpen = true;
+	}
+
+	function openDeleteUpload(upload: UploadRow) {
+		deleteUploadTarget = {
+			did: upload.did ?? '',
+			localId: upload.local_id ?? '',
+			filename: upload.filename
+		};
+		deleteUploadOpen = true;
+	}
+
+	// --- Init ---
+	$effect(() => {
+		if (userId) {
+			loadUser();
+			loadStorage();
+		}
+	});
+
+	$effect(() => {
+		if (userId) loadPosts();
+	});
+
+	$effect(() => {
+		if (userId) loadUploads();
+	});
+
+	function formatBytes(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+	}
+
+	function formatDate(iso: string): string {
+		return new Date(iso).toLocaleDateString(undefined, {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
+	}
+
+	const postsTotalPages = $derived(Math.max(1, Math.ceil(postsTotal / 10)));
+	const uploadsTotalPages = $derived(Math.max(1, Math.ceil(uploadsTotal / 10)));
+</script>
+
+<svelte:head>
+	<title>{userInfo?.username ?? 'User'} | Users | Settings | SYR</title>
+</svelte:head>
+
+<div class="mx-auto max-w-4xl space-y-6">
+	<a href={resolve('/settings/users')} class="text-sm text-muted-foreground hover:text-foreground">
+		&larr; Back to users
+	</a>
+
+	<!-- User Info -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>{userInfo?.display_name ?? 'Loading…'}</Card.Title>
+			{#if userInfo}
+				<Card.Description>@{userInfo.username}</Card.Description>
+			{/if}
+		</Card.Header>
+		{#if userInfo}
+			<Card.Content class="space-y-2 text-sm">
+				<div><strong>DID:</strong> <code class="text-xs">{userInfo.did ?? '—'}</code></div>
+				<div><strong>Role:</strong> {userInfo.role}</div>
+				<div><strong>Created:</strong> {formatDate(userInfo.created_at)}</div>
+				{#if userInfo.bio}
+					<div><strong>Bio:</strong> {userInfo.bio}</div>
+				{/if}
+			</Card.Content>
+			<Card.Footer>
+				<Button variant="destructive" onclick={() => (deleteUserOpen = true)}>
+					Delete account
+				</Button>
+			</Card.Footer>
+		{/if}
+	</Card.Root>
+
+	<!-- Storage -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Storage</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if storage}
+				<div class="space-y-1">
+					<div class="flex justify-between text-sm">
+						<span>{formatBytes(storage.bytes_used)} used</span>
+						<span>{formatBytes(storage.bytes_limit)} limit</span>
+					</div>
+					<Progress value={storage.percentage_used} />
+					<p class="text-xs text-muted-foreground">
+						{formatBytes(storage.bytes_remaining)} remaining
+					</p>
+				</div>
+				<div class="flex gap-2">
+					<Input
+						type="number"
+						min={0.1}
+						step={0.1}
+						placeholder="GB"
+						class="max-w-[8rem]"
+						bind:value={customLimitGb}
+					/>
+					<Button onclick={setStorageLimit} disabled={limitSaving}>Set limit (GB)</Button>
+					<Button variant="outline" onclick={resetStorageLimit} disabled={limitSaving}>
+						Reset to default
+					</Button>
+				</div>
+			{:else if storageLoading}
+				<p class="text-sm text-muted-foreground">Loading…</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Posts -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Posts ({postsTotal})</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head>Title / Type</Table.Head>
+						<Table.Head>Visibility</Table.Head>
+						<Table.Head>Status</Table.Head>
+						<Table.Head>Created</Table.Head>
+						<Table.Head class="text-right">Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
+					{#if postsLoading}
+						<Table.Row>
+							<Table.Cell colspan={5} class="py-4 text-center text-muted-foreground">
+								Loading…
+							</Table.Cell>
+						</Table.Row>
+					{:else if posts.length === 0}
+						<Table.Row>
+							<Table.Cell colspan={5} class="py-4 text-center text-muted-foreground">
+								No posts.
+							</Table.Cell>
+						</Table.Row>
+					{:else}
+						{#each posts as post (post.id)}
+							<Table.Row>
+								<Table.Cell>{post.title || post.type}</Table.Cell>
+								<Table.Cell class="text-xs">{post.visibility}</Table.Cell>
+								<Table.Cell class="text-xs">{post.status}</Table.Cell>
+								<Table.Cell class="text-xs text-muted-foreground">
+									{formatDate(post.created_at)}
+								</Table.Cell>
+								<Table.Cell class="text-right">
+									<Button variant="destructive" size="sm" onclick={() => openDeletePost(post)}>
+										Delete
+									</Button>
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					{/if}
+				</Table.Body>
+			</Table.Root>
+			{#if postsTotalPages > 1}
+				<div class="mt-2 flex items-center justify-end gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={postsPage <= 1}
+						onclick={() => {
+							postsPage--;
+							loadPosts();
+						}}
+					>
+						Prev
+					</Button>
+					<span class="text-xs text-muted-foreground">{postsPage} / {postsTotalPages}</span>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={postsPage >= postsTotalPages}
+						onclick={() => {
+							postsPage++;
+							loadPosts();
+						}}
+					>
+						Next
+					</Button>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Uploads -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Uploads ({uploadsTotal})</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head>Filename</Table.Head>
+						<Table.Head>Size</Table.Head>
+						<Table.Head>Status</Table.Head>
+						<Table.Head>Public</Table.Head>
+						<Table.Head>Created</Table.Head>
+						<Table.Head class="text-right">Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
+					{#if uploadsLoading}
+						<Table.Row>
+							<Table.Cell colspan={6} class="py-4 text-center text-muted-foreground">
+								Loading…
+							</Table.Cell>
+						</Table.Row>
+					{:else if uploads.length === 0}
+						<Table.Row>
+							<Table.Cell colspan={6} class="py-4 text-center text-muted-foreground">
+								No uploads.
+							</Table.Cell>
+						</Table.Row>
+					{:else}
+						{#each uploads as upload (upload.id)}
+							<Table.Row>
+								<Table.Cell class="max-w-[200px] truncate text-sm">{upload.filename}</Table.Cell>
+								<Table.Cell class="text-xs">{formatBytes(upload.size)}</Table.Cell>
+								<Table.Cell class="text-xs">{upload.status}</Table.Cell>
+								<Table.Cell class="text-xs">{upload.is_public ? 'Yes' : 'No'}</Table.Cell>
+								<Table.Cell class="text-xs text-muted-foreground">
+									{formatDate(upload.created_at)}
+								</Table.Cell>
+								<Table.Cell class="text-right">
+									<Button variant="destructive" size="sm" onclick={() => openDeleteUpload(upload)}>
+										Delete
+									</Button>
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					{/if}
+				</Table.Body>
+			</Table.Root>
+			{#if uploadsTotalPages > 1}
+				<div class="mt-2 flex items-center justify-end gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={uploadsPage <= 1}
+						onclick={() => {
+							uploadsPage--;
+							loadUploads();
+						}}
+					>
+						Prev
+					</Button>
+					<span class="text-xs text-muted-foreground">{uploadsPage} / {uploadsTotalPages}</span>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={uploadsPage >= uploadsTotalPages}
+						onclick={() => {
+							uploadsPage++;
+							loadUploads();
+						}}
+					>
+						Next
+					</Button>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+</div>
+
+<AdminDeleteUserDialog
+	bind:open={deleteUserOpen}
+	{userId}
+	username={userInfo?.username}
+	onSuccess={() => goto(resolve('/settings/users'))}
+/>
+
+<AdminDeletePostDialog
+	bind:open={deletePostOpen}
+	{userId}
+	postDid={deletePostTarget.did}
+	postLocalId={deletePostTarget.localId}
+	postTitle={deletePostTarget.title}
+	onSuccess={() => loadPosts()}
+/>
+
+<AdminDeleteUploadDialog
+	bind:open={deleteUploadOpen}
+	{userId}
+	uploadDid={deleteUploadTarget.did}
+	uploadLocalId={deleteUploadTarget.localId}
+	filename={deleteUploadTarget.filename}
+	onSuccess={() => {
+		loadUploads();
+		loadStorage();
+	}}
+/>

@@ -91,6 +91,22 @@ export class ProfileRepository extends BaseRepository<Profile> {
 	}
 
 	/**
+	 * Batch-fetch profiles for multiple user IDs in a single query.
+	 */
+	async findByUserIds(userIds: RecordId[]): Promise<Profile[]> {
+		if (userIds.length === 0) return [];
+		const result = await this.db.query<[Profile[]]>(
+			`SELECT * FROM ${this.tableName} WHERE user_id IN $userIds`,
+			{ userIds }
+		);
+		return (result[0] ?? []).map((r) => {
+			const transformed = this.transform(r);
+			const parsed = this.schema.safeParse(transformed);
+			return parsed.success ? parsed.data : (transformed as Profile);
+		});
+	}
+
+	/**
 	 * Find profile by user ID
 	 */
 	async findByUserId(userId: RecordId | string): Promise<Profile | null> {
