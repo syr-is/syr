@@ -7,10 +7,8 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { ChevronRight, Home, List, FolderOpen, ExternalLink } from 'lucide-svelte';
-	import FileTable from '$lib/components/fragments/file-table.svelte';
-	import FolderCard from '$lib/components/fragments/folder-card.svelte';
-	import { type DisplayItem, uploadsToDisplayItems } from '$lib/types/display-item';
+	import { List, FolderOpen, ExternalLink } from 'lucide-svelte';
+	import FileBrowser from '$lib/components/fragments/file-browser.svelte';
 	import AdminDeleteUserDialog from '$lib/components/fragments/admin-delete-user-dialog.svelte';
 	import AdminDeletePostDialog from '$lib/components/fragments/admin-delete-post-dialog.svelte';
 	import AdminDeleteUploadDialog from '$lib/components/fragments/admin-delete-upload-dialog.svelte';
@@ -219,10 +217,12 @@
 	let browserBreadcrumbs = $state<Array<{ id: string; name: string }>>([]);
 	let browserLoading = $state(false);
 	let browserPage = $state(1);
+	let browserLimit = $state(20);
 	let browserTotal = $state(0);
-
-	const browserDisplayItems = $derived(uploadsToDisplayItems(browserFolders, browserUploads));
-	const browserTotalPages = $derived(Math.max(1, Math.ceil(browserTotal / 20)));
+	let browserSortField = $state<'created_at' | 'updated_at' | 'filename' | 'size'>('created_at');
+	let browserSortOrder = $state<'asc' | 'desc'>('desc');
+	import type { ViewMode } from '$lib/types/display-item';
+	let browserViewMode = $state<ViewMode>('list');
 
 	async function loadBrowserFolders() {
 		try {
@@ -242,7 +242,7 @@
 	async function loadBrowserUploads() {
 		browserLoading = true;
 		try {
-			let qs = `page=${browserPage}&size=20&sort_field=created_at&sort_order=desc`;
+			let qs = `page=${browserPage}&size=${browserLimit}&sort_field=${browserSortField}&sort_order=${browserSortOrder}`;
 			if (browserFolderId === null) {
 				qs += '&folder_id=';
 			} else {
@@ -266,24 +266,15 @@
 		loadBrowserUploads();
 	}
 
-	function handleBrowserDelete(item: DisplayItem) {
-		if (item.kind === 'file') {
-			const u = item.data as UploadWithCompositeId;
-			deleteUploadTarget = {
-				did: u.did ?? '',
-				localId: u.local_id ?? '',
-				filename: u.filename
-			};
-			deleteUploadOpen = true;
-		}
+	function handleBrowserDelete(upload: UploadWithCompositeId) {
+		deleteUploadTarget = {
+			did: upload.did ?? '',
+			localId: upload.local_id ?? '',
+			filename: upload.filename
+		};
+		deleteUploadOpen = true;
 	}
 
-	function handleFolderClick(folder: Folder) {
-		const id = typeof folder.id === 'string' ? folder.id : folder.id.toString();
-		navigateFolder(id);
-	}
-
-	// Switch between list and browser views
 	function switchUploadView(mode: 'list' | 'browser') {
 		uploadViewMode = mode;
 		if (mode === 'browser') {
@@ -293,6 +284,28 @@
 			loadBrowserUploads();
 		}
 	}
+
+	// Watch browser sort/page changes
+	let prevBrowserSort = $state<string | undefined>(undefined);
+	let prevBrowserOrder = $state<string | undefined>(undefined);
+	$effect(() => {
+		if (uploadViewMode !== 'browser') return;
+		const sf = browserSortField;
+		const so = browserSortOrder;
+		const pg = browserPage;
+		const fid = browserFolderId;
+		void pg;
+		void fid;
+		if (prevBrowserSort !== undefined && prevBrowserOrder !== undefined) {
+			if (prevBrowserSort !== sf || prevBrowserOrder !== so) {
+				browserPage = 1;
+			}
+		}
+		prevBrowserSort = sf;
+		prevBrowserOrder = so;
+		loadBrowserFolders();
+		loadBrowserUploads();
+	});
 
 	// --- Dialogs ---
 	let deleteUserOpen = $state(false);
@@ -655,78 +668,21 @@
 					</div>
 				{/if}
 			{:else}
-				<!-- File browser view -->
-				<div class="space-y-3">
-					<!-- Breadcrumbs -->
-					<nav class="flex items-center gap-1 text-sm">
-						<button
-							type="button"
-							class="text-muted-foreground hover:text-foreground"
-							onclick={() => navigateFolder(null)}
-						>
-							<Home class="h-4 w-4" />
-						</button>
-						{#each browserBreadcrumbs as crumb (crumb.id)}
-							<ChevronRight class="h-3.5 w-3.5 text-muted-foreground" />
-							<button
-								type="button"
-								class="text-sm text-muted-foreground hover:text-foreground"
-								onclick={() => navigateFolder(crumb.id)}
-							>
-								{crumb.name}
-							</button>
-						{/each}
-					</nav>
-
-					{#if browserLoading}
-						<p class="py-4 text-center text-sm text-muted-foreground">Loading…</p>
-					{:else}
-						<!-- Folders -->
-						{#if browserFolders.length > 0}
-							<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-								{#each browserFolders as folder (folder.id)}
-									<FolderCard {folder} onclick={() => handleFolderClick(folder)} />
-								{/each}
-							</div>
-						{/if}
-
-						<!-- Files -->
-						{#if browserDisplayItems.filter((i) => i.kind === 'file').length > 0}
-							<FileTable
-								items={browserDisplayItems.filter((i) => i.kind === 'file')}
-								onDelete={handleBrowserDelete}
-							/>
-						{:else if browserFolders.length === 0}
-							<p class="py-4 text-center text-sm text-muted-foreground">Empty folder.</p>
-						{/if}
-
-						{#if browserTotalPages > 1}
-							<div class="flex items-center justify-end gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={browserPage <= 1}
-									onclick={() => {
-										browserPage--;
-										loadBrowserUploads();
-									}}>Prev</Button
-								>
-								<span class="text-xs text-muted-foreground"
-									>{browserPage} / {browserTotalPages}</span
-								>
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={browserPage >= browserTotalPages}
-									onclick={() => {
-										browserPage++;
-										loadBrowserUploads();
-									}}>Next</Button
-								>
-							</div>
-						{/if}
-					{/if}
-				</div>
+				<FileBrowser
+					folders={browserFolders}
+					uploads={browserUploads}
+					breadcrumbs={browserBreadcrumbs}
+					loading={browserLoading}
+					total={browserTotal}
+					bind:viewMode={browserViewMode}
+					bind:currentPage={browserPage}
+					bind:limit={browserLimit}
+					bind:sortField={browserSortField}
+					bind:sortOrder={browserSortOrder}
+					readonly
+					onNavigateFolder={navigateFolder}
+					onDeleteUpload={handleBrowserDelete}
+				/>
 			{/if}
 		</Card.Content>
 	</Card.Root>

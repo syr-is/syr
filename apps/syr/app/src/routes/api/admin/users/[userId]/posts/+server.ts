@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { stringToRecordId } from '@syr-is/types';
+import { stringToRecordId, extractDid, extractLocalId } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { postController } from '$lib/controllers/post.controller';
 
@@ -50,16 +50,26 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		sort: { field: 'created_at', order: 'desc' }
 	});
 
-	const data = posts.map((p) => ({
-		id: p.id.toString(),
-		did: p.did ?? null,
-		local_id: p.local_id ?? null,
-		type: p.type,
-		title: p.title ?? null,
-		visibility: p.visibility,
-		status: p.status,
-		created_at: p.created_at.toISOString()
-	}));
+	const data = posts.map((p) => {
+		let did: string | null = null;
+		let local_id: string | null = null;
+		try {
+			did = extractDid(p.id);
+			local_id = extractLocalId(p.id);
+		} catch {
+			// non-composite ID
+		}
+		return {
+			id: p.id.toString(),
+			did,
+			local_id,
+			type: p.type,
+			title: p.title ?? null,
+			visibility: p.visibility,
+			status: p.status,
+			created_at: p.created_at.toISOString()
+		};
+	});
 
 	return json({
 		status: 'success',
