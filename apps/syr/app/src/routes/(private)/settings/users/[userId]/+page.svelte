@@ -490,12 +490,12 @@
 						<p class="text-xs font-medium text-muted-foreground">Instance capacity</p>
 						<div class="relative h-3 w-full overflow-hidden rounded-full bg-muted">
 							<div
-								class="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/20"
-								style="width: {Math.min(100, otherPct + thisUserPct)}%"
+								class="absolute inset-y-0 left-0 rounded-full bg-primary"
+								style="width: {thisUserPct}%"
 							></div>
 							<div
-								class="absolute inset-y-0 rounded-full bg-primary"
-								style="left: {otherPct}%; width: {thisUserPct}%"
+								class="absolute inset-y-0 bg-muted-foreground/20"
+								style="left: {thisUserPct}%; width: {otherPct}%"
 							></div>
 						</div>
 						<div class="flex items-center gap-3 text-xs text-muted-foreground">
