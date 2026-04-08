@@ -200,7 +200,7 @@
 	}
 
 	async function handleCopyLink(upload: UploadWithCompositeId) {
-		if (!upload.url || !upload.did || !upload.local_id) {
+		if (!upload.did || !upload.local_id) {
 			toast.error('Link not available for this file');
 			return;
 		}
@@ -218,7 +218,7 @@
 			uploadToShare = upload;
 			shareDialogOpen = true;
 		} catch {
-			if (upload.is_public) {
+			if (upload.is_public && upload.url) {
 				try {
 					await navigator.clipboard.writeText(upload.url);
 					toast.success('Link copied to clipboard');

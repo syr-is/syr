@@ -34,6 +34,7 @@
 	let pageSizeValue = $state('20');
 	let searchQuery = $state('');
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+	let abortController: AbortController | null = null;
 
 	$effect(() => {
 		page = data.page ?? 1;
@@ -52,12 +53,16 @@
 	});
 
 	async function loadUsers(currentPage: number, currentSize: number, search: string) {
+		abortController?.abort();
+		abortController = new AbortController();
+		const signal = abortController.signal;
+
 		loading = true;
 		try {
 			let qs = `page=${currentPage}&size=${currentSize}`;
 			if (search.trim()) qs += `&search=${encodeURIComponent(search.trim())}`;
 
-			const res = await fetch(`/api/admin/users?${qs}`);
+			const res = await fetch(`/api/admin/users?${qs}`, { signal });
 			const json = await res.json();
 			if (json.status === 'success') {
 				rows = json.data;
@@ -66,8 +71,12 @@
 				rows = [];
 				total = 0;
 			}
+		} catch (e) {
+			if (e instanceof DOMException && e.name === 'AbortError') return;
+			rows = [];
+			total = 0;
 		} finally {
-			loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
@@ -91,6 +100,11 @@
 	$effect(() => {
 		updateUrl(page, size, searchQuery);
 		loadUsers(page, size, searchQuery);
+
+		return () => {
+			if (searchTimeout) clearTimeout(searchTimeout);
+			abortController?.abort();
+		};
 	});
 
 	function handleSearchInput(e: Event) {

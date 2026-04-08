@@ -37,7 +37,14 @@
 		try {
 			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`);
 			const json = await res.json();
-			if (json.status === 'success') userInfo = json.data;
+			if (json.status === 'success') {
+				userInfo = json.data;
+			} else {
+				userInfo = null;
+			}
+		} catch (e) {
+			console.error('[admin] Failed to load user:', e);
+			userInfo = null;
 		} finally {
 			_userLoading = false;
 		}
@@ -62,7 +69,14 @@
 		try {
 			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/storage`);
 			const json = await res.json();
-			if (json.status === 'success') storage = json.data;
+			if (json.status === 'success') {
+				storage = json.data;
+			} else {
+				storage = null;
+			}
+		} catch (e) {
+			console.error('[admin] Failed to load storage:', e);
+			storage = null;
 		} finally {
 			storageLoading = false;
 		}
@@ -262,14 +276,16 @@
 	function navigateFolder(folderId: string | null) {
 		browserFolderId = folderId;
 		browserPage = 1;
-		loadBrowserFolders();
-		loadBrowserUploads();
 	}
 
 	function handleBrowserDelete(upload: UploadWithCompositeId) {
+		if (!upload.did || !upload.local_id) {
+			toast.error('Cannot delete: missing file identifiers');
+			return;
+		}
 		deleteUploadTarget = {
-			did: upload.did ?? '',
-			localId: upload.local_id ?? '',
+			did: upload.did,
+			localId: upload.local_id,
 			filename: upload.filename
 		};
 		deleteUploadOpen = true;
@@ -280,8 +296,7 @@
 		if (mode === 'browser') {
 			browserFolderId = null;
 			browserPage = 1;
-			loadBrowserFolders();
-			loadBrowserUploads();
+			// $effect watching these will trigger the loads
 		}
 	}
 
@@ -323,14 +338,22 @@
 	});
 
 	function openDeletePost(post: PostRow) {
-		deletePostTarget = { did: post.did ?? '', localId: post.local_id ?? '', title: post.title };
+		if (!post.did || !post.local_id) {
+			toast.error('Cannot delete: missing post identifiers');
+			return;
+		}
+		deletePostTarget = { did: post.did, localId: post.local_id, title: post.title };
 		deletePostOpen = true;
 	}
 
 	function openDeleteUpload(upload: UploadRow) {
+		if (!upload.did || !upload.local_id) {
+			toast.error('Cannot delete: missing file identifiers');
+			return;
+		}
 		deleteUploadTarget = {
-			did: upload.did ?? '',
-			localId: upload.local_id ?? '',
+			did: upload.did,
+			localId: upload.local_id,
 			filename: upload.filename
 		};
 		deleteUploadOpen = true;
@@ -339,17 +362,18 @@
 	// --- Init ---
 	$effect(() => {
 		if (userId) {
+			// Reset all pagination and state when switching users
+			postsPage = 1;
+			uploadsPage = 1;
+			browserFolderId = null;
+			browserPage = 1;
+			uploadViewMode = 'list';
+
 			loadUser();
 			loadStorage();
+			loadPosts();
+			loadUploads();
 		}
-	});
-
-	$effect(() => {
-		if (userId) loadPosts();
-	});
-
-	$effect(() => {
-		if (userId) loadUploads();
 	});
 
 	function formatBytes(bytes: number): string {

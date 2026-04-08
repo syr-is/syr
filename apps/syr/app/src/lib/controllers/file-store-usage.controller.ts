@@ -76,6 +76,9 @@ export class FileStoreUsageController {
 	 * Set a per-user storage limit override.
 	 */
 	async setUserLimit(userId: RecordId | string, bytesLimit: number): Promise<void> {
+		if (!Number.isInteger(bytesLimit) || bytesLimit <= 0) {
+			throw new Error('Storage limit must be a positive integer');
+		}
 		const index = this.getUserIndex(userId);
 		await kvService.set<FileStoreLimitOverride>(KV_LIMIT_TYPE, index, { bytes_limit: bytesLimit });
 	}

@@ -79,9 +79,16 @@ export class UserRepository extends BaseRepository<User> {
 		}
 
 		const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-		const orderField = sort?.field ?? 'created_at';
-		const orderDir = sort?.order ?? 'desc';
-		const orderClause = `ORDER BY ${orderField} ${orderDir.toUpperCase()}`;
+
+		const ALLOWED_SORT_FIELDS: Record<string, string> = {
+			created_at: 'created_at',
+			updated_at: 'updated_at',
+			username: 'username',
+			role: 'role'
+		};
+		const orderField = ALLOWED_SORT_FIELDS[sort?.field ?? 'created_at'] ?? 'created_at';
+		const orderDir = sort?.order === 'asc' ? 'ASC' : 'DESC';
+		const orderClause = `ORDER BY ${orderField} ${orderDir}`;
 
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[User[]]>(
