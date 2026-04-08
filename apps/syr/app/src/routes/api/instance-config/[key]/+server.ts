@@ -8,6 +8,7 @@ import {
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	KEY_REGISTRATION_MODE,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
 	DEFAULT_PATH
 } from '$lib/instance-config';
 import { RegistrationModeSchema } from '@syr-is/types';
@@ -16,7 +17,8 @@ const INSTANCE_CONFIG_KEYS = [
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	KEY_REGISTRATION_MODE,
-	KEY_DEFAULT_STORAGE_LIMIT_GB
+	KEY_DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB
 ] as const;
 type AllowedKey = (typeof INSTANCE_CONFIG_KEYS)[number];
 
@@ -107,7 +109,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			value = validateCooldownDaysValue(body.value);
 		} else if (key === KEY_REGISTRATION_MODE) {
 			value = validateRegistrationMode(body.value);
-		} else if (key === KEY_DEFAULT_STORAGE_LIMIT_GB) {
+		} else if (key === KEY_DEFAULT_STORAGE_LIMIT_GB || key === KEY_INSTANCE_STORAGE_CAPACITY_GB) {
 			value = validateStorageLimitGb(body.value);
 		} else {
 			value = validatePathValue(body.value);

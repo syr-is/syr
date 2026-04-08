@@ -8,7 +8,9 @@
 	import type { PageData } from './$types';
 	import RemoveDiscoveryRegistryDialog from '$lib/components/fragments/remove-discovery-registry-dialog.svelte';
 	import DeleteInviteCodeDialog from '$lib/components/fragments/delete-invite-code-dialog.svelte';
-	import { Copy } from 'lucide-svelte';
+	import { Copy, AlertTriangle } from 'lucide-svelte';
+	import * as Table from '@syr-is/ui/table';
+	import { Progress } from '@syr-is/ui/progress';
 
 	let { data }: { data: PageData } = $props();
 
@@ -23,6 +25,20 @@
 
 	let defaultStorageLimitGb = $state('');
 	let storageLimitLoading = $state(false);
+	let instanceStorageCapacityGb = $state('');
+	let capacityLoading = $state(false);
+
+	// Storage overview state
+	type StorageOverview = {
+		capacity: number;
+		total_used: number;
+		total_allocated: number;
+		default_limit: number;
+		user_count: number;
+		users: Array<{ id: string; username: string; bytes_used: number; bytes_limit: number }>;
+	};
+	let storageOverview = $state<StorageOverview | null>(null);
+	let overviewLoading = $state(false);
 
 	let newCodeMaxUses = $state<number | null>(null);
 	let creatingCode = $state(false);
@@ -40,6 +56,25 @@
 		registrationModeDraft = data.registrationMode;
 		registrationModePersisted = data.registrationMode;
 		defaultStorageLimitGb = data.defaultStorageLimitGb;
+		instanceStorageCapacityGb = data.instanceStorageCapacityGb;
+	});
+
+	async function loadStorageOverview() {
+		overviewLoading = true;
+		try {
+			const res = await fetch('/api/admin/storage');
+			const json = await res.json();
+			if (json.status === 'success') storageOverview = json.data;
+		} catch {
+			storageOverview = null;
+		} finally {
+			overviewLoading = false;
+		}
+	}
+
+	// Load overview on mount
+	$effect(() => {
+		loadStorageOverview();
 	});
 
 	async function saveProfileSyncPath() {
@@ -116,6 +151,42 @@
 		} finally {
 			storageLimitLoading = false;
 		}
+	}
+
+	async function saveInstanceCapacity() {
+		const n = parseFloat(instanceStorageCapacityGb);
+		if (isNaN(n) || n <= 0) {
+			toast.error('Enter a positive number');
+			return;
+		}
+		capacityLoading = true;
+		try {
+			const res = await fetch('/api/instance-config/instance_storage_capacity_gb', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ value: String(n) })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to update');
+				return;
+			}
+			toast.success('Instance storage capacity updated');
+			await invalidateAll();
+			loadStorageOverview();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to update');
+		} finally {
+			capacityLoading = false;
+		}
+	}
+
+	function fmtBytes(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	async function addInstanceRegistry() {
@@ -367,6 +438,32 @@
 
 	<Card.Root>
 		<Card.Header>
+			<Card.Title>Instance storage capacity (GB)</Card.Title>
+			<Card.Description>
+				Total storage available on your SeaweedFS volume. Set this to your actual disk/volume
+				capacity so the overview below can warn about over-allocation.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex gap-2">
+				<Input
+					id="instance-storage-capacity-gb"
+					aria-label="Instance storage capacity in GB"
+					bind:value={instanceStorageCapacityGb}
+					type="number"
+					min={1}
+					step={1}
+					placeholder="Not configured"
+				/>
+				<Button onclick={saveInstanceCapacity} disabled={capacityLoading}>
+					{capacityLoading ? 'Saving…' : 'Save'}
+				</Button>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
 			<Card.Title>Default storage limit (GB)</Card.Title>
 			<Card.Description>
 				Default file storage limit per user. Users without a custom override will use this limit.
@@ -387,6 +484,108 @@
 					{storageLimitLoading ? 'Saving…' : 'Save'}
 				</Button>
 			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Storage overview</Card.Title>
+			<Card.Description>
+				Instance-wide storage usage and allocation across all users.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if overviewLoading}
+				<p class="text-sm text-muted-foreground">Loading…</p>
+			{:else if storageOverview}
+				{@const o = storageOverview}
+				{#if o.capacity > 0}
+					{@const usedPct = Math.min(100, (o.total_used / o.capacity) * 100)}
+					{@const allocPct = Math.min(100, (o.total_allocated / o.capacity) * 100)}
+					<div class="space-y-2">
+						<div class="flex justify-between text-sm">
+							<span>{fmtBytes(o.total_used)} used</span>
+							<span>{fmtBytes(o.total_allocated)} allocated</span>
+							<span>{fmtBytes(o.capacity)} capacity</span>
+						</div>
+						<!-- Stacked bar -->
+						<div class="relative h-4 w-full overflow-hidden rounded-full bg-muted">
+							{#if allocPct > 0}
+								<div
+									class="absolute inset-y-0 left-0 rounded-full bg-primary/25"
+									style="width: {allocPct}%"
+								></div>
+							{/if}
+							{#if usedPct > 0}
+								<div
+									class="absolute inset-y-0 left-0 rounded-full bg-primary"
+									style="width: {usedPct}%"
+								></div>
+							{/if}
+						</div>
+						<div class="flex items-center gap-4 text-xs text-muted-foreground">
+							<span class="flex items-center gap-1">
+								<span class="inline-block h-2.5 w-2.5 rounded-full bg-primary"></span>
+								Used
+							</span>
+							<span class="flex items-center gap-1">
+								<span class="inline-block h-2.5 w-2.5 rounded-full bg-primary/25"></span>
+								Allocated
+							</span>
+							<span class="flex items-center gap-1">
+								<span class="inline-block h-2.5 w-2.5 rounded-full border bg-muted"></span>
+								Free
+							</span>
+						</div>
+						{#if o.total_allocated > o.capacity}
+							<div
+								class="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+							>
+								<AlertTriangle class="h-4 w-4 shrink-0" />
+								Over-allocated by {fmtBytes(o.total_allocated - o.capacity)}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<p class="text-sm text-muted-foreground">
+						Set the instance storage capacity above to see the allocation overview.
+					</p>
+					<div class="flex justify-between text-sm">
+						<span><strong>Used:</strong> {fmtBytes(o.total_used)}</span>
+						<span><strong>Allocated:</strong> {fmtBytes(o.total_allocated)}</span>
+						<span><strong>Users:</strong> {o.user_count}</span>
+					</div>
+				{/if}
+
+				{#if o.users.length > 0}
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>User</Table.Head>
+								<Table.Head>Used</Table.Head>
+								<Table.Head>Limit</Table.Head>
+								<Table.Head>Usage</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each o.users as u (u.id)}
+								{@const pct =
+									u.bytes_limit > 0 ? Math.min(100, (u.bytes_used / u.bytes_limit) * 100) : 0}
+								<Table.Row>
+									<Table.Cell class="text-sm font-medium">{u.username}</Table.Cell>
+									<Table.Cell class="text-xs">{fmtBytes(u.bytes_used)}</Table.Cell>
+									<Table.Cell class="text-xs">{fmtBytes(u.bytes_limit)}</Table.Cell>
+									<Table.Cell class="w-32">
+										<Progress value={pct} />
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				{/if}
+			{:else}
+				<p class="text-sm text-muted-foreground">Failed to load storage overview.</p>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

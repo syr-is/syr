@@ -9,6 +9,7 @@ import {
 	DEFAULT_USERNAME_COOLDOWN_DAYS,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
 	INVITE_CODE_TYPE
 } from '$lib/instance-config';
 import { getRegistrationMode } from '$lib/instance-config';
@@ -33,6 +34,9 @@ export const load: PageServerLoad = async ({ parent }) => {
 	const defaultStorageLimitGb =
 		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB)) ??
 		String(DEFAULT_STORAGE_LIMIT_GB);
+
+	const instanceStorageCapacityGb =
+		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB)) ?? '';
 
 	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
 	const inviteCodes: {
@@ -68,6 +72,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 		usernameCooldownDays,
 		registrationMode,
 		defaultStorageLimitGb,
+		instanceStorageCapacityGb,
 		inviteCodes,
 		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
 			id: r.id.toString(),
