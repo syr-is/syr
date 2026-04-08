@@ -21,6 +21,9 @@
 	let registrationModePersisted = $state('open');
 	let registrationModeLoading = $state(false);
 
+	let defaultStorageLimitGb = $state('');
+	let storageLimitLoading = $state(false);
+
 	let newCodeMaxUses = $state<number | null>(null);
 	let creatingCode = $state(false);
 	let deleteCodeDialogOpen = $state(false);
@@ -36,6 +39,7 @@
 		usernameCooldownDays = data.usernameCooldownDays;
 		registrationModeDraft = data.registrationMode;
 		registrationModePersisted = data.registrationMode;
+		defaultStorageLimitGb = data.defaultStorageLimitGb;
 	});
 
 	async function saveProfileSyncPath() {
@@ -84,6 +88,33 @@
 			toast.error(e instanceof Error ? e.message : 'Failed to update');
 		} finally {
 			cooldownLoading = false;
+		}
+	}
+
+	async function saveDefaultStorageLimit() {
+		const n = parseFloat(defaultStorageLimitGb);
+		if (isNaN(n) || n <= 0) {
+			toast.error('Enter a positive number');
+			return;
+		}
+		storageLimitLoading = true;
+		try {
+			const res = await fetch('/api/instance-config/default_storage_limit_gb', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ value: String(n) })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to update');
+				return;
+			}
+			toast.success('Default storage limit updated');
+			await invalidateAll();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to update');
+		} finally {
+			storageLimitLoading = false;
 		}
 	}
 
@@ -329,6 +360,31 @@
 				/>
 				<Button onclick={saveUsernameCooldown} disabled={cooldownLoading}>
 					{cooldownLoading ? 'Saving…' : 'Save'}
+				</Button>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Default storage limit (GB)</Card.Title>
+			<Card.Description>
+				Default file storage limit per user. Users without a custom override will use this limit.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex gap-2">
+				<Input
+					id="default-storage-limit-gb"
+					aria-label="Default storage limit in GB"
+					bind:value={defaultStorageLimitGb}
+					type="number"
+					min={0.1}
+					step={0.1}
+					placeholder="5"
+				/>
+				<Button onclick={saveDefaultStorageLimit} disabled={storageLimitLoading}>
+					{storageLimitLoading ? 'Saving…' : 'Save'}
 				</Button>
 			</div>
 		</Card.Content>

@@ -7,6 +7,7 @@ import {
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	KEY_REGISTRATION_MODE,
+	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	DEFAULT_PATH
 } from '$lib/instance-config';
 import { RegistrationModeSchema } from '@syr-is/types';
@@ -14,7 +15,8 @@ import { RegistrationModeSchema } from '@syr-is/types';
 const INSTANCE_CONFIG_KEYS = [
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
-	KEY_REGISTRATION_MODE
+	KEY_REGISTRATION_MODE,
+	KEY_DEFAULT_STORAGE_LIMIT_GB
 ] as const;
 type AllowedKey = (typeof INSTANCE_CONFIG_KEYS)[number];
 
@@ -41,6 +43,15 @@ function validateCooldownDaysValue(val: string): string {
 	const n = parseInt(val.trim(), 10);
 	if (isNaN(n) || n < 1 || n > 365) {
 		throw new Error('Value must be an integer between 1 and 365');
+	}
+	return String(n);
+}
+
+/** Validate storage limit in GB: positive number */
+function validateStorageLimitGb(val: string): string {
+	const n = parseFloat(val.trim());
+	if (isNaN(n) || n <= 0) {
+		throw new Error('Value must be a positive number (in GB)');
 	}
 	return String(n);
 }
@@ -96,6 +107,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			value = validateCooldownDaysValue(body.value);
 		} else if (key === KEY_REGISTRATION_MODE) {
 			value = validateRegistrationMode(body.value);
+		} else if (key === KEY_DEFAULT_STORAGE_LIMIT_GB) {
+			value = validateStorageLimitGb(body.value);
 		} else {
 			value = validatePathValue(body.value);
 		}

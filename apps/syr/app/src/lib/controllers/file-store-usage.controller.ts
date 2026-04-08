@@ -1,5 +1,6 @@
 import { kvService } from '$lib/services/kv';
 import { uploadRepository } from '$lib/repositories/upload.repository';
+import { getDefaultStorageLimitBytes } from '$lib/instance-config';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
@@ -69,7 +70,7 @@ export class FileStoreUsageController {
 		if (override !== null && typeof override.bytes_limit === 'number' && override.bytes_limit > 0) {
 			return override.bytes_limit;
 		}
-		return MAX_STORAGE_BYTES;
+		return getDefaultStorageLimitBytes();
 	}
 
 	/**
