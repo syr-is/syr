@@ -7,7 +7,7 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { List, FolderOpen, ExternalLink } from 'lucide-svelte';
+	import { List, FolderOpen, ExternalLink, AlertTriangle } from 'lucide-svelte';
 	import FileBrowser from '$lib/components/fragments/file-browser.svelte';
 	import AdminDeleteUserDialog from '$lib/components/fragments/admin-delete-user-dialog.svelte';
 	import AdminDeletePostDialog from '$lib/components/fragments/admin-delete-post-dialog.svelte';
@@ -64,6 +64,24 @@
 	let limitSaving = $state(false);
 	let toggleSaving = $state(false);
 
+	// Instance storage overview for context
+	type InstanceOverview = {
+		capacity: number;
+		total_used: number;
+		total_allocated: number;
+	};
+	let instanceOverview = $state<InstanceOverview | null>(null);
+
+	async function loadInstanceOverview() {
+		try {
+			const res = await fetch('/api/admin/storage');
+			const json = await res.json();
+			if (json.status === 'success') instanceOverview = json.data;
+		} catch {
+			instanceOverview = null;
+		}
+	}
+
 	async function loadStorage() {
 		storageLoading = true;
 		try {
@@ -103,6 +121,7 @@
 			storage = json.data;
 			customLimitGb = '';
 			toast.success('Storage limit updated');
+			loadInstanceOverview();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to set limit');
 		} finally {
@@ -125,6 +144,7 @@
 			}
 			storage = json.data;
 			toast.success('Storage limit reset to default');
+			loadInstanceOverview();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to reset');
 		} finally {
@@ -371,6 +391,7 @@
 
 			loadUser();
 			loadStorage();
+			loadInstanceOverview();
 			loadPosts();
 			loadUploads();
 		}
@@ -456,6 +477,47 @@
 						{formatBytes(storage.bytes_remaining)} remaining
 					</p>
 				</div>
+				{#if instanceOverview && instanceOverview.capacity > 0}
+					{@const cap = instanceOverview.capacity}
+					{@const thisUserPct = Math.min(100, (storage.bytes_limit / cap) * 100)}
+					{@const otherAllocated = instanceOverview.total_allocated - storage.bytes_limit}
+					{@const otherPct = Math.min(100, (otherAllocated / cap) * 100)}
+					{@const totalAllocPct = Math.min(
+						100,
+						((otherAllocated + storage.bytes_limit) / cap) * 100
+					)}
+					<div class="space-y-1 border-t pt-3">
+						<p class="text-xs font-medium text-muted-foreground">Instance capacity</p>
+						<div class="relative h-3 w-full overflow-hidden rounded-full bg-muted">
+							<div
+								class="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/20"
+								style="width: {Math.min(100, otherPct + thisUserPct)}%"
+							></div>
+							<div
+								class="absolute inset-y-0 rounded-full bg-primary"
+								style="left: {otherPct}%; width: {thisUserPct}%"
+							></div>
+						</div>
+						<div class="flex items-center gap-3 text-xs text-muted-foreground">
+							<span class="flex items-center gap-1">
+								<span class="inline-block h-2 w-2 rounded-full bg-primary"></span>
+								This user: {formatBytes(storage.bytes_limit)}
+							</span>
+							<span class="flex items-center gap-1">
+								<span class="inline-block h-2 w-2 rounded-full bg-muted-foreground/20"></span>
+								Others: {formatBytes(otherAllocated)}
+							</span>
+							<span>Total: {formatBytes(cap)}</span>
+						</div>
+						{#if totalAllocPct > 100}
+							<div class="flex items-center gap-1 text-xs text-destructive">
+								<AlertTriangle class="h-3 w-3" />
+								Over-allocated
+							</div>
+						{/if}
+					</div>
+				{/if}
+
 				<div class="flex flex-wrap gap-2">
 					<Input
 						type="number"
