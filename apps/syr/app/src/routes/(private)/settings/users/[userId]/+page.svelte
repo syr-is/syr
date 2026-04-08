@@ -439,7 +439,22 @@
 	// --- Init ---
 	$effect(() => {
 		if (userId) {
-			// Reset all pagination and state when switching users
+			// Clear all data and close dialogs when switching users
+			storage = null;
+			instanceOverview = null;
+			posts = [];
+			postsTotal = 0;
+			uploads = [];
+			uploadsTotal = 0;
+			browserFolders = [];
+			browserUploads = [];
+			browserBreadcrumbs = [];
+			browserTotal = 0;
+			deleteUserOpen = false;
+			deletePostOpen = false;
+			deleteUploadOpen = false;
+
+			// Reset pagination
 			postsPage = 1;
 			uploadsPage = 1;
 			browserFolderId = null;

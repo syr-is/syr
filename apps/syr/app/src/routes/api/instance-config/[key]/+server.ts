@@ -52,8 +52,8 @@ function validateCooldownDaysValue(val: string): string {
 /** Validate storage limit in GB: positive number */
 function validateStorageLimitGb(val: string): string {
 	const n = parseFloat(val.trim());
-	if (isNaN(n) || n <= 0) {
-		throw new Error('Value must be a positive number (in GB)');
+	if (!Number.isFinite(n) || n <= 0) {
+		throw new Error('Value must be a finite positive number (in GB)');
 	}
 	return String(n);
 }

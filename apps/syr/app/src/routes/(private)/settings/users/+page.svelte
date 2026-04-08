@@ -29,10 +29,10 @@
 	};
 
 	const sizes = $derived(data.sizes ?? [10, 20, 50]);
-	let page = $state(1);
-	let size = $state(20);
-	let pageSizeValue = $state('20');
-	let searchQuery = $state('');
+	let page = $state(data.page ?? 1);
+	let size = $state(data.size ?? 20);
+	let pageSizeValue = $state(String(data.size ?? 20));
+	let searchQuery = $state(data.search ?? '');
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 	let abortController: AbortController | null = null;
 
@@ -64,7 +64,7 @@
 			let qs = `page=${currentPage}&size=${currentSize}`;
 			if (search.trim()) qs += `&search=${encodeURIComponent(search.trim())}`;
 
-			const res = await fetch(`/api/admin/users?${qs}`, { signal });
+			const res = await fetch(`${resolve('/api/admin/users')}?${qs}`, { signal });
 			if (!res.ok) {
 				rows = [];
 				total = 0;
@@ -153,6 +153,7 @@
 		<Input
 			type="search"
 			placeholder="Search by username or DID…"
+			aria-label="Search users"
 			class="max-w-xs"
 			value={searchQuery}
 			oninput={handleSearchInput}
