@@ -31,12 +31,12 @@ export const load: PageServerLoad = async ({ parent }) => {
 
 	const registrationMode = await getRegistrationMode();
 
-	const defaultStorageLimitGb =
-		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB)) ??
-		String(DEFAULT_STORAGE_LIMIT_GB);
-
-	const instanceStorageCapacityGb =
-		(await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB)) ?? '';
+	const [rawStorageLimit, rawStorageCapacity] = await Promise.all([
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB),
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB)
+	]);
+	const defaultStorageLimitGb = rawStorageLimit ?? String(DEFAULT_STORAGE_LIMIT_GB);
+	const instanceStorageCapacityGb = rawStorageCapacity ?? '';
 
 	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
 	const inviteCodes: {

@@ -46,6 +46,7 @@
 	let rows = $state<UserRow[]>([]);
 	let total = $state(0);
 	let loading = $state(false);
+	let fetchError = $state<string | null>(null);
 
 	$effect(() => {
 		const n = parseInt(pageSizeValue, 10);
@@ -58,11 +59,18 @@
 		const signal = abortController.signal;
 
 		loading = true;
+		fetchError = null;
 		try {
 			let qs = `page=${currentPage}&size=${currentSize}`;
 			if (search.trim()) qs += `&search=${encodeURIComponent(search.trim())}`;
 
 			const res = await fetch(`/api/admin/users?${qs}`, { signal });
+			if (!res.ok) {
+				rows = [];
+				total = 0;
+				fetchError = `Failed to load users (${res.status})`;
+				return;
+			}
 			const json = await res.json();
 			if (json.status === 'success') {
 				rows = json.data;
@@ -70,11 +78,13 @@
 			} else {
 				rows = [];
 				total = 0;
+				fetchError = 'Unexpected response';
 			}
 		} catch (e) {
 			if (e instanceof DOMException && e.name === 'AbortError') return;
 			rows = [];
 			total = 0;
+			fetchError = e instanceof Error ? e.message : 'Failed to load users';
 		} finally {
 			if (!signal.aborted) loading = false;
 		}
@@ -164,6 +174,12 @@
 				<Table.Row>
 					<Table.Cell colspan={5} class="py-8 text-center text-muted-foreground">
 						Loading…
+					</Table.Cell>
+				</Table.Row>
+			{:else if fetchError}
+				<Table.Row>
+					<Table.Cell colspan={5} class="py-8 text-center text-destructive">
+						{fetchError}
 					</Table.Cell>
 				</Table.Row>
 			{:else if rows.length === 0}

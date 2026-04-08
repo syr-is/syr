@@ -67,6 +67,12 @@ function validateRegistrationMode(val: string): string {
 	return result.data;
 }
 
+const ADMIN_ONLY_KEYS: readonly string[] = [
+	KEY_REGISTRATION_MODE,
+	KEY_DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB
+];
+
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
 		throw error(401, { code: 'UNAUTHORIZED', message: 'Authentication required' });
@@ -74,6 +80,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const key = params.key;
 	if (!isAllowedKey(key)) {
 		throw error(404, { code: 'NOT_FOUND', message: 'Unknown instance config key' });
+	}
+	if (ADMIN_ONLY_KEYS.includes(key) && locals.user.role !== 'ADMIN') {
+		throw error(403, { code: 'FORBIDDEN', message: 'Admin access required' });
 	}
 	const value = await kvService.get<string>(INSTANCE_CONFIG_TYPE, key);
 	return json({ value: value ?? null });

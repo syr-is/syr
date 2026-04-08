@@ -31,22 +31,28 @@
 	};
 	let userInfo = $state<UserInfo | null>(null);
 	let _userLoading = $state(true);
+	let requestId = $state(0);
 
 	async function loadUser() {
+		const myId = ++requestId;
 		_userLoading = true;
+		userInfo = null;
 		try {
 			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`);
-			const json = await res.json();
-			if (json.status === 'success') {
-				userInfo = json.data;
-			} else {
+			if (myId !== requestId) return;
+			if (!res.ok) {
 				userInfo = null;
+				return;
 			}
+			const json = await res.json();
+			if (myId !== requestId) return;
+			userInfo = json.status === 'success' ? json.data : null;
 		} catch (e) {
+			if (myId !== requestId) return;
 			console.error('[admin] Failed to load user:', e);
 			userInfo = null;
 		} finally {
-			_userLoading = false;
+			if (myId === requestId) _userLoading = false;
 		}
 	}
 
@@ -197,11 +203,28 @@
 			const res = await fetch(
 				`/api/admin/users/${encodeURIComponent(userId)}/posts?page=${postsPage}&size=10`
 			);
+			if (!res.ok) {
+				posts = [];
+				postsTotal = 0;
+				return;
+			}
 			const json = await res.json();
 			if (json.status === 'success') {
 				posts = json.data;
 				postsTotal = json.pagination?.total ?? 0;
+				// Clamp page if total shrank
+				const lastPage = Math.max(1, Math.ceil(postsTotal / 10));
+				if (postsPage > lastPage) {
+					postsPage = lastPage;
+					return loadPosts();
+				}
+			} else {
+				posts = [];
+				postsTotal = 0;
 			}
+		} catch {
+			posts = [];
+			postsTotal = 0;
 		} finally {
 			postsLoading = false;
 		}
@@ -233,11 +256,27 @@
 			const res = await fetch(
 				`/api/admin/users/${encodeURIComponent(userId)}/uploads?page=${uploadsPage}&size=10`
 			);
+			if (!res.ok) {
+				uploads = [];
+				uploadsTotal = 0;
+				return;
+			}
 			const json = await res.json();
 			if (json.status === 'success') {
 				uploads = json.data;
 				uploadsTotal = json.pagination?.total ?? 0;
+				const lastPage = Math.max(1, Math.ceil(uploadsTotal / 10));
+				if (uploadsPage > lastPage) {
+					uploadsPage = lastPage;
+					return loadUploads();
+				}
+			} else {
+				uploads = [];
+				uploadsTotal = 0;
 			}
+		} catch {
+			uploads = [];
+			uploadsTotal = 0;
 		} finally {
 			uploadsLoading = false;
 		}
@@ -283,11 +322,22 @@
 				qs += `&folder_id=${encodeURIComponent(browserFolderId)}`;
 			}
 			const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/uploads?${qs}`);
+			if (!res.ok) {
+				browserUploads = [];
+				browserTotal = 0;
+				return;
+			}
 			const json = await res.json();
 			if (json.status === 'success') {
 				browserUploads = json.data;
 				browserTotal = json.pagination?.total ?? 0;
+			} else {
+				browserUploads = [];
+				browserTotal = 0;
 			}
+		} catch {
+			browserUploads = [];
+			browserTotal = 0;
 		} finally {
 			browserLoading = false;
 		}
@@ -320,24 +370,31 @@
 		}
 	}
 
-	// Watch browser sort/page changes
+	// Watch browser sort/page/limit changes
 	let prevBrowserSort = $state<string | undefined>(undefined);
 	let prevBrowserOrder = $state<string | undefined>(undefined);
+	let prevBrowserLimit = $state<number | undefined>(undefined);
 	$effect(() => {
 		if (uploadViewMode !== 'browser') return;
 		const sf = browserSortField;
 		const so = browserSortOrder;
+		const bl = browserLimit;
 		const pg = browserPage;
 		const fid = browserFolderId;
 		void pg;
 		void fid;
-		if (prevBrowserSort !== undefined && prevBrowserOrder !== undefined) {
-			if (prevBrowserSort !== sf || prevBrowserOrder !== so) {
+		if (
+			prevBrowserSort !== undefined &&
+			prevBrowserOrder !== undefined &&
+			prevBrowserLimit !== undefined
+		) {
+			if (prevBrowserSort !== sf || prevBrowserOrder !== so || prevBrowserLimit !== bl) {
 				browserPage = 1;
 			}
 		}
 		prevBrowserSort = sf;
 		prevBrowserOrder = so;
+		prevBrowserLimit = bl;
 		loadBrowserFolders();
 		loadBrowserUploads();
 	});
@@ -482,10 +539,7 @@
 					{@const thisUserPct = Math.min(100, (storage.bytes_limit / cap) * 100)}
 					{@const otherAllocated = instanceOverview.total_allocated - storage.bytes_limit}
 					{@const otherPct = Math.min(100, (otherAllocated / cap) * 100)}
-					{@const totalAllocPct = Math.min(
-						100,
-						((otherAllocated + storage.bytes_limit) / cap) * 100
-					)}
+					{@const rawAllocated = otherAllocated + storage.bytes_limit}
 					<div class="space-y-1 border-t pt-3">
 						<p class="text-xs font-medium text-muted-foreground">Instance capacity</p>
 						<div class="relative h-3 w-full overflow-hidden rounded-full bg-muted">
@@ -509,7 +563,7 @@
 							</span>
 							<span>Total: {formatBytes(cap)}</span>
 						</div>
-						{#if totalAllocPct > 100}
+						{#if rawAllocated > cap}
 							<div class="flex items-center gap-1 text-xs text-destructive">
 								<AlertTriangle class="h-3 w-3" />
 								Over-allocated

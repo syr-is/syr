@@ -63,9 +63,19 @@
 		overviewLoading = true;
 		try {
 			const res = await fetch('/api/admin/storage');
+			if (!res.ok) {
+				console.error('[instance-config] Storage overview fetch failed:', res.status);
+				storageOverview = null;
+				return;
+			}
 			const json = await res.json();
-			if (json.status === 'success') storageOverview = json.data;
-		} catch {
+			if (json.status === 'success') {
+				storageOverview = json.data;
+			} else {
+				storageOverview = null;
+			}
+		} catch (err) {
+			console.error('[instance-config] Storage overview error:', err);
 			storageOverview = null;
 		} finally {
 			overviewLoading = false;
@@ -173,7 +183,7 @@
 			}
 			toast.success('Instance storage capacity updated');
 			await invalidateAll();
-			loadStorageOverview();
+			await loadStorageOverview();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to update');
 		} finally {

@@ -6,6 +6,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 
 const KV_USAGE_TYPE = 'file_store_usage';
 const KV_LIMIT_TYPE = 'file_store_limit_override';
+const MAX_USER_FETCH_LIMIT = 10000;
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -23,7 +24,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		getDefaultStorageLimitBytes(),
 		kvService.getByType(KV_USAGE_TYPE),
 		kvService.getByType(KV_LIMIT_TYPE),
-		userRepository.findManyWithSearch({ limit: 10000, offset: 0 })
+		userRepository.findManyWithSearch({ limit: MAX_USER_FETCH_LIMIT, offset: 0 })
 	]);
 
 	// Build usage map: userId string → bytes_used
