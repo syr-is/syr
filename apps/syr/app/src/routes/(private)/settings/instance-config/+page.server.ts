@@ -7,6 +7,9 @@ import {
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	DEFAULT_PATH,
 	DEFAULT_USERNAME_COOLDOWN_DAYS,
+	KEY_DEFAULT_STORAGE_LIMIT_GB,
+	DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
 	INVITE_CODE_TYPE
 } from '$lib/instance-config';
 import { getRegistrationMode } from '$lib/instance-config';
@@ -27,6 +30,13 @@ export const load: PageServerLoad = async ({ parent }) => {
 		String(DEFAULT_USERNAME_COOLDOWN_DAYS);
 
 	const registrationMode = await getRegistrationMode();
+
+	const [rawStorageLimit, rawStorageCapacity] = await Promise.all([
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB),
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB)
+	]);
+	const defaultStorageLimitGb = rawStorageLimit ?? String(DEFAULT_STORAGE_LIMIT_GB);
+	const instanceStorageCapacityGb = rawStorageCapacity ?? '';
 
 	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
 	const inviteCodes: {
@@ -61,6 +71,8 @@ export const load: PageServerLoad = async ({ parent }) => {
 		profileSyncAssetPath,
 		usernameCooldownDays,
 		registrationMode,
+		defaultStorageLimitGb,
+		instanceStorageCapacityGb,
 		inviteCodes,
 		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
 			id: r.id.toString(),

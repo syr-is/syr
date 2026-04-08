@@ -1,5 +1,6 @@
 import { kvService } from '$lib/services/kv';
 import { uploadRepository } from '$lib/repositories/upload.repository';
+import { getDefaultStorageLimitBytes } from '$lib/instance-config';
 import { stringToRecordId } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
@@ -18,9 +19,27 @@ interface FileStoreUsageData {
 }
 
 /**
- * Maximum storage allowed per user (5GB)
+ * Maximum storage allowed per user (5GB) — instance default
  */
 export const MAX_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+
+/**
+ * KV type for per-user storage limit overrides
+ */
+const KV_LIMIT_TYPE = 'file_store_limit_override';
+
+interface FileStoreLimitOverride {
+	bytes_limit: number;
+}
+
+/**
+ * KV type for per-user upload disabled flag
+ */
+const KV_UPLOAD_DISABLED_TYPE = 'file_upload_disabled';
+
+interface FileUploadDisabledFlag {
+	disabled: boolean;
+}
 
 /**
  * File Store Usage Controller
@@ -39,6 +58,61 @@ export class FileStoreUsageController {
 	 */
 	private toRecordId(userId: RecordId | string): RecordId {
 		return typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+	}
+
+	/**
+	 * Get the effective storage limit for a user.
+	 * Checks for a per-user override in KV, falls back to instance default.
+	 */
+	async getUserLimit(userId: RecordId | string): Promise<number> {
+		const index = this.getUserIndex(userId);
+		const override = await kvService.get<FileStoreLimitOverride>(KV_LIMIT_TYPE, index);
+		if (override !== null && typeof override.bytes_limit === 'number' && override.bytes_limit > 0) {
+			return override.bytes_limit;
+		}
+		return getDefaultStorageLimitBytes();
+	}
+
+	/**
+	 * Set a per-user storage limit override.
+	 */
+	async setUserLimit(userId: RecordId | string, bytesLimit: number): Promise<void> {
+		if (!Number.isInteger(bytesLimit) || bytesLimit <= 0) {
+			throw new Error('Storage limit must be a positive integer');
+		}
+		const index = this.getUserIndex(userId);
+		await kvService.set<FileStoreLimitOverride>(KV_LIMIT_TYPE, index, { bytes_limit: bytesLimit });
+	}
+
+	/**
+	 * Clear per-user storage limit override, reverting to instance default.
+	 */
+	async clearUserLimit(userId: RecordId | string): Promise<void> {
+		const index = this.getUserIndex(userId);
+		await kvService.delete(KV_LIMIT_TYPE, index);
+	}
+
+	/**
+	 * Check if uploads are disabled for a user.
+	 */
+	async isUploadDisabled(userId: RecordId | string): Promise<boolean> {
+		const index = this.getUserIndex(userId);
+		const flag = await kvService.get<FileUploadDisabledFlag>(KV_UPLOAD_DISABLED_TYPE, index);
+		return flag?.disabled === true;
+	}
+
+	/**
+	 * Enable or disable uploads for a user.
+	 */
+	async setUploadDisabled(userId: RecordId | string, disabled: boolean): Promise<void> {
+		const index = this.getUserIndex(userId);
+		if (disabled) {
+			await kvService.set<FileUploadDisabledFlag>(KV_UPLOAD_DISABLED_TYPE, index, {
+				disabled: true
+			});
+		} else {
+			await kvService.delete(KV_UPLOAD_DISABLED_TYPE, index);
+		}
 	}
 
 	/**
@@ -120,7 +194,7 @@ export class FileStoreUsageController {
 		bytes_remaining: number;
 	}> {
 		const bytesUsed = await this.getUsage(userId);
-		const bytesLimit = MAX_STORAGE_BYTES;
+		const bytesLimit = await this.getUserLimit(userId);
 		const percentageUsed = (bytesUsed / bytesLimit) * 100;
 		const bytesRemaining = Math.max(0, bytesLimit - bytesUsed);
 
@@ -159,13 +233,14 @@ export class FileStoreUsageController {
 		const index = this.getUserIndex(userId);
 
 		if (enforceQuota) {
+			const limit = await this.getUserLimit(userId);
 			return kvService.atomicIncrementFieldWithApplied(
 				KV_TYPE,
 				index,
 				'bytes_used',
 				bytes,
 				0,
-				MAX_STORAGE_BYTES
+				limit
 			);
 		}
 
@@ -238,9 +313,21 @@ export class FileStoreUsageController {
 		available_space: number;
 		message?: string;
 	}> {
+		if (await this.isUploadDisabled(userId)) {
+			const currentUsage = await this.getUsage(userId);
+			return {
+				allowed: false,
+				current_usage: currentUsage,
+				required_space: bytes,
+				available_space: 0,
+				message: 'Uploads are disabled for this account'
+			};
+		}
+
 		const currentUsage = await this.getUsage(userId);
-		const availableSpace = Math.max(0, MAX_STORAGE_BYTES - currentUsage);
-		const allowed = currentUsage + bytes <= MAX_STORAGE_BYTES;
+		const limit = await this.getUserLimit(userId);
+		const availableSpace = Math.max(0, limit - currentUsage);
+		const allowed = currentUsage + bytes <= limit;
 
 		return {
 			allowed,

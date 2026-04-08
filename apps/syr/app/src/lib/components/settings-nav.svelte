@@ -9,7 +9,8 @@
 		Settings,
 		KeyRound,
 		Compass,
-		Shield
+		Shield,
+		Users
 	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
@@ -24,7 +25,8 @@
 	];
 
 	const instanceItems: NavItem[] = [
-		{ title: 'Instance config', href: '/settings/instance-config', icon: Settings }
+		{ title: 'Instance config', href: '/settings/instance-config', icon: Settings },
+		{ title: 'Users', href: '/settings/users', icon: Users }
 	];
 
 	let { user }: { user?: { role?: string } | null } = $props();
@@ -32,7 +34,9 @@
 	let currentPath = $derived(page.url.pathname);
 	const isActive = (href: string): boolean => {
 		const norm = (s: string) => (s.endsWith('/') ? s.slice(0, -1) : s);
-		return norm(currentPath) === norm(href);
+		const normCurrent = norm(currentPath);
+		const normHref = norm(href);
+		return normCurrent === normHref || normCurrent.startsWith(normHref + '/');
 	};
 </script>
 

@@ -61,6 +61,52 @@ export class UserRepository extends BaseRepository<User> {
 	}
 
 	/**
+	 * Find users with optional username/DID search, pagination, and sorting.
+	 */
+	async findManyWithSearch(options: {
+		limit?: number;
+		offset?: number;
+		search?: string;
+		sort?: { field: string; order: 'asc' | 'desc' };
+	}): Promise<{ data: User[]; total: number }> {
+		const { limit = 20, offset = 0, search, sort } = options;
+		const params: Record<string, unknown> = { limit, offset };
+		const conditions: string[] = [];
+
+		if (search && search.trim()) {
+			conditions.push('(username CONTAINS $search OR did CONTAINS $search)');
+			params.search = search.trim();
+		}
+
+		const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+		const ALLOWED_SORT_FIELDS: Record<string, string> = {
+			created_at: 'created_at',
+			updated_at: 'updated_at',
+			username: 'username',
+			role: 'role'
+		};
+		const orderField = ALLOWED_SORT_FIELDS[sort?.field ?? 'created_at'] ?? 'created_at';
+		const orderDir = sort?.order === 'asc' ? 'ASC' : 'DESC';
+		const orderClause = `ORDER BY ${orderField} ${orderDir}`;
+
+		const [dataResult, countResult] = await Promise.all([
+			this.db.query<[User[]]>(
+				`SELECT * FROM ${this.tableName} ${whereClause} ${orderClause} LIMIT $limit START $offset`,
+				params
+			),
+			this.db.query<[{ count: number }[]]>(
+				`SELECT count() AS count FROM ${this.tableName} ${whereClause} GROUP ALL`,
+				params
+			)
+		]);
+
+		const data = (dataResult[0] ?? []).map((r) => this.validate(r));
+		const total = countResult[0]?.[0]?.count ?? 0;
+		return { data, total };
+	}
+
+	/**
 	 * Update username and set username_last_updated to now.
 	 * Caller must validate cooldown and uniqueness.
 	 */

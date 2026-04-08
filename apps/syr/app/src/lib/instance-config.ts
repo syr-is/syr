@@ -9,6 +9,9 @@ const DEFAULT_PATH = ['me', 'profile', 'public'];
 const DEFAULT_USERNAME_COOLDOWN_DAYS = 7;
 const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'open';
 const INVITE_CODE_TYPE = 'invite_code';
+const KEY_DEFAULT_STORAGE_LIMIT_GB = 'default_storage_limit_gb';
+const DEFAULT_STORAGE_LIMIT_GB = 5;
+const KEY_INSTANCE_STORAGE_CAPACITY_GB = 'instance_storage_capacity_gb';
 
 /**
  * Get the profile sync asset upload path from instance config.
@@ -52,13 +55,42 @@ export async function getRegistrationMode(): Promise<RegistrationMode> {
 	return DEFAULT_REGISTRATION_MODE;
 }
 
+/**
+ * Get the instance default storage limit in bytes.
+ * Default: 5GB when unset or invalid.
+ */
+export async function getDefaultStorageLimitBytes(): Promise<number> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB);
+	if (val != null) {
+		const n = parseFloat(String(val));
+		if (!isNaN(n) && n > 0) return Math.round(n * 1024 * 1024 * 1024);
+	}
+	return DEFAULT_STORAGE_LIMIT_GB * 1024 * 1024 * 1024;
+}
+
+/**
+ * Get the instance total storage capacity in bytes.
+ * Returns 0 if not configured (admin should set this to SeaweedFS volume size).
+ */
+export async function getInstanceStorageCapacityBytes(): Promise<number> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB);
+	if (val != null) {
+		const n = parseFloat(String(val));
+		if (!isNaN(n) && n > 0) return Math.round(n * 1024 * 1024 * 1024);
+	}
+	return 0;
+}
+
 export {
 	INSTANCE_CONFIG_TYPE,
 	KEY_PROFILE_SYNC_ASSET_PATH,
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	KEY_REGISTRATION_MODE,
+	KEY_DEFAULT_STORAGE_LIMIT_GB,
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
 	DEFAULT_PATH,
 	DEFAULT_USERNAME_COOLDOWN_DAYS,
 	DEFAULT_REGISTRATION_MODE,
+	DEFAULT_STORAGE_LIMIT_GB,
 	INVITE_CODE_TYPE
 };
