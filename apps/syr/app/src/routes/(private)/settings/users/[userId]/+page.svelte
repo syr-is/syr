@@ -494,7 +494,7 @@
 								style="width: {thisUserPct}%"
 							></div>
 							<div
-								class="absolute inset-y-0 bg-muted-foreground/20"
+								class="absolute inset-y-0 rounded-full bg-muted-foreground/20"
 								style="left: {thisUserPct}%; width: {otherPct}%"
 							></div>
 						</div>
