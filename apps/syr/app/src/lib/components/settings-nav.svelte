@@ -10,7 +10,8 @@
 		KeyRound,
 		Compass,
 		Shield,
-		Users
+		Users,
+		Smile
 	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
@@ -21,7 +22,8 @@
 		{ title: 'Discovery', href: '/settings/discovery', icon: Compass },
 		{ title: 'Content trust', href: '/settings/content-trust', icon: Shield },
 		{ title: 'Signing', href: '/settings/signing', icon: KeyRound },
-		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor }
+		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor },
+		{ title: 'Emojis & Stickers', href: '/settings/emojis', icon: Smile }
 	];
 
 	const instanceItems: NavItem[] = [

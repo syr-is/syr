@@ -722,20 +722,20 @@
 		onDismiss={handleSigilDismiss}
 	/>
 
-	<!-- Reactions -->
+	<!-- Reactions & Comments -->
 	{#if data.post.did && data.post.local_id && data.post.visibility === 'public' && data.post.status === 'completed'}
 		<Card.Root>
-			<Card.Content class="py-3">
+			<Card.Content class="space-y-6 py-4">
 				<ReactionBar parentType="post" parentDid={data.post.did} parentId={data.post.local_id} />
+				<div class="border-t pt-4">
+					<CommentThread
+						postDid={data.post.did}
+						postId={data.post.local_id}
+						followedDids={data.followedDids ?? []}
+						currentUserDid={data.user?.did ?? null}
+					/>
+				</div>
 			</Card.Content>
 		</Card.Root>
-
-		<!-- Comments -->
-		<CommentThread
-			postDid={data.post.did}
-			postId={data.post.local_id}
-			followedDids={data.followedDids ?? []}
-			currentUserDid={data.user?.did ?? null}
-		/>
 	{/if}
 </div>

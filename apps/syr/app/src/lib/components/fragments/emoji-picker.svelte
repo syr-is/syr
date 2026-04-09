@@ -31,30 +31,38 @@
 	let userEmojis = $state<EmojiEntry[]>([]);
 	let loading = $state(false);
 	let activeTab = $state('instance');
+	let hasLoaded = false;
 
 	async function loadEmojis() {
-		if (packs.length > 0 || userEmojis.length > 0) return;
+		if (hasLoaded) return;
+		hasLoaded = true;
 		loading = true;
 		try {
-			const [instanceRes, userRes] = await Promise.all([
-				fetch('/api/public/emojis'),
-				fetch('/api/emojis?limit=100')
-			]);
-			if (instanceRes.ok) {
-				const json = await instanceRes.json();
+			const res = await fetch('/api/public/emojis');
+			if (res.ok) {
+				const json = await res.json();
 				if (json.status === 'success') packs = json.data.packs ?? [];
 			}
-			if (userRes.ok) {
-				const json = await userRes.json();
-				if (json.status === 'success') userEmojis = json.data ?? [];
+
+			// Try personal emojis — will 401 if not logged in, that's fine
+			try {
+				const userRes = await fetch('/api/emojis?limit=100');
+				if (userRes.ok) {
+					const json = await userRes.json();
+					if (json.status === 'success') userEmojis = json.data ?? [];
+				}
+			} catch {
+				// Not logged in or no personal emojis
 			}
+		} catch {
+			// Instance emojis unavailable
 		} finally {
 			loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (open) loadEmojis();
+		if (open && !hasLoaded) loadEmojis();
 	});
 
 	const allInstanceEmojis = $derived(packs.flatMap((p) => p.emojis));

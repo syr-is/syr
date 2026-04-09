@@ -29,6 +29,7 @@
 	let loading = $state(false);
 	let activeTab = $state('instance');
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+	let hasLoaded = false;
 
 	async function loadGifs(query?: string) {
 		loading = true;
@@ -36,17 +37,27 @@
 			const qs = query?.trim()
 				? `?search=${encodeURIComponent(query.trim())}&limit=30`
 				: '?limit=30';
-			const [instanceRes, userRes] = await Promise.all([
-				fetch(`/api/public/gifs${qs}`),
-				fetch('/api/gifs?limit=30')
-			]);
-			if (instanceRes.ok) {
-				const json = await instanceRes.json();
-				if (json.status === 'success') instanceGifs = json.data ?? [];
+
+			try {
+				const instanceRes = await fetch(`/api/public/gifs${qs}`);
+				if (instanceRes.ok) {
+					const json = await instanceRes.json();
+					if (json.status === 'success') instanceGifs = json.data ?? [];
+				}
+			} catch {
+				/* instance GIFs unavailable */
 			}
-			if (userRes.ok) {
-				const json = await userRes.json();
-				if (json.status === 'success') userGifs = json.data ?? [];
+
+			if (!hasLoaded) {
+				try {
+					const userRes = await fetch('/api/gifs?limit=30');
+					if (userRes.ok) {
+						const json = await userRes.json();
+						if (json.status === 'success') userGifs = json.data ?? [];
+					}
+				} catch {
+					/* not logged in */
+				}
 			}
 		} finally {
 			loading = false;
@@ -54,7 +65,10 @@
 	}
 
 	$effect(() => {
-		if (open) loadGifs();
+		if (open && !hasLoaded) {
+			hasLoaded = true;
+			loadGifs();
+		}
 	});
 
 	function handleSearch(e: Event) {
