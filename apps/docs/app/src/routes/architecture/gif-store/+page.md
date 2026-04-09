@@ -44,10 +44,7 @@ Self-hosting GIFs preserves the **self-sovereign** principle: no third-party API
 
 ```
 Gif {
-  id: RecordId (gif:{ created_by: did, id: ulid })   // user GIFs use composite ID
-  -- OR --
-  id: RecordId (gif:ulid)                              // instance GIFs use simple ID
-
+  id: RecordId (gif:{ created_by: did, id: ulid })   // composite ID for all GIFs (portable, zero-conflict)
   title: string                    // display title
   tags: string[]                   // search keywords, lowercase
   image_url: string                // URL to the GIF (SeaweedFS)
@@ -129,21 +126,18 @@ POST   /api/gifs                      -- upload a new personal GIF
 DELETE /api/gifs/[did]/[id]           -- delete a personal GIF
 GET    /api/admin/gifs                -- list instance GIF library (admin)
 POST   /api/admin/gifs                -- upload to instance library (admin)
-DELETE /api/admin/gifs/[id]           -- delete from instance library (admin)
+DELETE /api/admin/gifs/[did]/[id]     -- delete from instance library (admin)
 ```
 
 ---
 
-## 5. Size and format constraints
+## 5. Storage and quotas
 
-| Constraint         | Value                                |
-| ------------------ | ------------------------------------ |
-| Max file size      | 8 MB                                 |
-| Max dimensions     | 600x600 px                           |
-| Allowed MIME types | `image/gif`, `image/webp` (animated) |
-| Max GIFs per user  | 100 (configurable per-instance)      |
-| Max instance GIFs  | 5000 (configurable)                  |
-| Thumbnail format   | WebP, max 200x200 px                 |
+GIF uploads use the **existing upload storage system**. User GIFs count toward the user's file storage quota -- no separate GIF-specific limits. As long as the upload fits within the user's remaining storage allocation, it is accepted.
+
+Instance GIFs (admin library) use a **dedicated instance media storage reservation** that is separate from any admin user's personal quota. The reservation size is configured by the admin via the **Settings > Instance Config** panel (e.g., "Instance media storage budget"). This budget is drawn from the overall instance storage capacity but does not count against any individual user's allocation.
+
+Allowed MIME types: `image/gif`, `image/webp` (animated).
 
 ---
 
@@ -184,6 +178,6 @@ Admins can:
 - Upload GIFs to the instance library via the admin panel (Settings > Instance Config or a dedicated GIF management page).
 - Bulk-tag GIFs.
 - Delete GIFs from the instance library.
-- Set instance-level limits (max GIFs, max file size).
+- Configure the instance media storage reservation size.
 
-Instance GIF storage does **not** count toward any individual user's quota; it is shared storage managed by the admin within the overall instance capacity.
+Instance GIF storage does **not** count toward any individual user's quota; it draws from the dedicated instance media storage reservation configured in the Instance Config panel.

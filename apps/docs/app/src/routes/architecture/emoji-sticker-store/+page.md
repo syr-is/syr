@@ -166,16 +166,13 @@ DELETE /api/admin/emojis/packs/[slug]/[shortcode] -- remove emoji from pack (adm
 
 ---
 
-## 7. Size and format constraints
+## 7. Storage and quotas
 
-| Constraint             | Value                                                                 |
-| ---------------------- | --------------------------------------------------------------------- |
-| Max file size          | 256 KB (emoji), 512 KB (sticker)                                      |
-| Max dimensions         | 128x128 px (emoji), 256x256 px (sticker)                              |
-| Allowed MIME types     | `image/png`, `image/gif`, `image/webp`, `image/apng`, `image/svg+xml` |
-| Max emojis per user    | 50 (configurable per-instance)                                        |
-| Max emojis per pack    | 200                                                                   |
-| Max packs per instance | 50                                                                    |
+Emoji and sticker uploads use the **existing upload storage system**. User emojis count toward the user's file storage quota -- no separate emoji-specific limits. As long as the upload fits within the user's remaining storage allocation, it is accepted.
+
+Instance emojis (admin packs) use a **dedicated instance media storage reservation** that is separate from any admin user's personal quota. The reservation size is configured by the admin via the **Settings > Instance Config** panel (e.g., "Instance media storage budget"). This budget is drawn from the overall instance storage capacity but does not count against any individual user's allocation.
+
+Allowed MIME types: `image/png`, `image/gif`, `image/webp`, `image/apng`, `image/svg+xml`.
 
 ---
 
