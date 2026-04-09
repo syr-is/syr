@@ -133,11 +133,9 @@ DELETE /api/admin/gifs/[did]/[id]     -- delete from instance library (admin)
 
 ## 5. Storage and quotas
 
-GIF uploads use the **existing upload storage system**. User GIFs count toward the user's file storage quota -- no separate GIF-specific limits. As long as the upload fits within the user's remaining storage allocation, it is accepted.
+Allowed MIME types for GIF assets: `image/gif`, `image/webp` (animated).
 
-Instance GIFs (admin library) use a **dedicated instance media storage reservation** that is separate from any admin user's personal quota. The reservation size is configured by the admin via the **Settings > Instance Config** panel (e.g., "Instance media storage budget"). This budget is drawn from the overall instance storage capacity but does not count against any individual user's allocation.
-
-Allowed MIME types: `image/gif`, `image/webp` (animated).
+Storage management (quotas, limits, capacity budgeting) is an implementation concern and not defined by this specification.
 
 ---
 
@@ -168,16 +166,3 @@ When a viewer on instance A sees a comment from instance B that contains a GIF U
 3. Content trust rules apply: the viewer's instance may require consent before loading remote media.
 
 The GIF picker for **composing** always uses the **local** instance's GIF library and the user's personal GIFs. Remote instance GIF browsing is not supported in v1 (only viewing GIFs already embedded in content).
-
----
-
-## 8. Admin management
-
-Admins can:
-
-- Upload GIFs to the instance library via the admin panel (Settings > Instance Config or a dedicated GIF management page).
-- Bulk-tag GIFs.
-- Delete GIFs from the instance library.
-- Configure the instance media storage reservation size.
-
-Instance GIF storage does **not** count toward any individual user's quota; it draws from the dedicated instance media storage reservation configured in the Instance Config panel.

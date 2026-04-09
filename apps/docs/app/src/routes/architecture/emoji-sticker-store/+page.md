@@ -166,13 +166,11 @@ DELETE /api/admin/emojis/packs/[slug]/[shortcode] -- remove emoji from pack (adm
 
 ---
 
-## 7. Storage and quotas
+## 7. Formats
 
-Emoji and sticker uploads use the **existing upload storage system**. User emojis count toward the user's file storage quota -- no separate emoji-specific limits. As long as the upload fits within the user's remaining storage allocation, it is accepted.
+Allowed MIME types for emoji and sticker images: `image/png`, `image/gif`, `image/webp`, `image/apng`, `image/svg+xml`.
 
-Instance emojis (admin packs) use a **dedicated instance media storage reservation** that is separate from any admin user's personal quota. The reservation size is configured by the admin via the **Settings > Instance Config** panel (e.g., "Instance media storage budget"). This budget is drawn from the overall instance storage capacity but does not count against any individual user's allocation.
-
-Allowed MIME types: `image/png`, `image/gif`, `image/webp`, `image/apng`, `image/svg+xml`.
+Storage management (quotas, limits, capacity budgeting) is an implementation concern and not defined by this specification.
 
 ---
 
