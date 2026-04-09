@@ -11,6 +11,7 @@ import {
 	extractLocalId,
 	stringToRecordId
 } from '@syr-is/types';
+import { followRepository } from '$lib/repositories/follow.repository';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Get post by ID
@@ -126,11 +127,29 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		};
 	}
 
+	// Load followed DIDs with provider URLs for cross-instance comment fetching
+	let followedDids: Array<{ did: string; providerUrl: string }> = [];
+	if (locals.user) {
+		try {
+			const uid = user?.id ?? stringToRecordId.decode(locals.user.id);
+			const follows = await followRepository.findByFollower(uid);
+			followedDids = follows
+				.filter((f) => f.followed_provider_url)
+				.map((f) => ({
+					did: f.followed_did,
+					providerUrl: f.followed_provider_url!
+				}));
+		} catch {
+			// Non-critical — comments will just not load from remote instances
+		}
+	}
+
 	return {
 		post: serializedPost,
 		user: serializedUser,
 		mediaUrlMimeTypes,
 		mediaUrlFilenames,
-		contentTrust
+		contentTrust,
+		followedDids
 	};
 };

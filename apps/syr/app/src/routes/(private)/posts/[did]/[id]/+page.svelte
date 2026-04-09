@@ -15,6 +15,8 @@
 	import type { PageData } from './$types';
 	import { Pencil, ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
 	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
+	import CommentThread from '$lib/components/fragments/comment-thread.svelte';
+	import ReactionBar from '$lib/components/fragments/reaction-bar.svelte';
 	import PostPublishSignDialog from '$lib/components/fragments/post-publish-sign-dialog.svelte';
 	import type { PostSignSnapshot } from '$lib/client/post-signed-payload';
 	import type { MediaDisplayMode, SignedMutationEnvelope } from '@syr-is/types';
@@ -719,4 +721,21 @@
 		onProceedUnlocked={handleSigilProceedUnlocked}
 		onDismiss={handleSigilDismiss}
 	/>
+
+	<!-- Reactions -->
+	{#if data.post.did && data.post.local_id && data.post.visibility === 'public' && data.post.status === 'completed'}
+		<Card.Root>
+			<Card.Content class="py-3">
+				<ReactionBar parentType="post" parentDid={data.post.did} parentId={data.post.local_id} />
+			</Card.Content>
+		</Card.Root>
+
+		<!-- Comments -->
+		<CommentThread
+			postDid={data.post.did}
+			postId={data.post.local_id}
+			followedDids={data.followedDids ?? []}
+			currentUserDid={data.user?.did ?? null}
+		/>
+	{/if}
 </div>
