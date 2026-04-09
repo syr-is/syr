@@ -209,3 +209,27 @@ sequenceDiagram
 ```
 
 The viewer caches emoji catalogs per-instance with a short TTL (e.g., 5 minutes) to avoid repeated fetches.
+
+### 9.1 Manifest discovery
+
+Emoji catalog endpoints are advertised in the per-identity manifest at `/.well-known/syr/&#123;did&#125;`:
+
+```json
+{
+	"endpoints": {
+		"public_emojis": "https://instance.example/api/public/emojis/did:syr:z6Mk..."
+	}
+}
+```
+
+And in the instance manifest at `/.well-known/syr`:
+
+```json
+{
+	"api": {
+		"public_emojis": "https://instance.example/api/public/emojis"
+	}
+}
+```
+
+Clients should prefer manifest-discovered URLs over hardcoded path assumptions.

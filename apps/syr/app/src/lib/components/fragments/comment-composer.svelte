@@ -4,23 +4,43 @@
 	import EmojiPicker from './emoji-picker.svelte';
 	import GifPicker from './gif-picker.svelte';
 	import { toast } from 'svelte-sonner';
-	import { Bold, Italic, Code, Link, List, Heading, Eye, Send } from 'lucide-svelte';
+	import {
+		Bold,
+		Italic,
+		Code,
+		Link,
+		List,
+		Heading,
+		Eye,
+		Send,
+		Check,
+		X,
+		Sticker
+	} from 'lucide-svelte';
+	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
+	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
 
 	let {
-		parentType,
-		parentDid,
-		parentId,
+		mode = 'create',
+		parentType = 'post',
+		parentDid = '',
+		parentId = '',
+		initialContent = '',
 		placeholder = 'Write a comment...',
-		onSubmit
+		onSubmit,
+		onCancel
 	}: {
-		parentType: 'post' | 'comment';
-		parentDid: string;
-		parentId: string;
+		mode?: 'create' | 'edit';
+		parentType?: 'post' | 'comment';
+		parentDid?: string;
+		parentId?: string;
+		initialContent?: string;
 		placeholder?: string;
-		onSubmit?: () => void;
+		onSubmit?: (content: string) => void;
+		onCancel?: () => void;
 	} = $props();
 
-	let content = $state('');
+	let content = $derived.by(() => initialContent);
 	let submitting = $state(false);
 	let preview = $state(false);
 	let previewHtml = $state('');
@@ -67,6 +87,10 @@
 		insertAtCursor(`:${emoji.shortcode}: `);
 	}
 
+	function handleSticker(emoji: { shortcode: string }) {
+		insertAtCursor(`::${emoji.shortcode}:: `);
+	}
+
 	function handleGif(gif: { url: string }) {
 		insertAtCursor(`![GIF](${gif.url})\n`);
 	}
@@ -75,7 +99,26 @@
 		if (!preview && content.trim()) {
 			try {
 				const { sanitizeMarkdownToHtml } = await import('$lib/client/sanitize-post-body');
-				previewHtml = await sanitizeMarkdownToHtml(content);
+				let html = await sanitizeMarkdownToHtml(content);
+
+				// Build emoji map from instance + user emojis
+				const instanceEmojis = await getInstanceEmojis();
+				const map: Record<string, string> = {};
+				for (const e of instanceEmojis) map[e.shortcode] = e.url;
+
+				// Load user's personal emojis too
+				try {
+					const userEmojis = await getUserEmojis('/api/emojis?limit=100');
+					for (const e of userEmojis) {
+						if (!(e.shortcode in map)) map[e.shortcode] = e.url;
+					}
+				} catch {
+					/* skip */
+				}
+
+				html = renderStickersInHtml(html, map);
+				html = renderEmojisInHtml(html, map);
+				previewHtml = html;
 			} catch {
 				previewHtml = content;
 			}
@@ -87,28 +130,30 @@
 		if (!content.trim()) return;
 		submitting = true;
 		try {
-			const res = await fetch('/api/comments', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					parent_type: parentType,
-					parent_did: parentDid,
-					parent_id: parentId,
-					content: content.trim(),
-					visibility: 'public',
-					status: 'completed'
-				})
-			});
-			if (!res.ok) {
-				const err = await res.json().catch(() => ({}));
-				toast.error(err.message ?? 'Failed to post comment');
-				return;
+			if (mode === 'create') {
+				const res = await fetch('/api/comments', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						parent_type: parentType,
+						parent_did: parentDid,
+						parent_id: parentId,
+						content: content.trim(),
+						visibility: 'public',
+						status: 'completed'
+					})
+				});
+				if (!res.ok) {
+					const err = await res.json().catch(() => ({}));
+					toast.error(err.message ?? 'Failed to post comment');
+					return;
+				}
+				content = '';
+				preview = false;
 			}
-			content = '';
-			preview = false;
-			onSubmit?.();
+			onSubmit?.(content.trim());
 		} catch {
-			toast.error('Failed to post comment');
+			toast.error(mode === 'create' ? 'Failed to post comment' : 'Failed to save');
 		} finally {
 			submitting = false;
 		}
@@ -116,7 +161,6 @@
 </script>
 
 <div class="space-y-2 rounded-lg border p-3">
-	<!-- Toolbar -->
 	<div class="flex flex-wrap items-center gap-0.5 border-b pb-2">
 		<Button
 			variant="ghost"
@@ -174,6 +218,7 @@
 		</Button>
 		<span class="mx-1 h-4 w-px bg-border"></span>
 		<EmojiPicker onSelect={handleEmoji} />
+		<EmojiPicker onSelect={handleSticker} triggerIcon={Sticker} triggerTitle="Sticker" />
 		<GifPicker onSelect={handleGif} />
 		<span class="mx-1 h-4 w-px bg-border"></span>
 		<Button
@@ -188,9 +233,8 @@
 		</Button>
 	</div>
 
-	<!-- Content area -->
 	{#if preview}
-		<div class="prose prose-sm dark:prose-invert min-h-[80px] rounded bg-muted/30 p-3">
+		<div class="prose prose-sm dark:prose-invert min-h-[60px] rounded bg-muted/30 p-3">
 			{#if previewHtml}
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html previewHtml}
@@ -204,15 +248,23 @@
 			bind:value={content}
 			{placeholder}
 			rows={3}
-			class="min-h-[80px] resize-y border-0 p-0 shadow-none focus-visible:ring-0"
+			class="min-h-[60px] resize-y border-0 p-0 shadow-none focus-visible:ring-0"
 		/>
 	{/if}
 
-	<!-- Submit -->
-	<div class="flex justify-end">
+	<div class="flex items-center justify-end gap-1">
+		{#if mode === 'edit' && onCancel}
+			<Button variant="ghost" size="sm" onclick={onCancel}>
+				<X class="mr-1 h-3 w-3" />
+				Cancel
+			</Button>
+		{/if}
 		<Button size="sm" onclick={submit} disabled={submitting || !content.trim()}>
 			{#if submitting}
-				Posting...
+				{mode === 'create' ? 'Posting...' : 'Saving...'}
+			{:else if mode === 'edit'}
+				<Check class="mr-1 h-3.5 w-3.5" />
+				Save
 			{:else}
 				<Send class="mr-1 h-3.5 w-3.5" />
 				Comment

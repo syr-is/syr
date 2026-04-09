@@ -10,11 +10,14 @@
 		open = $bindable(false),
 		parentId = null,
 		parentName = null,
+		apiBase = '/api/folders',
 		onSuccess
 	}: {
 		open?: boolean;
 		parentId?: string | null;
 		parentName?: string | null;
+		/** Base URL for folder API. Default: /api/folders */
+		apiBase?: string;
 		onSuccess?: () => void;
 	} = $props();
 
@@ -29,7 +32,7 @@
 
 		creating = true;
 		try {
-			const response = await fetch('/api/folders', {
+			const response = await fetch(apiBase, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

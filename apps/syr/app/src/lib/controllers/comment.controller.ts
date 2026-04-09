@@ -70,6 +70,8 @@ export class CommentController {
 			parentType?: string;
 			parentDid?: string;
 			parentId?: string;
+			postDid?: string;
+			postId?: string;
 			limit?: number;
 			offset?: number;
 		} = {}

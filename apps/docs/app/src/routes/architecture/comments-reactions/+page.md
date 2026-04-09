@@ -174,22 +174,44 @@ sequenceDiagram
     Note over Viewer: Merge comments, sort by created_at<br/>Build thread tree from parent references<br/>Render nested thread UI
 ```
 
-### 5.1 Fetching strategy
+### 5.1 Manifest-based endpoint discovery
+
+Before fetching comments or reactions, the viewer resolves each followed DID's endpoint URLs from their **identity manifest** at `/.well-known/syr/&#123;did&#125;`:
+
+```json
+{
+	"endpoints": {
+		"public_comments": "https://instance-b.example/api/public/comments/did:syr:userB",
+		"public_reactions": "https://instance-b.example/api/public/reactions/did:syr:userB",
+		"public_emojis": "https://instance-b.example/api/public/emojis/did:syr:userB",
+		"profile": "https://instance-b.example/api/public/profile/did:syr:userB"
+	}
+}
+```
+
+Clients **must** prefer manifest-discovered URLs over hardcoded path assumptions. Manifests are cached per-DID with a short TTL. If the manifest is unavailable, clients may fall back to constructing URLs from the provider base URL using the standard path patterns.
+
+### 5.2 Fetching strategy
 
 1. The viewer knows their **follow list** (DIDs + provider URLs).
-2. For the current post, the viewer queries **each followed DID's instance** for comments on that post.
-3. Responses are merged client-side, sorted by `created_at`, and organized into a thread tree by parent references.
-4. **Reactions** follow the same pattern: query each followed DID's instance for reactions on the post.
-5. Reactions are grouped by `(kind, value)` and counted for display.
+2. For each followed DID, resolve endpoint URLs from their identity manifest.
+3. For the current post, query each followed DID's `public_comments` endpoint for comments on that post.
+4. Responses are merged client-side, sorted by `created_at`, and organized into a thread tree by parent references.
+5. **Nested replies** are fetched iteratively: after root comments are collected, replies to those comments are fetched from all followed DIDs, then replies to replies, up to a reasonable depth limit.
+6. **Reactions** follow the same self-sovereign pattern: for each followed DID, resolve their `public_reactions` endpoint from the identity manifest, query with `parent_type`, `parent_did`, `parent_id` filters. Merge and group client-side by `(kind, value)` to produce counters.
+7. **Reaction tooltips** show the list of reactors (username@instance) with links to their profile pages, resolved from the `profile` manifest endpoint.
+8. **Author profiles** are fetched from each commenter's `profile` endpoint for display (avatar, username).
+9. **Emojis** are resolved from each author's `public_emojis` endpoint for shortcode rendering.
+10. **No local aggregation**: there is no server-side endpoint that aggregates reactions from multiple instances. All aggregation happens client-side from the follow graph.
 
-### 5.2 Thread tree construction
+### 5.3 Thread tree construction
 
 Given a flat list of comments from multiple instances:
 
 1. Group by `(parent_type, parent_did, parent_id)`.
 2. Comments whose parent is the post itself are **root-level** comments.
 3. Comments whose parent is another comment are nested under that comment.
-4. Missing parents (comment references a parent from a non-followed user) render as a root-level orphan with an indicator "replying to unknown".
+4. Missing parents (deleted comment) render as a `[deleted]` placeholder with the orphaned replies nested underneath.
 
 ---
 

@@ -74,6 +74,11 @@
 	});
 
 	const isProfilePayload = $derived(payload?.type === 'profile@v1');
+	const isCommentPayload = $derived(payload?.type === 'comment@v1');
+
+	const payloadLabel = $derived(
+		isProfilePayload ? 'profile' : isCommentPayload ? 'comment' : 'post'
+	);
 
 	let matchingPersonas = $derived(
 		hasDidBinding ? personas.filter((p) => p.did === expectedDid) : []
@@ -241,11 +246,7 @@
 					(errJ as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`;
 				throw new Error(msg);
 			}
-			toast.success(
-				isProfilePayload
-					? 'Signature sent. Return to SYR to finish saving your profile.'
-					: 'Signature sent. Return to SYR to finish publishing.'
-			);
+			toast.success(`Signature sent. Return to SYR to finish your ${payloadLabel}.`);
 			userConfirmed = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Signing failed');
@@ -259,7 +260,7 @@
 <div class="mx-auto max-w-lg space-y-4 p-4">
 	<Card>
 		<CardHeader>
-			<CardTitle>{isProfilePayload ? 'Sign profile in Syner' : 'Sign post in Syner'}</CardTitle>
+			<CardTitle>Sign {payloadLabel} in Syner</CardTitle>
 			<CardDescription>
 				{#if instanceUrl}
 					Instance <span class="font-mono">{instanceUrl}</span>
@@ -271,22 +272,15 @@
 		<CardContent class="space-y-4 text-sm">
 			<p class="text-muted-foreground">
 				<strong class="text-foreground">Trust:</strong>
-				{#if isProfilePayload}
-					Only sign if you started a profile save on a SYR tab you trust.
-				{:else}
-					Only sign if you started publishing on a SYR tab you trust.
-				{/if}
-				Syner signs the exact payload shown by your instance.
+				Only sign if you started this {payloadLabel} action on a SYR tab you trust. Syner signs the exact
+				payload shown by your instance.
 			</p>
 
 			{#if !hasSession}
 				<p
 					class="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
 				>
-					Missing <code class="font-mono">session</code>. Start from SYR →
-					{isProfilePayload
-						? 'Settings → Profile → Update Profile → Sign with Syner'
-						: 'Publish → Sign with Syner'}.
+					Missing <code class="font-mono">session</code>. Start the signing flow from SYR first.
 				</p>
 			{:else if !hasDidBinding}
 				<p
@@ -375,11 +369,7 @@
 					<label class="flex cursor-pointer items-start gap-2">
 						<input type="checkbox" bind:checked={userConfirmed} class="mt-1" />
 						<span>
-							{#if isProfilePayload}
-								I am saving this profile on SYR and want to sign this payload.
-							{:else}
-								I am publishing this post on SYR and want to sign this payload.
-							{/if}
+							I am signing this {payloadLabel} on SYR and want to sign this payload.
 						</span>
 					</label>
 

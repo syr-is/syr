@@ -46,6 +46,18 @@ export class ReactionRepository extends BaseRepository<Reaction> {
 		return { data, total };
 	}
 
+	async findByParent(parentType: string, parentDid: string, parentId: string): Promise<Reaction[]> {
+		const result = await this.db.query<[Reaction[]]>(
+			`SELECT * FROM reaction
+			 WHERE parent_type = $parentType
+			   AND parent_did = $parentDid
+			   AND parent_id = $parentId
+			 ORDER BY created_at ASC`,
+			{ parentType, parentDid, parentId }
+		);
+		return (result[0] ?? []).map((r) => this.validate(r));
+	}
+
 	async findExisting(
 		did: string,
 		parentType: string,

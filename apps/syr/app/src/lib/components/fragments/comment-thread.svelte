@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { Button } from '@syr-is/ui/button';
+	import * as Tooltip from '@syr-is/ui/tooltip';
 	import CommentComposer from './comment-composer.svelte';
 	import ReactionBar from './reaction-bar.svelte';
-	import { MessageSquare, ChevronDown, ChevronRight, Trash2 } from 'lucide-svelte';
+	import CommentSignDialog from './comment-sign-dialog.svelte';
+	import EmojiPicker from './emoji-picker.svelte';
+	import {
+		MessageSquare,
+		ChevronDown,
+		ChevronRight,
+		Trash2,
+		ShieldCheck,
+		Pencil,
+		KeyRound
+	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
+	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
+	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
 
 	type CommentData = {
 		did: string;
@@ -17,8 +30,16 @@
 		visibility: string;
 		status: string;
 		created_at: string;
-		author_username?: string;
+		content_signature?: string;
+		signed_payload_json?: string;
+		signing_device_public_key?: string;
 		author_instance?: string;
+	};
+
+	type AuthorProfile = {
+		display_name?: string;
+		avatar_url?: string;
+		username?: string;
 	};
 
 	type ReactionGroup = {
@@ -32,6 +53,7 @@
 	type ThreadNode = CommentData & {
 		children: ThreadNode[];
 		reactions: ReactionGroup[];
+		_deleted?: boolean;
 	};
 
 	let {
@@ -46,88 +68,327 @@
 		currentUserDid?: string | null;
 	} = $props();
 
+	type ManifestEndpoints = {
+		profile?: string;
+		public_emojis?: string;
+		public_comments?: string;
+		public_reactions?: string;
+	};
+
 	let threads = $state<ThreadNode[]>([]);
 	let renderedHtml = new SvelteMap<string, string>();
+	let emojiMap = $state<Record<string, string>>({});
+	let authorProfiles = new SvelteMap<string, AuthorProfile>();
+	const manifestCache = new SvelteMap<string, Promise<ManifestEndpoints>>();
 	let loading = $state(true);
+	let sortOrder = $state<'oldest' | 'newest'>('newest');
+
+	const sortedThreads = $derived.by(() => {
+		const dir = sortOrder === 'newest' ? -1 : 1;
+		return [...threads].sort(
+			(a, b) => dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+		);
+	});
+
 	let replyTo = $state<{ type: 'post' | 'comment'; did: string; id: string } | null>(null);
 	let collapsed = new SvelteSet<string>();
+	let hoveredComment = $state<string | null>(null);
+	let pickerOpen = $state(false);
+	let reactionRefresh = new SvelteMap<string, number>();
+
+	function bumpReactionRefresh(commentKey: string) {
+		reactionRefresh.set(commentKey, (reactionRefresh.get(commentKey) ?? 0) + 1);
+	}
+
+	// Fetch and cache the identity manifest for a DID.
+	// Caches the promise itself so concurrent callers share one in-flight request.
+	function getManifestEndpoints(did: string, providerBase: string): Promise<ManifestEndpoints> {
+		if (manifestCache.has(did)) return manifestCache.get(did)!;
+
+		const promise = (async (): Promise<ManifestEndpoints> => {
+			const endpoints: ManifestEndpoints = {};
+			try {
+				const base = providerBase || '';
+				const res = await fetch(`${base}/.well-known/syr/${encodeURIComponent(did)}`, {
+					headers: { Accept: 'application/json' }
+				});
+				if (res.ok) {
+					const manifest = await res.json();
+					if (manifest.endpoints) {
+						endpoints.profile = manifest.endpoints.profile;
+						endpoints.public_emojis = manifest.endpoints.public_emojis;
+						endpoints.public_comments = manifest.endpoints.public_comments;
+						endpoints.public_reactions = manifest.endpoints.public_reactions;
+					}
+				}
+			} catch {
+				/* fallback to hardcoded */
+			}
+
+			const base = providerBase || '';
+			const encoded = encodeURIComponent(did);
+			if (!endpoints.profile) endpoints.profile = `${base}/api/public/profile/${encoded}`;
+			if (!endpoints.public_emojis)
+				endpoints.public_emojis = `${base}/api/public/emojis/${encoded}`;
+			if (!endpoints.public_comments)
+				endpoints.public_comments = `${base}/api/public/comments/${encoded}`;
+			if (!endpoints.public_reactions)
+				endpoints.public_reactions = `${base}/api/public/reactions/${encoded}`;
+
+			return endpoints;
+		})();
+
+		manifestCache.set(did, promise);
+		return promise;
+	}
+	let editingKey = $state<string | null>(null);
+	let editingNode = $state<CommentData | null>(null);
+
+	function startEdit(node: CommentData) {
+		editingKey = `${node.did}:${node.local_id}`;
+		editingNode = node;
+	}
+
+	function cancelEdit() {
+		editingKey = null;
+		editingNode = null;
+	}
+
+	async function saveEdit(node: CommentData, newContent: string) {
+		try {
+			const res = await fetch(
+				`/api/comments/${encodeURIComponent(node.did)}/${encodeURIComponent(node.local_id)}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ content: newContent })
+				}
+			);
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message ?? 'Failed to update comment');
+				return;
+			}
+			toast.success('Comment updated');
+			cancelEdit();
+			loadComments();
+		} catch {
+			toast.error('Failed to update comment');
+		}
+	}
+
+	// Sign dialog state
+	let signDialogOpen = $state(false);
+	let signTarget = $state<CommentData | null>(null);
+
+	function openSignDialog(node: CommentData) {
+		signTarget = node;
+		signDialogOpen = true;
+	}
+
+	async function handleSignResult(result: {
+		content_signature: string;
+		signed_payload_json: string;
+		signing_device_public_key: string;
+	}) {
+		if (!signTarget) return;
+		try {
+			const res = await fetch(
+				`/api/comments/${encodeURIComponent(signTarget.did)}/${encodeURIComponent(signTarget.local_id)}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(result)
+				}
+			);
+			if (!res.ok) {
+				toast.error('Failed to save signature');
+				return;
+			}
+			toast.success('Comment signed');
+			signTarget = null;
+			loadComments();
+		} catch {
+			toast.error('Failed to save signature');
+		}
+	}
+
+	const profileFetchPending = new SvelteSet<string>();
+	async function fetchAuthorProfile(did: string, base: string) {
+		if (authorProfiles.has(did) || profileFetchPending.has(did)) return;
+		profileFetchPending.add(did);
+		try {
+			const endpoints = await getManifestEndpoints(did, base);
+			const res = await fetch(endpoints.profile!);
+			if (!res.ok) return;
+			const json = await res.json();
+			if (json.status === 'success' && json.data) {
+				authorProfiles.set(did, {
+					display_name: json.data.display_name,
+					avatar_url: json.data.avatar_url,
+					username: json.data.username
+				});
+			}
+		} catch {
+			/* skip */
+		}
+	}
+
+	// Load emoji map from local instance + per-author personal emojis
+	async function loadEmojiMapForAuthors(authorDids: Array<{ did: string; base: string }>) {
+		const allEmojis: Array<{ shortcode: string; url: string }> = [];
+
+		// 1. Local instance emojis (shared cache — no duplicate fetches)
+		const instanceEmojis = await getInstanceEmojis();
+		for (const e of instanceEmojis) {
+			allEmojis.push({ shortcode: e.shortcode, url: e.url });
+		}
+
+		// 2. Each author's personal emojis via manifest endpoints (shared cache per URL)
+		const emojiFetches = authorDids.map(async ({ did, base }) => {
+			try {
+				const endpoints = await getManifestEndpoints(did, base);
+				const userEmojis = await getUserEmojis(endpoints.public_emojis!);
+				for (const e of userEmojis) {
+					allEmojis.push({ shortcode: e.shortcode, url: e.url });
+				}
+			} catch {
+				/* skip */
+			}
+		});
+		await Promise.all(emojiFetches);
+
+		// Build map — first emoji for a shortcode wins, dupes get ~1, ~2 etc
+		const map: Record<string, string> = {};
+		const counts: Record<string, number> = {};
+		for (const { shortcode, url } of allEmojis) {
+			if (!(shortcode in map)) {
+				map[shortcode] = url;
+			} else {
+				const count = (counts[shortcode] ?? 1) + 1;
+				counts[shortcode] = count;
+				map[`${shortcode}~${count - 1}`] = url;
+			}
+		}
+		emojiMap = map;
+	}
 
 	async function loadComments() {
 		loading = true;
 		try {
 			const allComments: CommentData[] = [];
 
-			// Collect all DIDs to fetch from (followed + self)
 			const didsToFetch: Array<{ did: string; base: string }> = [];
-			for (const { did, providerUrl } of followedDids) {
-				didsToFetch.push({ did, base: providerUrl.replace(/\/$/, '') });
-			}
+			const seenDids = new SvelteSet<string>();
 			if (currentUserDid) {
+				seenDids.add(currentUserDid);
 				didsToFetch.push({ did: currentUserDid, base: '' });
 			}
+			for (const { did, providerUrl } of followedDids) {
+				if (!seenDids.has(did)) {
+					seenDids.add(did);
+					didsToFetch.push({ did, base: providerUrl.replace(/\/$/, '') });
+				}
+			}
 
-			// For each DID: fetch root comments on this post, then fetch
-			// replies (parent_type=comment) for any comment DIDs we find
-			const fetches = didsToFetch.map(async ({ did, base }) => {
-				const apiBase = base || '';
+			// Fetch comments related to this post from each followed DID (one request each).
+			// Uses post_did + post_id filter: returns root comments on this post
+			// plus all comment-type replies by that DID (client filters the thread tree).
+			const commentFetches = didsToFetch.map(async ({ did, base }) => {
 				const instance = base ? new URL(base).hostname : 'local';
-
+				fetchAuthorProfile(did, base);
 				try {
-					// Fetch direct comments on the post
-					const rootQs = `parent_type=post&parent_did=${encodeURIComponent(postDid)}&parent_id=${encodeURIComponent(postId)}&limit=100`;
-					const rootRes = await fetch(
-						`${apiBase}/api/public/comments/${encodeURIComponent(did)}?${rootQs}`
-					);
-					if (!rootRes.ok) return;
-					const rootJson = await rootRes.json();
-					if (rootJson.status === 'success' && rootJson.data) {
-						for (const c of rootJson.data) {
+					const endpoints = await getManifestEndpoints(did, base);
+					const qs = `post_did=${encodeURIComponent(postDid)}&post_id=${encodeURIComponent(postId)}&limit=500`;
+					const res = await fetch(`${endpoints.public_comments}?${qs}`);
+					if (!res.ok) return;
+					const json = await res.json();
+					if (json.status === 'success' && json.data) {
+						for (const c of json.data) {
 							allComments.push({ ...c, author_instance: instance });
 						}
 					}
-
-					// Also fetch this user's replies to any comment in the thread
-					// We query for comments whose parent is any comment by any DID
-					// (broad fetch, filtered client-side by tree builder)
-					const replyRes = await fetch(
-						`${apiBase}/api/public/comments/${encodeURIComponent(did)}?limit=200`
-					);
-					if (replyRes.ok) {
-						const replyJson = await replyRes.json();
-						if (replyJson.status === 'success' && replyJson.data) {
-							for (const c of replyJson.data) {
-								if (c.parent_type === 'comment') {
-									// Dedupe by did+local_id
-									const exists = allComments.some(
-										(existing) => existing.did === c.did && existing.local_id === c.local_id
-									);
-									if (!exists) {
-										allComments.push({ ...c, author_instance: instance });
-									}
-								}
-							}
-						}
-					}
 				} catch {
-					// Silently skip unreachable instances
+					/* skip */
 				}
 			});
+			await Promise.all(commentFetches);
 
-			await Promise.all(fetches);
+			// Filter to only comments in this post's thread:
+			// Walk from root comments (parent_type=post matching this post) and
+			// iteratively include replies whose parent is already in the set.
+			const rootKeys = new SvelteSet<string>();
+			const threadComments: CommentData[] = [];
 
+			// Seed with root comments on this post
+			for (const c of allComments) {
+				if (c.parent_type === 'post' && c.parent_did === postDid && c.parent_id === postId) {
+					const key = `${c.did}:${c.local_id}`;
+					if (!rootKeys.has(key)) {
+						rootKeys.add(key);
+						threadComments.push(c);
+					}
+				}
+			}
+
+			// Iteratively add replies whose parent is in the thread
+			let changed = true;
+			while (changed) {
+				changed = false;
+				for (const c of allComments) {
+					const key = `${c.did}:${c.local_id}`;
+					if (rootKeys.has(key)) continue;
+					if (c.parent_type === 'comment') {
+						const parentKey = `${c.parent_did}:${c.parent_id}`;
+						if (rootKeys.has(parentKey)) {
+							rootKeys.add(key);
+							threadComments.push(c);
+							changed = true;
+						}
+					}
+				}
+			}
+
+			// Fetch profiles for any new authors found in replies
+			for (const c of threadComments) {
+				if (!authorProfiles.has(c.did)) {
+					const entry = didsToFetch.find((d) => d.did === c.did);
+					if (entry) fetchAuthorProfile(c.did, entry.base);
+				}
+			}
+
+			allComments.length = 0;
+			allComments.push(...threadComments);
 			threads = buildThreadTree(allComments);
 
-			// Render markdown for all comments
 			if (browser && allComments.length > 0) {
+				// Collect unique author DIDs with their instance bases
+				const authorDidsMap = new SvelteMap<string, string>();
+				for (const c of allComments) {
+					if (!authorDidsMap.has(c.did)) {
+						const entry = didsToFetch.find((d) => d.did === c.did);
+						authorDidsMap.set(c.did, entry?.base ?? '');
+					}
+				}
+				const authorDidsArray = Array.from(authorDidsMap.entries()).map(([did, base]) => ({
+					did,
+					base
+				}));
+
+				// Load emojis from all author instances THEN render
+				await loadEmojiMapForAuthors(authorDidsArray);
+
 				try {
 					const { sanitizeMarkdownToHtml } = await import('$lib/client/sanitize-post-body');
 					for (const c of allComments) {
 						const key = `${c.did}:${c.local_id}`;
-						const html = await sanitizeMarkdownToHtml(c.content);
+						let html = await sanitizeMarkdownToHtml(c.content);
+						html = renderStickersInHtml(html, emojiMap);
+						html = renderEmojisInHtml(html, emojiMap);
 						renderedHtml.set(key, html);
 					}
 				} catch {
-					// Markdown rendering unavailable — will show raw text
+					/* raw text fallback */
 				}
 			}
 		} finally {
@@ -135,17 +396,36 @@
 		}
 	}
 
+	function makeDeletedPlaceholder(parentDid: string, parentId: string): ThreadNode {
+		return {
+			did: parentDid,
+			local_id: parentId,
+			parent_type: 'post',
+			parent_did: postDid,
+			parent_id: postId,
+			content: '[deleted]',
+			visibility: 'public',
+			status: 'completed',
+			created_at: new Date(0).toISOString(),
+			author_instance: undefined,
+			children: [],
+			reactions: [],
+			_deleted: true
+		} as ThreadNode & { _deleted?: boolean };
+	}
+
 	function buildThreadTree(comments: CommentData[]): ThreadNode[] {
 		const nodes = new SvelteMap<string, ThreadNode>();
 		const roots: ThreadNode[] = [];
 
-		// Create nodes
 		for (const c of comments) {
 			const key = `${c.did}:${c.local_id}`;
 			nodes.set(key, { ...c, children: [], reactions: [] });
 		}
 
-		// Build tree — root comments are those directly on this post
+		// Collect orphaned comment-parented nodes by their missing parent key
+		const orphansByParent = new SvelteMap<string, ThreadNode[]>();
+
 		for (const node of nodes.values()) {
 			if (node.parent_type === 'post' && node.parent_did === postDid && node.parent_id === postId) {
 				roots.push(node);
@@ -155,14 +435,29 @@
 				if (parent) {
 					parent.children.push(node);
 				} else {
-					// Orphan — parent not found, show as root
-					roots.push(node);
+					// Parent was deleted — group under a placeholder
+					if (!orphansByParent.has(parentKey)) {
+						orphansByParent.set(parentKey, []);
+					}
+					orphansByParent.get(parentKey)!.push(node);
 				}
 			}
 		}
 
-		// Sort by created_at ascending
-		roots.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+		// Create [deleted] placeholder nodes for each missing parent
+		for (const [parentKey, orphans] of orphansByParent) {
+			const [pDid, pId] = parentKey.split(':');
+			if (!pDid || !pId) continue;
+			const placeholder = makeDeletedPlaceholder(pDid, pId);
+			placeholder.children = orphans;
+			roots.push(placeholder);
+		}
+
+		const dir = sortOrder === 'newest' ? -1 : 1;
+		roots.sort(
+			(a, b) => dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+		);
+		// Children always oldest-first within a thread
 		for (const node of nodes.values()) {
 			node.children.sort(
 				(a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -191,6 +486,32 @@
 		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
+	function getAuthorDisplay(node: CommentData): { name: string; avatar?: string } {
+		const profile = authorProfiles.get(node.did);
+		const instance =
+			node.author_instance && node.author_instance !== 'local' ? `@${node.author_instance}` : '';
+		if (profile?.username) {
+			return {
+				name: `${profile.username}${instance}`,
+				avatar: profile.avatar_url
+			};
+		}
+		if (profile?.display_name) {
+			return {
+				name: `${profile.display_name}${instance}`,
+				avatar: profile.avatar_url
+			};
+		}
+		const shortDid = node.did.length > 24 ? node.did.slice(8, 18) + '...' : node.did.slice(8);
+		return { name: `${shortDid}${instance}` };
+	}
+
+	function isSigned(node: CommentData): boolean {
+		return (
+			!!node.content_signature && !!node.signed_payload_json && !!node.signing_device_public_key
+		);
+	}
+
 	async function deleteComment(did: string, localId: string) {
 		try {
 			const res = await fetch(
@@ -208,8 +529,36 @@
 		}
 	}
 
+	async function toggleCommentReaction(
+		commentDid: string,
+		commentLocalId: string,
+		kind: string,
+		value: string,
+		imageUrl?: string
+	) {
+		try {
+			await fetch('/api/reactions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					parent_type: 'comment',
+					parent_did: commentDid,
+					parent_id: commentLocalId,
+					kind,
+					value,
+					...(imageUrl ? { image_url: imageUrl } : {})
+				})
+			});
+			bumpReactionRefresh(`${commentDid}:${commentLocalId}`);
+		} catch {
+			/* skip */
+		}
+	}
+
 	$effect(() => {
-		if (postDid && postId) loadComments();
+		if (postDid && postId) {
+			loadComments();
+		}
 	});
 </script>
 
@@ -217,76 +566,174 @@
 	{@const key = `${node.did}:${node.local_id}`}
 	{@const isCollapsed = collapsed.has(key)}
 	{@const isOwn = node.did === currentUserDid}
-	<div class="group" style="margin-left: {Math.min(depth * 24, 96)}px">
-		<div
-			class="rounded-lg border-l-2 border-transparent py-2 pr-2 pl-3 hover:border-primary/30 hover:bg-muted/30"
-		>
-			<!-- Header -->
-			<div class="flex items-center gap-2 text-xs text-muted-foreground">
-				{#if node.children.length > 0}
-					<button type="button" class="p-0.5" onclick={() => toggleCollapse(key)}>
-						{#if isCollapsed}
-							<ChevronRight class="h-3 w-3" />
-						{:else}
-							<ChevronDown class="h-3 w-3" />
-						{/if}
-					</button>
-				{/if}
-				<span class="font-medium text-foreground">
-					{node.author_username ?? node.did.slice(0, 20) + '...'}
-				</span>
-				{#if node.author_instance && node.author_instance !== 'local'}
-					<span class="text-muted-foreground">@{node.author_instance}</span>
-				{/if}
-				<span>{formatTime(node.created_at)}</span>
-				<div class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
-					<button
-						type="button"
-						class="rounded p-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-						onclick={() => startReply('comment', node.did, node.local_id)}
-					>
-						Reply
-					</button>
-					{#if isOwn}
+	{@const author = getAuthorDisplay(node)}
+	{@const signed = isSigned(node)}
+	{@const isDeleted = node._deleted === true}
+	<div style="margin-left: {Math.min(depth * 20, 80)}px">
+		{#if isDeleted}
+			<div class="rounded py-1.5 pr-1 pl-2 opacity-50">
+				<div class="flex items-center gap-1.5 text-xs">
+					{#if node.children.length > 0}
 						<button
 							type="button"
-							class="rounded p-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-							onclick={() => deleteComment(node.did, node.local_id)}
+							class="p-0.5 text-muted-foreground"
+							onclick={() => toggleCollapse(key)}
 						>
-							<Trash2 class="h-3 w-3" />
+							{#if isCollapsed}
+								<ChevronRight class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
 						</button>
 					{/if}
+					<div
+						class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground"
+					>
+						?
+					</div>
+					<span class="text-muted-foreground italic">[deleted]</span>
 				</div>
+				<div class="mt-0.5 pl-7 text-sm text-muted-foreground italic">[deleted]</div>
 			</div>
-
-			<!-- Content -->
-			{#if !isCollapsed}
-				{@const htmlContent = renderedHtml.get(key)}
-				<div class="prose prose-sm dark:prose-invert mt-1 max-w-none text-sm">
-					{#if htmlContent}
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html htmlContent}
+			{#if !isCollapsed && node.children.length > 0}
+				{#each node.children as child (child.did + ':' + child.local_id)}
+					{@render commentNode(child, depth + 1)}
+				{/each}
+			{/if}
+		{:else}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="rounded py-1.5 pr-1 pl-2 hover:bg-muted/40"
+				onmouseenter={(e) => {
+					e.stopPropagation();
+					hoveredComment = key;
+				}}
+				onmouseleave={() => {
+					if (hoveredComment === key && !pickerOpen) hoveredComment = null;
+				}}
+			>
+				<div class="flex items-center gap-1.5 text-xs">
+					{#if node.children.length > 0}
+						<button
+							type="button"
+							class="p-0.5 text-muted-foreground"
+							onclick={() => toggleCollapse(key)}
+						>
+							{#if isCollapsed}
+								<ChevronRight class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+					{/if}
+					<!-- Avatar -->
+					{#if author.avatar}
+						<img src={author.avatar} alt="" class="h-7 w-7 rounded-full object-cover" />
 					{:else}
-						{node.content}
+						<div
+							class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground uppercase"
+						>
+							{node.did.slice(8, 10)}
+						</div>
+					{/if}
+					<span class="font-medium text-foreground">{author.name}</span>
+					{#if signed}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<ShieldCheck class="h-3 w-3 text-green-500" />
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>Cryptographically signed by the author</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<span class="text-muted-foreground">{formatTime(node.created_at)}</span>
+					{#if hoveredComment === key}
+						<div class="ml-auto flex items-center gap-1">
+							<EmojiPicker
+								onSelect={(emoji) => {
+									const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
+									toggleCommentReaction(node.did, node.local_id, kind, emoji.shortcode, emoji.url);
+								}}
+								triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+								onOpenChange={(o) => (pickerOpen = o)}
+							/>
+							<button
+								type="button"
+								class="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+								onclick={() => startReply('comment', node.did, node.local_id)}
+							>
+								Reply
+							</button>
+							{#if isOwn}
+								<button
+									type="button"
+									class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+									title="Edit"
+									onclick={() => startEdit(node)}
+								>
+									<Pencil class="h-3 w-3" />
+								</button>
+							{/if}
+							{#if isOwn && !signed}
+								<button
+									type="button"
+									class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+									title="Sign this comment"
+									onclick={() => openSignDialog(node)}
+								>
+									<KeyRound class="h-3 w-3" />
+								</button>
+							{/if}
+							{#if isOwn}
+								<button
+									type="button"
+									class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+									onclick={() => deleteComment(node.did, node.local_id)}
+								>
+									<Trash2 class="h-3 w-3" />
+								</button>
+							{/if}
+						</div>
 					{/if}
 				</div>
 
-				<!-- Reactions -->
-				{#if node.reactions.length > 0}
-					<div class="mt-1.5">
-						<ReactionBar
-							parentType="comment"
-							parentDid={node.did}
-							parentId={node.local_id}
-							reactions={node.reactions}
-							onToggle={loadComments}
+				{#if editingKey === key && editingNode}
+					<div class="mt-1 pl-7">
+						<CommentComposer
+							mode="edit"
+							initialContent={editingNode.content}
+							placeholder="Edit comment..."
+							onSubmit={(newContent) => saveEdit(node, newContent)}
+							onCancel={cancelEdit}
 						/>
+					</div>
+				{:else}
+					{@const htmlContent = renderedHtml.get(key)}
+					<div class="prose prose-sm dark:prose-invert mt-0.5 max-w-none pl-7 text-sm">
+						{#if htmlContent}
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							{@html htmlContent}
+						{:else}
+							{node.content}
+						{/if}
 					</div>
 				{/if}
 
-				<!-- Inline reply composer -->
+				<div class="mt-1 pl-7">
+					<ReactionBar
+						parentType="comment"
+						parentDid={node.did}
+						parentId={node.local_id}
+						{followedDids}
+						{currentUserDid}
+						showPicker={false}
+						refreshTrigger={reactionRefresh.get(key) ?? 0}
+					/>
+				</div>
+
 				{#if replyTo?.type === 'comment' && replyTo.did === node.did && replyTo.id === node.local_id}
-					<div class="mt-2">
+					<div class="mt-2 pl-7">
 						<CommentComposer
 							parentType="comment"
 							parentDid={node.did}
@@ -297,42 +744,39 @@
 								loadComments();
 							}}
 						/>
-						<Button variant="ghost" size="sm" class="mt-1" onclick={() => (replyTo = null)}
+						<Button variant="ghost" size="sm" class="mt-1 text-xs" onclick={() => (replyTo = null)}
 							>Cancel</Button
 						>
 					</div>
 				{/if}
-			{/if}
-		</div>
+			</div>
 
-		<!-- Children -->
-		{#if !isCollapsed && node.children.length > 0}
-			{#each node.children as child (child.did + ':' + child.local_id)}
-				{@render commentNode(child, depth + 1)}
-			{/each}
+			{#if !isCollapsed && node.children.length > 0}
+				{#each node.children as child (child.did + ':' + child.local_id)}
+					{@render commentNode(child, depth + 1)}
+				{/each}
+			{/if}
 		{/if}
 	</div>
 {/snippet}
 
-<div class="space-y-4">
-	<h3 class="flex items-center gap-2 text-sm font-semibold">
-		<MessageSquare class="h-4 w-4" />
-		Comments
-	</h3>
+<div class="space-y-3">
+	<div class="flex items-center justify-between">
+		<h3 class="flex items-center gap-2 text-sm font-semibold">
+			<MessageSquare class="h-4 w-4" />
+			Comments
+		</h3>
+		{#if threads.length > 1}
+			<button
+				type="button"
+				class="text-xs text-muted-foreground hover:text-foreground"
+				onclick={() => (sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest')}
+			>
+				{sortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
+			</button>
+		{/if}
+	</div>
 
-	{#if loading}
-		<p class="py-4 text-center text-sm text-muted-foreground">Loading comments...</p>
-	{:else if threads.length === 0}
-		<p class="py-4 text-center text-sm text-muted-foreground">
-			No comments yet. Be the first to comment!
-		</p>
-	{:else}
-		{#each threads as thread (thread.did + ':' + thread.local_id)}
-			{@render commentNode(thread, 0)}
-		{/each}
-	{/if}
-
-	<!-- Root-level composer -->
 	{#if currentUserDid}
 		{#if replyTo === null || replyTo.type === 'post'}
 			<CommentComposer
@@ -343,6 +787,32 @@
 			/>
 		{/if}
 	{:else}
-		<p class="py-2 text-center text-sm text-muted-foreground">Sign in to comment</p>
+		<p class="py-1 text-center text-xs text-muted-foreground">Sign in to comment</p>
+	{/if}
+
+	{#if loading}
+		<p class="py-2 text-center text-sm text-muted-foreground">Loading comments...</p>
+	{:else if threads.length === 0}
+		<p class="py-2 text-center text-sm text-muted-foreground">No comments yet.</p>
+	{:else}
+		{#each sortedThreads as thread (thread.did + ':' + thread.local_id)}
+			{@render commentNode(thread, 0)}
+		{/each}
 	{/if}
 </div>
+
+{#if signTarget}
+	<CommentSignDialog
+		bind:open={signDialogOpen}
+		commentDid={signTarget.did}
+		commentLocalId={signTarget.local_id}
+		commentContent={signTarget.content}
+		parentType={signTarget.parent_type}
+		parentDid={signTarget.parent_did}
+		parentId={signTarget.parent_id}
+		visibility={signTarget.visibility}
+		status={signTarget.status}
+		createdAtIso={signTarget.created_at}
+		onSigned={handleSignResult}
+	/>
+{/if}

@@ -47,7 +47,7 @@ export const EmojiSchema = BaseEntitySchema.extend({
 		.min(2)
 		.max(32)
 		.regex(/^[a-zA-Z0-9_]+$/, 'Shortcode must be alphanumeric with underscores'),
-	url: z.string().url().optional(),
+	url: z.string().url(),
 	mime_type: z.string().min(1),
 	size: z.number().int().nonnegative(),
 	is_sticker: z.boolean().default(false),
@@ -66,8 +66,7 @@ export const EmojiCreateSchema = EmojiSchema.omit({
 	updated_at: true,
 	author_id: true,
 	did: true,
-	local_id: true,
-	url: true
+	local_id: true
 });
 
 export type EmojiCreate = z.infer<typeof EmojiCreateSchema>;

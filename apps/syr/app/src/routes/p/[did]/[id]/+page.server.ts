@@ -3,12 +3,14 @@ import type { PageServerLoad } from './$types';
 import { isValidSyrDid } from '@syr-is/did';
 import { postController } from '$lib/controllers/post.controller';
 import { resolveMediaUrlMetadata } from '$lib/utils/post-media.server';
-import { extractDid, extractLocalId } from '@syr-is/types';
+import { extractDid, extractLocalId, stringToRecordId } from '@syr-is/types';
+import { followRepository } from '$lib/repositories/follow.repository';
+import { userRepository } from '$lib/repositories/user.repository';
 
 /**
  * Public read-only post page (no login). Linked from /u/… profiles.
  */
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	let did: string;
 	let localId: string;
 	try {
@@ -42,9 +44,31 @@ export const load: PageServerLoad = async ({ params }) => {
 			? await resolveMediaUrlMetadata(post.media_urls)
 			: { mimeTypes: {}, filenames: {} };
 
+	// Load user context for comments/reactions if logged in
+	let currentUserDid: string | null = null;
+	let followedDids: Array<{ did: string; providerUrl: string }> = [];
+	if (locals.user) {
+		try {
+			const user = await userRepository.findById(locals.user.id);
+			currentUserDid = user?.did ?? null;
+			const uid = user?.id ?? stringToRecordId.decode(locals.user.id);
+			const follows = await followRepository.findByFollower(uid);
+			followedDids = follows
+				.filter((f) => f.followed_provider_url)
+				.map((f) => ({
+					did: f.followed_did,
+					providerUrl: f.followed_provider_url!
+				}));
+		} catch {
+			/* non-critical */
+		}
+	}
+
 	return {
 		post: serializedPost,
 		mediaUrlMimeTypes,
-		mediaUrlFilenames
+		mediaUrlFilenames,
+		currentUserDid,
+		followedDids
 	};
 };

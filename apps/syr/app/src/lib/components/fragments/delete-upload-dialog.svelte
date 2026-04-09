@@ -9,11 +9,14 @@
 	let {
 		upload = null,
 		open = $bindable(false),
-		onSuccess
+		onSuccess,
+		adminMediaMode = false
 	}: {
 		upload?: UploadWithCompositeId | null;
 		open?: boolean;
 		onSuccess?: () => void;
+		/** When true, delete via /api/admin/media instead of user uploads API */
+		adminMediaMode?: boolean;
 	} = $props();
 
 	let deleting = $state(false);
@@ -23,7 +26,11 @@
 
 		deleting = true;
 		try {
-			const response = await fetch(getUploadApiUrl(upload), {
+			const deleteUrl =
+				adminMediaMode && upload.did && upload.local_id
+					? `/api/admin/media/${encodeURIComponent(upload.did)}/${encodeURIComponent(upload.local_id)}`
+					: getUploadApiUrl(upload);
+			const response = await fetch(deleteUrl, {
 				method: 'DELETE'
 			});
 

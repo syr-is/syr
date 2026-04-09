@@ -13,6 +13,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const parentType = url.searchParams.get('parent_type') ?? undefined;
 	const parentDid = url.searchParams.get('parent_did') ?? undefined;
 	const parentId = url.searchParams.get('parent_id') ?? undefined;
+	const postDid = url.searchParams.get('post_did') ?? undefined;
+	const postId = url.searchParams.get('post_id') ?? undefined;
 	const limit = Math.min(
 		100,
 		Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10) || 50)
@@ -23,6 +25,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		parentType,
 		parentDid,
 		parentId,
+		postDid,
+		postId,
 		limit,
 		offset
 	});

@@ -1,71 +1,145 @@
 <script lang="ts">
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
+	import { Progress } from '@syr-is/ui/progress';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import PersonaDirectoryRow from '$lib/components/fragments/persona-directory-row.svelte';
+	import { Loader2 } from 'lucide-svelte';
+	import { SvelteMap, SvelteURLSearchParams } from 'svelte/reactivity';
+
+	type DirectoryRow = {
+		did: string;
+		username: string;
+		displayName: string;
+		provider: string;
+		updatedAt: string;
+		registryUrl: string;
+	};
 
 	let q = $state('');
 	let loading = $state(false);
 	let searchError = $state<string | null>(null);
-	let results = $state<
-		Array<{
-			did: string;
-			username: string;
-			displayName: string;
-			provider: string;
-			registryUrl: string;
-			avatarUrl: string | null;
-			bannerUrl: string | null;
-		}>
-	>([]);
 	let directoryHint = $state<string | null>(null);
 
-	let activeSearchController: AbortController | null = null;
+	let totalRegistries = $state(0);
+	let completedRegistries = $state(0);
+
+	/** Internal map keyed by DID for dedup — not reactive. */
+	let mergedMap = new SvelteMap<string, DirectoryRow>();
+	/** Reactive sorted result list, rebuilt on each registry response. */
+	let results = $state<DirectoryRow[]>([]);
+
+	let activeAbort: AbortController | null = null;
+
+	function parseUpdatedAtMs(iso: string): number {
+		const t = Date.parse(iso);
+		return Number.isNaN(t) ? 0 : t;
+	}
+
+	function rebuildResults() {
+		results = [...mergedMap.values()].sort((a, b) => {
+			const tb = parseUpdatedAtMs(b.updatedAt);
+			const ta = parseUpdatedAtMs(a.updatedAt);
+			if (tb !== ta) return tb - ta;
+			return a.did.localeCompare(b.did);
+		});
+	}
 
 	async function runSearch() {
-		activeSearchController?.abort();
+		activeAbort?.abort();
 		const ac = new AbortController();
-		activeSearchController = ac;
+		activeAbort = ac;
+
 		loading = true;
 		searchError = null;
 		directoryHint = null;
+		totalRegistries = 0;
+		completedRegistries = 0;
+		mergedMap = new SvelteMap();
+		results = [];
+
 		try {
-			const trimmed = q.trim();
-			const qs = trimmed ? `?q=${encodeURIComponent(trimmed)}` : '';
-			const res = await fetch(`${resolve('/api/search/directory')}${qs}`, { signal: ac.signal });
-			if (!res.ok) {
-				results = [];
-				let msg = 'Search failed';
-				try {
-					const j = (await res.json()) as { error?: { message?: string }; message?: string };
-					msg = j.error?.message ?? j.message ?? msg;
-				} catch {
-					/* non-JSON body */
-				}
-				searchError = msg;
+			// 1. Fetch registry list
+			const regRes = await fetch(resolve('/api/user/discovery-registries'), {
+				signal: ac.signal
+			});
+			if (!regRes.ok) {
+				searchError = 'Failed to load discovery registries';
+				loading = false;
 				return;
 			}
-			const j = (await res.json()) as {
-				data?: typeof results;
-				meta?: { message?: string };
-			};
-			results = j.data ?? [];
-			directoryHint =
-				results.length === 0 && j.meta?.message?.trim() ? j.meta.message.trim() : null;
+			const regBody = (await regRes.json()) as { data?: { registry_url: string }[] };
+			const registries = regBody.data ?? [];
+			totalRegistries = registries.length;
+
+			if (registries.length === 0) {
+				directoryHint =
+					'No discovery registries configured. Add registries under Settings → Discovery or ask your admin to add instance-wide registries.';
+				loading = false;
+				return;
+			}
+
+			// 2. Query each registry in parallel via proxy
+			const trimmed = q.trim();
+			await Promise.allSettled(
+				registries.map(async (reg) => {
+					if (ac.signal.aborted) return;
+					try {
+						const qs = new SvelteURLSearchParams();
+						qs.set('registryUrl', reg.registry_url);
+						if (trimmed) qs.set('q', trimmed);
+						qs.set('limit', '50');
+
+						const res = await fetch(`${resolve('/api/search/directory')}?${qs.toString()}`, {
+							signal: ac.signal
+						});
+						if (!res.ok) return;
+
+						const body = (await res.json()) as { data?: DirectoryRow[] };
+						const rows = body.data ?? [];
+
+						for (const row of rows) {
+							const existing = mergedMap.get(row.did);
+							if (
+								!existing ||
+								parseUpdatedAtMs(row.updatedAt) > parseUpdatedAtMs(existing.updatedAt)
+							) {
+								mergedMap.set(row.did, row);
+							}
+						}
+						rebuildResults();
+					} catch (err) {
+						if (err instanceof DOMException && err.name === 'AbortError') return;
+						console.debug('Registry query failed', { registry: reg.registry_url, err });
+					} finally {
+						if (!ac.signal.aborted) {
+							completedRegistries++;
+						}
+					}
+				})
+			);
+
+			if (!ac.signal.aborted && results.length === 0 && !searchError) {
+				directoryHint = trimmed
+					? 'No results found. Try a different search term.'
+					: 'No users found in the directory.';
+			}
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error(err);
-			results = [];
-			directoryHint = null;
 			searchError = err instanceof Error ? err.message : 'Network error';
 		} finally {
-			if (activeSearchController === ac) {
-				activeSearchController = null;
+			if (activeAbort === ac) {
+				activeAbort = null;
 				loading = false;
 			}
 		}
 	}
+
+	let progressPercent = $derived(
+		totalRegistries > 0 ? Math.round((completedRegistries / totalRegistries) * 100) : 0
+	);
 </script>
 
 <div class="mx-auto max-w-3xl space-y-6 p-4">
@@ -92,6 +166,19 @@
 		<Button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
 	</form>
 
+	{#if loading && totalRegistries > 0}
+		<div class="space-y-2">
+			<div class="flex items-center gap-2 text-sm text-muted-foreground">
+				<Loader2 class="h-4 w-4 animate-spin" />
+				<span>
+					Searching {completedRegistries} of {totalRegistries}
+					{totalRegistries === 1 ? 'registry' : 'registries'}…
+				</span>
+			</div>
+			<Progress value={progressPercent} class="h-1.5" />
+		</div>
+	{/if}
+
 	{#if searchError}
 		<p class="text-sm text-destructive" role="alert" aria-live="assertive">{searchError}</p>
 	{/if}
@@ -100,18 +187,18 @@
 		<p class="text-sm text-muted-foreground">{directoryHint}</p>
 	{/if}
 
-	<ul class="space-y-4">
-		{#each results as row (row.did)}
-			<li>
-				<PersonaDirectoryRow
-					displayName={row.displayName}
-					username={row.username}
-					did={row.did}
-					avatarUrl={row.avatarUrl}
-					bannerUrl={row.bannerUrl}
-					onOpen={() => goto(resolve(`/u/${encodeURIComponent(row.did)}`))}
-				/>
-			</li>
-		{/each}
-	</ul>
+	{#if results.length > 0}
+		<ul class="space-y-4">
+			{#each results as row (row.did)}
+				<li>
+					<PersonaDirectoryRow
+						displayName={row.displayName}
+						username={row.username}
+						did={row.did}
+						onOpen={() => goto(resolve(`/u/${encodeURIComponent(row.did)}`))}
+					/>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 </div>

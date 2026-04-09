@@ -166,3 +166,25 @@ When a viewer on instance A sees a comment from instance B that contains a GIF U
 3. Content trust rules apply: the viewer's instance may require consent before loading remote media.
 
 The GIF picker for **composing** always uses the **local** instance's GIF library and the user's personal GIFs. Remote instance GIF browsing is not supported in v1 (only viewing GIFs already embedded in content).
+
+### 7.1 Manifest discovery
+
+GIF catalog endpoints are advertised in the per-identity manifest at `/.well-known/syr/&#123;did&#125;`:
+
+```json
+{
+	"endpoints": {
+		"public_gifs": "https://instance.example/api/public/gifs/did:syr:z6Mk..."
+	}
+}
+```
+
+And in the instance manifest at `/.well-known/syr`:
+
+```json
+{
+	"api": {
+		"public_gifs": "https://instance.example/api/public/gifs"
+	}
+}
+```

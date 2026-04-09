@@ -2,16 +2,20 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { emojiController } from '$lib/controllers/emoji.controller';
-import { emojiRepository } from '$lib/repositories/emoji.repository';
-import { EmojiCreateRequestSchema, extractDid, extractLocalId } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
+import { EmojiCreateRequestSchema, extractDid, extractLocalId } from '@syr-is/types';
 
-export const GET: RequestHandler = async ({ params, url, locals }) => {
+function requireAdmin(locals: { user?: { role: string } }) {
 	if (!locals.user) throw error(401, { code: 'UNAUTHORIZED', message: 'Authentication required' });
 	if (locals.user.role !== 'ADMIN') throw error(403, { code: 'FORBIDDEN', message: 'Admin only' });
+}
 
-	const pack = await emojiController.getPackBySlug(params.slug);
-	if (!pack) throw error(404, { code: 'NOT_FOUND', message: 'Pack not found' });
+/**
+ * GET /api/admin/emojis
+ * List all instance-scope emojis (flat, no packs).
+ */
+export const GET: RequestHandler = async ({ url, locals }) => {
+	requireAdmin(locals);
 
 	const limit = Math.min(
 		200,
@@ -19,7 +23,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 	);
 	const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
 
-	const { data, total } = await emojiRepository.findByPackSlug(params.slug, { limit, offset });
+	const { data, total } = await emojiController.getInstanceCatalog();
 
 	const serialized = data.map((e) => ({
 		...e,
@@ -31,29 +35,29 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 	return json({
 		status: 'success',
-		data: serialized,
-		pagination: { limit, offset, total, has_more: offset + data.length < total }
+		data: serialized.slice(offset, offset + limit),
+		pagination: { limit, offset, total, has_more: offset + limit < total }
 	});
 };
 
-export const POST: RequestHandler = async ({ params, request, locals }) => {
-	if (!locals.user) throw error(401, { code: 'UNAUTHORIZED', message: 'Authentication required' });
-	if (locals.user.role !== 'ADMIN') throw error(403, { code: 'FORBIDDEN', message: 'Admin only' });
+/**
+ * POST /api/admin/emojis
+ * Create an instance-scope emoji (flat, no pack).
+ */
+export const POST: RequestHandler = async ({ request, locals }) => {
+	requireAdmin(locals);
 
-	const pack = await emojiController.getPackBySlug(params.slug);
-	if (!pack) throw error(404, { code: 'NOT_FOUND', message: 'Pack not found' });
-
-	const user = await userRepository.findById(locals.user.id);
-	if (!user || !user.did)
+	const user = await userRepository.findById(locals.user!.id);
+	if (!user || !user.did) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Admin must have an identity' });
+	}
 
 	try {
 		const parsed = EmojiCreateRequestSchema.parse(await request.json());
 		const { emoji_local_id, ...data } = parsed;
-
 		const result = await emojiController.createEmoji(
 			user,
-			{ ...data, scope: 'instance', pack_slug: params.slug },
+			{ ...data, scope: 'instance' },
 			{ localId: emoji_local_id }
 		);
 
@@ -71,13 +75,14 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			{ status: 201 }
 		);
 	} catch (err) {
-		if (err instanceof z.ZodError)
+		if (err instanceof z.ZodError) {
 			throw error(400, {
 				code: 'VALIDATION_ERROR',
 				message: 'Invalid emoji data',
 				details: z.treeifyError(err)
 			});
+		}
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to add emoji to pack' });
+		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create instance emoji' });
 	}
 };

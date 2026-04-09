@@ -1,38 +1,8 @@
-import { emojiPackRepository } from '$lib/repositories/emoji-pack.repository';
 import { emojiRepository } from '$lib/repositories/emoji.repository';
-import {
-	type EmojiPackCreate,
-	type EmojiPackUpdate,
-	type EmojiCreate,
-	type QueryOptions,
-	type User
-} from '@syr-is/types';
+import { type EmojiCreate, type QueryOptions, type User } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
 
 export class EmojiController {
-	async createPack(user: User, data: EmojiPackCreate) {
-		if (!user.did) {
-			throw new Error('User must have an identity (DID) to create emoji packs');
-		}
-		return emojiPackRepository.create({ ...data, created_by: user.id });
-	}
-
-	async updatePack(packId: RecordId, data: EmojiPackUpdate) {
-		return emojiPackRepository.merge(packId, { ...data, updated_at: new Date() });
-	}
-
-	async deletePack(packId: RecordId) {
-		await emojiPackRepository.delete(packId);
-	}
-
-	async getPacks() {
-		return emojiPackRepository.findAll({ limit: 100, offset: 0 });
-	}
-
-	async getPackBySlug(slug: string) {
-		return emojiPackRepository.findBySlug(slug);
-	}
-
 	async createEmoji(user: User, data: EmojiCreate, opts?: { localId?: string }) {
 		if (!user.did) {
 			throw new Error('User must have an identity (DID) to create emojis');

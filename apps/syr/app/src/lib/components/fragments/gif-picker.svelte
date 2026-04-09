@@ -32,6 +32,8 @@
 	let hasLoaded = false;
 
 	async function loadGifs(query?: string) {
+		const isFirstLoad = !hasLoaded;
+		hasLoaded = true;
 		loading = true;
 		try {
 			const qs = query?.trim()
@@ -48,7 +50,8 @@
 				/* instance GIFs unavailable */
 			}
 
-			if (!hasLoaded) {
+			// Load user GIFs on first open (not on search refreshes)
+			if (isFirstLoad) {
 				try {
 					const userRes = await fetch('/api/gifs?limit=30');
 					if (userRes.ok) {
@@ -65,10 +68,7 @@
 	}
 
 	$effect(() => {
-		if (open && !hasLoaded) {
-			hasLoaded = true;
-			loadGifs();
-		}
+		if (open && !hasLoaded) loadGifs();
 	});
 
 	function handleSearch(e: Event) {

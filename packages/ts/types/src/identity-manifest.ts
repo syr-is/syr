@@ -20,7 +20,11 @@ export const SyrIdentityManifestSchema = z.object({
 		stories: z.string().url(),
 		uploads: z.string().url(),
 		did_document: z.string().url(),
-		public_following: z.string().url().optional()
+		public_following: z.string().url().optional(),
+		public_emojis: z.string().url().optional(),
+		public_gifs: z.string().url().optional(),
+		public_comments: z.string().url().optional(),
+		public_reactions: z.string().url().optional()
 	}),
 	web_profile: z.string().url()
 });
@@ -50,7 +54,9 @@ export const SyrInstanceManifestSchema = z.object({
 		public_posts: z.string().url(),
 		public_stories: z.string().url(),
 		public_uploads: z.string().url(),
-		public_following: z.string().url().optional()
+		public_following: z.string().url().optional(),
+		public_emojis: z.string().url().optional(),
+		public_gifs: z.string().url().optional()
 	}),
 	identity_manifest_template: httpUrlTemplate,
 	syner: z

@@ -11,6 +11,7 @@
 		mimeType = null,
 		fileSize = 0,
 		isSticker = false,
+		scope = 'user',
 		onSuccess
 	}: {
 		open?: boolean;
@@ -18,6 +19,8 @@
 		mimeType?: string | null;
 		fileSize?: number;
 		isSticker?: boolean;
+		/** 'user' uses /api/emojis, 'instance' uses /api/admin/emojis */
+		scope?: 'user' | 'instance';
 		onSuccess?: () => void;
 	} = $props();
 
@@ -32,13 +35,15 @@
 		if (!shortcode.trim() || !imageUrl) return;
 		saving = true;
 		try {
-			const res = await fetch('/api/emojis', {
+			const endpoint = scope === 'instance' ? '/api/admin/emojis' : '/api/emojis';
+			const res = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					shortcode: shortcode.trim().toLowerCase(),
+					url: imageUrl,
 					is_sticker: isSticker,
-					scope: 'user',
+					scope,
 					mime_type: mimeType ?? 'image/png',
 					size: fileSize
 				})

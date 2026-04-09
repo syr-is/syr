@@ -21,7 +21,9 @@ export const GET: RequestHandler = async () => {
 			public_posts: `${base}/api/public/posts`,
 			public_stories: `${base}/api/public/stories`,
 			public_uploads: `${base}/api/public/uploads`,
-			public_following: `${base}/api/public/following`
+			public_following: `${base}/api/public/following`,
+			public_emojis: `${base}/api/public/emojis`,
+			public_gifs: `${base}/api/public/gifs`
 		},
 		identity_manifest_template: `${base}/.well-known/syr/{did}`,
 		syner: {

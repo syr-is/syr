@@ -479,7 +479,7 @@
 	}
 </script>
 
-<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-6 sm:py-8">
+<div class="container mx-auto flex h-full max-w-4xl flex-col gap-6 px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -700,6 +700,18 @@
 			{:else}
 				<p class="text-muted-foreground">No content available.</p>
 			{/if}
+
+			{#if data.post.did && data.post.local_id}
+				<div class="mt-4 border-t pt-3">
+					<ReactionBar
+						parentType="post"
+						parentDid={data.post.did}
+						parentId={data.post.local_id}
+						followedDids={data.followedDids ?? []}
+						currentUserDid={data.user?.did ?? null}
+					/>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 
@@ -722,20 +734,13 @@
 		onDismiss={handleSigilDismiss}
 	/>
 
-	<!-- Reactions & Comments -->
-	{#if data.post.did && data.post.local_id && data.post.visibility === 'public' && data.post.status === 'completed'}
-		<Card.Root>
-			<Card.Content class="space-y-6 py-4">
-				<ReactionBar parentType="post" parentDid={data.post.did} parentId={data.post.local_id} />
-				<div class="border-t pt-4">
-					<CommentThread
-						postDid={data.post.did}
-						postId={data.post.local_id}
-						followedDids={data.followedDids ?? []}
-						currentUserDid={data.user?.did ?? null}
-					/>
-				</div>
-			</Card.Content>
-		</Card.Root>
+	<!-- Comments -->
+	{#if data.post.did && data.post.local_id}
+		<CommentThread
+			postDid={data.post.did}
+			postId={data.post.local_id}
+			followedDids={data.followedDids ?? []}
+			currentUserDid={data.user?.did ?? null}
+		/>
 	{/if}
 </div>

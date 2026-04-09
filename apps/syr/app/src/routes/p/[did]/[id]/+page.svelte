@@ -8,6 +8,8 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from 'lucide-svelte';
+	import CommentThread from '$lib/components/fragments/comment-thread.svelte';
+	import ReactionBar from '$lib/components/fragments/reaction-bar.svelte';
 	import type { PageData } from './$types';
 	import type { Post } from '@syr-is/types';
 
@@ -51,7 +53,7 @@
 	});
 </script>
 
-<div class="container mx-auto max-w-4xl px-4 py-6 sm:py-8">
+<div class="container mx-auto max-w-4xl space-y-6 px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -122,6 +124,27 @@
 			{:else}
 				<p class="text-muted-foreground">No content.</p>
 			{/if}
+
+			{#if data.post.did && data.post.local_id}
+				<div class="mt-4 border-t pt-3">
+					<ReactionBar
+						parentType="post"
+						parentDid={data.post.did}
+						parentId={data.post.local_id}
+						followedDids={data.followedDids ?? []}
+						currentUserDid={data.currentUserDid ?? null}
+					/>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.post.did && data.post.local_id}
+		<CommentThread
+			postDid={data.post.did}
+			postId={data.post.local_id}
+			followedDids={data.followedDids ?? []}
+			currentUserDid={data.currentUserDid ?? null}
+		/>
+	{/if}
 </div>

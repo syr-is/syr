@@ -4,6 +4,7 @@
 	import { Input } from '@syr-is/ui/input';
 	import { Button } from '@syr-is/ui/button';
 	import { Smile } from 'lucide-svelte';
+	import { getInstanceEmojis } from '$lib/stores/emoji-cache';
 
 	type EmojiEntry = {
 		shortcode: string;
@@ -11,23 +12,27 @@
 		is_sticker: boolean;
 	};
 
-	type EmojiPack = {
-		slug: string;
-		name: string;
-		emojis: EmojiEntry[];
-	};
-
 	let {
 		onSelect,
-		triggerClass = ''
+		triggerClass = '',
+		triggerIcon = Smile,
+		triggerTitle = 'Emoji',
+		onOpenChange
 	}: {
 		onSelect?: (emoji: EmojiEntry) => void;
 		triggerClass?: string;
+		triggerIcon?: typeof Smile;
+		triggerTitle?: string;
+		onOpenChange?: (open: boolean) => void;
 	} = $props();
 
 	let open = $state(false);
+
+	$effect(() => {
+		onOpenChange?.(open);
+	});
 	let search = $state('');
-	let packs = $state<EmojiPack[]>([]);
+	let instanceEmojis = $state<EmojiEntry[]>([]);
 	let userEmojis = $state<EmojiEntry[]>([]);
 	let loading = $state(false);
 	let activeTab = $state('instance');
@@ -38,13 +43,8 @@
 		hasLoaded = true;
 		loading = true;
 		try {
-			const res = await fetch('/api/public/emojis');
-			if (res.ok) {
-				const json = await res.json();
-				if (json.status === 'success') packs = json.data.packs ?? [];
-			}
+			instanceEmojis = await getInstanceEmojis();
 
-			// Try personal emojis — will 401 if not logged in, that's fine
 			try {
 				const userRes = await fetch('/api/emojis?limit=100');
 				if (userRes.ok) {
@@ -52,10 +52,10 @@
 					if (json.status === 'success') userEmojis = json.data ?? [];
 				}
 			} catch {
-				// Not logged in or no personal emojis
+				/* not logged in */
 			}
 		} catch {
-			// Instance emojis unavailable
+			/* skip */
 		} finally {
 			loading = false;
 		}
@@ -65,14 +65,12 @@
 		if (open && !hasLoaded) loadEmojis();
 	});
 
-	const allInstanceEmojis = $derived(packs.flatMap((p) => p.emojis));
-
 	const filteredInstance = $derived(
 		search.trim()
-			? allInstanceEmojis.filter((e) =>
+			? instanceEmojis.filter((e) =>
 					e.shortcode.toLowerCase().includes(search.trim().toLowerCase())
 				)
-			: allInstanceEmojis
+			: instanceEmojis
 	);
 
 	const filteredUser = $derived(
@@ -89,8 +87,8 @@
 
 <Popover.Root bind:open>
 	<Popover.Trigger>
-		<Button variant="ghost" size="icon-sm" class={triggerClass} type="button">
-			<Smile class="h-4 w-4" />
+		<Button variant="ghost" size="icon-sm" class={triggerClass} type="button" title={triggerTitle}>
+			<svelte:component this={triggerIcon} class="h-4 w-4" />
 		</Button>
 	</Popover.Trigger>
 	<Popover.Content class="w-80 p-0" align="start">

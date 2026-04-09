@@ -36,7 +36,11 @@ export const GET: RequestHandler = async ({ params, request }) => {
 			stories: `${base}/api/public/stories/${encoded}`,
 			uploads: `${base}/api/public/uploads/${encoded}`,
 			did_document: `${base}/api/identity/${encoded}/document`,
-			public_following: `${base}/api/public/following/${encoded}`
+			public_following: `${base}/api/public/following/${encoded}`,
+			public_emojis: `${base}/api/public/emojis/${encoded}`,
+			public_gifs: `${base}/api/public/gifs/${encoded}`,
+			public_comments: `${base}/api/public/comments/${encoded}`,
+			public_reactions: `${base}/api/public/reactions/${encoded}`
 		},
 		web_profile: `${base}/u/${encoded}`
 	};

@@ -65,7 +65,10 @@ export type CommentCreateRequest = z.infer<typeof CommentCreateRequestSchema>;
 export const CommentUpdateByUrlRequestSchema = CommentSchema.pick({
 	content: true,
 	visibility: true,
-	status: true
+	status: true,
+	content_signature: true,
+	signed_payload_json: true,
+	signing_device_public_key: true
 })
 	.partial()
 	.extend({

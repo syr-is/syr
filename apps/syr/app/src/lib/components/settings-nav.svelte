@@ -12,7 +12,8 @@
 		Shield,
 		Users,
 		Smile,
-		Film
+		Film,
+		ImagePlus
 	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
@@ -30,6 +31,7 @@
 
 	const instanceItems: NavItem[] = [
 		{ title: 'Instance config', href: '/settings/instance-config', icon: Settings },
+		{ title: 'Instance media', href: '/settings/instance-media', icon: ImagePlus },
 		{ title: 'Users', href: '/settings/users', icon: Users }
 	];
 

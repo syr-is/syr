@@ -10,12 +10,15 @@
 		imageUrl = null,
 		mimeType = null,
 		fileSize = 0,
+		scope = 'user',
 		onSuccess
 	}: {
 		open?: boolean;
 		imageUrl?: string | null;
 		mimeType?: string | null;
 		fileSize?: number;
+		/** 'user' uses /api/gifs, 'instance' uses /api/admin/gifs */
+		scope?: 'user' | 'instance';
 		onSuccess?: () => void;
 	} = $props();
 
@@ -33,11 +36,13 @@
 				.split(',')
 				.map((t) => t.trim().toLowerCase())
 				.filter(Boolean);
-			const res = await fetch('/api/gifs', {
+			const endpoint = scope === 'instance' ? '/api/admin/gifs' : '/api/gifs';
+			const res = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					scope: 'user',
+					url: imageUrl,
+					scope,
 					mime_type: mimeType ?? 'image/gif',
 					size: fileSize,
 					tags: tagList

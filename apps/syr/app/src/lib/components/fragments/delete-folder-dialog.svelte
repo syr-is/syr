@@ -9,11 +9,14 @@
 		open = $bindable(false),
 		folderId = null,
 		folderName = null,
+		apiBase = '/api/folders',
 		onSuccess
 	}: {
 		open?: boolean;
 		folderId?: string | null;
 		folderName?: string | null;
+		/** Base URL for folder API. Default: /api/folders */
+		apiBase?: string;
 		onSuccess?: () => void;
 	} = $props();
 
@@ -26,7 +29,7 @@
 		deleting = true;
 		try {
 			const queryString = deleteWithContents ? '?delete_contents=true' : '';
-			const response = await fetch(`/api/folders/${folderId}${queryString}`, {
+			const response = await fetch(`${apiBase}/${folderId}${queryString}`, {
 				method: 'DELETE'
 			});
 

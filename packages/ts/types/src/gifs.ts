@@ -12,7 +12,7 @@ export type GifScope = z.infer<typeof GifScopeSchema>;
  * Self-hosted GIF entry (composite ID: gif:{ created_by: did, id: ulid })
  */
 export const GifSchema = BaseEntitySchema.extend({
-	url: z.string().url().optional(),
+	url: z.string().url(),
 	thumbnail_url: z.string().url().optional(),
 	mime_type: z.string().min(1),
 	size: z.number().int().nonnegative(),
@@ -32,7 +32,6 @@ export const GifCreateSchema = GifSchema.omit({
 	author_id: true,
 	did: true,
 	local_id: true,
-	url: true,
 	thumbnail_url: true
 });
 
