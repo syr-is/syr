@@ -41,7 +41,10 @@
 		onDownload,
 		onCopyLink,
 		onRename,
-		onMove
+		onMove,
+		onAddAsEmoji,
+		onAddAsSticker,
+		onAddAsGif
 	}: {
 		folders?: Folder[];
 		uploads?: UploadWithCompositeId[];
@@ -64,6 +67,9 @@
 		onCopyLink?: (upload: UploadWithCompositeId) => void;
 		onRename?: (upload: UploadWithCompositeId) => void;
 		onMove?: (upload: UploadWithCompositeId) => void;
+		onAddAsEmoji?: (item: DisplayItem) => void;
+		onAddAsSticker?: (item: DisplayItem) => void;
+		onAddAsGif?: (item: DisplayItem) => void;
 	} = $props();
 
 	const displayItems = $derived(uploadsToDisplayItems(folders, uploads));
@@ -256,6 +262,9 @@
 			onDelete={onDeleteUpload ? handleTableDelete : undefined}
 			onFolderClick={handleFolderClick}
 			onFolderDelete={!readonly ? handleFolderDelete : undefined}
+			{onAddAsEmoji}
+			{onAddAsSticker}
+			{onAddAsGif}
 		/>
 	{:else if viewMode === 'carousel'}
 		{#if folders.length > 0}

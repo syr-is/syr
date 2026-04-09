@@ -14,6 +14,8 @@
 	import ShareUploadDialog from '$lib/components/fragments/share-upload-dialog.svelte';
 	import MediaPreviewModal from '$lib/components/fragments/media-preview-modal.svelte';
 	import FileBrowser from '$lib/components/fragments/file-browser.svelte';
+	import AddAsEmojiDialog from '$lib/components/fragments/add-as-emoji-dialog.svelte';
+	import AddAsGifDialog from '$lib/components/fragments/add-as-gif-dialog.svelte';
 	import { toast } from 'svelte-sonner';
 	import { Plus, FolderPlus } from 'lucide-svelte';
 
@@ -242,6 +244,43 @@
 		moveDialogOpen = true;
 	}
 
+	// Emoji/Sticker/GIF designation
+	let addEmojiOpen = $state(false);
+	let addEmojiIsSticker = $state(false);
+	let addEmojiUrl = $state<string | null>(null);
+	let addEmojiMime = $state<string | null>(null);
+	let addEmojiSize = $state(0);
+	let addGifOpen = $state(false);
+	let addGifUrl = $state<string | null>(null);
+	let addGifMime = $state<string | null>(null);
+	let addGifSize = $state(0);
+
+	function handleAddAsEmoji(item: DisplayItem) {
+		if (item.kind !== 'file') return;
+		addEmojiUrl = item.url;
+		addEmojiMime = item.mimeType;
+		addEmojiSize = item.size;
+		addEmojiIsSticker = false;
+		addEmojiOpen = true;
+	}
+
+	function handleAddAsSticker(item: DisplayItem) {
+		if (item.kind !== 'file') return;
+		addEmojiUrl = item.url;
+		addEmojiMime = item.mimeType;
+		addEmojiSize = item.size;
+		addEmojiIsSticker = true;
+		addEmojiOpen = true;
+	}
+
+	function handleAddAsGif(item: DisplayItem) {
+		if (item.kind !== 'file') return;
+		addGifUrl = item.url;
+		addGifMime = item.mimeType;
+		addGifSize = item.size;
+		addGifOpen = true;
+	}
+
 	function handlePreview(_item: DisplayItem, index: number) {
 		mediaPreviewIndex = index;
 		mediaPreviewOpen = true;
@@ -314,6 +353,9 @@
 			onCopyLink={handleCopyLink}
 			onRename={handleRename}
 			onMove={handleMove}
+			onAddAsEmoji={handleAddAsEmoji}
+			onAddAsSticker={handleAddAsSticker}
+			onAddAsGif={handleAddAsGif}
 		>
 			{#snippet actions()}
 				<Button variant="outline" onclick={() => (createFolderDialogOpen = true)}>
@@ -366,6 +408,19 @@
 			uploadToShare = upload;
 			shareDialogOpen = true;
 		}}
+	/>
+	<AddAsEmojiDialog
+		bind:open={addEmojiOpen}
+		imageUrl={addEmojiUrl}
+		mimeType={addEmojiMime}
+		fileSize={addEmojiSize}
+		isSticker={addEmojiIsSticker}
+	/>
+	<AddAsGifDialog
+		bind:open={addGifOpen}
+		imageUrl={addGifUrl}
+		mimeType={addGifMime}
+		fileSize={addGifSize}
 	/>
 {:else}
 	<div class="flex h-full items-center justify-center p-4 sm:p-6">
