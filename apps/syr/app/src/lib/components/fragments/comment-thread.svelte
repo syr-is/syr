@@ -5,6 +5,7 @@
 	import { MessageSquare, ChevronDown, ChevronRight, Trash2 } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { browser } from '$app/environment';
 
 	type CommentData = {
 		did: string;
@@ -46,6 +47,7 @@
 	} = $props();
 
 	let threads = $state<ThreadNode[]>([]);
+	let renderedHtml = new SvelteMap<string, string>();
 	let loading = $state(true);
 	let replyTo = $state<{ type: 'post' | 'comment'; did: string; id: string } | null>(null);
 	let collapsed = new SvelteSet<string>();
@@ -55,17 +57,55 @@
 		try {
 			const allComments: CommentData[] = [];
 
-			// Fetch from each followed user's instance
-			const fetches = followedDids.map(async ({ did, providerUrl }) => {
+			// Collect all DIDs to fetch from (followed + self)
+			const didsToFetch: Array<{ did: string; base: string }> = [];
+			for (const { did, providerUrl } of followedDids) {
+				didsToFetch.push({ did, base: providerUrl.replace(/\/$/, '') });
+			}
+			if (currentUserDid) {
+				didsToFetch.push({ did: currentUserDid, base: '' });
+			}
+
+			// For each DID: fetch root comments on this post, then fetch
+			// replies (parent_type=comment) for any comment DIDs we find
+			const fetches = didsToFetch.map(async ({ did, base }) => {
+				const apiBase = base || '';
+				const instance = base ? new URL(base).hostname : 'local';
+
 				try {
-					const base = providerUrl.replace(/\/$/, '');
-					const qs = `parent_type=post&parent_did=${encodeURIComponent(postDid)}&parent_id=${encodeURIComponent(postId)}&limit=100`;
-					const res = await fetch(`${base}/api/public/comments/${encodeURIComponent(did)}?${qs}`);
-					if (!res.ok) return;
-					const json = await res.json();
-					if (json.status === 'success' && json.data) {
-						for (const c of json.data) {
-							allComments.push({ ...c, author_instance: new URL(base).hostname });
+					// Fetch direct comments on the post
+					const rootQs = `parent_type=post&parent_did=${encodeURIComponent(postDid)}&parent_id=${encodeURIComponent(postId)}&limit=100`;
+					const rootRes = await fetch(
+						`${apiBase}/api/public/comments/${encodeURIComponent(did)}?${rootQs}`
+					);
+					if (!rootRes.ok) return;
+					const rootJson = await rootRes.json();
+					if (rootJson.status === 'success' && rootJson.data) {
+						for (const c of rootJson.data) {
+							allComments.push({ ...c, author_instance: instance });
+						}
+					}
+
+					// Also fetch this user's replies to any comment in the thread
+					// We query for comments whose parent is any comment by any DID
+					// (broad fetch, filtered client-side by tree builder)
+					const replyRes = await fetch(
+						`${apiBase}/api/public/comments/${encodeURIComponent(did)}?limit=200`
+					);
+					if (replyRes.ok) {
+						const replyJson = await replyRes.json();
+						if (replyJson.status === 'success' && replyJson.data) {
+							for (const c of replyJson.data) {
+								if (c.parent_type === 'comment') {
+									// Dedupe by did+local_id
+									const exists = allComments.some(
+										(existing) => existing.did === c.did && existing.local_id === c.local_id
+									);
+									if (!exists) {
+										allComments.push({ ...c, author_instance: instance });
+									}
+								}
+							}
 						}
 					}
 				} catch {
@@ -75,27 +115,21 @@
 
 			await Promise.all(fetches);
 
-			// Also fetch own comments from local instance
-			if (currentUserDid) {
+			threads = buildThreadTree(allComments);
+
+			// Render markdown for all comments
+			if (browser && allComments.length > 0) {
 				try {
-					const qs = `parent_type=post&parent_did=${encodeURIComponent(postDid)}&parent_id=${encodeURIComponent(postId)}&limit=100`;
-					const res = await fetch(
-						`/api/public/comments/${encodeURIComponent(currentUserDid)}?${qs}`
-					);
-					if (res.ok) {
-						const json = await res.json();
-						if (json.status === 'success' && json.data) {
-							for (const c of json.data) {
-								allComments.push({ ...c, author_instance: 'local' });
-							}
-						}
+					const { sanitizeMarkdownToHtml } = await import('$lib/client/sanitize-post-body');
+					for (const c of allComments) {
+						const key = `${c.did}:${c.local_id}`;
+						const html = await sanitizeMarkdownToHtml(c.content);
+						renderedHtml.set(key, html);
 					}
 				} catch {
-					// Skip
+					// Markdown rendering unavailable — will show raw text
 				}
 			}
-
-			threads = buildThreadTree(allComments);
 		} finally {
 			loading = false;
 		}
@@ -111,11 +145,11 @@
 			nodes.set(key, { ...c, children: [], reactions: [] });
 		}
 
-		// Build tree
+		// Build tree — root comments are those directly on this post
 		for (const node of nodes.values()) {
-			if (node.parent_type === 'post') {
+			if (node.parent_type === 'post' && node.parent_did === postDid && node.parent_id === postId) {
 				roots.push(node);
-			} else {
+			} else if (node.parent_type === 'comment') {
 				const parentKey = `${node.parent_did}:${node.parent_id}`;
 				const parent = nodes.get(parentKey);
 				if (parent) {
@@ -227,8 +261,14 @@
 
 			<!-- Content -->
 			{#if !isCollapsed}
+				{@const htmlContent = renderedHtml.get(key)}
 				<div class="prose prose-sm dark:prose-invert mt-1 max-w-none text-sm">
-					{node.content}
+					{#if htmlContent}
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						{@html htmlContent}
+					{:else}
+						{node.content}
+					{/if}
 				</div>
 
 				<!-- Reactions -->
