@@ -41,7 +41,6 @@ export class EmojiController {
 		const base = {
 			...data,
 			author_id: user.id,
-			url: '',
 			created_at: now,
 			updated_at: now
 		};

@@ -11,7 +11,6 @@ export class GifController {
 		const base = {
 			...data,
 			author_id: user.id,
-			url: '',
 			created_at: now,
 			updated_at: now
 		};
