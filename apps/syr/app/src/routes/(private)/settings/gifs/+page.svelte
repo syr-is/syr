@@ -4,7 +4,8 @@
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
-	import { Trash2 } from 'lucide-svelte';
+	import { Trash2, Upload } from 'lucide-svelte';
+	import { computeSha256Hex } from '@syr-is/utils';
 
 	type GifRow = {
 		id: string;
@@ -20,6 +21,8 @@
 	let loading = $state(true);
 	let tags = $state('');
 	let uploading = $state(false);
+	let uploadStatus = $state('');
+	let fileInput: HTMLInputElement | null = $state(null);
 
 	async function loadGifs() {
 		loading = true;
@@ -34,35 +37,84 @@
 		}
 	}
 
-	async function createGif() {
+	async function uploadAndCreateGif() {
+		const file = fileInput?.files?.[0];
+		if (!file) {
+			toast.error('Select a GIF file');
+			return;
+		}
+
+		if (!['image/gif', 'image/webp'].includes(file.type)) {
+			toast.error('Allowed formats: GIF, animated WebP');
+			return;
+		}
+
 		uploading = true;
 		try {
+			uploadStatus = 'Computing hash...';
+			const arrayBuffer = await file.arrayBuffer();
+			const sha256 = await computeSha256Hex(arrayBuffer);
+
+			uploadStatus = 'Getting upload URL...';
+			const uploadRes = await fetch('/api/uploads', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					filename: file.name,
+					mime_type: file.type,
+					size: file.size,
+					sha256
+				})
+			});
+			if (!uploadRes.ok) throw new Error('Failed to get upload URL');
+			const uploadResult = await uploadRes.json();
+			const { signedUrl, uploadDid, uploadLocalId } = uploadResult.data;
+
+			uploadStatus = 'Uploading to storage...';
+			const putRes = await fetch(signedUrl, {
+				method: 'PUT',
+				headers: { 'Content-Type': file.type },
+				body: file
+			});
+			if (!putRes.ok) throw new Error('Failed to upload file');
+
+			uploadStatus = 'Finalizing upload...';
+			const completeRes = await fetch('/api/uploads', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
+			});
+			if (!completeRes.ok) throw new Error('Failed to finalize upload');
+
+			uploadStatus = 'Creating GIF entry...';
 			const tagList = tags
 				.split(',')
 				.map((t) => t.trim().toLowerCase())
 				.filter(Boolean);
-			const res = await fetch('/api/gifs', {
+			const gifRes = await fetch('/api/gifs', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					scope: 'user',
-					mime_type: 'image/gif',
-					size: 0,
+					mime_type: file.type,
+					size: file.size,
 					tags: tagList
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) {
-				toast.error(json.message ?? 'Failed to create GIF entry');
-				return;
+			if (!gifRes.ok) {
+				const err = await gifRes.json().catch(() => ({}));
+				throw new Error(err.message ?? 'Failed to create GIF');
 			}
+
 			tags = '';
-			toast.success('GIF entry created');
+			if (fileInput) fileInput.value = '';
+			toast.success('GIF uploaded');
 			loadGifs();
-		} catch {
-			toast.error('Failed to create GIF entry');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to upload GIF');
 		} finally {
 			uploading = false;
+			uploadStatus = '';
 		}
 	}
 
@@ -97,23 +149,43 @@
 		<Card.Header>
 			<Card.Title>My GIF Library</Card.Title>
 			<Card.Description>
-				Manage your personal GIF collection. GIFs can be used in comments, reactions, and posts.
+				Upload GIFs for use in comments, reactions, and posts. Files are stored in your upload
+				space.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<div class="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-end">
-				<div class="flex-1 space-y-1">
-					<label for="gif-tags" class="text-sm font-medium">Tags (comma-separated)</label>
-					<Input
-						id="gif-tags"
-						bind:value={tags}
-						placeholder="funny, reaction, thumbsup"
-						class="text-sm"
-					/>
+			<div class="space-y-3 rounded-lg border p-4">
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div class="space-y-1">
+						<label for="gif-file" class="text-sm font-medium">GIF file</label>
+						<input
+							id="gif-file"
+							type="file"
+							accept="image/gif,image/webp"
+							bind:this={fileInput}
+							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs file:border-0 file:bg-transparent file:text-sm file:font-medium"
+						/>
+					</div>
+					<div class="space-y-1">
+						<label for="gif-tags" class="text-sm font-medium">Tags (comma-separated)</label>
+						<Input
+							id="gif-tags"
+							bind:value={tags}
+							placeholder="funny, reaction, thumbsup"
+							class="text-sm"
+						/>
+					</div>
 				</div>
-				<Button onclick={createGif} disabled={uploading}>
-					{uploading ? 'Creating...' : 'Create GIF Entry'}
-				</Button>
+				<div class="flex justify-end">
+					<Button onclick={uploadAndCreateGif} disabled={uploading}>
+						{#if uploading}
+							{uploadStatus || 'Uploading...'}
+						{:else}
+							<Upload class="mr-1.5 h-3.5 w-3.5" />
+							Upload GIF
+						{/if}
+					</Button>
+				</div>
 			</div>
 
 			<Table.Root>
@@ -135,7 +207,7 @@
 					{:else if gifs.length === 0}
 						<Table.Row>
 							<Table.Cell colspan={4} class="py-4 text-center text-muted-foreground"
-								>No GIFs yet</Table.Cell
+								>No GIFs yet. Upload one above!</Table.Cell
 							>
 						</Table.Row>
 					{:else}

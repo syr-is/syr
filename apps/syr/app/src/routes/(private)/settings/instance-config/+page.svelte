@@ -28,6 +28,71 @@
 	let instanceStorageCapacityGb = $state('');
 	let capacityLoading = $state(false);
 
+	// Emoji packs state
+	type EmojiPackRow = { id: string; slug: string; name: string; description?: string };
+	let emojiPacks = $state<EmojiPackRow[]>([]);
+	let emojiPacksLoading = $state(false);
+	let newPackSlug = $state('');
+	let newPackName = $state('');
+	let creatingPack = $state(false);
+
+	async function loadEmojiPacks() {
+		emojiPacksLoading = true;
+		try {
+			const res = await fetch('/api/admin/emoji-packs');
+			if (res.ok) {
+				const json = await res.json();
+				if (json.status === 'success') emojiPacks = json.data ?? [];
+			}
+		} finally {
+			emojiPacksLoading = false;
+		}
+	}
+
+	async function createEmojiPack() {
+		if (!newPackSlug.trim() || !newPackName.trim()) {
+			toast.error('Enter both slug and name');
+			return;
+		}
+		creatingPack = true;
+		try {
+			const res = await fetch('/api/admin/emoji-packs', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ slug: newPackSlug.trim(), name: newPackName.trim() })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to create pack');
+				return;
+			}
+			newPackSlug = '';
+			newPackName = '';
+			toast.success('Emoji pack created');
+			loadEmojiPacks();
+		} catch {
+			toast.error('Failed to create pack');
+		} finally {
+			creatingPack = false;
+		}
+	}
+
+	async function deleteEmojiPack(slug: string) {
+		try {
+			const res = await fetch(`/api/admin/emoji-packs/${encodeURIComponent(slug)}`, {
+				method: 'DELETE'
+			});
+			if (!res.ok) {
+				toast.error('Failed to delete pack');
+				return;
+			}
+			toast.success('Emoji pack deleted');
+			loadEmojiPacks();
+		} catch {
+			toast.error('Failed to delete pack');
+		}
+	}
+
 	// Storage overview state
 	type StorageOverview = {
 		capacity: number;
@@ -82,9 +147,10 @@
 		}
 	}
 
-	// Load overview on mount
+	// Load data on mount
 	$effect(() => {
 		loadStorageOverview();
+		loadEmojiPacks();
 	});
 
 	async function saveProfileSyncPath() {
@@ -595,6 +661,63 @@
 				{/if}
 			{:else}
 				<p class="text-sm text-muted-foreground">Failed to load storage overview.</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Emoji packs</Card.Title>
+			<Card.Description>
+				Instance-wide emoji packs available to all users. Create packs and add emojis to them via
+				the admin API.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
+					<label for="pack-slug" class="text-sm font-medium">Slug</label>
+					<Input
+						id="pack-slug"
+						bind:value={newPackSlug}
+						placeholder="party-animals"
+						class="font-mono text-sm"
+					/>
+				</div>
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
+					<label for="pack-name" class="text-sm font-medium">Name</label>
+					<Input
+						id="pack-name"
+						bind:value={newPackName}
+						placeholder="Party Animals"
+						class="text-sm"
+					/>
+				</div>
+				<Button
+					onclick={createEmojiPack}
+					disabled={creatingPack || !newPackSlug.trim() || !newPackName.trim()}
+				>
+					{creatingPack ? 'Creating...' : 'Create Pack'}
+				</Button>
+			</div>
+			{#if emojiPacksLoading}
+				<p class="text-sm text-muted-foreground">Loading...</p>
+			{:else if emojiPacks.length === 0}
+				<p class="text-sm text-muted-foreground">No emoji packs yet.</p>
+			{:else}
+				<ul class="space-y-2">
+					{#each emojiPacks as pack (pack.id)}
+						<li class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+							<div>
+								<span class="font-medium">{pack.name}</span>
+								<span class="ml-2 font-mono text-xs text-muted-foreground">{pack.slug}</span>
+							</div>
+							<Button variant="destructive" size="sm" onclick={() => deleteEmojiPack(pack.slug)}>
+								Delete
+							</Button>
+						</li>
+					{/each}
+				</ul>
 			{/if}
 		</Card.Content>
 	</Card.Root>
