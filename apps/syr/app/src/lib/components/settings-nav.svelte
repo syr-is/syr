@@ -11,7 +11,8 @@
 		Compass,
 		Shield,
 		Users,
-		Smile
+		Smile,
+		Film
 	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
@@ -23,7 +24,8 @@
 		{ title: 'Content trust', href: '/settings/content-trust', icon: Shield },
 		{ title: 'Signing', href: '/settings/signing', icon: KeyRound },
 		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor },
-		{ title: 'Emojis & Stickers', href: '/settings/emojis', icon: Smile }
+		{ title: 'Emojis & Stickers', href: '/settings/emojis', icon: Smile },
+		{ title: 'GIFs', href: '/settings/gifs', icon: Film }
 	];
 
 	const instanceItems: NavItem[] = [
