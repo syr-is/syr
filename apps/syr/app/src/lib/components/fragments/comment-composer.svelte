@@ -24,7 +24,7 @@
 	let submitting = $state(false);
 	let preview = $state(false);
 	let previewHtml = $state('');
-	let textareaEl: HTMLTextAreaElement | undefined = $state();
+	let textareaEl: HTMLTextAreaElement | null = $state(null);
 
 	function insertAtCursor(text: string) {
 		if (!textareaEl) {
