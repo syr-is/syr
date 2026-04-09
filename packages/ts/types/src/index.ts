@@ -56,3 +56,15 @@ export * from './persona.js';
 
 // Identity manifest (per-identity discovery at /.well-known/syr/{did})
 export * from './identity-manifest.js';
+
+// Emoji & sticker types
+export * from './emojis.js';
+
+// GIF types
+export * from './gifs.js';
+
+// Comment types
+export * from './comments.js';
+
+// Reaction types
+export * from './reactions.js';
