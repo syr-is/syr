@@ -36,7 +36,10 @@ const ALLOWED_TAGS = [
 	'span',
 	'div',
 	'sub',
-	'sup'
+	'sup',
+	'video',
+	'audio',
+	'source'
 ];
 
 const ALLOWED_ATTR = [
@@ -49,7 +52,9 @@ const ALLOWED_ATTR = [
 	'rowspan',
 	'width',
 	'height',
-	'loading'
+	'loading',
+	'controls',
+	'type'
 ];
 
 function domPurifyConfig(allowDataUrls: boolean): Config {

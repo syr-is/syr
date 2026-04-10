@@ -215,9 +215,18 @@
 		}
 	}
 
-	function handleEmojiReaction(emoji: { shortcode: string; url: string; is_sticker: boolean }) {
-		const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
-		toggleReaction(kind, emoji.shortcode, emoji.url);
+	function handleEmojiReaction(emoji: {
+		shortcode: string;
+		url: string;
+		is_sticker: boolean;
+		unicode?: boolean;
+	}) {
+		if (emoji.unicode) {
+			toggleReaction('unicode', emoji.shortcode);
+		} else {
+			const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
+			toggleReaction(kind, emoji.shortcode, emoji.url);
+		}
 	}
 
 	function reactorName(r: Reactor): string {

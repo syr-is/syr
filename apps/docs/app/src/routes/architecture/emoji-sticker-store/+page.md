@@ -8,7 +8,7 @@ title: Emoji & Sticker Store (v1 specification)
 
 This document specifies a **self-hosted custom emoji and sticker system** for Syr instances. Custom emojis and stickers are first-class media assets that can be used in **comments**, **reactions**, and **markdown content** across the ecosystem.
 
-Both **instance-wide** packs (managed by admins) and **per-user** custom emojis are supported. Custom emojis are **discoverable cross-instance** via public APIs, meaning a user on instance A can see and use custom emojis from instance B when viewing content authored by users on that instance.
+Both **instance-wide** emojis (managed by admins) and **per-user** custom emojis are supported. Custom emojis are **discoverable cross-instance** via public APIs, meaning a user on instance A can see and use custom emojis from instance B when viewing content authored by users on that instance.
 
 **Related specs**
 
@@ -23,150 +23,119 @@ Both **instance-wide** packs (managed by admins) and **per-user** custom emojis 
 
 ### 2.1 Goals
 
-- **Instance emoji packs**: Admins can create, manage, and organize emoji/sticker packs for all users on the instance.
-- **Per-user custom emojis**: Users can upload personal custom emojis stored in their DID-namespaced storage.
-- **Shortcode syntax**: Emojis are referenced in markdown/text via `:shortcode:` syntax (e.g., `:party_parrot:`). Stickers use `::shortcode::` (double-colon) for larger inline display.
+- **Instance emojis**: Admins can manage a flat catalog of emojis and stickers available to all users on the instance.
+- **Per-user custom emojis**: Users can create personal custom emojis from their uploaded media.
+- **Shortcode syntax**: Emojis are referenced in markdown/text via `:shortcode:` syntax (e.g., `:party_parrot:`). Stickers use `::shortcode::` (double-colon) for larger block-level display.
+- **Unicode emoji support**: Pickers include standard unicode emojis alongside custom emojis for use in comments and reactions.
 - **Cross-instance discovery**: Public API exposes instance and user emoji catalogs so remote viewers can resolve shortcodes to image URLs.
 - **Multiple formats**: Support static images (PNG, WebP, SVG) and animated formats (GIF, APNG, animated WebP).
-- **Reactions**: Any emoji or sticker can be used as a reaction on posts or comments.
+- **Reactions**: Any emoji (unicode or custom) or sticker can be used as a reaction on posts or comments.
 
 ### 2.2 Non-goals (v1)
 
 - Emoji search/discovery across the entire network (only within followed users and their instances).
 - Animated sticker packs with frame-by-frame editing tools.
 - Emoji marketplace or cross-instance pack importing (users can manually re-upload).
-- Unicode emoji rendering customization (standard Unicode emojis use the OS/browser renderer).
 
 ---
 
 ## 3. Data model
 
-### 3.1 Emoji pack (instance-level)
-
-```
-EmojiPack {
-  id: RecordId                    // auto-generated
-  name: string                    // e.g., "Party Animals"
-  slug: string                    // URL-safe identifier, unique per instance
-  description?: string
-  created_by: RecordId            // admin user who created it
-  created_at, updated_at
-}
-```
-
-### 3.2 Emoji (instance or user)
+### 3.1 Emoji
 
 ```
 Emoji {
-  id: RecordId (emoji:{ created_by: did, id: ulid })
-  shortcode: string               // unique within scope (pack or user), alphanumeric + underscores
-  image_url: string               // URL to the emoji image (SeaweedFS)
-  image_key: string               // S3 object key
+  id: composite (emoji:{ created_by: did, id: ulid })
+  shortcode: string               // alphanumeric + underscores, 2-32 chars
+  url: string                     // absolute URL to the emoji image
   mime_type: string               // image/png, image/gif, image/webp, image/svg+xml, image/apng
-  width?: number                  // intrinsic width in pixels
-  height?: number                 // intrinsic height in pixels
-  file_size: number               // bytes
-  is_sticker: boolean             // true = larger display (sticker), false = inline emoji
-  pack_id?: RecordId              // if part of an instance pack (null = user personal emoji)
-  author_id: RecordId             // user who uploaded
+  size: number                    // bytes
+  is_sticker: boolean             // true = larger block display (sticker), false = inline emoji
+  scope: 'instance' | 'user'     // instance = shared, user = personal
   created_at, updated_at
 }
 ```
 
-### 3.3 Shortcode resolution order
+### 3.2 Shortcode resolution order
 
 When rendering `:shortcode:` in content authored by a DID:
 
 1. **Author's personal emojis** -- check the content author's custom emojis on their instance.
-2. **Author's instance packs** -- check all packs on the author's instance.
-3. **Viewer's instance packs** -- fallback to the viewer's own instance packs.
+2. **Author's instance emojis** -- check the instance-wide emojis on the author's instance.
+3. **Viewer's instance emojis** -- fallback to the viewer's own instance catalog.
 4. **Not found** -- render the literal `:shortcode:` text.
 
 For cross-instance resolution, the viewer's client fetches the author's emoji catalog from the author's instance via the public API.
 
 ---
 
-## 4. Storage layout
+## 4. Public API
 
-### 4.1 Instance emojis
-
-```text
-emojis/instance/{pack_slug}/{shortcode}.{ext}
-```
-
-Stored in the instance's S3 bucket under a dedicated prefix, **not** under any user's DID namespace. Admin-managed.
-
-### 4.2 User emojis
-
-```text
-uploads/{did}/emojis/{shortcode}.{ext}
-```
-
-Stored under the user's DID-namespaced storage, following the existing upload key pattern. Counts toward the user's storage quota.
-
----
-
-## 5. Public API
-
-### 5.1 Instance emoji catalog
+### 4.1 Instance emoji catalog
 
 ```
 GET /api/public/emojis
 ```
 
-Returns all instance packs and their emojis. No authentication required.
+Returns all instance-scope emojis as a flat array. No authentication required.
 
 ```json
 {
-	"packs": [
+	"status": "success",
+	"data": [
 		{
-			"name": "Party Animals",
-			"slug": "party-animals",
-			"emojis": [{ "shortcode": "party_parrot", "url": "https://...", "is_sticker": false }]
+			"shortcode": "party_parrot",
+			"url": "https://...",
+			"is_sticker": false,
+			"did": "did:syr:z6Mk...",
+			"local_id": "01ARZ3N..."
+		},
+		{
+			"shortcode": "blob_wave",
+			"url": "https://...",
+			"is_sticker": false,
+			"did": "did:syr:z6Mk...",
+			"local_id": "01ARZ3M..."
 		}
 	]
 }
 ```
 
-### 5.2 User emoji catalog
+### 4.2 User emoji catalog
 
 ```
-GET /api/public/emojis/{did}
+GET /api/public/emojis/[did]
 ```
 
 Returns personal custom emojis for a specific DID. No authentication required.
 
 ```json
 {
-	"did": "did:syr:z6Mkt...",
-	"emojis": [{ "shortcode": "my_cat", "url": "https://...", "is_sticker": false }]
+	"status": "success",
+	"data": [
+		{
+			"shortcode": "my_cat",
+			"url": "https://...",
+			"is_sticker": false,
+			"did": "did:syr:z6Mk...",
+			"local_id": "01ARZ3N..."
+		}
+	]
 }
 ```
 
-### 5.3 Authenticated management
-
-```
-GET    /api/emojis                     -- list user's personal emojis
-POST   /api/emojis                     -- upload a new personal emoji
-DELETE /api/emojis/[did]/[id]          -- delete a personal emoji
-GET    /api/admin/emojis/packs         -- list instance packs (admin)
-POST   /api/admin/emojis/packs         -- create pack (admin)
-DELETE /api/admin/emojis/packs/[slug]  -- delete pack (admin)
-POST   /api/admin/emojis/packs/[slug]  -- add emoji to pack (admin)
-DELETE /api/admin/emojis/packs/[slug]/[shortcode] -- remove emoji from pack (admin)
-```
-
 ---
 
-## 6. Shortcode format
+## 5. Shortcode format
 
 - **Pattern**: `[a-zA-Z0-9_]+`, 2--32 characters.
 - **Case-insensitive** matching but stored in original case.
-- **Uniqueness**: Within a pack, shortcodes are unique. Within a user's personal emojis, shortcodes are unique. Cross-pack collisions are resolved by pack priority (admin-configurable ordering).
+- **Uniqueness**: Within instance emojis, shortcodes are unique. Within a user's personal emojis, shortcodes are unique. Cross-scope collisions are resolved by the resolution order in section 3.2.
+- **Duplicate handling**: When multiple emojis share a shortcode across scopes, the first match wins. Subsequent matches are accessible via suffixed shortcodes (e.g., `:party_parrot~1:`).
 
 ---
 
-## 7. Formats
+## 6. Formats
 
 Allowed MIME types for emoji and sticker images: `image/png`, `image/gif`, `image/webp`, `image/apng`, `image/svg+xml`.
 
@@ -174,23 +143,29 @@ Storage management (quotas, limits, capacity budgeting) is an implementation con
 
 ---
 
-## 8. Rendering
+## 7. Rendering
 
-### 8.1 Inline emoji
+### 7.1 Inline emoji
 
 `:shortcode:` renders as an inline `<img>` element sized to match surrounding text line height (typically 1.2em--1.5em). The `alt` attribute contains the shortcode for accessibility.
 
-### 8.2 Sticker (large)
+The regex for matching inline emojis must use negative lookbehind and lookahead to avoid matching sticker syntax: `(?<!:):([a-zA-Z0-9_~+-]+):(?!:)`.
 
-`::shortcode::` renders as a block-level or large inline image (up to 128px or 256px depending on context). Used primarily in comments and chat-like contexts.
+### 7.2 Sticker (large)
 
-### 8.3 Content trust
+`::shortcode::` renders as a block-level image (up to 128px). Used in comments and chat-like contexts. Custom stickers use `<img>` tags; unicode stickers render the character at a larger font size (e.g., 3rem).
+
+### 7.3 Unicode emojis
+
+Standard unicode emojis are inserted directly as characters (not shortcodes). They render using the OS/browser emoji font. In reactions, unicode emojis use `kind: 'unicode'` with the character as the `value`.
+
+### 7.4 Content trust
 
 Emoji image URLs are subject to the same **content trust** rules as other remote media. Viewers can configure whether to auto-load images from remote instances or require explicit consent per the [untrusted post content](/architecture/untrusted-post-content) spec.
 
 ---
 
-## 9. Cross-instance flow
+## 8. Cross-instance flow
 
 ```mermaid
 sequenceDiagram
@@ -199,20 +174,23 @@ sequenceDiagram
 
     Note over Viewer: Viewing post by did:syr:z6Mk...<br/>Content contains :party_parrot:
 
-    Viewer->>Author: GET /api/public/emojis/did:syr:z6Mk...
-    Author-->>Viewer: { emojis: [{ shortcode: "party_parrot", url: "..." }] }
+    Viewer->>Author: GET /.well-known/syr/did:syr:z6Mk...
+    Author-->>Viewer: { endpoints: { public_emojis: "https://..." } }
+
+    Viewer->>Author: GET {public_emojis endpoint}
+    Author-->>Viewer: { data: [{ shortcode: "my_cat", url: "..." }] }
 
     Viewer->>Author: GET /api/public/emojis
-    Author-->>Viewer: { packs: [{ emojis: [...] }] }
+    Author-->>Viewer: { data: [{ shortcode: "party_parrot", url: "..." }] }
 
     Note over Viewer: Resolve shortcode → URL<br/>Render inline <img>
 ```
 
-The viewer caches emoji catalogs per-instance with a short TTL (e.g., 5 minutes) to avoid repeated fetches.
+The viewer caches emoji catalogs per-instance with a short TTL (e.g., 5 minutes) to avoid repeated fetches. The promise-based caching pattern (store the in-flight promise, not the result) prevents duplicate concurrent requests.
 
-### 9.1 Manifest discovery
+### 8.1 Manifest discovery
 
-Emoji catalog endpoints are advertised in the per-identity manifest at `/.well-known/syr/&#123;did&#125;`:
+Emoji catalog endpoints are advertised in the per-identity manifest at `/.well-known/syr/{did}`:
 
 ```json
 {
@@ -232,4 +210,4 @@ And in the instance manifest at `/.well-known/syr`:
 }
 ```
 
-Clients should prefer manifest-discovered URLs over hardcoded path assumptions.
+Clients **must** prefer manifest-discovered URLs over hardcoded path assumptions.

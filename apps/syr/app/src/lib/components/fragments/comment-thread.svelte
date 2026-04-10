@@ -652,8 +652,18 @@
 						<div class="ml-auto flex items-center gap-1">
 							<EmojiPicker
 								onSelect={(emoji) => {
-									const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
-									toggleCommentReaction(node.did, node.local_id, kind, emoji.shortcode, emoji.url);
+									if (emoji.unicode) {
+										toggleCommentReaction(node.did, node.local_id, 'unicode', emoji.shortcode);
+									} else {
+										const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
+										toggleCommentReaction(
+											node.did,
+											node.local_id,
+											kind,
+											emoji.shortcode,
+											emoji.url
+										);
+									}
 								}}
 								triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
 								onOpenChange={(o) => (pickerOpen = o)}
@@ -816,3 +826,12 @@
 		onSigned={handleSignResult}
 	/>
 {/if}
+
+<style>
+	:global(.prose .unicode-sticker) {
+		display: block;
+		font-size: 3rem;
+		line-height: 1;
+		margin: 0.25em 0;
+	}
+</style>

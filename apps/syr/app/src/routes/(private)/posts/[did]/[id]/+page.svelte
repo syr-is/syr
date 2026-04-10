@@ -25,6 +25,8 @@
 		sanitizePostHtmlFragment,
 		sanitizedHtmlToPlainText
 	} from '$lib/client/sanitize-post-body';
+	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
+	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
 	import { collectPostSubresourceUrls } from '$lib/content-trust/post-sources';
 	import { postContentFingerprint } from '$lib/content-trust/post-fingerprint';
 	import {
@@ -342,6 +344,29 @@
 				} else {
 					sanitizedBlogHtml = '';
 				}
+
+				// Render custom emojis and stickers in blog content
+				if (sanitizedBlogHtml) {
+					const emojiMap: Record<string, string> = {};
+					const instanceEmojis = await getInstanceEmojis();
+					for (const e of instanceEmojis) emojiMap[e.shortcode] = e.url;
+					// If the post author has personal emojis, load them too
+					if (post.did) {
+						try {
+							const authorEmojis = await getUserEmojis(
+								`/api/public/emojis/${encodeURIComponent(post.did)}`
+							);
+							for (const e of authorEmojis) {
+								if (!(e.shortcode in emojiMap)) emojiMap[e.shortcode] = e.url;
+							}
+						} catch {
+							/* best effort */
+						}
+					}
+					sanitizedBlogHtml = renderStickersInHtml(sanitizedBlogHtml, emojiMap);
+					sanitizedBlogHtml = renderEmojisInHtml(sanitizedBlogHtml, emojiMap);
+				}
+
 				blogPlainText = sanitizedBlogHtml ? sanitizedHtmlToPlainText(sanitizedBlogHtml) : '';
 
 				const unk = trustEntries.find((e) => e.status === 'unknown');

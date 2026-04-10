@@ -55,9 +55,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const { limit = 20, offset = 0 } = options;
 
 	// Get folder_id from query params
-	// null = root level only, undefined = all files, string = specific folder
+	// folder_id absent  = all files (undefined → no folder filter)
+	// folder_id=        = root level only (empty string → null → folder_id IS NULL)
+	// folder_id=abc     = specific folder
+	const hasFolderParam = url.searchParams.has('folder_id');
 	const folderIdParam = url.searchParams.get('folder_id');
-	const folderId = folderIdParam === '' ? null : folderIdParam;
+	const folderId: string | null | undefined = !hasFolderParam
+		? undefined
+		: folderIdParam === '' || folderIdParam === null
+			? null
+			: folderIdParam;
 
 	const { data, total } = await uploadController.getUserUploads(user.id, {
 		...options,

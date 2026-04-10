@@ -19,9 +19,13 @@
 	import '@milkdown/crepe/theme/nord-dark.css';
 	import '$lib/styles/crepe-custom.css';
 	import { imageBlockConfig } from '@milkdown/components/image-block';
+	import { insert as milkdownInsert } from '@milkdown/kit/utils';
 	import { createPostAssetUploader, handlePostAssetUpload } from '$lib/handlers/upload';
 	import { stringToRecordId } from '@syr-is/types';
 	import MediaUploadZone from '$lib/components/fragments/media-upload-zone.svelte';
+	import EmojiPicker from '$lib/components/fragments/emoji-picker.svelte';
+	import GifPicker from '$lib/components/fragments/gif-picker.svelte';
+	import InsertUploadDialog from '$lib/components/fragments/insert-upload-dialog.svelte';
 	import type { Crepe as CrepeType } from '@milkdown/crepe';
 	import type { PageData } from './$types';
 	import {
@@ -34,7 +38,9 @@
 		LayoutGrid,
 		GalleryHorizontal,
 		Grid3x3,
-		PanelTop
+		PanelTop,
+		FolderOpen,
+		Sticker
 	} from 'lucide-svelte';
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
@@ -44,6 +50,64 @@
 
 	let crepeInstance: CrepeType | null = $state(null);
 	let crepeReady = $state(false);
+	let insertUploadOpen = $state(false);
+
+	function insertMarkdownIntoEditor(md: string) {
+		if (crepeInstance && crepeReady) {
+			try {
+				crepeInstance.editor.action(milkdownInsert(md));
+				$formData.content = crepeInstance.getMarkdown();
+				return;
+			} catch {
+				/* fallback below */
+			}
+		}
+		const current = $formData.content || '';
+		const separator = current.endsWith('\n') ? '' : '\n';
+		$formData.content = current + separator + md;
+	}
+
+	function handleEditorEmoji(emoji: { shortcode: string; unicode?: boolean }) {
+		if (emoji.unicode) {
+			insertMarkdownIntoEditor(emoji.shortcode);
+		} else {
+			insertMarkdownIntoEditor(`:${emoji.shortcode}: `);
+		}
+	}
+
+	function handleEditorSticker(emoji: { shortcode: string; unicode?: boolean }) {
+		if (emoji.unicode) {
+			insertMarkdownIntoEditor(`<span class="unicode-sticker">${emoji.shortcode}</span>`);
+		} else {
+			insertMarkdownIntoEditor(`::${emoji.shortcode}:: `);
+		}
+	}
+
+	function handleEditorGif(gif: { url: string }) {
+		insertMarkdownIntoEditor(`![GIF](${gif.url})`);
+	}
+
+	function handleInsertUpload(item: { url: string; filename: string; mimeType: string }) {
+		if (item.mimeType.startsWith('image/')) {
+			insertMarkdownIntoEditor(`![${item.filename}](${item.url})`);
+		} else if (item.mimeType.startsWith('video/')) {
+			insertMarkdownIntoEditor(`<video src="${item.url}" controls></video>`);
+		} else if (item.mimeType.startsWith('audio/')) {
+			insertMarkdownIntoEditor(`<audio src="${item.url}" controls></audio>`);
+		} else {
+			insertMarkdownIntoEditor(`[${item.filename}](${item.url})`);
+		}
+	}
+
+	function handleMediaInsertUpload(item: { url: string; filename: string; mimeType: string }) {
+		if (!item.url) return;
+		const current = $formData.media_urls ?? [];
+		if (!current.includes(item.url)) {
+			$formData.media_urls = [...current, item.url];
+		} else {
+			toast.info('This file is already in the media list');
+		}
+	}
 	let loading = $state(false);
 	let isPinned = $state(false);
 	let pinLoading = $state(false);
@@ -705,6 +769,28 @@
 										class="max-h-[400px] min-h-[250px] w-full overflow-y-auto rounded-md border border-input p-4"
 									></div>
 								{/key}
+								<div
+									class="flex flex-wrap items-center gap-0.5 rounded-md border bg-muted/30 px-2 py-1"
+								>
+									<Button
+										variant="ghost"
+										size="sm"
+										type="button"
+										class="h-7 gap-1.5 px-2 text-xs"
+										onclick={() => (insertUploadOpen = true)}
+									>
+										<FolderOpen class="h-3.5 w-3.5" />
+										Browse Uploads
+									</Button>
+									<span class="mx-0.5 h-4 w-px bg-border"></span>
+									<EmojiPicker onSelect={handleEditorEmoji} />
+									<EmojiPicker
+										onSelect={handleEditorSticker}
+										triggerIcon={Sticker}
+										triggerTitle="Sticker"
+									/>
+									<GifPicker onSelect={handleEditorGif} />
+								</div>
 							{:else}
 								<Textarea
 									bind:value={$formData.content}
@@ -799,6 +885,16 @@
 						onRemove={removeMediaUrl}
 						inputId="edit-media-file-input"
 					/>
+					<Button
+						variant="outline"
+						size="sm"
+						type="button"
+						class="gap-1.5"
+						onclick={() => (insertUploadOpen = true)}
+					>
+						<FolderOpen class="h-3.5 w-3.5" />
+						Add from Uploads
+					</Button>
 				{/if}
 			</Card.Content>
 			<Card.Footer class="flex shrink-0 justify-end gap-2">
@@ -885,5 +981,10 @@
 		onSigned={(e) => runPublish(e)}
 		onUnsigned={() => runPublish()}
 		onDefer={() => {}}
+	/>
+
+	<InsertUploadDialog
+		bind:open={insertUploadOpen}
+		onInsert={$formData.type === 'media' ? handleMediaInsertUpload : handleInsertUpload}
 	/>
 </div>

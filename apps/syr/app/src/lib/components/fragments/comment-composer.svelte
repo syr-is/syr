@@ -84,12 +84,20 @@
 		});
 	}
 
-	function handleEmoji(emoji: { shortcode: string }) {
-		insertAtCursor(`:${emoji.shortcode}: `);
+	function handleEmoji(emoji: { shortcode: string; unicode?: boolean }) {
+		if (emoji.unicode) {
+			insertAtCursor(emoji.shortcode);
+		} else {
+			insertAtCursor(`:${emoji.shortcode}: `);
+		}
 	}
 
-	function handleSticker(emoji: { shortcode: string }) {
-		insertAtCursor(`::${emoji.shortcode}:: `);
+	function handleSticker(emoji: { shortcode: string; unicode?: boolean }) {
+		if (emoji.unicode) {
+			insertAtCursor(`\n<span class="unicode-sticker">${emoji.shortcode}</span>\n`);
+		} else {
+			insertAtCursor(`::${emoji.shortcode}:: `);
+		}
 	}
 
 	function handleGif(gif: { url: string }) {
@@ -273,3 +281,12 @@
 		</Button>
 	</div>
 </div>
+
+<style>
+	:global(.prose .unicode-sticker) {
+		display: block;
+		font-size: 3rem;
+		line-height: 1;
+		margin: 0.25em 0;
+	}
+</style>

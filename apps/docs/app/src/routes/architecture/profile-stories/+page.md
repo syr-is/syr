@@ -37,26 +37,7 @@ Stories are **beyond Phase 0** and build on existing **DID-scoped object storage
 
 ---
 
-## 3. Object storage layout (UTC +00:00)
-
-Stories use the same **DID-namespaced** bucket layout as other uploads (see the **Storage layer** section in [apps/syr reference](/reference/app) and repo `s3/README.md`).
-
-**Canonical object key (after upload completes):**
-
-```text
-uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{upload_ulid}
-```
-
-- `{UTC_YYYY-MM-DD}` is the **calendar date in UTC** at the moment the story asset is **finalized** (e.g. upload status `completed`), not the viewer’s local timezone.
-- `{upload_ulid}` is the **local id** portion of the composite upload record id (`{ created_by: DID, id: ULID }`), consistent with existing upload keys.
-
-**Rationale:** Date prefixes support **lifecycle rules**, debugging, and human browsing in the console without replacing the need for a **timestamp filter** for the 24-hour window (see §4).
-
-**Anonymous read:** Paths remain under a `public` segment so existing bucket policies such as `Read:…/uploads/did:syr:*/public/*` continue to apply.
-
----
-
-## 4. Rolling 24-hour visibility
+## 3. Rolling 24-hour visibility
 
 **Definition:** A slide is **active** if:
 
@@ -68,28 +49,11 @@ where `completed_at` (or equivalent **`published_at`**) is stored in **UTC** and
 
 **Important:** The UTC **folder** for an object (§3) may be **yesterday’s** date while the slide is still active (e.g. uploaded 23 hours ago). Implementations **must not** expose slides using “list today’s prefix only”; they **must** filter by **timestamp** (database query and/or listing multiple date prefixes and filtering).
 
-Expired objects may remain in storage until a **separate retention / GC** job deletes them; the **public API** only returns active slides.
+Expired slides are excluded from the public API. Cleanup of expired media is an implementation concern.
 
 ---
 
-## 5. Metadata model (implementation guidance)
-
-**Recommended:** Reuse the existing **`upload`** table and **folder** hierarchy:
-
-- Virtual folders: `stories` → `{UTC_YYYY-MM-DD}` → `public`, mirroring the S3 key layout.
-- Each story slide is one **`upload`** row (composite id, `is_public: true`, `mime_type`, `size`, `url` / `key`, `created_at` / completion time).
-
-**Alternative:** A dedicated `story_item` table with `upload_id` and `published_at` if product rules later diverge from generic uploads. v1 spec prefers **one code path** with folders + uploads for quotas, signing hooks, and export.
-
-**Media constraints (v1 constants, TBD in implementation):**
-
-- **Images:** common formats (e.g. JPEG, PNG, WebP, GIF).
-- **Video:** short clips with **max duration** and **max byte size** enforced at presign / complete time.
-- Reject disallowed MIME types at API boundary.
-
----
-
-## 6. Public API (author’s instance)
+## 4. Public API (author’s instance)
 
 **Endpoint (normative target):**
 
@@ -129,15 +93,15 @@ Optional query parameter for efficiency: `?since=<ISO8601>` — server may still
 
 ---
 
-## 7. Cross-provider client flow
+## 5. Cross-provider client flow
 
-Aligned with [§9 of Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline): the **browser** (or app) holds **follow rows** with **`followed_provider_url`**, resolves each **followed DID**’s **base URL**, and calls:
+Aligned with [Follows, Discovery, and Home Timeline](/architecture/follows-and-timeline): the client holds follow rows with provider URLs, resolves each followed DID’s endpoints from their **identity manifest** at `/.well-known/syr/{did}`, and calls the `stories` endpoint:
 
 ```text
-GET {followed_provider_base}/api/public/stories/{followed_did}
+GET {endpoints.stories}
 ```
 
-Same-instance authors can use **relative** `/api/public/stories/…` on the current host.
+If the manifest is unavailable, clients fall back to `{provider}/api/public/stories/{did}`.
 
 ```mermaid
 sequenceDiagram
@@ -158,7 +122,7 @@ sequenceDiagram
 
 ---
 
-## 8. Product UX
+## 6. Product UX
 
 | Surface              | Behavior                                                                                                                                                                                      |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -169,7 +133,7 @@ sequenceDiagram
 
 ---
 
-## 9. Privacy and abuse
+## 7. Privacy and abuse
 
 - v1 stories are **world-readable** once published (same exposure model as **public** post media under `public/` paths).
 - **Rate limits** and **upload quotas** should apply to story uploads like other **`upload`** usage.
@@ -177,18 +141,7 @@ sequenceDiagram
 
 ---
 
-## 10. Implementation checklist (later)
-
-- `@syr-is/types`: optional `PublicStorySlideSchema` / response wrapper.
-- Folder + upload controller: presign path `stories/{UTC-date}/public/…`, enforce MIME/size.
-- Route `GET /api/public/stories/[did]/+server.ts` (or equivalent).
-- Home tray + viewer components; parallel fetch with **timeouts** and **partial failure** (skip unreachable providers).
-- Tests: 24h boundary, UTC date folder, empty reel, cross-origin fetch mocks.
-- Update **SeaweedFS** docs if policy strings need explicit mention of `stories/`.
-
----
-
-## 11. Revision history
+## 8. Revision history
 
 | Version | Summary                                                                     |
 | ------- | --------------------------------------------------------------------------- |

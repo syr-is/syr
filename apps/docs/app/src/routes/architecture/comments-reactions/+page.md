@@ -47,14 +47,13 @@ This document specifies **comments** and **reactions** for the Syr ecosystem. Co
 
 ```
 Comment {
-  id: RecordId (comment:{ created_by: did, id: ulid })
+  id: composite (comment:{ created_by: did, id: ulid })
   parent_type: 'post' | 'comment'
   parent_did: string                // DID of the parent entity's author
   parent_id: string                 // ULID of the parent entity
   content: string                   // markdown text with emoji shortcodes
   status: 'draft' | 'completed'
   visibility: 'public' | 'unlisted' | 'private'
-  author_id: RecordId               // local user record
   created_at, updated_at
   content_signature?: string
   signed_payload_json?: string
@@ -68,14 +67,13 @@ Comment {
 
 ```
 Reaction {
-  id: RecordId (reaction:{ created_by: did, id: ulid })
+  id: composite (reaction:{ created_by: did, id: ulid })
   parent_type: 'post' | 'comment'
   parent_did: string
   parent_id: string
   kind: 'unicode' | 'custom_emoji' | 'sticker' | 'gif'
-  value: string                     // Unicode char(s) for 'unicode', shortcode for emoji/sticker, URL for gif
-  image_url?: string                // resolved URL for custom emoji/sticker/gif (null for unicode)
-  author_id: RecordId
+  value: string                     // Unicode char(s) for 'unicode', shortcode for custom_emoji/sticker/gif
+  image_url?: string                // resolved image URL for custom_emoji/sticker/gif (absent for unicode)
   created_at, updated_at
   content_signature?: string
   signed_payload_json?: string
@@ -98,21 +96,27 @@ GET    /api/comments/[did]/[id]                -- get specific comment
 PATCH  /api/comments/[did]/[id]                -- update comment content/status/visibility
 DELETE /api/comments/[did]/[id]                -- delete comment
 
-POST   /api/reactions                          -- create/toggle reaction
-GET    /api/reactions                          -- list own reactions
+POST   /api/reactions                          -- toggle reaction (create or remove)
 DELETE /api/reactions/[did]/[id]               -- delete reaction
 ```
 
 ### 4.2 Public (cross-instance reads)
 
 ```
-GET /api/public/comments/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}
+GET /api/public/comments/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}&limit={n}&offset={n}
 ```
 
 Returns all **public + completed** comments by `[did]` for the specified parent. This is the core cross-instance query. The viewer calls this for each followed DID to collect comments on a post.
 
+An alternative convenience form accepts `post_did` and `post_id` to fetch all comments in a post's thread (root comments on the post plus all comment-type replies by this DID):
+
+```
+GET /api/public/comments/[did]?post_did={did}&post_id={ulid}&limit={n}&offset={n}
+```
+
 ```json
 {
+	"status": "success",
 	"data": [
 		{
 			"did": "did:syr:z6Mk...",
@@ -123,29 +127,40 @@ Returns all **public + completed** comments by `[did]` for the specified parent.
 			"parent_id": "01ARZ3N...",
 			"visibility": "public",
 			"status": "completed",
-			"created_at": "2026-04-09T12:00:00Z"
+			"created_at": "2026-04-09T12:00:00Z",
+			"updated_at": "2026-04-09T12:00:00Z",
+			"content_signature": null,
+			"signed_payload_json": null,
+			"signing_device_public_key": null
 		}
-	]
+	],
+	"pagination": { "limit": 50, "offset": 0, "total": 1, "has_more": false }
 }
 ```
 
 ```
-GET /api/public/reactions/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}
+GET /api/public/reactions/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}&limit={n}&offset={n}
 ```
 
 Returns all reactions by `[did]` for the specified parent.
 
 ```json
 {
+	"status": "success",
 	"data": [
 		{
 			"did": "did:syr:z6Mk...",
+			"local_id": "01ARZ3N...",
+			"parent_type": "post",
+			"parent_did": "did:syr:z6Mk...",
+			"parent_id": "01ARZ3N...",
 			"kind": "custom_emoji",
 			"value": "party_parrot",
 			"image_url": "https://...",
 			"created_at": "2026-04-09T12:00:00Z"
 		}
-	]
+	],
+	"pagination": { "limit": 50, "offset": 0, "total": 1, "has_more": false }
 }
 ```
 
@@ -303,105 +318,8 @@ Reactions from followed users are fetched per-instance (same pattern as comments
 
 ---
 
-## 9. Database tables
+## 9. Uniqueness constraints
 
-### 9.1 `comment` table
+### 9.1 Reactions
 
-| Field                       | Type                 | Notes                                   |
-| --------------------------- | -------------------- | --------------------------------------- |
-| `id`                        | RecordId (composite) | `comment:{ created_by: did, id: ulid }` |
-| `parent_type`               | string               | `post` or `comment`                     |
-| `parent_did`                | string               | DID of parent entity's author           |
-| `parent_id`                 | string               | ULID of parent entity                   |
-| `content`                   | string               | Markdown text                           |
-| `status`                    | string               | `draft` or `completed`                  |
-| `visibility`                | string               | `public`, `unlisted`, `private`         |
-| `author_id`                 | RecordId             | FK to user                              |
-| `content_signature`         | string?              | Signed content hash                     |
-| `signed_payload_json`       | string?              | Canonical signed payload                |
-| `signing_device_public_key` | string?              | Device key used                         |
-| `created_at`                | datetime             |                                         |
-| `updated_at`                | datetime             |                                         |
-
-**Indexes**: `(parent_type, parent_did, parent_id)` for parent lookup; `author_id` for user's comments; composite ID for direct access.
-
-### 9.2 `reaction` table
-
-| Field                       | Type                 | Notes                                       |
-| --------------------------- | -------------------- | ------------------------------------------- |
-| `id`                        | RecordId (composite) | `reaction:{ created_by: did, id: ulid }`    |
-| `parent_type`               | string               | `post` or `comment`                         |
-| `parent_did`                | string               | DID of parent entity's author               |
-| `parent_id`                 | string               | ULID of parent entity                       |
-| `kind`                      | string               | `unicode`, `custom_emoji`, `sticker`, `gif` |
-| `value`                     | string               | The emoji/shortcode/URL                     |
-| `image_url`                 | string?              | Resolved image URL                          |
-| `author_id`                 | RecordId             | FK to user                                  |
-| `content_signature`         | string?              |                                             |
-| `signed_payload_json`       | string?              |                                             |
-| `signing_device_public_key` | string?              |                                             |
-| `created_at`                | datetime             |                                             |
-| `updated_at`                | datetime             |                                             |
-
-**Unique constraint**: `(author_id, parent_type, parent_did, parent_id, kind, value)` -- one reaction per user per value per parent.
-
-**Indexes**: `(parent_type, parent_did, parent_id)` for parent lookup; `author_id` for user's reactions.
-
----
-
-## 10. UI components
-
-### 10.1 Comment thread
-
-- **Post page** includes a "Comments" section below the post content.
-- On load, fetches comments from all followed users' instances for this post.
-- Renders as a **nested tree** with indentation per depth level.
-- Each comment shows: avatar, username@instance, content (rendered markdown), timestamp, reaction counters, reply button.
-- **Reply** opens an inline markdown editor below the comment.
-- **Collapse/expand** for deep threads.
-
-### 10.2 Comment composer
-
-- Markdown editor with toolbar (bold, italic, link, code, image).
-- Emoji picker button (opens [Emoji & Sticker Store](/architecture/emoji-sticker-store) picker).
-- GIF picker button (opens [GIF Store](/architecture/gif-store) picker).
-- Preview toggle.
-- Submit creates a `POST /api/comments` on the viewer's own instance.
-
-### 10.3 Reaction bar
-
-- Row of grouped reaction counters below each post/comment.
-- "+" button to add a new reaction via emoji/sticker/GIF picker.
-- Click to toggle own reaction.
-- Tooltip shows list of users who reacted (from followed users).
-
----
-
-## 11. Implementation phases
-
-### Phase 1: Core comment CRUD
-
-- Comment schema, repository, controller.
-- Authenticated API routes (create, read, update, delete).
-- Public API for cross-instance reads.
-- Basic comment rendering (markdown) on post page.
-
-### Phase 2: Threading and cross-instance
-
-- Thread tree construction from flat comment lists.
-- Cross-instance comment fetching (query followed users' instances).
-- Nested thread UI with collapse/expand.
-
-### Phase 3: Reactions
-
-- Reaction schema, repository, controller.
-- Authenticated and public API routes.
-- Reaction bar UI component.
-- Cross-instance reaction aggregation.
-
-### Phase 4: Emoji/Sticker/GIF integration
-
-- Emoji picker in comment composer.
-- GIF picker in comment composer.
-- Shortcode resolution in rendered content.
-- Custom emoji/sticker reactions.
+One reaction per user per value per parent is enforced: `(author_id, parent_type, parent_did, parent_id, kind, value)` must be unique. Adding the same reaction again is a toggle (removes it).
