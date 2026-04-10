@@ -48,7 +48,7 @@
 	const viewer = $derived(userSessionStore.user);
 	/** Authenticated user can toggle follow via API */
 	const canFollowLocal = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
-	/** Always show the button if there's a DID (unauthenticated users get the remote follow dialog) */
+	/** Always show follow button; unauthenticated users are redirected to login, users without a DID get the remote follow dialog */
 	const showFollowButton = $derived(!!p.did && p.did !== viewer?.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
 	const remoteHomeHref = $derived.by(() => {

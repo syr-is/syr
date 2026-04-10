@@ -101,12 +101,13 @@
 
 	function handleMediaInsertUpload(item: { url: string; filename: string; mimeType: string }) {
 		if (!item.url) return;
-		const current = $formData.media_urls ?? [];
-		if (!current.includes(item.url)) {
-			$formData.media_urls = [...current, item.url];
-		} else {
+		if (mediaUrls.includes(item.url)) {
 			toast.info('This file is already in the media list');
+			return;
 		}
+		mediaUrls = [...mediaUrls, item.url];
+		mediaMimeTypes = { ...mediaMimeTypes, [item.url]: item.mimeType };
+		$formData.media_urls = mediaUrls;
 	}
 	let loading = $state(false);
 	let isPinned = $state(false);

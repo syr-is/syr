@@ -446,7 +446,10 @@
 
 		// Create [deleted] placeholder nodes for each missing parent
 		for (const [parentKey, orphans] of orphansByParent) {
-			const [pDid, pId] = parentKey.split(':');
+			const lastColon = parentKey.lastIndexOf(':');
+			if (lastColon <= 0) continue;
+			const pDid = parentKey.substring(0, lastColon);
+			const pId = parentKey.substring(lastColon + 1);
 			if (!pDid || !pId) continue;
 			const placeholder = makeDeletedPlaceholder(pDid, pId);
 			placeholder.children = orphans;
@@ -699,6 +702,7 @@
 								<button
 									type="button"
 									class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+									title="Delete comment"
 									onclick={() => deleteComment(node.did, node.local_id)}
 								>
 									<Trash2 class="h-3 w-3" />

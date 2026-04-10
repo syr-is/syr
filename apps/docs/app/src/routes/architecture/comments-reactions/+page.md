@@ -45,7 +45,7 @@ This document specifies **comments** and **reactions** for the Syr ecosystem. Co
 
 ### 3.1 Comment
 
-```
+```text
 Comment {
   id: composite (comment:{ created_by: did, id: ulid })
   parent_type: 'post' | 'comment'
@@ -65,7 +65,7 @@ Comment {
 
 ### 3.2 Reaction
 
-```
+```text
 Reaction {
   id: composite (reaction:{ created_by: did, id: ulid })
   parent_type: 'post' | 'comment'
@@ -89,7 +89,7 @@ Reaction {
 
 ### 4.1 Authenticated (comment owner's instance)
 
-```
+```text
 POST   /api/comments                           -- create comment
 GET    /api/comments                           -- list own comments (paginated)
 GET    /api/comments/[did]/[id]                -- get specific comment
@@ -102,7 +102,7 @@ DELETE /api/reactions/[did]/[id]               -- delete reaction
 
 ### 4.2 Public (cross-instance reads)
 
-```
+```text
 GET /api/public/comments/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}&limit={n}&offset={n}
 ```
 
@@ -110,7 +110,7 @@ Returns all **public + completed** comments by `[did]` for the specified parent.
 
 An alternative convenience form accepts `post_did` and `post_id` to fetch all comments in a post's thread (root comments on the post plus all comment-type replies by this DID):
 
-```
+```text
 GET /api/public/comments/[did]?post_did={did}&post_id={ulid}&limit={n}&offset={n}
 ```
 
@@ -138,7 +138,7 @@ GET /api/public/comments/[did]?post_did={did}&post_id={ulid}&limit={n}&offset={n
 }
 ```
 
-```
+```text
 GET /api/public/reactions/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}&limit={n}&offset={n}
 ```
 
@@ -264,7 +264,7 @@ Comment content is sanitized using the same pipeline as post content:
 
 Reactions on a post/comment are grouped by `(kind, value)` and displayed as a row of counters:
 
-```
+```text
 [party_parrot: 3] [thumbsup: 5] [heart: 2]
 ```
 

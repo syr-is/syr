@@ -212,7 +212,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		if (!upload.key?.startsWith('instance-media/')) {
 			throw error(403, { code: 'FORBIDDEN', message: 'Not an instance media upload' });
 		}
-		if (upload.status === 'completed') return json({ status: 'success', data: upload });
+		if (upload.status === 'completed') {
+			return json({
+				status: 'success',
+				data: {
+					...upload,
+					id: upload.id.toString(),
+					did: extractDid(upload.id),
+					local_id: extractLocalId(upload.id)
+				}
+			});
+		}
 		if (upload.status !== 'pending') {
 			throw error(400, {
 				code: 'BAD_REQUEST',
@@ -221,9 +231,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Verify file in S3
-		const headResult = await s3Service.client.send(
-			new HeadObjectCommand({ Bucket: s3.bucket, Key: upload.key })
-		);
+		let headResult;
+		try {
+			headResult = await s3Service.client.send(
+				new HeadObjectCommand({ Bucket: s3.bucket, Key: upload.key })
+			);
+		} catch (s3Err) {
+			const httpStatus = (s3Err as { $metadata?: { httpStatusCode?: number } }).$metadata
+				?.httpStatusCode;
+			if (httpStatus === 404) {
+				throw error(400, {
+					code: 'FILE_NOT_FOUND',
+					message: 'File not found in storage. Upload the file first.'
+				});
+			}
+			throw error(502, { code: 'STORAGE_ERROR', message: 'Could not verify file in storage' });
+		}
 		const actualSize = headResult.ContentLength ?? 0;
 		if (actualSize !== upload.size) {
 			await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key }));
@@ -244,12 +267,36 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const now = new Date();
-		await uploadRepository.casPendingToFinalizing(uploadId, now);
+		const finalizing = await uploadRepository.casPendingToFinalizing(uploadId, now);
+		if (!finalizing) {
+			// Concurrent completion — check if already done
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') {
+				return json({
+					status: 'success',
+					data: {
+						...latest,
+						id: latest.id.toString(),
+						did: extractDid(latest.id),
+						local_id: extractLocalId(latest.id)
+					}
+				});
+			}
+			throw error(409, { code: 'CONFLICT', message: 'Upload state changed concurrently' });
+		}
 		const completed = await uploadRepository.casFinalizingToCompleted(uploadId, now);
 		if (!completed)
 			throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to complete upload' });
 
-		return json({ status: 'success', data: completed });
+		return json({
+			status: 'success',
+			data: {
+				...completed,
+				id: completed.id.toString(),
+				did: extractDid(completed.id),
+				local_id: extractLocalId(completed.id)
+			}
+		});
 	} catch (err) {
 		if (err instanceof z.ZodError) {
 			throw error(400, {

@@ -37,9 +37,15 @@
 		let url: URL;
 		try {
 			const raw = instanceUrl.trim();
-			url = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+			const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw);
+			url = new URL(hasScheme ? raw : `https://${raw}`);
 		} catch {
 			errorMsg = 'Invalid URL';
+			return;
+		}
+
+		if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+			errorMsg = 'Only http and https URLs are supported';
 			return;
 		}
 
@@ -49,8 +55,13 @@
 		}
 		const qs = params.toString();
 		const profilePath = `/u/${encodeURIComponent(did)}${qs ? `?${qs}` : ''}`;
-		window.open(`${url.origin}${profilePath}`, '_blank');
-		open = false;
+		const newWin = window.open(`${url.origin}${profilePath}`, '_blank');
+		if (newWin) {
+			newWin.opener = null;
+			open = false;
+		} else {
+			errorMsg = 'Popup was blocked by your browser. Allow popups and try again.';
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {

@@ -14,12 +14,12 @@ This is **not** a certificate viewer; it is a minimal integrity and attribution 
 
 ## 2. What the user sees
 
-| Element              | Description                                                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **DID**              | Full `did:syr:...` string with copy-to-clipboard.                                                                                                         |
-| **Public key**       | Derived from the DID (multibase or short **fingerprint** / first/last hex) so users can correlate with other tools.                                       |
-| **Signature status** | **Valid** or **Invalid** (or **Unknown** if data missing), from re-running JCS canonicalization + Ed25519 verification using the public key from the DID. |
-| **Optional**         | Expandable “canonical payload” or hash for advanced users and support.                                                                                    |
+| Element              | Description                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **DID**              | Full `did:syr:...` string with copy-to-clipboard.                                                                                                                                                                                                                                                                              |
+| **Public key**       | Derived from the DID (multibase or short **fingerprint** / first/last hex) so users can correlate with other tools.                                                                                                                                                                                                            |
+| **Signature status** | **Valid** or **Invalid** (or **Unknown** if data missing), from re-running JCS canonicalization + Ed25519 verification using the DID-derived public key or, when `signing_device_public_key` is present, the delegated device key from the signing artifact. Implementers must accept valid signatures from either key source. |
+| **Optional**         | Expandable “canonical payload” or hash for advanced users and support.                                                                                                                                                                                                                                                         |
 
 ---
 
