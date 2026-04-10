@@ -77,6 +77,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const data = FolderCreateSchema.parse(body);
 		const parentId = data.parent_id ? stringToRecordId.decode(data.parent_id) : null;
 
+		// Validate parent exists and is instance-scoped
+		if (parentId) {
+			const parentResult = await db.query<[Folder[]]>(
+				`SELECT * FROM folder WHERE id = $parentId AND scope = 'instance' LIMIT 1`,
+				{ parentId }
+			);
+			if ((parentResult[0]?.length ?? 0) === 0) {
+				throw error(400, {
+					code: 'INVALID_PARENT',
+					message: 'Parent folder not found or not an instance media folder'
+				});
+			}
+		}
+
 		// Check for duplicate name in same parent
 		let existing: Folder[];
 		if (parentId) {

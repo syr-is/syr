@@ -36,6 +36,7 @@
 
 	let reactions = $state<ReactionGroup[]>([]);
 	let toggling = $state<string | null>(null);
+	let loadSeq = 0;
 
 	type ManifestEndpoints = { public_reactions: string; profile: string };
 	const manifestCache = new SvelteMap<string, Promise<ManifestEndpoints>>();
@@ -91,6 +92,7 @@
 	}
 
 	async function loadReactions() {
+		const seq = ++loadSeq;
 		try {
 			const allReactions: Array<{
 				kind: string;
@@ -176,6 +178,7 @@
 				}
 			}
 
+			if (seq !== loadSeq) return; // stale response, discard
 			reactions = Array.from(groups.values());
 		} catch {
 			/* skip */

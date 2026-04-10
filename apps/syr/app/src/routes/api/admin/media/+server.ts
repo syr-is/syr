@@ -169,7 +169,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					uploadId: uploadRecord.id.toString(),
 					uploadDid: extractDid(uploadRecord.id),
 					uploadLocalId: extractLocalId(uploadRecord.id),
-					isPublic: true
+					isPublic
 				}
 			},
 			{ status: 201 }

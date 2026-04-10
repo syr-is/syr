@@ -30,7 +30,7 @@ export class ReactionRepository extends BaseRepository<Reaction> {
 
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[Reaction[]]>(
-				`SELECT * FROM reaction ${whereClause} LIMIT $limit START $offset`,
+				`SELECT * FROM reaction ${whereClause} ORDER BY created_at DESC, id DESC LIMIT $limit START $offset`,
 				params
 			),
 			this.db.query<[{ total: number }[]]>(

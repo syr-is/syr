@@ -133,12 +133,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		try {
 			const uid = user?.id ?? stringToRecordId.decode(locals.user.id);
 			const follows = await followRepository.findByFollower(uid);
-			followedDids = follows
-				.filter((f) => f.followed_provider_url)
-				.map((f) => ({
-					did: f.followed_did,
-					providerUrl: f.followed_provider_url!
-				}));
+			followedDids = follows.map((f) => ({
+				did: f.followed_did,
+				providerUrl: f.followed_provider_url ?? ''
+			}));
 		} catch {
 			// Non-critical — comments will just not load from remote instances
 		}

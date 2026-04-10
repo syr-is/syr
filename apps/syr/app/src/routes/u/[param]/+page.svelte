@@ -31,6 +31,7 @@
 	import type { StorySlide } from '$lib/types/feed-stories';
 	import { fetchManifest } from '$lib/manifest-cache.js';
 	import { endpointsFromManifest, fallbackEndpoints, manifestUrl } from '$lib/remote-endpoints.js';
+	import RemoteFollowDialog from '$lib/components/fragments/remote-follow-dialog.svelte';
 
 	let { data } = $props();
 
@@ -45,7 +46,10 @@
 
 	const p = $derived(data.publicProfile);
 	const viewer = $derived(userSessionStore.user);
-	const canFollow = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
+	/** Authenticated user can toggle follow via API */
+	const canFollowLocal = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
+	/** Always show the button if there's a DID (unauthenticated users get the remote follow dialog) */
+	const showFollowButton = $derived(!!p.did && p.did !== viewer?.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
 	const remoteHomeHref = $derived.by(() => {
 		if (data.remoteEndpoints?.web_profile) return data.remoteEndpoints.web_profile;
@@ -111,6 +115,7 @@
 	let followBusy = $state(false);
 	let isFollowing = $state(false);
 	let followStateLoading = $state(false);
+	let remoteFollowOpen = $state(false);
 
 	let storySlides = $state<StorySlide[]>([]);
 	let storyViewerOpen = $state(false);
@@ -495,7 +500,20 @@
 	}
 
 	async function toggleFollow() {
-		if (!p.did || !viewer || followBusy || followStateLoading) return;
+		if (!p.did || followBusy || followStateLoading) return;
+		if (!canFollowLocal) {
+			if (!viewer) {
+				// Not logged in — redirect to login, then back here
+				const returnPath = `${window.location.pathname}${window.location.search}`;
+				const loginHref = resolve('/login') + `?redirectTo=${encodeURIComponent(returnPath)}`;
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- base is resolve()'d, query is dynamic
+				void goto(loginHref);
+			} else {
+				// Logged in but no DID or viewing own profile — show remote follow
+				remoteFollowOpen = true;
+			}
+			return;
+		}
 		const currentDid = p.did;
 		followBusy = true;
 		try {
@@ -572,7 +590,7 @@
 						})()
 					: null
 		}}
-		showFollow={canFollow}
+		showFollow={showFollowButton}
 		{followBusy}
 		{followStateLoading}
 		{isFollowing}
@@ -942,3 +960,9 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<RemoteFollowDialog
+	bind:open={remoteFollowOpen}
+	did={p.did ?? ''}
+	providerOrigin={data.resolvedProviderOrigin ?? null}
+/>

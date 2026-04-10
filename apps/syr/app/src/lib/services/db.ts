@@ -264,6 +264,7 @@ class DatabaseService {
 
 			// Emoji table (composite ID: { created_by: did, id: ulid })
 			await db.query(`
+				DEFINE TABLE IF NOT EXISTS emoji SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS shortcode ON TABLE emoji TYPE string;
 				DEFINE FIELD IF NOT EXISTS url ON TABLE emoji TYPE string;
 				DEFINE FIELD IF NOT EXISTS mime_type ON TABLE emoji TYPE string;
@@ -281,6 +282,7 @@ class DatabaseService {
 
 			// GIF table (composite ID: { created_by: did, id: ulid })
 			await db.query(`
+				DEFINE TABLE IF NOT EXISTS gif SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS url ON TABLE gif TYPE string;
 				DEFINE FIELD IF NOT EXISTS thumbnail_url ON TABLE gif TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS mime_type ON TABLE gif TYPE string;
@@ -297,6 +299,7 @@ class DatabaseService {
 
 			// Comment table (composite ID: { created_by: did, id: ulid })
 			await db.query(`
+				DEFINE TABLE IF NOT EXISTS comment SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS parent_type ON TABLE comment TYPE string
 					ASSERT $value IN ['post', 'comment'];
 				DEFINE FIELD IF NOT EXISTS parent_did ON TABLE comment TYPE string;
@@ -318,6 +321,7 @@ class DatabaseService {
 
 			// Reaction table (composite ID: { created_by: did, id: ulid })
 			await db.query(`
+				DEFINE TABLE IF NOT EXISTS reaction SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS parent_type ON TABLE reaction TYPE string
 					ASSERT $value IN ['post', 'comment'];
 				DEFINE FIELD IF NOT EXISTS parent_did ON TABLE reaction TYPE string;
@@ -334,6 +338,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE reaction TYPE option<string>;
 				DEFINE INDEX IF NOT EXISTS idx_reaction_parent ON TABLE reaction COLUMNS parent_type, parent_did, parent_id;
 				DEFINE INDEX IF NOT EXISTS idx_reaction_author ON TABLE reaction COLUMNS author_id;
+				DEFINE INDEX IF NOT EXISTS idx_reaction_unique ON TABLE reaction COLUMNS author_id, parent_type, parent_did, parent_id, kind, value UNIQUE;
 			`);
 
 			console.log('✅ Database schema initialized');

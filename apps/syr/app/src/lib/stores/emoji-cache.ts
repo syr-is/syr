@@ -1,6 +1,7 @@
 /**
  * Shared cache for instance emoji catalog.
  * All components (emoji picker, comment thread, reaction bar) share one fetch.
+ * On failure, the cache is cleared so the next call retries.
  */
 
 type EmojiEntry = {
@@ -15,18 +16,18 @@ export function getInstanceEmojis(): Promise<EmojiEntry[]> {
 	if (instancePromise) return instancePromise;
 
 	instancePromise = (async () => {
-		try {
-			const res = await fetch('/api/public/emojis');
-			if (!res.ok) return [];
-			const json = await res.json();
-			if (json.status === 'success') {
-				return (json.data ?? []) as EmojiEntry[];
-			}
-		} catch {
-			/* skip */
+		const res = await fetch('/api/public/emojis');
+		if (!res.ok) throw new Error(`Failed to fetch instance emojis: ${res.status}`);
+		const json = await res.json();
+		if (json.status === 'success') {
+			return (json.data ?? []) as EmojiEntry[];
 		}
 		return [];
-	})();
+	})().catch(() => {
+		// Clear cache on failure so next call retries
+		instancePromise = null;
+		return [] as EmojiEntry[];
+	});
 
 	return instancePromise;
 }
@@ -37,18 +38,18 @@ export function getUserEmojis(endpointUrl: string): Promise<EmojiEntry[]> {
 	if (userEmojiCache.has(endpointUrl)) return userEmojiCache.get(endpointUrl)!;
 
 	const promise = (async () => {
-		try {
-			const res = await fetch(endpointUrl);
-			if (!res.ok) return [];
-			const json = await res.json();
-			if (json.status === 'success' && json.data) {
-				return json.data as EmojiEntry[];
-			}
-		} catch {
-			/* skip */
+		const res = await fetch(endpointUrl);
+		if (!res.ok) throw new Error(`Failed: ${res.status}`);
+		const json = await res.json();
+		if (json.status === 'success' && json.data) {
+			return json.data as EmojiEntry[];
 		}
 		return [];
-	})();
+	})().catch(() => {
+		// Clear this URL from cache on failure so next call retries
+		userEmojiCache.delete(endpointUrl);
+		return [] as EmojiEntry[];
+	});
 
 	userEmojiCache.set(endpointUrl, promise);
 	return promise;

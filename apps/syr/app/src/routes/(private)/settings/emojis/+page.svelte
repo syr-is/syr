@@ -113,6 +113,7 @@
 									<Button
 										variant="destructive"
 										size="sm"
+										aria-label="Delete emoji"
 										onclick={() => deleteEmoji(emoji.did, emoji.local_id)}
 									>
 										<Trash2 class="h-3.5 w-3.5" />

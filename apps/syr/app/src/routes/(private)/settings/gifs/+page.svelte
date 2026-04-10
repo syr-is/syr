@@ -118,6 +118,7 @@
 									<Button
 										variant="destructive"
 										size="sm"
+										aria-label="Delete GIF"
 										onclick={() => deleteGif(gif.did, gif.local_id)}
 									>
 										<Trash2 class="h-3.5 w-3.5" />

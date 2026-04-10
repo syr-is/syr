@@ -14,7 +14,7 @@ export class EmojiRepository extends BaseRepository<Emoji> {
 
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[Emoji[]]>(
-				`SELECT * FROM emoji WHERE pack_slug = $packSlug AND scope = 'instance' LIMIT $limit START $offset`,
+				`SELECT * FROM emoji WHERE pack_slug = $packSlug AND scope = 'instance' ORDER BY shortcode ASC LIMIT $limit START $offset`,
 				{ packSlug, limit, offset }
 			),
 			this.db.query<[{ total: number }[]]>(
@@ -39,7 +39,7 @@ export class EmojiRepository extends BaseRepository<Emoji> {
 
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[Emoji[]]>(
-				`SELECT * FROM emoji WHERE id.created_by = $did AND scope = 'user' LIMIT $limit START $offset`,
+				`SELECT * FROM emoji WHERE id.created_by = $did AND scope = 'user' ORDER BY shortcode ASC LIMIT $limit START $offset`,
 				{ did, limit, offset }
 			),
 			this.db.query<[{ total: number }[]]>(
@@ -58,12 +58,12 @@ export class EmojiRepository extends BaseRepository<Emoji> {
 	async findInstanceEmojis(
 		opts: { limit?: number; offset?: number } = {}
 	): Promise<{ data: Emoji[]; total: number }> {
-		const limit = Math.min(Math.max(Math.floor(Number(opts.limit ?? 50)), 1), 200);
+		const limit = Math.min(Math.max(Math.floor(Number(opts.limit ?? 1000)), 1), 1000);
 		const offset = Math.max(Math.floor(Number(opts.offset ?? 0)), 0);
 
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[Emoji[]]>(
-				`SELECT * FROM emoji WHERE scope = 'instance' LIMIT $limit START $offset`,
+				`SELECT * FROM emoji WHERE scope = 'instance' ORDER BY shortcode ASC LIMIT $limit START $offset`,
 				{ limit, offset }
 			),
 			this.db.query<[{ total: number }[]]>(

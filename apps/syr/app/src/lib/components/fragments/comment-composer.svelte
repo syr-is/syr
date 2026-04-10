@@ -40,7 +40,8 @@
 		onCancel?: () => void;
 	} = $props();
 
-	let content = $derived.by(() => initialContent);
+	// eslint-disable-next-line svelte/prefer-writable-derived -- content is user-editable, not a pure derivation
+	let content = $state(initialContent);
 	let submitting = $state(false);
 	let preview = $state(false);
 	let previewHtml = $state('');

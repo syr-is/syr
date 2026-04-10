@@ -53,12 +53,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			currentUserDid = user?.did ?? null;
 			const uid = user?.id ?? stringToRecordId.decode(locals.user.id);
 			const follows = await followRepository.findByFollower(uid);
-			followedDids = follows
-				.filter((f) => f.followed_provider_url)
-				.map((f) => ({
-					did: f.followed_did,
-					providerUrl: f.followed_provider_url!
-				}));
+			followedDids = follows.map((f) => ({
+				did: f.followed_did,
+				providerUrl: f.followed_provider_url ?? ''
+			}));
 		} catch {
 			/* non-critical */
 		}
