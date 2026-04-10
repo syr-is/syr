@@ -51,6 +51,7 @@ Comment {
   parent_type: 'post' | 'comment'
   parent_did: string                // DID of the parent entity's author
   parent_id: string                 // ULID of the parent entity
+  ancestor_chain: string[]          // ordered chain from root comment to immediate parent
   content: string                   // markdown text with emoji shortcodes
   status: 'draft' | 'completed'
   visibility: 'public' | 'unlisted' | 'private'
@@ -62,6 +63,10 @@ Comment {
 ```
 
 **Parent reference**: The `(parent_type, parent_did, parent_id)` tuple uniquely identifies the parent entity across instances. This is used for cross-instance querying: "give me all comments by this DID whose parent is `post:{did},{ulid}`".
+
+**Ancestor chain**: The `ancestor_chain` array preserves the full path from the root comment down to the immediate parent. Each entry is a `"{did}:{local_id}"` string. Root comments (parent_type=post) have an empty chain. When a comment replies to another comment, its chain is the parent's chain plus the parent itself.
+
+This enables correct thread reconstruction even when intermediate comments are deleted or unavailable (author not followed). The viewer walks the chain backwards to find the nearest available ancestor and inserts placeholders for missing nodes, preserving the thread hierarchy.
 
 ### 3.2 Reaction
 
@@ -125,6 +130,7 @@ GET /api/public/comments/[did]?post_did={did}&post_id={ulid}&limit={n}&offset={n
 			"parent_type": "post",
 			"parent_did": "did:syr:z6Mk...",
 			"parent_id": "01ARZ3N...",
+			"ancestor_chain": [],
 			"visibility": "public",
 			"status": "completed",
 			"created_at": "2026-04-09T12:00:00Z",
@@ -223,10 +229,11 @@ Clients **must** prefer manifest-discovered URLs over hardcoded path assumptions
 
 Given a flat list of comments from multiple instances:
 
-1. Group by `(parent_type, parent_did, parent_id)`.
-2. Comments whose parent is the post itself are **root-level** comments.
-3. Comments whose parent is another comment are nested under that comment.
-4. Missing parents (deleted comment) render as a `[deleted]` placeholder with the orphaned replies nested underneath.
+1. Comments whose parent is the post itself are **root-level** comments.
+2. Comments whose parent is another comment are nested under that parent.
+3. **Orphan comments** (parent missing — deleted or not followed) use their `ancestor_chain` to find the nearest available ancestor in the tree. The viewer walks the chain backwards; the first ancestor found in the fetched set becomes the attachment point.
+4. **Placeholders** are inserted for each missing node in the gap between the found ancestor and the orphan, preserving the full thread depth. Placeholders display the unavailable author's DID as a discoverable link.
+5. If no ancestor is found at all, the orphan is attached to a root-level placeholder for its immediate parent.
 
 ---
 
@@ -291,9 +298,9 @@ Reactions from followed users are fetched per-instance (same pattern as comments
 	"type": "comment@v1",
 	"did": "did:syr:z6Mk...",
 	"comment_id": "01ARZ3N...",
-	"parent_type": "post",
-	"parent_did": "did:syr:z6Mk...",
-	"parent_id": "01ARZ3N...",
+	"post_did": "did:syr:z6Mk...",
+	"post_id": "01ARZ3N...",
+	"ancestor_chain": [],
 	"content": "Great post!",
 	"visibility": "public",
 	"status": "completed",

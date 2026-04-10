@@ -289,7 +289,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS size ON TABLE gif TYPE int;
 				DEFINE FIELD IF NOT EXISTS scope ON TABLE gif TYPE string
 					ASSERT $value IN ['instance', 'user'];
-				DEFINE FIELD IF NOT EXISTS tags ON TABLE gif FLEXIBLE TYPE array;
+				DEFINE FIELD IF NOT EXISTS tags ON TABLE gif TYPE array<string> DEFAULT [];
 				DEFINE FIELD IF NOT EXISTS author_id ON TABLE gif TYPE record<user>;
 				DEFINE FIELD IF NOT EXISTS created_at ON TABLE gif TYPE datetime;
 				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE gif TYPE datetime;
@@ -298,12 +298,18 @@ class DatabaseService {
 			`);
 
 			// Comment table (composite ID: { created_by: did, id: ulid })
+			// Migration: drop deprecated parent_type/parent_did/parent_id fields and old index
+			await db.query(`
+				REMOVE FIELD IF EXISTS parent_type ON TABLE comment;
+				REMOVE FIELD IF EXISTS parent_did ON TABLE comment;
+				REMOVE FIELD IF EXISTS parent_id ON TABLE comment;
+				REMOVE INDEX IF EXISTS idx_comment_parent ON TABLE comment;
+			`);
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS comment SCHEMAFULL;
-				DEFINE FIELD IF NOT EXISTS parent_type ON TABLE comment TYPE string
-					ASSERT $value IN ['post', 'comment'];
-				DEFINE FIELD IF NOT EXISTS parent_did ON TABLE comment TYPE string;
-				DEFINE FIELD IF NOT EXISTS parent_id ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS post_did ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS post_id ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS ancestor_chain ON TABLE comment TYPE array<string> DEFAULT [];
 				DEFINE FIELD IF NOT EXISTS content ON TABLE comment TYPE string;
 				DEFINE FIELD IF NOT EXISTS visibility ON TABLE comment TYPE string
 					ASSERT $value IN ['public', 'unlisted', 'private'];
@@ -315,7 +321,7 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE comment TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE comment TYPE option<string>;
 				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE comment TYPE option<string>;
-				DEFINE INDEX IF NOT EXISTS idx_comment_parent ON TABLE comment COLUMNS parent_type, parent_did, parent_id;
+				DEFINE INDEX IF NOT EXISTS idx_comment_post ON TABLE comment COLUMNS post_did, post_id;
 				DEFINE INDEX IF NOT EXISTS idx_comment_author ON TABLE comment COLUMNS author_id;
 			`);
 

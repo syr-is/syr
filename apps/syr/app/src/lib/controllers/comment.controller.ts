@@ -23,9 +23,13 @@ export class CommentController {
 		if (!user.did) {
 			throw new Error('User must have an identity (DID) to create comments');
 		}
+
+		const ancestorChain = data.ancestor_chain ?? [];
+
 		const now = new Date();
 		const base = {
 			...data,
+			ancestor_chain: ancestorChain,
 			author_id: user.id,
 			created_at: now,
 			updated_at: now,
@@ -67,9 +71,6 @@ export class CommentController {
 	async getPublicCommentsByDid(
 		did: string,
 		opts: {
-			parentType?: string;
-			parentDid?: string;
-			parentId?: string;
 			postDid?: string;
 			postId?: string;
 			limit?: number;

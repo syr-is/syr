@@ -3,9 +3,9 @@ import { canonicalize, initCryptoWasm } from '@syr-is/crypto';
 
 export type CommentSignSnapshot = {
 	content: string;
-	parent_type: 'post' | 'comment';
-	parent_did: string;
-	parent_id: string;
+	post_did: string;
+	post_id: string;
+	ancestor_chain: string[];
 	visibility: 'public' | 'unlisted' | 'private';
 	status: 'draft' | 'completed';
 };
@@ -20,9 +20,9 @@ export function buildCommentSignedPayloadV1(params: {
 		type: 'comment@v1',
 		did: params.did,
 		comment_id: params.commentLocalId,
-		parent_type: params.snapshot.parent_type,
-		parent_did: params.snapshot.parent_did,
-		parent_id: params.snapshot.parent_id,
+		post_did: params.snapshot.post_did,
+		post_id: params.snapshot.post_id,
+		ancestor_chain: params.snapshot.ancestor_chain,
 		content: params.snapshot.content,
 		visibility: params.snapshot.visibility,
 		status: params.snapshot.status,

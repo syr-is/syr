@@ -15,6 +15,8 @@
 		provider: string;
 		updatedAt: string;
 		registryUrl: string;
+		avatarUrl?: string | null;
+		bannerUrl?: string | null;
 	};
 
 	let q = $state('');
@@ -44,6 +46,68 @@
 			if (tb !== ta) return tb - ta;
 			return a.did.localeCompare(b.did);
 		});
+	}
+
+	const ENRICH_BATCH = 4;
+	const ENRICH_TIMEOUT_MS = 8_000;
+
+	/** Enrich a single row with avatar/banner via manifest → profile fetch. */
+	async function enrichRow(row: DirectoryRow, signal: AbortSignal): Promise<void> {
+		const base = row.provider.replace(/\/$/, '');
+		let profileUrl = `${base}/api/public/profile/${encodeURIComponent(row.did)}`;
+		try {
+			const mRes = await fetch(`${base}/.well-known/syr/${encodeURIComponent(row.did)}`, {
+				headers: { Accept: 'application/json' },
+				signal
+			});
+			if (mRes.ok) {
+				const manifest = await mRes.json();
+				if (manifest.endpoints?.profile) profileUrl = manifest.endpoints.profile;
+			}
+		} catch {
+			/* fallback */
+		}
+
+		const pRes = await fetch(profileUrl, { signal, headers: { Accept: 'application/json' } });
+		if (!pRes.ok) return;
+		const body = (await pRes.json()) as {
+			data?: { avatar_url?: string | null; banner_url?: string | null };
+		};
+		row.avatarUrl = body.data?.avatar_url ?? null;
+		row.bannerUrl = body.data?.banner_url ?? null;
+	}
+
+	/** Enrich results in queued batches of 4, each batch with an 8s timeout. */
+	async function enrichResults(ac: AbortController) {
+		const toEnrich = [...mergedMap.values()].filter((r) => r.avatarUrl === undefined && r.provider);
+		for (let i = 0; i < toEnrich.length; i += ENRICH_BATCH) {
+			if (ac.signal.aborted) return;
+			const batch = toEnrich.slice(i, i + ENRICH_BATCH);
+
+			const batchAc = new AbortController();
+			const timeout = setTimeout(() => batchAc.abort(), ENRICH_TIMEOUT_MS);
+			// Also abort if the search itself is cancelled
+			const onSearchAbort = () => batchAc.abort();
+			ac.signal.addEventListener('abort', onSearchAbort, { once: true });
+
+			await Promise.allSettled(
+				batch.map(async (row) => {
+					try {
+						await enrichRow(row, batchAc.signal);
+					} catch {
+						/* timeout or network error */
+					}
+					// Mark as attempted even on failure
+					if (row.avatarUrl === undefined) row.avatarUrl = null;
+					if (row.bannerUrl === undefined) row.bannerUrl = null;
+					mergedMap.set(row.did, { ...row });
+				})
+			);
+
+			clearTimeout(timeout);
+			ac.signal.removeEventListener('abort', onSearchAbort);
+			if (!ac.signal.aborted) rebuildResults();
+		}
 	}
 
 	async function runSearch() {
@@ -125,6 +189,11 @@
 					? 'No results found. Try a different search term.'
 					: 'No users found in the directory.';
 			}
+
+			// Enrich with avatars/banners in the background
+			if (!ac.signal.aborted && mergedMap.size > 0) {
+				void enrichResults(ac);
+			}
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error(err);
@@ -195,6 +264,8 @@
 						displayName={row.displayName}
 						username={row.username}
 						did={row.did}
+						avatarUrl={row.avatarUrl}
+						bannerUrl={row.bannerUrl}
 						onOpen={() => goto(resolve(`/u/${encodeURIComponent(row.did)}`))}
 					/>
 				</li>

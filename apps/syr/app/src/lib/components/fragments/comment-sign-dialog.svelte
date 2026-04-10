@@ -26,9 +26,9 @@
 		commentDid = '',
 		commentLocalId = '',
 		commentContent = '',
-		parentType = 'post',
-		parentDid = '',
-		parentId = '',
+		commentPostDid = '',
+		commentPostId = '',
+		commentAncestorChain = [] as string[],
 		visibility = 'public',
 		status = 'completed',
 		createdAtIso = '',
@@ -38,9 +38,9 @@
 		commentDid?: string;
 		commentLocalId?: string;
 		commentContent?: string;
-		parentType?: string;
-		parentDid?: string;
-		parentId?: string;
+		commentPostDid?: string;
+		commentPostId?: string;
+		commentAncestorChain?: string[];
 		visibility?: string;
 		status?: string;
 		createdAtIso?: string;
@@ -93,9 +93,9 @@
 			commentLocalId,
 			snapshot: {
 				content: commentContent,
-				parent_type: parentType as 'post' | 'comment',
-				parent_did: parentDid,
-				parent_id: parentId,
+				post_did: commentPostDid,
+				post_id: commentPostId,
+				ancestor_chain: commentAncestorChain,
 				visibility: visibility as 'public' | 'unlisted' | 'private',
 				status: status as 'draft' | 'completed'
 			},

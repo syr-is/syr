@@ -8,9 +8,6 @@ export class CommentRepository extends BaseRepository<Comment> {
 	async findPublicByDid(
 		did: string,
 		opts: {
-			parentType?: string;
-			parentDid?: string;
-			parentId?: string;
 			postDid?: string;
 			postId?: string;
 			limit?: number;
@@ -24,16 +21,9 @@ export class CommentRepository extends BaseRepository<Comment> {
 		const params: Record<string, unknown> = { did, limit, offset };
 
 		if (opts.postDid && opts.postId) {
-			// Fetch all comments in a post's thread by this DID:
-			// root comments on the post OR replies to any comment (client filters the tree)
-			whereClause += ` AND ((parent_type = 'post' AND parent_did = $postDid AND parent_id = $postId) OR parent_type = 'comment')`;
+			whereClause += ` AND post_did = $postDid AND post_id = $postId`;
 			params.postDid = opts.postDid;
 			params.postId = opts.postId;
-		} else if (opts.parentType && opts.parentDid && opts.parentId) {
-			whereClause += ` AND parent_type = $parentType AND parent_did = $parentDid AND parent_id = $parentId`;
-			params.parentType = opts.parentType;
-			params.parentDid = opts.parentDid;
-			params.parentId = opts.parentId;
 		}
 
 		const [dataResult, countResult] = await Promise.all([

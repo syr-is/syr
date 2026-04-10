@@ -3,12 +3,6 @@ import { BaseEntitySchema, RecordIdSchema, DidSyrSchema } from './common.js';
 import { SignedMutationEnvelopeSchema } from './signed-mutations.js';
 
 /**
- * Comment Parent Type
- */
-export const CommentParentTypeSchema = z.enum(['post', 'comment']);
-export type CommentParentType = z.infer<typeof CommentParentTypeSchema>;
-
-/**
  * Comment Visibility
  */
 export const CommentVisibilitySchema = z.enum(['public', 'unlisted', 'private']);
@@ -22,12 +16,21 @@ export type CommentStatus = z.infer<typeof CommentStatusSchema>;
 
 /**
  * Comment Schema
- * Threaded comment with parent reference (composite ID: comment:{ created_by: did, id: ulid })
+ * Threaded comment with ancestor chain (composite ID: comment:{ created_by: did, id: ulid })
+ *
+ * Every comment belongs to a post (post_did + post_id).
+ * Root comments have an empty ancestor_chain.
+ * Nested comments store the full path from root comment to immediate parent in ancestor_chain,
+ * where each entry is a "did:local_id" string identifying a comment in the chain.
  */
 export const CommentSchema = BaseEntitySchema.extend({
-	parent_type: CommentParentTypeSchema,
-	parent_did: DidSyrSchema,
-	parent_id: z.string().min(1),
+	/** DID of the post author */
+	post_did: z.string().min(1),
+	/** ULID of the post */
+	post_id: z.string().min(1),
+	/** Ordered ancestor chain from root comment to immediate parent.
+	 *  Each entry is "did:local_id". Empty for root comments. */
+	ancestor_chain: z.array(z.string()).default([]),
 	content: z.string().min(1),
 	visibility: CommentVisibilitySchema.default('public'),
 	status: CommentStatusSchema.default('completed'),

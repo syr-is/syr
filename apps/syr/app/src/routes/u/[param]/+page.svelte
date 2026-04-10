@@ -51,6 +51,8 @@
 	/** Always show follow button; unauthenticated users are redirected to login, users without a DID get the remote follow dialog */
 	const showFollowButton = $derived(!!p.did && p.did !== viewer?.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
+	/** Effective provider URL: resolvedProviderOrigin for remote, current origin for local */
+	const effectiveProvider = $derived(data.resolvedProviderOrigin ?? window.location.origin);
 	const remoteHomeHref = $derived.by(() => {
 		if (data.remoteEndpoints?.web_profile) return data.remoteEndpoints.web_profile;
 		const o = data.resolvedProviderOrigin?.trim().replace(/\/$/, '');
@@ -467,7 +469,7 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				const checkQs = `did=${encodeURIComponent(did)}${data.resolvedProviderOrigin ? `&provider=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const checkQs = `did=${encodeURIComponent(did)}&provider=${encodeURIComponent(effectiveProvider)}`;
 				const res = await fetch(`/api/follows/check?${checkQs}`, {
 					credentials: 'include'
 				});
@@ -518,7 +520,7 @@
 		followBusy = true;
 		try {
 			if (isFollowing) {
-				const delQs = `followed_did=${encodeURIComponent(currentDid)}${data.resolvedProviderOrigin ? `&provider_url=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const delQs = `followed_did=${encodeURIComponent(currentDid)}&provider_url=${encodeURIComponent(effectiveProvider)}`;
 				const res = await fetch(`/api/follows?${delQs}`, {
 					method: 'DELETE'
 				});
@@ -534,12 +536,10 @@
 				return;
 			}
 
-			const followBody: { followed_did: string; provider_url?: string } = {
-				followed_did: currentDid
+			const followBody = {
+				followed_did: currentDid,
+				provider_url: effectiveProvider
 			};
-			if (data.resolvedProviderOrigin) {
-				followBody.provider_url = data.resolvedProviderOrigin;
-			}
 			const res = await fetch('/api/follows', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },

@@ -85,6 +85,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('Comment creation error:', err);
 		throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create comment' });
 	}
 };

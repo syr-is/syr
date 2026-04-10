@@ -1,6 +1,7 @@
 import { followRepository, type UserFollow } from '$lib/repositories/follow.repository';
 import { userRepository } from '$lib/repositories/user.repository';
 import { discoveryRegistryRepository } from '$lib/repositories/discovery-registry.repository';
+import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
 import { assertFollowableFromRegistries } from '$lib/server/follow-registry-gate.server';
 import { normalizeProviderBaseUrl } from '$lib/normalize-provider-base-url';
 import { config } from '$lib/config';
@@ -23,6 +24,31 @@ function normalizeVerifiedProvider(provider: string): string {
 }
 
 export class FollowController {
+	/** Merge user's personal + instance-wide discovery registry URLs, deduped. */
+	private async getAllRegistryUrls(userId: RecordId | string): Promise<string[]> {
+		const [userRegs, instanceRegs] = await Promise.all([
+			discoveryRegistryRepository.findByUserId(userId),
+			instanceDiscoveryRegistryRepository.findAll()
+		]);
+		const seen = new Set<string>();
+		const urls: string[] = [];
+		for (const r of userRegs) {
+			const u = r.registry_url.replace(/\/$/, '');
+			if (u && !seen.has(u)) {
+				seen.add(u);
+				urls.push(u);
+			}
+		}
+		for (const r of instanceRegs) {
+			const u = r.registry_url.replace(/\/$/, '');
+			if (u && !seen.has(u)) {
+				seen.add(u);
+				urls.push(u);
+			}
+		}
+		return urls;
+	}
+
 	private async followerDidOrThrow(followerUserId: RecordId | string): Promise<string> {
 		const user = await userRepository.findById(followerUserId);
 		if (!user?.did) {
@@ -75,8 +101,7 @@ export class FollowController {
 		const existing = await followRepository.findOne(followerUserId, followedDid);
 		if (existing) {
 			if (!existing.followed_provider_url) {
-				const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
-				const urls = registries.map((r) => r.registry_url);
+				const urls = await this.getAllRegistryUrls(followerUserId);
 				try {
 					const { providerBaseUrl } = await assertFollowableFromRegistries(followedDid, urls);
 					const normalized = normalizeVerifiedProvider(providerBaseUrl);
@@ -93,8 +118,7 @@ export class FollowController {
 			return existing;
 		}
 
-		const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
-		const urls = registries.map((r) => r.registry_url);
+		const urls = await this.getAllRegistryUrls(followerUserId);
 		let sourceRegistry: string;
 		let providerBaseUrl: string;
 		try {
@@ -127,8 +151,7 @@ export class FollowController {
 		if (followerDid === followedDid) {
 			normalized = this.instanceProviderBase();
 		} else {
-			const registries = await discoveryRegistryRepository.findByUserId(followerUserId);
-			const urls = registries.map((r) => r.registry_url);
+			const urls = await this.getAllRegistryUrls(followerUserId);
 			let providerBaseUrl: string;
 			try {
 				({ providerBaseUrl } = await assertFollowableFromRegistries(followedDid, urls));

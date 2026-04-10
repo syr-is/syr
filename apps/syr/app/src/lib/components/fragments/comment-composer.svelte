@@ -22,18 +22,19 @@
 
 	let {
 		mode = 'create',
-		parentType = 'post',
-		parentDid = '',
-		parentId = '',
+		postDid = '',
+		postId = '',
+		ancestorChain = [],
 		initialContent = '',
 		placeholder = 'Write a comment...',
 		onSubmit,
 		onCancel
 	}: {
 		mode?: 'create' | 'edit';
-		parentType?: 'post' | 'comment';
-		parentDid?: string;
-		parentId?: string;
+		postDid?: string;
+		postId?: string;
+		/** Ancestor chain for this new comment. Empty for root comments. */
+		ancestorChain?: string[];
 		initialContent?: string;
 		placeholder?: string;
 		onSubmit?: (content: string) => void;
@@ -144,9 +145,9 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						parent_type: parentType,
-						parent_did: parentDid,
-						parent_id: parentId,
+						post_did: postDid,
+						post_id: postId,
+						ancestor_chain: ancestorChain,
 						content: content.trim(),
 						visibility: 'public',
 						status: 'completed'

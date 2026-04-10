@@ -10,9 +10,6 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}
 
-	const parentType = url.searchParams.get('parent_type') ?? undefined;
-	const parentDid = url.searchParams.get('parent_did') ?? undefined;
-	const parentId = url.searchParams.get('parent_id') ?? undefined;
 	const postDid = url.searchParams.get('post_did') ?? undefined;
 	const postId = url.searchParams.get('post_id') ?? undefined;
 	const limit = Math.min(
@@ -22,9 +19,6 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
 
 	const { data, total } = await commentController.getPublicCommentsByDid(did, {
-		parentType,
-		parentDid,
-		parentId,
 		postDid,
 		postId,
 		limit,
@@ -34,9 +28,9 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const serialized = data.map((c) => ({
 		did: extractDid(c.id),
 		local_id: extractLocalId(c.id),
-		parent_type: c.parent_type,
-		parent_did: c.parent_did,
-		parent_id: c.parent_id,
+		post_did: c.post_did,
+		post_id: c.post_id,
+		ancestor_chain: c.ancestor_chain ?? [],
 		content: c.content,
 		visibility: c.visibility,
 		status: c.status,
