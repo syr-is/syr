@@ -86,7 +86,7 @@ Returns the instance GIF library (all instance-scope GIFs), paginated. `search` 
 ### 4.2 User GIF library
 
 ```
-GET /api/public/gifs/[did]?limit={n}&offset={n}
+GET /api/public/gifs/{did}?limit={n}&offset={n}
 ```
 
 Returns personal GIFs for a specific DID. No authentication required. Same response format.

@@ -53,7 +53,6 @@
 	type ThreadNode = CommentData & {
 		children: ThreadNode[];
 		reactions: ReactionGroup[];
-		_deleted?: boolean;
 	};
 
 	let {
@@ -80,6 +79,7 @@
 	let emojiMap = $state<Record<string, string>>({});
 	let authorProfiles = new SvelteMap<string, AuthorProfile>();
 	const manifestCache = new SvelteMap<string, Promise<ManifestEndpoints>>();
+	let loadSeq = 0;
 	let loading = $state(true);
 	let sortOrder = $state<'oldest' | 'newest'>('newest');
 
@@ -274,6 +274,7 @@
 	}
 
 	async function loadComments() {
+		const seq = ++loadSeq;
 		loading = true;
 		try {
 			const allComments: CommentData[] = [];
@@ -359,6 +360,8 @@
 
 			allComments.length = 0;
 			allComments.push(...threadComments);
+
+			if (seq !== loadSeq) return; // stale
 			threads = buildThreadTree(allComments);
 
 			if (browser && allComments.length > 0) {
@@ -377,6 +380,7 @@
 
 				// Load emojis from all author instances THEN render
 				await loadEmojiMapForAuthors(authorDidsArray);
+				if (seq !== loadSeq) return; // stale
 
 				try {
 					const { sanitizeMarkdownToHtml } = await import('$lib/client/sanitize-post-body');
@@ -392,26 +396,8 @@
 				}
 			}
 		} finally {
-			loading = false;
+			if (seq === loadSeq) loading = false;
 		}
-	}
-
-	function makeDeletedPlaceholder(parentDid: string, parentId: string): ThreadNode {
-		return {
-			did: parentDid,
-			local_id: parentId,
-			parent_type: 'post',
-			parent_did: postDid,
-			parent_id: postId,
-			content: '[deleted]',
-			visibility: 'public',
-			status: 'completed',
-			created_at: new Date(0).toISOString(),
-			author_instance: undefined,
-			children: [],
-			reactions: [],
-			_deleted: true
-		} as ThreadNode & { _deleted?: boolean };
 	}
 
 	function buildThreadTree(comments: CommentData[]): ThreadNode[] {
@@ -444,16 +430,11 @@
 			}
 		}
 
-		// Create [deleted] placeholder nodes for each missing parent
-		for (const [parentKey, orphans] of orphansByParent) {
-			const lastColon = parentKey.lastIndexOf(':');
-			if (lastColon <= 0) continue;
-			const pDid = parentKey.substring(0, lastColon);
-			const pId = parentKey.substring(lastColon + 1);
-			if (!pDid || !pId) continue;
-			const placeholder = makeDeletedPlaceholder(pDid, pId);
-			placeholder.children = orphans;
-			roots.push(placeholder);
+		// Orphan comments whose parent is missing (not followed or deleted) — show as top-level
+		for (const [, orphans] of orphansByParent) {
+			for (const orphan of orphans) {
+				roots.push(orphan);
+			}
 		}
 
 		const dir = sortOrder === 'newest' ? -1 : 1;
@@ -540,7 +521,7 @@
 		imageUrl?: string
 	) {
 		try {
-			await fetch('/api/reactions', {
+			const res = await fetch('/api/reactions', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -552,7 +533,9 @@
 					...(imageUrl ? { image_url: imageUrl } : {})
 				})
 			});
-			bumpReactionRefresh(`${commentDid}:${commentLocalId}`);
+			if (res.ok) {
+				bumpReactionRefresh(`${commentDid}:${commentLocalId}`);
+			}
 		} catch {
 			/* skip */
 		}
@@ -571,205 +554,166 @@
 	{@const isOwn = node.did === currentUserDid}
 	{@const author = getAuthorDisplay(node)}
 	{@const signed = isSigned(node)}
-	{@const isDeleted = node._deleted === true}
 	<div style="margin-left: {Math.min(depth * 20, 80)}px">
-		{#if isDeleted}
-			<div class="rounded py-1.5 pr-1 pl-2 opacity-50">
-				<div class="flex items-center gap-1.5 text-xs">
-					{#if node.children.length > 0}
-						<button
-							type="button"
-							class="p-0.5 text-muted-foreground"
-							onclick={() => toggleCollapse(key)}
-						>
-							{#if isCollapsed}
-								<ChevronRight class="h-3 w-3" />
-							{:else}
-								<ChevronDown class="h-3 w-3" />
-							{/if}
-						</button>
-					{/if}
-					<div
-						class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground"
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="rounded py-1.5 pr-1 pl-2 hover:bg-muted/40"
+			onmouseenter={(e) => {
+				e.stopPropagation();
+				hoveredComment = key;
+			}}
+			onmouseleave={() => {
+				if (hoveredComment === key && !pickerOpen) hoveredComment = null;
+			}}
+		>
+			<div class="flex items-center gap-1.5 text-xs">
+				{#if node.children.length > 0}
+					<button
+						type="button"
+						class="p-0.5 text-muted-foreground"
+						onclick={() => toggleCollapse(key)}
 					>
-						?
+						{#if isCollapsed}
+							<ChevronRight class="h-3 w-3" />
+						{:else}
+							<ChevronDown class="h-3 w-3" />
+						{/if}
+					</button>
+				{/if}
+				<!-- Avatar -->
+				{#if author.avatar}
+					<img src={author.avatar} alt="" class="h-7 w-7 rounded-full object-cover" />
+				{:else}
+					<div
+						class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground uppercase"
+					>
+						{node.did.slice(8, 10)}
 					</div>
-					<span class="text-muted-foreground italic">[deleted]</span>
-				</div>
-				<div class="mt-0.5 pl-7 text-sm text-muted-foreground italic">[deleted]</div>
-			</div>
-			{#if !isCollapsed && node.children.length > 0}
-				{#each node.children as child (child.did + ':' + child.local_id)}
-					{@render commentNode(child, depth + 1)}
-				{/each}
-			{/if}
-		{:else}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div
-				class="rounded py-1.5 pr-1 pl-2 hover:bg-muted/40"
-				onmouseenter={(e) => {
-					e.stopPropagation();
-					hoveredComment = key;
-				}}
-				onmouseleave={() => {
-					if (hoveredComment === key && !pickerOpen) hoveredComment = null;
-				}}
-			>
-				<div class="flex items-center gap-1.5 text-xs">
-					{#if node.children.length > 0}
+				{/if}
+				<span class="font-medium text-foreground">{author.name}</span>
+				{#if signed}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<ShieldCheck class="h-3 w-3 text-green-500" />
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>Cryptographically signed by the author</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+				{/if}
+				<span class="text-muted-foreground">{formatTime(node.created_at)}</span>
+				{#if hoveredComment === key}
+					<div class="ml-auto flex items-center gap-1">
+						<EmojiPicker
+							onSelect={(emoji) => {
+								if (emoji.unicode) {
+									toggleCommentReaction(node.did, node.local_id, 'unicode', emoji.shortcode);
+								} else {
+									const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
+									toggleCommentReaction(node.did, node.local_id, kind, emoji.shortcode, emoji.url);
+								}
+							}}
+							triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+							onOpenChange={(o) => (pickerOpen = o)}
+						/>
 						<button
 							type="button"
-							class="p-0.5 text-muted-foreground"
-							onclick={() => toggleCollapse(key)}
+							class="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+							onclick={() => startReply('comment', node.did, node.local_id)}
 						>
-							{#if isCollapsed}
-								<ChevronRight class="h-3 w-3" />
-							{:else}
-								<ChevronDown class="h-3 w-3" />
-							{/if}
+							Reply
 						</button>
-					{/if}
-					<!-- Avatar -->
-					{#if author.avatar}
-						<img src={author.avatar} alt="" class="h-7 w-7 rounded-full object-cover" />
-					{:else}
-						<div
-							class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground uppercase"
-						>
-							{node.did.slice(8, 10)}
-						</div>
-					{/if}
-					<span class="font-medium text-foreground">{author.name}</span>
-					{#if signed}
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<ShieldCheck class="h-3 w-3 text-green-500" />
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>Cryptographically signed by the author</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
-					{/if}
-					<span class="text-muted-foreground">{formatTime(node.created_at)}</span>
-					{#if hoveredComment === key}
-						<div class="ml-auto flex items-center gap-1">
-							<EmojiPicker
-								onSelect={(emoji) => {
-									if (emoji.unicode) {
-										toggleCommentReaction(node.did, node.local_id, 'unicode', emoji.shortcode);
-									} else {
-										const kind = emoji.is_sticker ? 'sticker' : 'custom_emoji';
-										toggleCommentReaction(
-											node.did,
-											node.local_id,
-											kind,
-											emoji.shortcode,
-											emoji.url
-										);
-									}
-								}}
-								triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-								onOpenChange={(o) => (pickerOpen = o)}
-							/>
+						{#if isOwn}
 							<button
 								type="button"
-								class="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-								onclick={() => startReply('comment', node.did, node.local_id)}
+								class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+								title="Edit"
+								onclick={() => startEdit(node)}
 							>
-								Reply
+								<Pencil class="h-3 w-3" />
 							</button>
-							{#if isOwn}
-								<button
-									type="button"
-									class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-									title="Edit"
-									onclick={() => startEdit(node)}
-								>
-									<Pencil class="h-3 w-3" />
-								</button>
-							{/if}
-							{#if isOwn && !signed}
-								<button
-									type="button"
-									class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-									title="Sign this comment"
-									onclick={() => openSignDialog(node)}
-								>
-									<KeyRound class="h-3 w-3" />
-								</button>
-							{/if}
-							{#if isOwn}
-								<button
-									type="button"
-									class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-									title="Delete comment"
-									onclick={() => deleteComment(node.did, node.local_id)}
-								>
-									<Trash2 class="h-3 w-3" />
-								</button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-
-				{#if editingKey === key && editingNode}
-					<div class="mt-1 pl-7">
-						<CommentComposer
-							mode="edit"
-							initialContent={editingNode.content}
-							placeholder="Edit comment..."
-							onSubmit={(newContent) => saveEdit(node, newContent)}
-							onCancel={cancelEdit}
-						/>
-					</div>
-				{:else}
-					{@const htmlContent = renderedHtml.get(key)}
-					<div class="prose prose-sm dark:prose-invert mt-0.5 max-w-none pl-7 text-sm">
-						{#if htmlContent}
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							{@html htmlContent}
-						{:else}
-							{node.content}
+						{/if}
+						{#if isOwn && !signed}
+							<button
+								type="button"
+								class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+								title="Sign this comment"
+								onclick={() => openSignDialog(node)}
+							>
+								<KeyRound class="h-3 w-3" />
+							</button>
+						{/if}
+						{#if isOwn}
+							<button
+								type="button"
+								class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+								title="Delete comment"
+								onclick={() => deleteComment(node.did, node.local_id)}
+							>
+								<Trash2 class="h-3 w-3" />
+							</button>
 						{/if}
 					</div>
 				{/if}
+			</div>
 
+			{#if editingKey === key && editingNode}
 				<div class="mt-1 pl-7">
-					<ReactionBar
+					<CommentComposer
+						mode="edit"
+						initialContent={editingNode.content}
+						placeholder="Edit comment..."
+						onSubmit={(newContent) => saveEdit(node, newContent)}
+						onCancel={cancelEdit}
+					/>
+				</div>
+			{:else}
+				{@const htmlContent = renderedHtml.get(key)}
+				<div class="prose prose-sm dark:prose-invert mt-0.5 max-w-none pl-7 text-sm">
+					{#if htmlContent}
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						{@html htmlContent}
+					{:else}
+						{node.content}
+					{/if}
+				</div>
+			{/if}
+
+			<div class="mt-1 pl-7">
+				<ReactionBar
+					parentType="comment"
+					parentDid={node.did}
+					parentId={node.local_id}
+					{followedDids}
+					{currentUserDid}
+					showPicker={false}
+					refreshTrigger={reactionRefresh.get(key) ?? 0}
+				/>
+			</div>
+
+			{#if replyTo?.type === 'comment' && replyTo.did === node.did && replyTo.id === node.local_id}
+				<div class="mt-2 pl-7">
+					<CommentComposer
 						parentType="comment"
 						parentDid={node.did}
 						parentId={node.local_id}
-						{followedDids}
-						{currentUserDid}
-						showPicker={false}
-						refreshTrigger={reactionRefresh.get(key) ?? 0}
+						placeholder="Reply..."
+						onSubmit={() => {
+							replyTo = null;
+							loadComments();
+						}}
 					/>
+					<Button variant="ghost" size="sm" class="mt-1 text-xs" onclick={() => (replyTo = null)}
+						>Cancel</Button
+					>
 				</div>
-
-				{#if replyTo?.type === 'comment' && replyTo.did === node.did && replyTo.id === node.local_id}
-					<div class="mt-2 pl-7">
-						<CommentComposer
-							parentType="comment"
-							parentDid={node.did}
-							parentId={node.local_id}
-							placeholder="Reply..."
-							onSubmit={() => {
-								replyTo = null;
-								loadComments();
-							}}
-						/>
-						<Button variant="ghost" size="sm" class="mt-1 text-xs" onclick={() => (replyTo = null)}
-							>Cancel</Button
-						>
-					</div>
-				{/if}
-			</div>
-
-			{#if !isCollapsed && node.children.length > 0}
-				{#each node.children as child (child.did + ':' + child.local_id)}
-					{@render commentNode(child, depth + 1)}
-				{/each}
 			{/if}
+		</div>
+
+		{#if !isCollapsed && node.children.length > 0}
+			{#each node.children as child (child.did + ':' + child.local_id)}
+				{@render commentNode(child, depth + 1)}
+			{/each}
 		{/if}
 	</div>
 {/snippet}

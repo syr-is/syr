@@ -49,10 +49,10 @@
 
 	async function loadEmojis() {
 		if (hasLoaded) return;
-		hasLoaded = true;
 		loading = true;
 		try {
 			instanceEmojis = await getInstanceEmojis();
+			hasLoaded = true;
 
 			try {
 				const userRes = await fetch('/api/emojis?limit=100');
@@ -64,7 +64,7 @@
 				/* not logged in */
 			}
 		} catch {
-			/* skip */
+			/* retry on next open */
 		} finally {
 			loading = false;
 		}

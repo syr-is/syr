@@ -159,6 +159,7 @@
 				}
 				content = '';
 				preview = false;
+				previewHtml = '';
 			}
 			onSubmit?.(content.trim());
 		} catch {
