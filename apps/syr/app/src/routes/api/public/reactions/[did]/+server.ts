@@ -10,13 +10,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Invalid DID' });
 	}
 
-	const parentType = url.searchParams.get('parent_type') ?? undefined;
-	const parentDid = url.searchParams.get('parent_did') ?? undefined;
-	const parentId = url.searchParams.get('parent_id') ?? undefined;
+	const parentType = url.searchParams.get('parent_type')?.trim() || undefined;
+	const parentDid = url.searchParams.get('parent_did')?.trim() || undefined;
+	const parentId = url.searchParams.get('parent_id')?.trim() || undefined;
 
-	// Require all three parent filters or none
-	const parentParamsCount = [parentType, parentDid, parentId].filter(Boolean).length;
-	if (parentParamsCount > 0 && parentParamsCount < 3) {
+	// Require all three parent filters or none — reject partial sets
+	const hasParentType = parentType !== undefined;
+	const hasParentDid = parentDid !== undefined;
+	const hasParentId = parentId !== undefined;
+	if (
+		(hasParentType || hasParentDid || hasParentId) &&
+		!(hasParentType && hasParentDid && hasParentId)
+	) {
 		throw error(400, {
 			code: 'BAD_REQUEST',
 			message: 'parent_type, parent_did, and parent_id must all be provided together'
