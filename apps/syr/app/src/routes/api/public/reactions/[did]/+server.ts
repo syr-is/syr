@@ -13,6 +13,16 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const parentType = url.searchParams.get('parent_type') ?? undefined;
 	const parentDid = url.searchParams.get('parent_did') ?? undefined;
 	const parentId = url.searchParams.get('parent_id') ?? undefined;
+
+	// Require all three parent filters or none
+	const parentParamsCount = [parentType, parentDid, parentId].filter(Boolean).length;
+	if (parentParamsCount > 0 && parentParamsCount < 3) {
+		throw error(400, {
+			code: 'BAD_REQUEST',
+			message: 'parent_type, parent_did, and parent_id must all be provided together'
+		});
+	}
+
 	const limit = Math.min(
 		100,
 		Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10) || 50)

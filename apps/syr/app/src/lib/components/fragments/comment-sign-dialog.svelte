@@ -104,6 +104,14 @@
 	}
 
 	async function finishWithSeed(seed: Uint8Array) {
+		if (!did || !identityPublicKey) {
+			toast.error('Identity not available for signing');
+			return;
+		}
+		if (did !== commentDid) {
+			toast.error('Active identity does not match comment author — cannot sign');
+			return;
+		}
 		await initCryptoWasm();
 		const payload = buildPayload();
 		const signature = await signMutationPayload(payload, seed);
@@ -111,7 +119,7 @@
 		onSigned?.({
 			content_signature: signature,
 			signed_payload_json: payloadJson,
-			signing_device_public_key: identityPublicKey!
+			signing_device_public_key: identityPublicKey
 		});
 		open = false;
 		resetSynerUi();

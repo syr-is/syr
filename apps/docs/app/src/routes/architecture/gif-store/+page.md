@@ -26,7 +26,7 @@ Self-hosting GIFs preserves the **self-sovereign** principle: no third-party API
 - **Two scopes**: Instance GIF library (admin-managed, shared) and user GIF library (personal).
 - **Tagging and search**: GIFs are tagged with keywords for search. Tags are free-form, comma-separated.
 - **GIF picker UI**: Inline picker component (similar to Discord/Slack GIF picker) for selecting GIFs when composing comments, posts, or reactions.
-- **Cross-instance browsing**: Public API exposes instance and user GIF catalogs so viewers on other instances can browse and display GIFs.
+- **Cross-instance display**: Public API exposes instance and user GIF catalogs so viewers on other instances can display GIFs embedded in content and reactions. The GIF picker for composing uses only local and personal GIF libraries.
 
 ### 2.2 Non-goals (v1)
 
@@ -41,7 +41,7 @@ Self-hosting GIFs preserves the **self-sovereign** principle: no third-party API
 
 ### 3.1 GIF entry
 
-```
+```text
 Gif {
   id: composite (gif:{ created_by: did, id: ulid })
   url: string                     // absolute URL to the GIF
@@ -60,7 +60,7 @@ Gif {
 
 ### 4.1 Instance GIF library
 
-```
+```text
 GET /api/public/gifs?search={query}&limit={n}&offset={n}
 ```
 
@@ -85,7 +85,7 @@ Returns the instance GIF library (all instance-scope GIFs), paginated. `search` 
 
 ### 4.2 User GIF library
 
-```
+```text
 GET /api/public/gifs/{did}?limit={n}&offset={n}
 ```
 

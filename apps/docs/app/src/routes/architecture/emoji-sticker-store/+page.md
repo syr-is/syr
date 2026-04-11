@@ -43,7 +43,7 @@ Both **instance-wide** emojis (managed by admins) and **per-user** custom emojis
 
 ### 3.1 Emoji
 
-```
+```text
 Emoji {
   id: composite (emoji:{ created_by: did, id: ulid })
   shortcode: string               // alphanumeric + underscores, 2-32 chars
@@ -73,7 +73,7 @@ For cross-instance resolution, the viewer's client fetches the author's emoji ca
 
 ### 4.1 Instance emoji catalog
 
-```
+```text
 GET /api/public/emojis
 ```
 
@@ -103,7 +103,7 @@ Returns all instance-scope emojis as a flat array. No authentication required.
 
 ### 4.2 User emoji catalog
 
-```
+```text
 GET /api/public/emojis/[did]
 ```
 

@@ -178,14 +178,14 @@ sequenceDiagram
     Note over Viewer: Viewer follows did:syr:userB (on Instance B)<br/>and did:syr:userC (on Instance C)
 
     par Fetch comments from followed users
-        Viewer->>FollowedB: GET /api/public/comments/did:syr:userB?parent_type=post&parent_did=did:syr:postAuthor&parent_id=01ARZ3N...
+        Viewer->>FollowedB: GET /api/public/comments/did:syr:userB?post_did=did:syr:postAuthor&post_id=01ARZ3N...
         FollowedB-->>Viewer: { data: [comment1, comment2] }
     and
-        Viewer->>FollowedC: GET /api/public/comments/did:syr:userC?parent_type=post&parent_did=did:syr:postAuthor&parent_id=01ARZ3N...
+        Viewer->>FollowedC: GET /api/public/comments/did:syr:userC?post_did=did:syr:postAuthor&post_id=01ARZ3N...
         FollowedC-->>Viewer: { data: [comment3] }
     end
 
-    Note over Viewer: Merge comments, sort by created_at<br/>Build thread tree from parent references<br/>Render nested thread UI
+    Note over Viewer: Merge comments, sort by created_at<br/>Build thread tree from ancestor_chain<br/>Render nested thread UI
 ```
 
 ### 5.1 Manifest-based endpoint discovery
@@ -209,9 +209,9 @@ Clients **must** prefer manifest-discovered URLs over hardcoded path assumptions
 
 1. The viewer knows their **follow list** (DIDs + provider URLs).
 2. For each followed DID, resolve endpoint URLs from their identity manifest.
-3. For the current post, query each followed DID's `public_comments` endpoint for comments on that post.
-4. Responses are merged client-side, sorted by `created_at`, and organized into a thread tree by parent references.
-5. **Nested replies** are fetched iteratively: after root comments are collected, replies to those comments are fetched from all followed DIDs, then replies to replies, up to a reasonable depth limit.
+3. For the current post, query each followed DID's `public_comments` endpoint with `post_did` and `post_id` filters.
+4. Responses are merged client-side, deduplicated by `(did, local_id)`, and organized into a thread tree using `ancestor_chain`.
+5. **Thread reconstruction**: root comments have empty `ancestor_chain`. Nested comments use their chain to find the nearest available ancestor. Placeholders are inserted for missing intermediate nodes.
 6. **Reactions** follow the same self-sovereign pattern: for each followed DID, resolve their `public_reactions` endpoint from the identity manifest, query with `parent_type`, `parent_did`, `parent_id` filters. Merge and group client-side by `(kind, value)` to produce counters.
 7. **Reaction tooltips** show the list of reactors (username@instance) with links to their profile pages, resolved from the `profile` manifest endpoint.
 8. **Author profiles** are fetched from each commenter's `profile` endpoint for display (avatar, username).
