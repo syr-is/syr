@@ -75,6 +75,7 @@
 		capacity: number;
 		total_used: number;
 		total_allocated: number;
+		media_reservation: number;
 	};
 	let instanceOverview = $state<InstanceOverview | null>(null);
 
@@ -551,10 +552,12 @@
 				</div>
 				{#if instanceOverview && instanceOverview.capacity > 0}
 					{@const cap = instanceOverview.capacity}
+					{@const mediaRes = instanceOverview.media_reservation ?? 0}
 					{@const thisUserPct = Math.min(100, (storage.bytes_limit / cap) * 100)}
 					{@const otherAllocated = instanceOverview.total_allocated - storage.bytes_limit}
 					{@const otherPct = Math.min(100, (otherAllocated / cap) * 100)}
-					{@const rawAllocated = otherAllocated + storage.bytes_limit}
+					{@const mediaPct = Math.min(100, (mediaRes / cap) * 100)}
+					{@const totalCommitted = otherAllocated + storage.bytes_limit + mediaRes}
 					<div class="space-y-1 border-t pt-3">
 						<p class="text-xs font-medium text-muted-foreground">Instance capacity</p>
 						<div class="relative h-3 w-full overflow-hidden rounded-full bg-muted">
@@ -566,8 +569,14 @@
 								class="absolute inset-y-0 rounded-full bg-muted-foreground/20"
 								style="left: {thisUserPct}%; width: {otherPct}%"
 							></div>
+							{#if mediaPct > 0}
+								<div
+									class="absolute inset-y-0 rounded-full bg-amber-500/40"
+									style="left: {thisUserPct + otherPct}%; width: {mediaPct}%"
+								></div>
+							{/if}
 						</div>
-						<div class="flex items-center gap-3 text-xs text-muted-foreground">
+						<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
 							<span class="flex items-center gap-1">
 								<span class="inline-block h-2 w-2 rounded-full bg-primary"></span>
 								This user: {formatBytes(storage.bytes_limit)}
@@ -576,12 +585,18 @@
 								<span class="inline-block h-2 w-2 rounded-full bg-muted-foreground/20"></span>
 								Others: {formatBytes(otherAllocated)}
 							</span>
+							{#if mediaRes > 0}
+								<span class="flex items-center gap-1">
+									<span class="inline-block h-2 w-2 rounded-full bg-amber-500/40"></span>
+									Media: {formatBytes(mediaRes)}
+								</span>
+							{/if}
 							<span>Total: {formatBytes(cap)}</span>
 						</div>
-						{#if rawAllocated > cap}
+						{#if totalCommitted > cap}
 							<div class="flex items-center gap-1 text-xs text-destructive">
 								<AlertTriangle class="h-3 w-3" />
-								Over-allocated
+								Over-committed
 							</div>
 						{/if}
 					</div>

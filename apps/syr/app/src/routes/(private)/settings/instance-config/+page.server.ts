@@ -10,6 +10,7 @@ import {
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	DEFAULT_STORAGE_LIMIT_GB,
 	KEY_INSTANCE_STORAGE_CAPACITY_GB,
+	KEY_INSTANCE_MEDIA_STORAGE_GB,
 	INVITE_CODE_TYPE
 } from '$lib/instance-config';
 import { getRegistrationMode } from '$lib/instance-config';
@@ -31,12 +32,14 @@ export const load: PageServerLoad = async ({ parent }) => {
 
 	const registrationMode = await getRegistrationMode();
 
-	const [rawStorageLimit, rawStorageCapacity] = await Promise.all([
+	const [rawStorageLimit, rawStorageCapacity, rawMediaStorage] = await Promise.all([
 		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_DEFAULT_STORAGE_LIMIT_GB),
-		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB)
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_STORAGE_CAPACITY_GB),
+		kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_MEDIA_STORAGE_GB)
 	]);
 	const defaultStorageLimitGb = rawStorageLimit ?? String(DEFAULT_STORAGE_LIMIT_GB);
 	const instanceStorageCapacityGb = rawStorageCapacity ?? '';
+	const instanceMediaStorageGb = rawMediaStorage ?? '';
 
 	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
 	const inviteCodes: {
@@ -73,6 +76,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 		registrationMode,
 		defaultStorageLimitGb,
 		instanceStorageCapacityGb,
+		instanceMediaStorageGb,
 		inviteCodes,
 		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
 			id: r.id.toString(),

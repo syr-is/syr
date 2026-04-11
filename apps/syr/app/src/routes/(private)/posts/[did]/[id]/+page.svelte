@@ -15,6 +15,8 @@
 	import type { PageData } from './$types';
 	import { Pencil, ArrowLeft, Pin, PinOff, FilePen, Send, EyeOff } from 'lucide-svelte';
 	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
+	import CommentThread from '$lib/components/fragments/comment-thread.svelte';
+	import ReactionBar from '$lib/components/fragments/reaction-bar.svelte';
 	import PostPublishSignDialog from '$lib/components/fragments/post-publish-sign-dialog.svelte';
 	import type { PostSignSnapshot } from '$lib/client/post-signed-payload';
 	import type { MediaDisplayMode, SignedMutationEnvelope } from '@syr-is/types';
@@ -23,6 +25,8 @@
 		sanitizePostHtmlFragment,
 		sanitizedHtmlToPlainText
 	} from '$lib/client/sanitize-post-body';
+	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
+	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
 	import { collectPostSubresourceUrls } from '$lib/content-trust/post-sources';
 	import { postContentFingerprint } from '$lib/content-trust/post-fingerprint';
 	import {
@@ -340,6 +344,29 @@
 				} else {
 					sanitizedBlogHtml = '';
 				}
+
+				// Render custom emojis and stickers in blog content
+				if (sanitizedBlogHtml) {
+					const emojiMap: Record<string, string> = {};
+					const instanceEmojis = await getInstanceEmojis();
+					for (const e of instanceEmojis) emojiMap[e.shortcode] = e.url;
+					// If the post author has personal emojis, load them too
+					if (post.did) {
+						try {
+							const authorEmojis = await getUserEmojis(
+								`/api/public/emojis/${encodeURIComponent(post.did)}`
+							);
+							for (const e of authorEmojis) {
+								if (!(e.shortcode in emojiMap)) emojiMap[e.shortcode] = e.url;
+							}
+						} catch {
+							/* best effort */
+						}
+					}
+					sanitizedBlogHtml = renderStickersInHtml(sanitizedBlogHtml, emojiMap);
+					sanitizedBlogHtml = renderEmojisInHtml(sanitizedBlogHtml, emojiMap);
+				}
+
 				blogPlainText = sanitizedBlogHtml ? sanitizedHtmlToPlainText(sanitizedBlogHtml) : '';
 
 				const unk = trustEntries.find((e) => e.status === 'unknown');
@@ -477,7 +504,7 @@
 	}
 </script>
 
-<div class="container mx-auto flex h-full max-w-4xl flex-col px-4 py-6 sm:py-8">
+<div class="container mx-auto flex h-full max-w-4xl flex-col gap-6 px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -698,6 +725,18 @@
 			{:else}
 				<p class="text-muted-foreground">No content available.</p>
 			{/if}
+
+			{#if data.post.did && data.post.local_id}
+				<div class="mt-4 border-t pt-3">
+					<ReactionBar
+						parentType="post"
+						parentDid={data.post.did}
+						parentId={data.post.local_id}
+						followedDids={data.followedDids ?? []}
+						currentUserDid={data.user?.did ?? null}
+					/>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 
@@ -719,4 +758,14 @@
 		onProceedUnlocked={handleSigilProceedUnlocked}
 		onDismiss={handleSigilDismiss}
 	/>
+
+	<!-- Comments -->
+	{#if data.post.did && data.post.local_id}
+		<CommentThread
+			postDid={data.post.did}
+			postId={data.post.local_id}
+			followedDids={data.followedDids ?? []}
+			currentUserDid={data.user?.did ?? null}
+		/>
+	{/if}
 </div>

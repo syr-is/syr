@@ -9,6 +9,7 @@ import {
 	KEY_REGISTRATION_MODE,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	KEY_INSTANCE_STORAGE_CAPACITY_GB,
+	KEY_INSTANCE_MEDIA_STORAGE_GB,
 	DEFAULT_PATH
 } from '$lib/instance-config';
 import { RegistrationModeSchema } from '@syr-is/types';
@@ -18,7 +19,8 @@ const INSTANCE_CONFIG_KEYS = [
 	KEY_USERNAME_CHANGE_COOLDOWN_DAYS,
 	KEY_REGISTRATION_MODE,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
-	KEY_INSTANCE_STORAGE_CAPACITY_GB
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
+	KEY_INSTANCE_MEDIA_STORAGE_GB
 ] as const;
 type AllowedKey = (typeof INSTANCE_CONFIG_KEYS)[number];
 
@@ -70,7 +72,8 @@ function validateRegistrationMode(val: string): string {
 const ADMIN_ONLY_KEYS: readonly string[] = [
 	KEY_REGISTRATION_MODE,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
-	KEY_INSTANCE_STORAGE_CAPACITY_GB
+	KEY_INSTANCE_STORAGE_CAPACITY_GB,
+	KEY_INSTANCE_MEDIA_STORAGE_GB
 ];
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -118,7 +121,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			value = validateCooldownDaysValue(body.value);
 		} else if (key === KEY_REGISTRATION_MODE) {
 			value = validateRegistrationMode(body.value);
-		} else if (key === KEY_DEFAULT_STORAGE_LIMIT_GB || key === KEY_INSTANCE_STORAGE_CAPACITY_GB) {
+		} else if (
+			key === KEY_DEFAULT_STORAGE_LIMIT_GB ||
+			key === KEY_INSTANCE_STORAGE_CAPACITY_GB ||
+			key === KEY_INSTANCE_MEDIA_STORAGE_GB
+		) {
 			value = validateStorageLimitGb(body.value);
 		} else {
 			value = validatePathValue(body.value);

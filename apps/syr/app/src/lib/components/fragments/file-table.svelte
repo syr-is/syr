@@ -19,7 +19,10 @@
 		MoreVertical,
 		Move,
 		Pencil,
-		Trash2
+		Trash2,
+		Smile,
+		Sticker,
+		Film
 	} from 'lucide-svelte';
 	import {
 		type DisplayItem,
@@ -40,7 +43,10 @@
 		onMove,
 		onDelete,
 		onFolderClick,
-		onFolderDelete
+		onFolderDelete,
+		onAddAsEmoji,
+		onAddAsSticker,
+		onAddAsGif
 	}: {
 		items: DisplayItem[];
 		onPreview?: (item: DisplayItem) => void;
@@ -51,7 +57,24 @@
 		onDelete?: (item: DisplayItem) => void;
 		onFolderClick?: (folder: Folder) => void;
 		onFolderDelete?: (folder: Folder) => void;
+		onAddAsEmoji?: (item: DisplayItem) => void;
+		onAddAsSticker?: (item: DisplayItem) => void;
+		onAddAsGif?: (item: DisplayItem) => void;
 	} = $props();
+
+	function isImageItem(item: DisplayItem): boolean {
+		if (item.kind !== 'file') return false;
+		const mt = item.mimeType;
+		return mt.startsWith('image/');
+	}
+
+	function isGifItem(item: DisplayItem): boolean {
+		if (item.kind !== 'file') return false;
+		return (
+			item.mimeType === 'image/gif' ||
+			(item.mimeType === 'image/webp' && item.filename.toLowerCase().endsWith('.gif'))
+		);
+	}
 
 	// Check if any items are full file objects (to show extra columns)
 	const hasFileMetadata = $derived(items.some((i) => i.kind === 'file'));
@@ -267,7 +290,25 @@
 													Move to folder
 												</DropdownMenu.Item>
 											{/if}
-											{#if (onRename || onMove) && onDelete}
+											{#if onAddAsEmoji && isImageItem(item)}
+												<DropdownMenu.Item onclick={() => onAddAsEmoji?.(item)}>
+													<Smile class="mr-2 h-4 w-4" />
+													Add as Emoji
+												</DropdownMenu.Item>
+											{/if}
+											{#if onAddAsSticker && isImageItem(item)}
+												<DropdownMenu.Item onclick={() => onAddAsSticker?.(item)}>
+													<Sticker class="mr-2 h-4 w-4" />
+													Add as Sticker
+												</DropdownMenu.Item>
+											{/if}
+											{#if onAddAsGif && isGifItem(item)}
+												<DropdownMenu.Item onclick={() => onAddAsGif?.(item)}>
+													<Film class="mr-2 h-4 w-4" />
+													Add as GIF
+												</DropdownMenu.Item>
+											{/if}
+											{#if (onRename || onMove || onAddAsEmoji || onAddAsSticker || onAddAsGif) && onDelete}
 												<DropdownMenu.Separator />
 											{/if}
 											{#if onDelete}

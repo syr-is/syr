@@ -11,14 +11,19 @@ import { stringToRecordId } from './codecs.js';
  * - Without folder (root): uploads/{did}/{ulid}
  * - Post assets: uploads/{did}/posts/{post_ulid}/public/{ulid}
  * - Profile stories: uploads/{did}/stories/{UTC_YYYY-MM-DD}/public/{ulid}
+ * - Instance media: instance-media/{ulid}
  *
  * The DID prefix (did:syr:z6Mk...) namespaces all uploads by identity owner.
+ * Instance media uses a shared prefix not tied to any single DID.
  * Note: folder_path can be nested like "public/images/2024"
  */
 export const UploadKeySchema = z
 	.string()
-	.regex(/^uploads\/did:syr:[a-zA-Z0-9]+\/.+$/, 'Upload key must start with uploads/{did}/')
-	.describe('Upload key in format uploads/{did}/[folder_path/]{ulid}');
+	.regex(
+		/^(uploads\/did:syr:[a-zA-Z0-9]+\/.+|instance-media\/.+)$/,
+		'Upload key must start with uploads/{did}/ or instance-media/'
+	)
+	.describe('Upload key in format uploads/{did}/[path/]{ulid} or instance-media/{ulid}');
 
 export type UploadKey = z.infer<typeof UploadKeySchema>;
 

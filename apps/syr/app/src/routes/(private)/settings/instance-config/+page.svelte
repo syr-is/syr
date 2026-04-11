@@ -27,12 +27,15 @@
 	let storageLimitLoading = $state(false);
 	let instanceStorageCapacityGb = $state('');
 	let capacityLoading = $state(false);
+	let instanceMediaStorageGb = $state('');
+	let mediaStorageLoading = $state(false);
 
 	// Storage overview state
 	type StorageOverview = {
 		capacity: number;
 		total_used: number;
 		total_allocated: number;
+		media_reservation: number;
 		default_limit: number;
 		user_count: number;
 		users: Array<{ id: string; username: string; bytes_used: number; bytes_limit: number }>;
@@ -57,6 +60,7 @@
 		registrationModePersisted = data.registrationMode;
 		defaultStorageLimitGb = data.defaultStorageLimitGb;
 		instanceStorageCapacityGb = data.instanceStorageCapacityGb;
+		instanceMediaStorageGb = data.instanceMediaStorageGb;
 	});
 
 	async function loadStorageOverview() {
@@ -82,7 +86,7 @@
 		}
 	}
 
-	// Load overview on mount
+	// Load data on mount
 	$effect(() => {
 		loadStorageOverview();
 	});
@@ -188,6 +192,34 @@
 			toast.error(e instanceof Error ? e.message : 'Failed to update');
 		} finally {
 			capacityLoading = false;
+		}
+	}
+
+	async function saveInstanceMediaStorage() {
+		const n = parseFloat(instanceMediaStorageGb);
+		if (isNaN(n) || n <= 0) {
+			toast.error('Enter a positive number');
+			return;
+		}
+		mediaStorageLoading = true;
+		try {
+			const res = await fetch('/api/instance-config/instance_media_storage_gb', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ value: String(n) })
+			});
+			const json = await res.json();
+			if (!res.ok) {
+				toast.error(json.message ?? 'Failed to update');
+				return;
+			}
+			toast.success('Instance media storage updated');
+			await invalidateAll();
+			await loadStorageOverview();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to update');
+		} finally {
+			mediaStorageLoading = false;
 		}
 	}
 
@@ -499,6 +531,32 @@
 
 	<Card.Root>
 		<Card.Header>
+			<Card.Title>Instance media storage (GB)</Card.Title>
+			<Card.Description>
+				Storage reserved for shared instance media (emojis, stickers, GIFs). This space is separate
+				from individual user quotas and is managed by admins.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex gap-2">
+				<Input
+					id="instance-media-storage-gb"
+					aria-label="Instance media storage in GB"
+					bind:value={instanceMediaStorageGb}
+					type="number"
+					min={0.1}
+					step={0.1}
+					placeholder="Not configured"
+				/>
+				<Button onclick={saveInstanceMediaStorage} disabled={mediaStorageLoading}>
+					{mediaStorageLoading ? 'Saving…' : 'Save'}
+				</Button>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
 			<Card.Title>Storage overview</Card.Title>
 			<Card.Description>
 				Instance-wide storage usage and allocation across all users.
@@ -509,13 +567,18 @@
 				<p class="text-sm text-muted-foreground">Loading…</p>
 			{:else if storageOverview}
 				{@const o = storageOverview}
+				{@const totalCommitted = o.total_allocated + o.media_reservation}
 				{#if o.capacity > 0}
 					{@const usedPct = Math.min(100, (o.total_used / o.capacity) * 100)}
 					{@const allocPct = Math.min(100, (o.total_allocated / o.capacity) * 100)}
+					{@const mediaPct = Math.min(100, (o.media_reservation / o.capacity) * 100)}
 					<div class="space-y-2">
-						<div class="flex justify-between text-sm">
+						<div class="flex flex-wrap justify-between gap-x-4 text-sm">
 							<span>{fmtBytes(o.total_used)} used</span>
-							<span>{fmtBytes(o.total_allocated)} allocated</span>
+							<span>{fmtBytes(o.total_allocated)} user allocated</span>
+							{#if o.media_reservation > 0}
+								<span>{fmtBytes(o.media_reservation)} media reserved</span>
+							{/if}
 							<span>{fmtBytes(o.capacity)} capacity</span>
 						</div>
 						<!-- Stacked bar -->
@@ -532,27 +595,39 @@
 									style="width: {usedPct}%"
 								></div>
 							{/if}
+							{#if mediaPct > 0}
+								<div
+									class="absolute inset-y-0 rounded-full bg-amber-500/40"
+									style="left: {allocPct}%; width: {mediaPct}%"
+								></div>
+							{/if}
 						</div>
-						<div class="flex items-center gap-4 text-xs text-muted-foreground">
+						<div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
 							<span class="flex items-center gap-1">
 								<span class="inline-block h-2.5 w-2.5 rounded-full bg-primary"></span>
 								Used
 							</span>
 							<span class="flex items-center gap-1">
 								<span class="inline-block h-2.5 w-2.5 rounded-full bg-primary/25"></span>
-								Allocated
+								User allocated
 							</span>
+							{#if o.media_reservation > 0}
+								<span class="flex items-center gap-1">
+									<span class="inline-block h-2.5 w-2.5 rounded-full bg-amber-500/40"></span>
+									Media reserved
+								</span>
+							{/if}
 							<span class="flex items-center gap-1">
 								<span class="inline-block h-2.5 w-2.5 rounded-full border bg-muted"></span>
 								Free
 							</span>
 						</div>
-						{#if o.total_allocated > o.capacity}
+						{#if totalCommitted > o.capacity}
 							<div
 								class="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
 							>
 								<AlertTriangle class="h-4 w-4 shrink-0" />
-								Over-allocated by {fmtBytes(o.total_allocated - o.capacity)}
+								Over-committed by {fmtBytes(totalCommitted - o.capacity)} (users + media exceed capacity)
 							</div>
 						{/if}
 					</div>
@@ -560,9 +635,12 @@
 					<p class="text-sm text-muted-foreground">
 						Set the instance storage capacity above to see the allocation overview.
 					</p>
-					<div class="flex justify-between text-sm">
+					<div class="flex flex-wrap justify-between gap-2 text-sm">
 						<span><strong>Used:</strong> {fmtBytes(o.total_used)}</span>
-						<span><strong>Allocated:</strong> {fmtBytes(o.total_allocated)}</span>
+						<span><strong>User allocated:</strong> {fmtBytes(o.total_allocated)}</span>
+						{#if o.media_reservation > 0}
+							<span><strong>Media reserved:</strong> {fmtBytes(o.media_reservation)}</span>
+						{/if}
 						<span><strong>Users:</strong> {o.user_count}</span>
 					</div>
 				{/if}

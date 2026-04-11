@@ -250,6 +250,103 @@ class DatabaseService {
 				DEFINE INDEX IF NOT EXISTS idx_idr_url ON TABLE instance_discovery_registry COLUMNS registry_url UNIQUE;
 			`);
 
+			// Emoji pack table (instance-level, simple auto-ID)
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS emoji_pack SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS slug ON TABLE emoji_pack TYPE string;
+				DEFINE FIELD IF NOT EXISTS name ON TABLE emoji_pack TYPE string;
+				DEFINE FIELD IF NOT EXISTS description ON TABLE emoji_pack TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS created_by ON TABLE emoji_pack TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE emoji_pack TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE emoji_pack TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_emoji_pack_slug ON TABLE emoji_pack COLUMNS slug UNIQUE;
+			`);
+
+			// Emoji table (composite ID: { created_by: did, id: ulid })
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS emoji SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS shortcode ON TABLE emoji TYPE string;
+				DEFINE FIELD IF NOT EXISTS url ON TABLE emoji TYPE string;
+				DEFINE FIELD IF NOT EXISTS mime_type ON TABLE emoji TYPE string;
+				DEFINE FIELD IF NOT EXISTS size ON TABLE emoji TYPE int;
+				DEFINE FIELD IF NOT EXISTS is_sticker ON TABLE emoji TYPE bool DEFAULT false;
+				DEFINE FIELD IF NOT EXISTS pack_slug ON TABLE emoji TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS scope ON TABLE emoji TYPE string
+					ASSERT $value IN ['instance', 'user'];
+				DEFINE FIELD IF NOT EXISTS author_id ON TABLE emoji TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE emoji TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE emoji TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_emoji_pack ON TABLE emoji COLUMNS pack_slug;
+				DEFINE INDEX IF NOT EXISTS idx_emoji_author ON TABLE emoji COLUMNS author_id;
+			`);
+
+			// GIF table (composite ID: { created_by: did, id: ulid })
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS gif SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS url ON TABLE gif TYPE string;
+				DEFINE FIELD IF NOT EXISTS thumbnail_url ON TABLE gif TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS mime_type ON TABLE gif TYPE string;
+				DEFINE FIELD IF NOT EXISTS size ON TABLE gif TYPE int;
+				DEFINE FIELD IF NOT EXISTS scope ON TABLE gif TYPE string
+					ASSERT $value IN ['instance', 'user'];
+				DEFINE FIELD IF NOT EXISTS tags ON TABLE gif TYPE array<string> DEFAULT [];
+				DEFINE FIELD IF NOT EXISTS author_id ON TABLE gif TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE gif TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE gif TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_gif_scope ON TABLE gif COLUMNS scope;
+				DEFINE INDEX IF NOT EXISTS idx_gif_author ON TABLE gif COLUMNS author_id;
+			`);
+
+			// Comment table (composite ID: { created_by: did, id: ulid })
+			// Migration: drop deprecated parent_type/parent_did/parent_id fields and old index
+			await db.query(`
+				REMOVE FIELD IF EXISTS parent_type ON TABLE comment;
+				REMOVE FIELD IF EXISTS parent_did ON TABLE comment;
+				REMOVE FIELD IF EXISTS parent_id ON TABLE comment;
+				REMOVE INDEX IF EXISTS idx_comment_parent ON TABLE comment;
+			`);
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS comment SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS post_did ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS post_id ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS ancestor_chain ON TABLE comment TYPE array<string> DEFAULT [];
+				DEFINE FIELD IF NOT EXISTS content ON TABLE comment TYPE string;
+				DEFINE FIELD IF NOT EXISTS visibility ON TABLE comment TYPE string
+					ASSERT $value IN ['public', 'unlisted', 'private'];
+				DEFINE FIELD IF NOT EXISTS status ON TABLE comment TYPE string
+					ASSERT $value IN ['draft', 'completed'];
+				DEFINE FIELD IF NOT EXISTS author_id ON TABLE comment TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE comment TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE comment TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE comment TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE comment TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE comment TYPE option<string>;
+				DEFINE INDEX IF NOT EXISTS idx_comment_post ON TABLE comment COLUMNS post_did, post_id;
+				DEFINE INDEX IF NOT EXISTS idx_comment_author ON TABLE comment COLUMNS author_id;
+			`);
+
+			// Reaction table (composite ID: { created_by: did, id: ulid })
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS reaction SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS parent_type ON TABLE reaction TYPE string
+					ASSERT $value IN ['post', 'comment'];
+				DEFINE FIELD IF NOT EXISTS parent_did ON TABLE reaction TYPE string;
+				DEFINE FIELD IF NOT EXISTS parent_id ON TABLE reaction TYPE string;
+				DEFINE FIELD IF NOT EXISTS kind ON TABLE reaction TYPE string
+					ASSERT $value IN ['unicode', 'custom_emoji', 'sticker', 'gif'];
+				DEFINE FIELD IF NOT EXISTS value ON TABLE reaction TYPE string;
+				DEFINE FIELD IF NOT EXISTS image_url ON TABLE reaction TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS author_id ON TABLE reaction TYPE record<user>;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE reaction TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS updated_at ON TABLE reaction TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS content_signature ON TABLE reaction TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signed_payload_json ON TABLE reaction TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS signing_device_public_key ON TABLE reaction TYPE option<string>;
+				DEFINE INDEX IF NOT EXISTS idx_reaction_parent ON TABLE reaction COLUMNS parent_type, parent_did, parent_id;
+				DEFINE INDEX IF NOT EXISTS idx_reaction_author ON TABLE reaction COLUMNS author_id;
+				DEFINE INDEX IF NOT EXISTS idx_reaction_unique ON TABLE reaction COLUMNS author_id, parent_type, parent_did, parent_id, kind, value UNIQUE;
+			`);
+
 			console.log('✅ Database schema initialized');
 		} catch (error) {
 			console.error('Schema initialization error:', error);

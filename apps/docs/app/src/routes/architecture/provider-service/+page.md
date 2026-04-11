@@ -86,7 +86,10 @@ No:
 		"public_profile": "https://provider.example/api/public/profile",
 		"public_posts": "https://provider.example/api/public/posts",
 		"public_stories": "https://provider.example/api/public/stories",
-		"public_uploads": "https://provider.example/api/public/uploads"
+		"public_uploads": "https://provider.example/api/public/uploads",
+		"public_following": "https://provider.example/api/public/following",
+		"public_emojis": "https://provider.example/api/public/emojis",
+		"public_gifs": "https://provider.example/api/public/gifs"
 	},
 	"identity_manifest_template": "https://provider.example/.well-known/syr/{did}",
 	"syner": {
@@ -146,7 +149,12 @@ This means `identity_host_url` can point directly to the manifest URL: browsers 
 		"posts": "https://provider.example/api/public/posts/did%3Asyr%3A...",
 		"stories": "https://provider.example/api/public/stories/did%3Asyr%3A...",
 		"uploads": "https://provider.example/api/public/uploads/did%3Asyr%3A...",
-		"did_document": "https://provider.example/api/identity/did%3Asyr%3A.../document"
+		"did_document": "https://provider.example/api/identity/did%3Asyr%3A.../document",
+		"public_following": "https://provider.example/api/public/following/did%3Asyr%3A...",
+		"public_emojis": "https://provider.example/api/public/emojis/did%3Asyr%3A...",
+		"public_gifs": "https://provider.example/api/public/gifs/did%3Asyr%3A...",
+		"public_comments": "https://provider.example/api/public/comments/did%3Asyr%3A...",
+		"public_reactions": "https://provider.example/api/public/reactions/did%3Asyr%3A..."
 	},
 	"web_profile": "https://provider.example/u/did%3Asyr%3A..."
 }
@@ -168,6 +176,11 @@ If a provider does not serve a manifest (404 or non-JSON response), clients SHOU
 - Stories: `{provider}/api/public/stories/{did}`
 - Uploads: `{provider}/api/public/uploads/{did}`
 - DID Document: `{provider}/api/identity/{did}/document`
+- Following: `{provider}/api/public/following/{did}`
+- Emojis: `{provider}/api/public/emojis/{did}`
+- GIFs: `{provider}/api/public/gifs/{did}`
+- Comments: `{provider}/api/public/comments/{did}`
+- Reactions: `{provider}/api/public/reactions/{did}`
 
 ---
 

@@ -5,9 +5,13 @@
 	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
 	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
 	import { sanitizeMarkdownToHtml, sanitizePostHtmlFragment } from '$lib/client/sanitize-post-body';
+	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
+	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowLeft } from 'lucide-svelte';
+	import CommentThread from '$lib/components/fragments/comment-thread.svelte';
+	import ReactionBar from '$lib/components/fragments/reaction-bar.svelte';
 	import type { PageData } from './$types';
 	import type { Post } from '@syr-is/types';
 
@@ -36,13 +40,32 @@
 		void (async () => {
 			try {
 				if (p.type === 'blog') {
+					let html = '';
 					if (p.content_type === 'markdown' && p.content?.trim()) {
-						const html = await sanitizeMarkdownToHtml(p.content, false);
-						if (gen === sanitizeGen) blogHtml = html;
+						html = await sanitizeMarkdownToHtml(p.content, false);
 					} else if (p.content_type === 'html' && p.content?.trim()) {
-						const html = await sanitizePostHtmlFragment(p.content, false);
-						if (gen === sanitizeGen) blogHtml = html;
+						html = await sanitizePostHtmlFragment(p.content, false);
 					}
+					if (html) {
+						const emojiMap: Record<string, string> = {};
+						const instanceEmojis = await getInstanceEmojis();
+						for (const e of instanceEmojis) emojiMap[e.shortcode] = e.url;
+						if (p.did) {
+							try {
+								const authorEmojis = await getUserEmojis(
+									`/api/public/emojis/${encodeURIComponent(p.did)}`
+								);
+								for (const e of authorEmojis) {
+									if (!(e.shortcode in emojiMap)) emojiMap[e.shortcode] = e.url;
+								}
+							} catch {
+								/* best effort */
+							}
+						}
+						html = renderStickersInHtml(html, emojiMap);
+						html = renderEmojisInHtml(html, emojiMap);
+					}
+					if (gen === sanitizeGen) blogHtml = html;
 				}
 			} finally {
 				if (gen === sanitizeGen) bodyReady = true;
@@ -51,7 +74,7 @@
 	});
 </script>
 
-<div class="container mx-auto max-w-4xl px-4 py-6 sm:py-8">
+<div class="container mx-auto max-w-4xl space-y-6 px-4 py-6 sm:py-8">
 	<Button
 		variant="ghost"
 		size="sm"
@@ -122,6 +145,27 @@
 			{:else}
 				<p class="text-muted-foreground">No content.</p>
 			{/if}
+
+			{#if data.post.did && data.post.local_id}
+				<div class="mt-4 border-t pt-3">
+					<ReactionBar
+						parentType="post"
+						parentDid={data.post.did}
+						parentId={data.post.local_id}
+						followedDids={data.followedDids ?? []}
+						currentUserDid={data.currentUserDid ?? null}
+					/>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.post.did && data.post.local_id}
+		<CommentThread
+			postDid={data.post.did}
+			postId={data.post.local_id}
+			followedDids={data.followedDids ?? []}
+			currentUserDid={data.currentUserDid ?? null}
+		/>
+	{/if}
 </div>

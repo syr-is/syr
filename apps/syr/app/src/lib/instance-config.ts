@@ -12,6 +12,7 @@ const INVITE_CODE_TYPE = 'invite_code';
 const KEY_DEFAULT_STORAGE_LIMIT_GB = 'default_storage_limit_gb';
 const DEFAULT_STORAGE_LIMIT_GB = 5;
 const KEY_INSTANCE_STORAGE_CAPACITY_GB = 'instance_storage_capacity_gb';
+const KEY_INSTANCE_MEDIA_STORAGE_GB = 'instance_media_storage_gb';
 
 /**
  * Get the profile sync asset upload path from instance config.
@@ -81,6 +82,20 @@ export async function getInstanceStorageCapacityBytes(): Promise<number> {
 	return 0;
 }
 
+/**
+ * Get the instance media storage reservation in bytes.
+ * This is storage reserved for shared instance emojis, stickers, and GIFs.
+ * Returns 0 if not configured.
+ */
+export async function getInstanceMediaStorageBytes(): Promise<number> {
+	const val = await kvService.get<string>(INSTANCE_CONFIG_TYPE, KEY_INSTANCE_MEDIA_STORAGE_GB);
+	if (val != null) {
+		const n = parseFloat(String(val));
+		if (!isNaN(n) && n > 0) return Math.round(n * 1024 * 1024 * 1024);
+	}
+	return 0;
+}
+
 export {
 	INSTANCE_CONFIG_TYPE,
 	KEY_PROFILE_SYNC_ASSET_PATH,
@@ -88,6 +103,7 @@ export {
 	KEY_REGISTRATION_MODE,
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	KEY_INSTANCE_STORAGE_CAPACITY_GB,
+	KEY_INSTANCE_MEDIA_STORAGE_GB,
 	DEFAULT_PATH,
 	DEFAULT_USERNAME_COOLDOWN_DAYS,
 	DEFAULT_REGISTRATION_MODE,

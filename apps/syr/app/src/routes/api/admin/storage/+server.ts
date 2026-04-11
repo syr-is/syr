@@ -1,7 +1,11 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { kvService } from '$lib/services/kv';
-import { getDefaultStorageLimitBytes, getInstanceStorageCapacityBytes } from '$lib/instance-config';
+import {
+	getDefaultStorageLimitBytes,
+	getInstanceStorageCapacityBytes,
+	getInstanceMediaStorageBytes
+} from '$lib/instance-config';
 import { userRepository } from '$lib/repositories/user.repository';
 
 const KV_USAGE_TYPE = 'file_store_usage';
@@ -19,13 +23,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	const [capacity, defaultLimit, usageEntries, limitEntries, usersResult] = await Promise.all([
-		getInstanceStorageCapacityBytes(),
-		getDefaultStorageLimitBytes(),
-		kvService.getByType(KV_USAGE_TYPE),
-		kvService.getByType(KV_LIMIT_TYPE),
-		userRepository.findManyWithSearch({ limit: MAX_USER_FETCH_LIMIT, offset: 0 })
-	]);
+	const [capacity, defaultLimit, mediaReservation, usageEntries, limitEntries, usersResult] =
+		await Promise.all([
+			getInstanceStorageCapacityBytes(),
+			getDefaultStorageLimitBytes(),
+			getInstanceMediaStorageBytes(),
+			kvService.getByType(KV_USAGE_TYPE),
+			kvService.getByType(KV_LIMIT_TYPE),
+			userRepository.findManyWithSearch({ limit: MAX_USER_FETCH_LIMIT, offset: 0 })
+		]);
 
 	// Build usage map: userId string → bytes_used
 	const usageMap = new Map<string, number>();
@@ -75,6 +81,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			capacity,
 			total_used: totalUsed,
 			total_allocated: totalAllocated,
+			media_reservation: mediaReservation,
 			default_limit: defaultLimit,
 			user_count: users.length,
 			users

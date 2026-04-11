@@ -14,12 +14,12 @@ This is **not** a certificate viewer; it is a minimal integrity and attribution 
 
 ## 2. What the user sees
 
-| Element              | Description                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **DID**              | Full `did:syr:...` string with copy-to-clipboard.                                                                                                          |
-| **Public key**       | Derived from the DID (multibase or short **fingerprint** / first/last hex) so users can correlate with other tools.                                        |
-| **Signature status** | **Valid** or **Invalid** (or **Unknown** if data missing), from re-running JCS canonicalization + Ed25519 verify using `@syr-is/crypto` and `@syr-is/did`. |
-| **Optional**         | Expandable “canonical payload” or hash for advanced users and support.                                                                                     |
+| Element              | Description                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **DID**              | Full `did:syr:...` string with copy-to-clipboard.                                                                                                                                                                                                                                                                              |
+| **Public key**       | Derived from the DID (multibase or short **fingerprint** / first/last hex) so users can correlate with other tools.                                                                                                                                                                                                            |
+| **Signature status** | **Valid** or **Invalid** (or **Unknown** if data missing), from re-running JCS canonicalization + Ed25519 verification using the DID-derived public key or, when `signing_device_public_key` is present, the delegated device key from the signing artifact. Implementers must accept valid signatures from either key source. |
+| **Optional**         | Expandable “canonical payload” or hash for advanced users and support.                                                                                                                                                                                                                                                         |
 
 ---
 
@@ -44,21 +44,15 @@ No additional trust anchor: verification is **local** to displayed data.
 
 ---
 
-## 5. Loading UX — Svelte await blocks
+## 5. Loading UX
 
-Verification may be **async** (e.g. lazy import of crypto, or fetching DID document). Use Svelte **await blocks** (or equivalent promise-bound UI) so the user always sees a **pending** state (spinner/skeleton) then **valid / invalid / error**. Pattern:
+Verification is **async** (crypto operations, potential lazy module loading). Implementations should show three states:
 
-```svelte
-{#await verifySignature()}
-	<p>Checking signature…</p>
-{:then ok}
-	<p>{ok ? 'Valid' : 'Invalid'}</p>
-{:catch e}
-	<p>Error: {e.message}</p>
-{/await}
-```
+- **Pending** — spinner or skeleton while verification runs.
+- **Result** — "Valid" or "Invalid" with optional reason on failure.
+- **Error** — catch and display if verification cannot complete (e.g., missing fields).
 
-Same pattern applies on the [home timeline](/architecture/follows-and-timeline) for meta loads and full post hydration.
+The same async pattern applies on the [home timeline](/architecture/follows-and-timeline) for meta loads and full post hydration.
 
 ---
 

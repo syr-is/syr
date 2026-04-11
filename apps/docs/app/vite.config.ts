@@ -51,7 +51,10 @@ const sidebarConfig = [
 			{ title: 'Independent Login', to: '/architecture/independent-login' },
 			{ title: 'Registry Protocol v0.1', to: '/architecture/registry-protocol' },
 			{ title: 'Provider Service v0.1', to: '/architecture/provider-service' },
-			{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' }
+			{ title: 'Recovery & Rotation v0.1', to: '/architecture/recovery-rotation' },
+			{ title: 'Emoji & Sticker Store (v1)', to: '/architecture/emoji-sticker-store' },
+			{ title: 'GIF Store (v1)', to: '/architecture/gif-store' },
+			{ title: 'Comments & Reactions (v1)', to: '/architecture/comments-reactions' }
 		]
 	},
 	{

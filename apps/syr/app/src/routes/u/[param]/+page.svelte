@@ -31,6 +31,7 @@
 	import type { StorySlide } from '$lib/types/feed-stories';
 	import { fetchManifest } from '$lib/manifest-cache.js';
 	import { endpointsFromManifest, fallbackEndpoints, manifestUrl } from '$lib/remote-endpoints.js';
+	import RemoteFollowDialog from '$lib/components/fragments/remote-follow-dialog.svelte';
 
 	let { data } = $props();
 
@@ -45,8 +46,15 @@
 
 	const p = $derived(data.publicProfile);
 	const viewer = $derived(userSessionStore.user);
-	const canFollow = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
+	/** Authenticated user can toggle follow via API */
+	const canFollowLocal = $derived(!!viewer?.did && !!p.did && p.did !== viewer.did);
+	/** Always show follow button; unauthenticated users are redirected to login, users without a DID get the remote follow dialog */
+	const showFollowButton = $derived(!!p.did && p.did !== viewer?.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
+	/** Effective provider URL: resolvedProviderOrigin for remote, current origin for local (client-only) */
+	const effectiveProvider = $derived(
+		data.resolvedProviderOrigin ?? (typeof window !== 'undefined' ? window.location.origin : '')
+	);
 	const remoteHomeHref = $derived.by(() => {
 		if (data.remoteEndpoints?.web_profile) return data.remoteEndpoints.web_profile;
 		const o = data.resolvedProviderOrigin?.trim().replace(/\/$/, '');
@@ -111,6 +119,7 @@
 	let followBusy = $state(false);
 	let isFollowing = $state(false);
 	let followStateLoading = $state(false);
+	let remoteFollowOpen = $state(false);
 
 	let storySlides = $state<StorySlide[]>([]);
 	let storyViewerOpen = $state(false);
@@ -462,7 +471,7 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				const checkQs = `did=${encodeURIComponent(did)}${data.resolvedProviderOrigin ? `&provider=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const checkQs = `did=${encodeURIComponent(did)}&provider=${encodeURIComponent(effectiveProvider)}`;
 				const res = await fetch(`/api/follows/check?${checkQs}`, {
 					credentials: 'include'
 				});
@@ -495,12 +504,25 @@
 	}
 
 	async function toggleFollow() {
-		if (!p.did || !viewer || followBusy || followStateLoading) return;
+		if (!p.did || followBusy || followStateLoading) return;
+		if (!canFollowLocal) {
+			if (!viewer) {
+				// Not logged in — redirect to login, then back here
+				const returnPath = `${window.location.pathname}${window.location.search}`;
+				const loginHref = resolve('/login') + `?redirectTo=${encodeURIComponent(returnPath)}`;
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- base is resolve()'d, query is dynamic
+				void goto(loginHref);
+			} else {
+				// Logged in but no DID or viewing own profile — show remote follow
+				remoteFollowOpen = true;
+			}
+			return;
+		}
 		const currentDid = p.did;
 		followBusy = true;
 		try {
 			if (isFollowing) {
-				const delQs = `followed_did=${encodeURIComponent(currentDid)}${data.resolvedProviderOrigin ? `&provider_url=${encodeURIComponent(data.resolvedProviderOrigin)}` : ''}`;
+				const delQs = `followed_did=${encodeURIComponent(currentDid)}&provider_url=${encodeURIComponent(effectiveProvider)}`;
 				const res = await fetch(`/api/follows?${delQs}`, {
 					method: 'DELETE'
 				});
@@ -516,12 +538,10 @@
 				return;
 			}
 
-			const followBody: { followed_did: string; provider_url?: string } = {
-				followed_did: currentDid
+			const followBody = {
+				followed_did: currentDid,
+				provider_url: effectiveProvider
 			};
-			if (data.resolvedProviderOrigin) {
-				followBody.provider_url = data.resolvedProviderOrigin;
-			}
 			const res = await fetch('/api/follows', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -572,7 +592,7 @@
 						})()
 					: null
 		}}
-		showFollow={canFollow}
+		showFollow={showFollowButton}
 		{followBusy}
 		{followStateLoading}
 		{isFollowing}
@@ -942,3 +962,9 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<RemoteFollowDialog
+	bind:open={remoteFollowOpen}
+	did={p.did ?? ''}
+	providerOrigin={data.resolvedProviderOrigin ?? null}
+/>
