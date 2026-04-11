@@ -16,13 +16,19 @@
 
 	let {
 		onSelect,
-		triggerClass = ''
+		triggerClass = '',
+		onOpenChange
 	}: {
 		onSelect?: (gif: GifEntry) => void;
 		triggerClass?: string;
+		onOpenChange?: (open: boolean) => void;
 	} = $props();
 
 	let open = $state(false);
+
+	$effect(() => {
+		onOpenChange?.(open);
+	});
 	let search = $state('');
 	let instanceGifs = $state<GifEntry[]>([]);
 	let userGifs = $state<GifEntry[]>([]);

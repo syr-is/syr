@@ -752,6 +752,7 @@
 								onSelect={(gif) => {
 									toggleCommentReaction(node.did, node.local_id, 'gif', gif.url, gif.url);
 								}}
+								onOpenChange={(o) => (pickerOpen = o)}
 							/>
 							{#if currentUserDid}
 								<button
