@@ -130,7 +130,12 @@
 				html = renderEmojisInHtml(html, map);
 				previewHtml = html;
 			} catch {
-				previewHtml = content;
+				// Escape raw content so it's safe for {@html}
+				previewHtml = content
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;')
+					.replace(/\n/g, '<br>');
 			}
 		}
 		preview = !preview;
@@ -158,9 +163,12 @@
 					toast.error(err.message ?? 'Failed to post comment');
 					return;
 				}
+				const submitted = content.trim();
 				content = '';
 				preview = false;
 				previewHtml = '';
+				onSubmit?.(submitted);
+				return;
 			}
 			onSubmit?.(content.trim());
 		} catch {

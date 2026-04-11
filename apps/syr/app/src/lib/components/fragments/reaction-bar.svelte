@@ -1,5 +1,6 @@
 <script lang="ts">
 	import EmojiPicker from './emoji-picker.svelte';
+	import GifPicker from './gif-picker.svelte';
 	import * as Tooltip from '@syr-is/ui/tooltip';
 	import { toast } from 'svelte-sonner';
 	import { cn } from '$lib/utils';
@@ -288,5 +289,6 @@
 			onSelect={handleEmojiReaction}
 			triggerClass="h-6 w-6 rounded-full border border-dashed border-muted-foreground/30 hover:border-muted-foreground/60"
 		/>
+		<GifPicker onSelect={(gif) => toggleReaction('gif', gif.url, gif.url)} />
 	{/if}
 </div>

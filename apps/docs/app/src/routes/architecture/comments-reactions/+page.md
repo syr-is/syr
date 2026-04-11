@@ -48,9 +48,8 @@ This document specifies **comments** and **reactions** for the Syr ecosystem. Co
 ```text
 Comment {
   id: composite (comment:{ created_by: did, id: ulid })
-  parent_type: 'post' | 'comment'
-  parent_did: string                // DID of the parent entity's author
-  parent_id: string                 // ULID of the parent entity
+  post_did: string                  // DID of the post author
+  post_id: string                   // ULID of the post
   ancestor_chain: string[]          // ordered chain from root comment to immediate parent
   content: string                   // markdown text with emoji shortcodes
   status: 'draft' | 'completed'
@@ -62,9 +61,9 @@ Comment {
 }
 ```
 
-**Parent reference**: The `(parent_type, parent_did, parent_id)` tuple uniquely identifies the parent entity across instances. This is used for cross-instance querying: "give me all comments by this DID whose parent is `post:{did},{ulid}`".
+**Post reference**: Every comment stores `post_did` and `post_id` identifying which post it belongs to. This is the primary query index for cross-instance comment fetching.
 
-**Ancestor chain**: The `ancestor_chain` array preserves the full path from the root comment down to the immediate parent. Each entry is a `"{did}:{local_id}"` string. Root comments (parent_type=post) have an empty chain. When a comment replies to another comment, its chain is the parent's chain plus the parent itself.
+**Ancestor chain**: The `ancestor_chain` array preserves the full path from the root comment down to the immediate parent. Each entry is a `"{did}:{local_id}"` string. Root comments have an empty chain. When a comment replies to another comment, its chain is the parent's chain plus the parent itself.
 
 This enables correct thread reconstruction even when intermediate comments are deleted or unavailable (author not followed). The viewer walks the chain backwards to find the nearest available ancestor and inserts placeholders for missing nodes, preserving the thread hierarchy.
 
@@ -108,16 +107,10 @@ DELETE /api/reactions/[did]/[id]               -- delete reaction
 ### 4.2 Public (cross-instance reads)
 
 ```text
-GET /api/public/comments/[did]?parent_type={post|comment}&parent_did={did}&parent_id={ulid}&limit={n}&offset={n}
-```
-
-Returns all **public + completed** comments by `[did]` for the specified parent. This is the core cross-instance query. The viewer calls this for each followed DID to collect comments on a post.
-
-An alternative convenience form accepts `post_did` and `post_id` to fetch all comments in a post's thread (root comments on the post plus all comment-type replies by this DID):
-
-```text
 GET /api/public/comments/[did]?post_did={did}&post_id={ulid}&limit={n}&offset={n}
 ```
+
+Returns all **public + completed** comments by `[did]` for the specified post. This is the core cross-instance query. The viewer calls this for each followed DID to collect comments on a post.
 
 ```json
 {

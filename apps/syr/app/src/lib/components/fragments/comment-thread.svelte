@@ -5,6 +5,7 @@
 	import ReactionBar from './reaction-bar.svelte';
 	import CommentSignDialog from './comment-sign-dialog.svelte';
 	import EmojiPicker from './emoji-picker.svelte';
+	import GifPicker from './gif-picker.svelte';
 	import {
 		MessageSquare,
 		ChevronDown,
@@ -239,6 +240,8 @@
 			}
 		} catch {
 			/* skip */
+		} finally {
+			profileFetchPending.delete(did);
 		}
 	}
 
@@ -745,13 +748,20 @@
 								triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
 								onOpenChange={(o) => (pickerOpen = o)}
 							/>
-							<button
-								type="button"
-								class="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-								onclick={() => startReply('comment', node.did, node.local_id)}
-							>
-								Reply
-							</button>
+							<GifPicker
+								onSelect={(gif) => {
+									toggleCommentReaction(node.did, node.local_id, 'gif', gif.url, gif.url);
+								}}
+							/>
+							{#if currentUserDid}
+								<button
+									type="button"
+									class="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+									onclick={() => startReply('comment', node.did, node.local_id)}
+								>
+									Reply
+								</button>
+							{/if}
 							{#if isOwn}
 								<button
 									type="button"

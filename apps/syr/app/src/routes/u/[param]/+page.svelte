@@ -51,8 +51,10 @@
 	/** Always show follow button; unauthenticated users are redirected to login, users without a DID get the remote follow dialog */
 	const showFollowButton = $derived(!!p.did && p.did !== viewer?.did);
 	const isRemoteProfile = $derived(data.profileSource === 'remote');
-	/** Effective provider URL: resolvedProviderOrigin for remote, current origin for local */
-	const effectiveProvider = $derived(data.resolvedProviderOrigin ?? window.location.origin);
+	/** Effective provider URL: resolvedProviderOrigin for remote, current origin for local (client-only) */
+	const effectiveProvider = $derived(
+		data.resolvedProviderOrigin ?? (typeof window !== 'undefined' ? window.location.origin : '')
+	);
 	const remoteHomeHref = $derived.by(() => {
 		if (data.remoteEndpoints?.web_profile) return data.remoteEndpoints.web_profile;
 		const o = data.resolvedProviderOrigin?.trim().replace(/\/$/, '');
