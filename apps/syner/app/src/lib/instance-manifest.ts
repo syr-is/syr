@@ -50,7 +50,9 @@ export async function resolveSynerEndpoint(
 
 	if (manifest?.syner) {
 		const template = manifest.syner[endpointKey];
-		return id ? template.replace('{id}', encodeURIComponent(id)) : template;
+		if (template) {
+			return id ? template.replace('{id}', encodeURIComponent(id)) : template;
+		}
 	}
 
 	// Fallback to hardcoded paths for providers without manifest
@@ -65,7 +67,9 @@ export async function resolveSynerEndpoint(
 		post_sign_payload: `${base}/api/user/post-sign/{id}/payload`,
 		post_sign_signature: `${base}/api/user/post-sign/{id}/signature`,
 		registry_sign_payload: `${base}/api/user/registry-sign/{id}/payload`,
-		registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`
+		registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`,
+		delegation_challenge_payload: `${base}/api/platform/delegation-challenge/{id}/payload`,
+		delegation_verify: `${base}/api/platform/delegation-verify`
 	};
 
 	const template = fallbacks[endpointKey];

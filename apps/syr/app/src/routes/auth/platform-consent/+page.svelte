@@ -10,6 +10,7 @@
 		challenge_id: string;
 		deeplink_url: string;
 		qrDataUrl: string;
+		delegate_public_key: string;
 		expires_in: number;
 		expiresAt: number;
 	} | null>(null);
@@ -27,15 +28,7 @@
 			const res = await fetch('/api/platform/delegation-challenge', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					delegation_statement: {
-						did: data.did,
-						delegate: 'pending',
-						scope: 'platform',
-						createdAt: new Date().toISOString()
-					},
-					delegation_id: data.challengeId
-				})
+				body: JSON.stringify({ delegation_id: data.challengeId })
 			});
 			const result = await res.json();
 			if (!res.ok) {
@@ -46,6 +39,7 @@
 			synerChallenge = {
 				challenge_id: result.challenge_id,
 				deeplink_url: result.deeplink_url,
+				delegate_public_key: result.delegate_public_key ?? '',
 				qrDataUrl,
 				expires_in: result.expires_in,
 				expiresAt: Date.now() + result.expires_in * 1000
@@ -222,6 +216,14 @@
 					>
 						Open in Syner
 					</a>
+					{#if synerChallenge.delegate_public_key}
+						<p
+							class="max-w-full truncate font-mono text-[10px] text-muted-foreground"
+							title={synerChallenge.delegate_public_key}
+						>
+							Delegate key: {synerChallenge.delegate_public_key.slice(0, 24)}...
+						</p>
+					{/if}
 					<p class="text-xs text-muted-foreground">
 						Challenge expires in {synerChallenge.expires_in}s
 					</p>

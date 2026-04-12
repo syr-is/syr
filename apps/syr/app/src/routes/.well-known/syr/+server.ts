@@ -37,7 +37,9 @@ export const GET: RequestHandler = async () => {
 			post_sign_payload: `${base}/api/user/post-sign/{id}/payload`,
 			post_sign_signature: `${base}/api/user/post-sign/{id}/signature`,
 			registry_sign_payload: `${base}/api/user/registry-sign/{id}/payload`,
-			registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`
+			registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`,
+			delegation_challenge_payload: `${base}/api/platform/delegation-challenge/{id}/payload`,
+			delegation_verify: `${base}/api/platform/delegation-verify`
 		}
 	};
 	return json(manifest, {

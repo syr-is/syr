@@ -1099,3 +1099,68 @@ pub async fn decrypt_persona_sigil_cmd(
     .map_err(|e| e.to_string())
     .and_then(std::convert::identity)
 }
+
+// ── Platform delegation tracking ──
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonaDelegation {
+    pub delegate_public_key: String,
+    pub platform_origin: String,
+    pub platform_name: String,
+    pub scope: String,
+    pub created_at: String,
+    pub instance_url: String,
+}
+
+#[tauri::command]
+pub fn add_persona_delegation_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+    delegation_json: String,
+) -> Result<(), String> {
+    validate_persona_id(&persona_id)?;
+    let base = default_personas_path(&app)?;
+    let persona_dir = base.join(&persona_id);
+    if !persona_dir.is_dir() {
+        return Err("Persona not found".to_string());
+    }
+
+    let delegation: PersonaDelegation = serde_json::from_str(&delegation_json)
+        .map_err(|e| format!("Invalid delegation JSON: {}", e))?;
+
+    let delegations_path = persona_dir.join("delegations.json");
+    let mut delegations: Vec<PersonaDelegation> = if delegations_path.exists() {
+        let content = std::fs::read_to_string(&delegations_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    delegations.push(delegation);
+
+    let json = serde_json::to_string_pretty(&delegations).map_err(|e| e.to_string())?;
+    std::fs::write(&delegations_path, json).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_persona_delegations_cmd(
+    app: tauri::AppHandle,
+    persona_id: String,
+) -> Result<Vec<PersonaDelegation>, String> {
+    validate_persona_id(&persona_id)?;
+    let base = default_personas_path(&app)?;
+    let delegations_path = base.join(&persona_id).join("delegations.json");
+
+    if !delegations_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(&delegations_path).map_err(|e| e.to_string())?;
+    let delegations: Vec<PersonaDelegation> =
+        serde_json::from_str(&content).map_err(|e| format!("Invalid delegations.json: {}", e))?;
+
+    Ok(delegations)
+}

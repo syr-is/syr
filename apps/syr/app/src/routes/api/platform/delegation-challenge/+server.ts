@@ -1,16 +1,25 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { canonicalize } from '@syr-is/crypto';
+import {
+	generateDeviceKeypair,
+	canonicalize,
+	encodeMultibase,
+	ED25519_MULTICODEC_PREFIX
+} from '@syr-is/crypto';
 import { config, platformDelegation } from '$lib/config';
-import { setChallenge, setDelegationMeta } from '$lib/server/independent-login-store';
+import { encryptDelegateKey } from '$lib/services/platform-key-encryption';
+import {
+	getPendingDelegation,
+	setPendingKeypair,
+	setDelegationChallenge
+} from '$lib/server/platform-delegation-store';
 
 /**
  * POST /api/platform/delegation-challenge
  *
- * Creates a signing challenge for delegation. Stores it in the
- * independent login challenge KV so Syner's standard verify flow finds it.
- * Also stores delegation metadata so the verify endpoint can complete
- * the platform delegation after signature verification.
+ * Round 1 of the two-round Syner delegation flow.
+ * Generates the delegate keypair upfront, builds the canonical delegation statement
+ * with the real public key, and returns a syr://delegate deeplink for Syner.
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) {
@@ -19,48 +28,98 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		const { delegation_statement, delegation_id } = body;
+		const { delegation_id } = body;
 
-		if (!delegation_statement || !delegation_id) {
+		if (!delegation_id) {
 			return json(
-				{
-					error: 'invalid_request',
-					error_description: 'delegation_statement and delegation_id are required'
-				},
+				{ error: 'invalid_request', error_description: 'delegation_id is required' },
 				{ status: 400 }
 			);
 		}
 
-		const message =
-			typeof delegation_statement === 'string'
-				? delegation_statement
-				: canonicalize(delegation_statement);
+		// Look up pending registration for platform details
+		const registration = await getPendingDelegation(delegation_id);
+		if (!registration) {
+			return json(
+				{
+					error: 'registration_expired',
+					error_description: 'Platform registration not found or expired'
+				},
+				{ status: 410 }
+			);
+		}
 
-		const challengeId = crypto.randomUUID();
-		const publicUrl = new URL(config.PUBLIC_URL);
+		const did = registration.did || '';
+		if (!did) {
+			return json(
+				{ error: 'invalid_request', error_description: 'Registration has no DID' },
+				{ status: 400 }
+			);
+		}
 
-		// Store as a standard independent login challenge so Syner's verify finds it
-		await setChallenge(challengeId, {
-			nonce: challengeId,
-			message,
-			domain: publicUrl.hostname,
+		// Generate delegate keypair
+		const delegateKeypair = await generateDeviceKeypair();
+		const delegatePublicKeyMultibase = encodeMultibase(
+			new Uint8Array([...ED25519_MULTICODEC_PREFIX, ...delegateKeypair.publicKey])
+		);
+
+		// Build canonical delegation statement with the REAL delegate key
+		const now = new Date();
+		const delegationStatement = {
+			did,
+			delegate: delegatePublicKeyMultibase,
+			scope: 'platform' as const,
+			platform_origin: registration.platform_origin,
+			platform_name: registration.platform_name,
+			createdAt: now.toISOString()
+		};
+		const canonicalStatement = canonicalize(delegationStatement);
+
+		// Encrypt delegate private key, then zero raw
+		let aegisDelegate;
+		try {
+			aegisDelegate = await encryptDelegateKey(delegateKeypair.privateKey);
+		} finally {
+			delegateKeypair.privateKey.fill(0);
+		}
+
+		// Store pre-generated keypair for Round 2
+		await setPendingKeypair(delegation_id, {
+			delegation_id,
+			delegate_public_key_multibase: delegatePublicKeyMultibase,
+			aegis_delegate: aegisDelegate,
+			canonical_statement: canonicalStatement,
+			did,
+			platform_origin: registration.platform_origin,
+			platform_name: registration.platform_name,
 			created_at: Date.now()
 		});
 
-		// Store delegation metadata separately — consumed by verify after sig check
-		await setDelegationMeta(challengeId, {
+		// Store challenge for Syner verify
+		const challengeId = crypto.randomUUID();
+		await setDelegationChallenge(challengeId, {
+			message: canonicalStatement,
 			delegation_id,
-			user_id: locals.user.id.toString()
+			user_id: locals.user.id.toString(),
+			created_at: Date.now()
 		});
 
-		// Standard Syner deeplink — posts to /api/auth/independent-login/verify
-		const callbackBase = `${config.PUBLIC_URL}/auth/independent-callback`;
-		const deeplinkUrl = `syr://login?challenge=${encodeURIComponent(challengeId)}&instance=${encodeURIComponent(config.PUBLIC_URL)}&callback=${encodeURIComponent(callbackBase)}`;
+		// Build syr://delegate deeplink
+		const deeplinkParams = new URLSearchParams({
+			challenge: challengeId,
+			instance: config.PUBLIC_URL,
+			platform_name: registration.platform_name,
+			platform_origin: registration.platform_origin,
+			did,
+			delegate: delegatePublicKeyMultibase
+		});
+		const deeplinkUrl = `syr://delegate?${deeplinkParams.toString()}`;
 
 		return json({
 			challenge_id: challengeId,
-			message,
+			message: canonicalStatement,
 			deeplink_url: deeplinkUrl,
+			delegate_public_key: delegatePublicKeyMultibase,
 			expires_in: platformDelegation.registrationExpiresIn
 		});
 	} catch (err) {

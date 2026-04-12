@@ -176,3 +176,27 @@ export const PlatformDelegationInfoSchema = z.object({
 });
 
 export type PlatformDelegationInfo = z.infer<typeof PlatformDelegationInfoSchema>;
+
+// ── Delegation Statement (canonical payload signed by root key) ──
+
+/**
+ * The canonical delegation statement that the root key signs to authorize
+ * a platform delegate keypair. This exact object is JCS-canonicalized and
+ * signed; the signature is stored alongside the delegation record.
+ */
+export const PlatformDelegationStatementSchema = z.object({
+	/** The identity DID being delegated from */
+	did: DidSyrSchema,
+	/** Multibase-encoded Ed25519 delegate public key */
+	delegate: z.string().min(1),
+	/** Always 'platform' for platform delegations */
+	scope: z.literal('platform'),
+	/** Platform origin URL */
+	platform_origin: z.string().url(),
+	/** Human-readable platform name */
+	platform_name: z.string().min(1).max(100),
+	/** ISO-8601 creation timestamp */
+	createdAt: z.string().datetime()
+});
+
+export type PlatformDelegationStatement = z.infer<typeof PlatformDelegationStatementSchema>;

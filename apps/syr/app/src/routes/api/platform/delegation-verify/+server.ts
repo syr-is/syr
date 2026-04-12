@@ -1,30 +1,23 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verify, decodeMultibase } from '@syr-is/crypto';
+import { verify, decodeMultibase, encodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
-import { kvService } from '$lib/services/kv';
-import { getPendingDelegation, setPendingDelegation } from '$lib/server/platform-delegation-store';
+import {
+	consumeDelegationChallenge,
+	consumePendingKeypair,
+	getPendingDelegation,
+	setPendingDelegation
+} from '$lib/server/platform-delegation-store';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { platformDelegationController } from '$lib/controllers/platform-delegation.controller';
 import { notifyDelegationSigned } from '$lib/server/platform-delegation-broadcast';
-interface StoredDelegationChallenge {
-	message: string;
-	delegation_id: string;
-	user_id: string;
-	created_at: number;
-}
-
-const KV_TYPE = 'platform_delegation_sign';
 
 /**
  * POST /api/platform/delegation-verify
  *
- * Syner posts signed delegation here. This endpoint does EVERYTHING:
- * 1. Verify signature against DID pubkey
- * 2. Look up identity (must exist on instance)
- * 3. Create platform delegation using the signature
- * 4. Set authorization code on pending registration
- * 5. Notify SSE → consent page auto-redirects to callback
+ * Round 2 of the two-round Syner delegation flow.
+ * Syner posts the signed canonical delegation statement.
+ * Server verifies, retrieves the pre-generated keypair, and stores the delegation.
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -41,11 +34,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Retrieve and consume challenge
-		const challenge = await kvService.getAndDelete<StoredDelegationChallenge>(
-			KV_TYPE,
-			challenge_id
-		);
+		// Atomically consume challenge (prevents replay)
+		const challenge = await consumeDelegationChallenge(challenge_id);
 		if (!challenge) {
 			return json(
 				{ error: 'challenge_expired', error_description: 'Challenge not found or expired' },
@@ -53,7 +43,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Verify signature against DID pubkey
+		// Verify signature against DID root public key
 		const parsed = parseDid(did);
 		const signatureBytes = decodeMultibase(signature);
 		const isValid = await verify(challenge.message, signatureBytes, parsed.publicKey);
@@ -68,61 +58,70 @@ export const POST: RequestHandler = async ({ request }) => {
 		const identity = await identityRepository.findByDid(did);
 		if (!identity) {
 			return json(
-				{
-					error: 'unknown_did',
-					error_description: 'Identity not found on this instance'
-				},
+				{ error: 'unknown_did', error_description: 'Identity not found on this instance' },
 				{ status: 404 }
 			);
 		}
 
-		// Get pending registration
-		const registration = await getPendingDelegation(challenge.delegation_id);
-		if (!registration) {
+		// Validate user_id matches (prevent cross-user delegation)
+		if (identity.user_id.toString() !== challenge.user_id) {
+			return json(
+				{ error: 'mismatched_did', error_description: 'Identity does not match registration' },
+				{ status: 403 }
+			);
+		}
+
+		// Consume pre-generated keypair (atomic — prevents double-use)
+		const keypair = await consumePendingKeypair(challenge.delegation_id);
+		if (!keypair) {
 			return json(
 				{
-					error: 'registration_expired',
-					error_description: 'Platform registration expired'
+					error: 'keypair_expired',
+					error_description: 'Pre-generated keypair not found or expired'
 				},
 				{ status: 410 }
 			);
 		}
 
-		// Create platform delegation using Syner's signature as root sig
-		const rootSignFn = async () => signatureBytes;
-
+		// Store the delegation with the REAL signature that attests to the actual delegate key
+		const signatureMultibase = encodeMultibase(signatureBytes);
 		try {
-			await platformDelegationController.createPlatformDelegation({
+			await platformDelegationController.storePlatformDelegation({
 				userId: identity.user_id,
 				did,
-				platformOrigin: registration.platform_origin,
-				platformName: registration.platform_name,
-				rootSignFn
+				platformOrigin: keypair.platform_origin,
+				platformName: keypair.platform_name,
+				delegatePublicKeyMultibase: keypair.delegate_public_key_multibase,
+				aegisDelegate: keypair.aegis_delegate as import('@syr-is/types').AegisBundle,
+				signatureMultibase,
+				canonicalDelegation: keypair.canonical_statement,
+				createdAt: new Date(keypair.created_at)
 			});
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Delegation creation failed';
 			return json({ error: 'delegation_failed', error_description: msg }, { status: 500 });
 		}
 
-		// Set authorization code on registration
-		const code = crypto.randomUUID();
-		registration.did = did;
-		registration.code = code;
-		await setPendingDelegation(challenge.delegation_id, registration);
+		// Get pending registration to set auth code
+		const registration = await getPendingDelegation(challenge.delegation_id);
+		if (registration) {
+			const code = crypto.randomUUID();
+			registration.did = did;
+			registration.code = code;
+			await setPendingDelegation(challenge.delegation_id, registration);
 
-		// Build callback URL
-		const callbackUrl = new URL(registration.callback_url);
-		callbackUrl.searchParams.set('code', code);
-		if (registration.state) {
-			callbackUrl.searchParams.set('state', registration.state);
+			const callbackUrl = new URL(registration.callback_url);
+			callbackUrl.searchParams.set('code', code);
+			if (registration.state) {
+				callbackUrl.searchParams.set('state', registration.state);
+			}
+
+			notifyDelegationSigned(challenge_id, {
+				signature,
+				did,
+				redirect_url: callbackUrl.toString()
+			});
 		}
-
-		// Notify SSE → consent page auto-redirects
-		notifyDelegationSigned(challenge_id, {
-			signature,
-			did,
-			redirect_url: callbackUrl.toString()
-		});
 
 		return json({ success: true });
 	} catch (err) {

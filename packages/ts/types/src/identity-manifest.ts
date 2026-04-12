@@ -71,7 +71,9 @@ export const SyrInstanceManifestSchema = z.object({
 			post_sign_payload: httpUrlTemplate,
 			post_sign_signature: httpUrlTemplate,
 			registry_sign_payload: httpUrlTemplate,
-			registry_sign_signature: httpUrlTemplate
+			registry_sign_signature: httpUrlTemplate,
+			delegation_challenge_payload: httpUrlTemplate.optional(),
+			delegation_verify: httpUrlTemplate.optional()
 		})
 		.optional()
 });

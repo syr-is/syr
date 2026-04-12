@@ -35,6 +35,61 @@ export async function deletePendingDelegation(id: string): Promise<void> {
 	await kvService.delete(KV_TYPE, id);
 }
 
+// ── Pre-generated delegate keypair (Round 1 → Round 2 handoff) ──
+
+const KV_KEYPAIR_TYPE = 'platform_delegation_keypair';
+const KV_CHALLENGE_TYPE = 'platform_delegation_sign';
+
+/** Pre-generated delegate keypair stored between Round 1 (challenge) and Round 2 (verify). */
+export interface PendingDelegateKeypair {
+	delegation_id: string;
+	delegate_public_key_multibase: string;
+	aegis_delegate: unknown; // AegisBundle — encrypted delegate private key
+	canonical_statement: string;
+	did: string;
+	platform_origin: string;
+	platform_name: string;
+	created_at: number;
+}
+
+export async function setPendingKeypair(
+	id: string,
+	keypair: PendingDelegateKeypair
+): Promise<void> {
+	await kvService.set(KV_KEYPAIR_TYPE, id, keypair, platformDelegation.registrationExpiresIn);
+}
+
+export async function consumePendingKeypair(id: string): Promise<PendingDelegateKeypair | null> {
+	return kvService.getAndDelete<PendingDelegateKeypair>(KV_KEYPAIR_TYPE, id);
+}
+
+/** Challenge stored for Syner signing — consumed atomically on verify. */
+export interface StoredDelegationChallenge {
+	message: string;
+	delegation_id: string;
+	user_id: string;
+	created_at: number;
+}
+
+export async function setDelegationChallenge(
+	id: string,
+	challenge: StoredDelegationChallenge
+): Promise<void> {
+	await kvService.set(KV_CHALLENGE_TYPE, id, challenge, platformDelegation.registrationExpiresIn);
+}
+
+export async function getDelegationChallenge(
+	id: string
+): Promise<StoredDelegationChallenge | null> {
+	return kvService.get<StoredDelegationChallenge>(KV_CHALLENGE_TYPE, id);
+}
+
+export async function consumeDelegationChallenge(
+	id: string
+): Promise<StoredDelegationChallenge | null> {
+	return kvService.getAndDelete<StoredDelegationChallenge>(KV_CHALLENGE_TYPE, id);
+}
+
 /** Atomically consume a pending delegation: get + delete + validate code in one step. */
 export async function consumePendingDelegation(
 	id: string,

@@ -110,6 +110,68 @@ export class PlatformDelegationController {
 	}
 
 	/**
+	 * Store a platform delegation with a pre-generated keypair and externally-produced signature.
+	 * Used by the Syner two-round flow where the keypair is generated in Round 1
+	 * and the root signature comes from Syner in Round 2.
+	 */
+	async storePlatformDelegation(params: {
+		userId: UserIdInput;
+		did: string;
+		platformOrigin: string;
+		platformName: string;
+		delegatePublicKeyMultibase: string;
+		aegisDelegate: AegisBundle;
+		signatureMultibase: string;
+		canonicalDelegation: string;
+		createdAt: Date;
+	}): Promise<{ delegatePublicKey: string }> {
+		const {
+			userId,
+			did,
+			platformOrigin,
+			platformName,
+			delegatePublicKeyMultibase,
+			aegisDelegate,
+			signatureMultibase,
+			canonicalDelegation,
+			createdAt
+		} = params;
+		const resolvedUserId = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
+
+		const identity = await identityRepository.findByUserId(resolvedUserId);
+		if (!identity) throw new Error('User has no identity.');
+		if (identity.did !== did) throw new Error('DID does not match user identity.');
+
+		// Reuse existing active delegation
+		const existing = await delegatedKeyRepository.findByDidAndPlatformOrigin(did, platformOrigin);
+		if (
+			existing &&
+			!existing.revoked_at &&
+			!(existing.expires_at && new Date() > existing.expires_at)
+		) {
+			return { delegatePublicKey: existing.public_key };
+		}
+
+		try {
+			await delegatedKeyRepository.createPlatformDelegatedKey({
+				did,
+				publicKey: delegatePublicKeyMultibase,
+				platformOrigin,
+				platformName,
+				aegisDelegate,
+				createdAt,
+				signature: signatureMultibase,
+				canonicalDelegation
+			});
+		} catch (err) {
+			console.error('[platform-delegation] Failed to store delegated_key:', err);
+			throw err;
+		}
+
+		return { delegatePublicKey: delegatePublicKeyMultibase };
+	}
+
+	/**
 	 * Create a root signing function for Aegis users.
 	 * Decrypts the root key with the user's password, signs, then zeroes.
 	 */
