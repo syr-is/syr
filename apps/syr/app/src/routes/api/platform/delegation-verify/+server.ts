@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verify, decodeMultibase, encodeMultibase } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
+import { AegisBundleSchema } from '@syr-is/types';
 import {
 	consumeDelegationChallenge,
 	consumePendingKeypair,
@@ -21,8 +22,16 @@ import { notifyDelegationSigned } from '$lib/server/platform-delegation-broadcas
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
-		const body = await request.json();
-		const { challenge_id, did, signature } = body;
+		let body: unknown;
+		try {
+			body = await request.json();
+		} catch {
+			return json(
+				{ error: 'invalid_request', error_description: 'Invalid JSON body' },
+				{ status: 400 }
+			);
+		}
+		const { challenge_id, did, signature } = body as Record<string, string>;
 
 		if (!challenge_id || !did || !signature) {
 			return json(
@@ -83,6 +92,35 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
+		// Validate aegis_delegate structure
+		const aegisParsed = AegisBundleSchema.safeParse(keypair.aegis_delegate);
+		if (!aegisParsed.success) {
+			return json(
+				{
+					error: 'keypair_corrupt',
+					error_description: 'Pre-generated keypair has invalid encryption data'
+				},
+				{ status: 500 }
+			);
+		}
+
+		// Validate callback URL before storing delegation (prevents post-store failures)
+		const registration = await getPendingDelegation(challenge.delegation_id);
+		let callbackUrl: URL | null = null;
+		if (registration) {
+			try {
+				callbackUrl = new URL(registration.callback_url);
+			} catch {
+				return json(
+					{
+						error: 'invalid_request',
+						error_description: 'Registration has a malformed callback URL'
+					},
+					{ status: 400 }
+				);
+			}
+		}
+
 		// Store the delegation with the REAL signature that attests to the actual delegate key
 		const signatureMultibase = encodeMultibase(signatureBytes);
 		try {
@@ -92,7 +130,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				platformOrigin: keypair.platform_origin,
 				platformName: keypair.platform_name,
 				delegatePublicKeyMultibase: keypair.delegate_public_key_multibase,
-				aegisDelegate: keypair.aegis_delegate as import('@syr-is/types').AegisBundle,
+				aegisDelegate: aegisParsed.data,
 				signatureMultibase,
 				canonicalDelegation: keypair.canonical_statement,
 				createdAt: new Date(keypair.created_at)
@@ -102,15 +140,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'delegation_failed', error_description: msg }, { status: 500 });
 		}
 
-		// Get pending registration to set auth code
-		const registration = await getPendingDelegation(challenge.delegation_id);
-		if (registration) {
+		// Set auth code and notify SSE
+		if (registration && callbackUrl) {
 			const code = crypto.randomUUID();
 			registration.did = did;
 			registration.code = code;
 			await setPendingDelegation(challenge.delegation_id, registration);
 
-			const callbackUrl = new URL(registration.callback_url);
 			callbackUrl.searchParams.set('code', code);
 			if (registration.state) {
 				callbackUrl.searchParams.set('state', registration.state);

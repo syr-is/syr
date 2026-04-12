@@ -47,8 +47,21 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		if (!qOrigin || !qCallback)
 			error(400, { message: 'Missing required: platform_origin, callback_url' });
 
+		// Validate callback_url is a valid URL whose origin matches platform_origin
+		let parsedOrigin: URL;
+		let parsedCallback: URL;
+		try {
+			parsedOrigin = new URL(qOrigin);
+			parsedCallback = new URL(qCallback);
+		} catch {
+			error(400, { message: 'Invalid platform_origin or callback_url' });
+		}
+		if (parsedCallback.origin !== parsedOrigin.origin) {
+			error(400, { message: 'callback_url origin must match platform_origin' });
+		}
+
 		platformOrigin = qOrigin;
-		platformName = url.searchParams.get('platform_name') || new URL(qOrigin).hostname;
+		platformName = url.searchParams.get('platform_name') || parsedOrigin.hostname;
 		callbackUrl = qCallback;
 		scopes = (url.searchParams.get('scopes') || 'identity:read,profile:read')
 			.split(',')

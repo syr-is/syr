@@ -115,7 +115,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		// Validate that received IDs cover the current chunk
+		// Validate that received IDs cover the current chunk (the one Syner just signed)
 		const currentChunk = getSignableItemsChunk(
 			export_data,
 			did,
@@ -148,6 +148,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!allReceived) {
 			const chunkIndex = Math.floor(cursor / CHUNK_SIZE);
 
+			// Get the NEXT chunk to send to Syner
+			const nextChunk = getSignableItemsChunk(
+				export_data,
+				did,
+				currentChunk.nextCursor,
+				CHUNK_SIZE,
+				all_signable_items
+			);
+
 			const updated = await updateExportSigningSession(data.signing_session_id, (s) => ({
 				...s,
 				signatures: mergedSignatures,
@@ -166,10 +175,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			return json({
 				success: true as const,
-				items: currentChunk.items,
-				has_more: currentChunk.hasMore,
+				items: nextChunk.items,
+				has_more: nextChunk.hasMore,
 				chunk_index: chunkIndex + 1,
-				total_count: currentChunk.totalCount,
+				total_count: nextChunk.totalCount,
 				chunk_size: CHUNK_SIZE,
 				signed_count: Object.keys(mergedSignatures).length
 			});

@@ -41,7 +41,7 @@ Consumer applications MUST NOT hardcode any API paths on the identity provider. 
 | `/.well-known/syr`       | Instance manifest — discovers all platform endpoints                        |
 | `/.well-known/syr/{did}` | Identity manifest — discovers profile, posts, stories, delegation endpoints |
 
-All platform delegation endpoints (consent, token exchange, signing, challenge, delegations listing, revocation) are declared in the instance manifest under the `platform` section. Consumer applications fetch the instance manifest once and use the discovered URLs for all subsequent operations.
+Platform delegation endpoints for consumer applications (consent, token exchange, signing, challenge, delegations listing, revocation) use conventional paths on the identity provider. The Syner companion app's delegation endpoints (`delegation_challenge_payload`, `delegation_verify`) are declared in the optional `syner` section of the instance manifest. Consumer applications fetch the instance manifest once and use the discovered URLs where available.
 
 This ensures identity provider instances can host their APIs at any path structure without breaking consumer applications.
 
@@ -116,16 +116,23 @@ sequenceDiagram
 
 ### Endpoint discovery
 
-The consumer application MUST fetch the instance manifest (`GET /.well-known/syr`) before initiating the flow. The `platform` section of the manifest declares all endpoints:
+The consumer application SHOULD fetch the instance manifest (`GET /.well-known/syr`) before initiating the flow. The following endpoints are used by consumer applications:
 
-| Manifest field         | Purpose                                  |
-| ---------------------- | ---------------------------------------- |
-| `platform.consent`     | Consent page URL (user redirect)         |
-| `platform.token`       | Token exchange endpoint                  |
-| `platform.sign`        | Signing-as-a-service endpoint            |
-| `platform.challenge`   | Re-login challenge endpoint              |
-| `platform.delegations` | Public delegation listing (verification) |
-| `platform.revoke`      | Delegation revocation                    |
+| Endpoint                  | Purpose                              |
+| ------------------------- | ------------------------------------ |
+| Consent page              | User redirect for authorization      |
+| Token exchange            | Code → access token exchange         |
+| Signing-as-a-service      | Request signatures with access token |
+| Re-login challenge        | Challenge-based re-authentication    |
+| Public delegation listing | Verification of delegate keys        |
+| Revocation                | User revokes platform access         |
+
+The Syner companion app's operational endpoints are declared in the optional `syner` section of the instance manifest:
+
+| Manifest field                       | Purpose                               |
+| ------------------------------------ | ------------------------------------- |
+| `syner.delegation_challenge_payload` | Fetch canonical statement for signing |
+| `syner.delegation_verify`            | Submit signed delegation              |
 
 ### Consent page query parameters
 
@@ -187,12 +194,12 @@ sequenceDiagram
 Any party can verify content signed by a platform delegation:
 
 1. Fetch the signer's identity manifest: `GET {signer_instance}/.well-known/syr/{did}`
-2. Fetch delegation info from the discovered endpoint: `GET {identity_manifest.endpoints.platform_delegations}?did={did}`
-3. Check that the delegate key is **not revoked** and **not expired**.
+2. Fetch the DID document from the discovered endpoint: `GET {identity_manifest.endpoints.did_document}`
+3. Locate the delegate key in the DID document's delegated keys and check that it is **not revoked** and **not expired**.
 4. Canonicalize the content payload using JCS (RFC 8785).
 5. Verify the Ed25519 signature against the delegate public key.
 
-If any check fails, the signature is invalid. No API paths are assumed — all endpoints are discovered from the manifests.
+If any check fails, the signature is invalid. The identity manifest and DID document are the only resources needed for verification — both are discovered from the manifest.
 
 ---
 
@@ -277,7 +284,7 @@ Platform delegate keys are included in identity exports:
 
 ### 11.1 Token security
 
-Platform access tokens SHOULD be short-lived (24 hours recommended) and refreshed via the challenge endpoint. Tokens MUST be transmitted over TLS and stored securely by the consumer application.
+Platform access tokens SHOULD be short-lived (24 hours recommended). The **token endpoint** is responsible for minting access tokens (during the initial code exchange). The **challenge endpoint** only performs re-authentication — it signs a caller-provided challenge with the delegate key and returns `{signature, delegate_public_key, did}`, proving the delegation is still active; it does not mint or rotate tokens. Token refresh/rotation is not defined in v0.1; consumer applications that need a new token must re-initiate the consent flow. Tokens MUST be transmitted over TLS and stored securely by the consumer application.
 
 ### 11.2 Signing rate limits
 

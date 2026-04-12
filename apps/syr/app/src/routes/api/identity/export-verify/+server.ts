@@ -140,7 +140,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			};
 			const did = exportResult.identityBundle.did;
 			const allSignableItems = buildAllSignableItems(exportData, did);
-			const { items, nextCursor, hasMore, totalCount } = getSignableItemsChunk(
+			const { items, hasMore, totalCount } = getSignableItemsChunk(
 				exportData,
 				did,
 				0,
@@ -154,7 +154,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				did: data.did,
 				export_data: exportData,
 				signatures: {},
-				cursor: nextCursor,
+				cursor: 0,
 				all_item_ids: allSignableItems.map((i) => i.id),
 				all_signable_items: allSignableItems
 			});

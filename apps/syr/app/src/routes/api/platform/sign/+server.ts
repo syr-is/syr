@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
+import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { PlatformSignRequestSchema } from '@syr-is/types';
 import { platformDelegationController } from '$lib/controllers/platform-delegation.controller';
-import { identityRepository } from '$lib/repositories/identity.repository';
+import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 
 /**
  * POST /api/platform/sign
@@ -31,48 +32,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		const data = PlatformSignRequestSchema.parse(body);
 
-		// Extract platform origin from the session ID (platform:{delegateKeyId})
-		const identity = await identityRepository.findByUserId(locals.user.id);
-		if (!identity) {
-			return json(
-				{ error: 'server_error', error_description: 'User identity not found' },
-				{ status: 500 }
-			);
-		}
-
-		// The platform origin must be provided or determined from the token context.
-		// For now, we look it up via the session's delegate key reference.
-		const sessionId = ((locals as Record<string, unknown>).session_id as string) || '';
+		// Extract the delegate key record ID from the session (format: "platform:{recordId}")
+		const sessionId = locals.user.sessionId || '';
 		const platformKeyRef = sessionId.startsWith('platform:')
 			? sessionId.slice('platform:'.length)
 			: null;
 
 		if (!platformKeyRef) {
 			return json(
-				{
-					error: 'invalid_request',
-					error_description: 'Not a platform session'
-				},
+				{ error: 'invalid_request', error_description: 'Not a platform session' },
 				{ status: 400 }
 			);
 		}
 
-		// Resolve the exact delegation referenced by the platform session key
-		const delegations = await platformDelegationController.getDelegations(identity.did);
-		const delegation = delegations.find((d) => d.delegate_public_key === platformKeyRef);
-		if (!delegation) {
+		// Look up the exact delegation by record ID
+		const dk = await delegatedKeyRepository.findById(platformKeyRef);
+		if (!dk) {
 			return json(
-				{ error: 'invalid_request', error_description: 'No matching platform delegation found' },
+				{ error: 'invalid_request', error_description: 'Platform delegation not found' },
 				{ status: 400 }
 			);
 		}
-		if (delegation.revoked_at) {
+
+		// Verify delegation belongs to this user
+		const identity = await identityRepository.findByUserId(locals.user.id);
+		if (!identity || dk.did !== identity.did) {
+			return json(
+				{ error: 'forbidden', error_description: 'Delegation does not belong to this user' },
+				{ status: 403 }
+			);
+		}
+		if (dk.revoked_at) {
 			return json(
 				{ error: 'delegation_revoked', error_description: 'Platform delegation has been revoked' },
 				{ status: 403 }
 			);
 		}
-		if (delegation.expires_at && new Date(delegation.expires_at) < new Date()) {
+		if (dk.expires_at && dk.expires_at < new Date()) {
 			return json(
 				{ error: 'delegation_expired', error_description: 'Platform delegation has expired' },
 				{ status: 403 }
@@ -81,15 +77,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const result = await platformDelegationController.signContent(
 			identity.did,
-			delegation.platform_origin,
+			dk.platform_origin!,
 			data.payload
 		);
 
 		return json(result);
 	} catch (err) {
-		if (err instanceof Error && err.name === 'ZodError') {
+		if (err instanceof z.ZodError) {
 			return json(
-				{ error: 'invalid_request', error_description: 'Invalid sign request' },
+				{
+					error: 'invalid_request',
+					error_description: 'Invalid sign request',
+					details: z.treeifyError(err)
+				},
 				{ status: 400 }
 			);
 		}

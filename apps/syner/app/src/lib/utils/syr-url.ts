@@ -216,14 +216,23 @@ export function parseSyrDelegateUrl(urlStr: string): {
 		const challenge = url.searchParams.get('challenge');
 		const instanceRaw = url.searchParams.get('instance');
 		const platform_name = url.searchParams.get('platform_name');
-		const platform_origin = url.searchParams.get('platform_origin');
+		const platform_origin_raw = url.searchParams.get('platform_origin');
 		const did = url.searchParams.get('did');
 		const delegate = url.searchParams.get('delegate');
-		if (!challenge || !instanceRaw || !platform_name || !platform_origin || !did || !delegate)
+		if (!challenge || !instanceRaw || !platform_name || !platform_origin_raw || !did || !delegate)
 			return null;
 		const instanceUrl = new URL(instanceRaw);
 		if (!isValidUrlScheme(instanceUrl)) return null;
-		return { challenge, instance: instanceRaw, platform_name, platform_origin, did, delegate };
+		const platformOriginUrl = new URL(platform_origin_raw);
+		if (!isValidUrlScheme(platformOriginUrl)) return null;
+		return {
+			challenge,
+			instance: instanceRaw,
+			platform_name,
+			platform_origin: platformOriginUrl.origin,
+			did,
+			delegate
+		};
 	} catch {
 		return null;
 	}

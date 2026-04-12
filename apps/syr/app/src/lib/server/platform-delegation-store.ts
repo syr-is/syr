@@ -90,12 +90,13 @@ export async function consumeDelegationChallenge(
 	return kvService.getAndDelete<StoredDelegationChallenge>(KV_CHALLENGE_TYPE, id);
 }
 
-/** Atomically consume a pending delegation: get + delete + validate code in one step. */
+/** Consume a pending delegation: validate code first, then delete. */
 export async function consumePendingDelegation(
 	id: string,
 	code: string
 ): Promise<PendingPlatformDelegation | null> {
-	const reg = await kvService.getAndDelete<PendingPlatformDelegation>(KV_TYPE, id);
+	const reg = await kvService.get<PendingPlatformDelegation>(KV_TYPE, id);
 	if (!reg || reg.code !== code) return null;
+	await kvService.delete(KV_TYPE, id);
 	return reg;
 }

@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { subscribeExport } from '$lib/server/export-verify-broadcast';
 
-const MAX_CONNECTION_LIFETIME_MS = 120_000; // 2 min
+const MAX_CONNECTION_LIFETIME_MS = 600_000; // 10 min — must outlive buildIdentityExport + chunked signing
 const MAX_CONNECTIONS_PER_IP = 3;
 
 const connectionsByIp = new Map<string, number>();

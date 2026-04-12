@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import { identityRepository } from '$lib/repositories/identity.repository';
 import { userRepository } from '$lib/repositories/user.repository';
@@ -61,9 +62,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			expires_in: platformDelegation.registrationExpiresIn
 		});
 	} catch (err) {
-		if (err instanceof Error && err.name === 'ZodError') {
+		if (err instanceof z.ZodError) {
 			return json(
-				{ error: 'invalid_request', error_description: 'Invalid registration request' },
+				{
+					error: 'invalid_request',
+					error_description: 'Invalid registration request',
+					details: z.treeifyError(err)
+				},
 				{ status: 400 }
 			);
 		}

@@ -66,6 +66,8 @@ export class PlatformDelegationController {
 			did,
 			delegate: delegatePublicKeyMultibase,
 			scope: 'platform' as const,
+			platform_origin: platformOrigin,
+			platform_name: platformName,
 			createdAt: now.toISOString()
 		};
 		const canonicalDelegation = canonicalize(delegationStatement);

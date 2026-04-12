@@ -75,6 +75,13 @@
 			try {
 				const d = JSON.parse(e.data || '{}');
 				if (d.redirect_url) {
+					// Validate redirect origin matches expected platform
+					try {
+						const redirectOrigin = new URL(d.redirect_url).origin;
+						if (redirectOrigin !== new URL(data.platformOrigin).origin) return;
+					} catch {
+						return;
+					}
 					disconnectHeartbeat();
 					window.location.href = d.redirect_url;
 				}
@@ -84,16 +91,15 @@
 		});
 
 		let errorCount = 0;
+		src.onopen = () => {
+			errorCount = 0;
+		};
 		src.onerror = () => {
 			errorCount++;
 			// Only disconnect after sustained failure or permanent close
 			if (src.readyState === EventSource.CLOSED || errorCount > 5) {
 				disconnectHeartbeat();
 			}
-		};
-		// Reset error count on successful message
-		src.onmessage = () => {
-			errorCount = 0;
 		};
 	}
 

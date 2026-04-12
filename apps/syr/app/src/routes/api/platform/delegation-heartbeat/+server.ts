@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { subscribeDelegation } from '$lib/server/platform-delegation-broadcast';
+import { getPendingDelegation } from '$lib/server/platform-delegation-store';
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
 const MAX_CONNECTION_LIFETIME_MS = 600_000;
@@ -9,12 +10,29 @@ const MAX_CONNECTION_LIFETIME_MS = 600_000;
  *
  * SSE stream for the consent page showing the Syner QR for delegation signing.
  * Sends "signed" when Syner completes signing, with the signature data.
+ * Requires authentication — only the user who owns the pending delegation can subscribe.
  */
-export const GET: RequestHandler = async ({ request, url }) => {
+export const GET: RequestHandler = async ({ request, url, locals }) => {
+	if (!locals.user) {
+		return new Response(JSON.stringify({ error: 'unauthorized' }), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const challengeId = url.searchParams.get('challenge_id');
 	if (!challengeId || !/^[A-Za-z0-9_-]{1,64}$/.test(challengeId)) {
 		return new Response(JSON.stringify({ error: 'invalid_challenge_id' }), {
 			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	// Verify the pending delegation belongs to this user
+	const reg = await getPendingDelegation(challengeId);
+	if (reg && reg.user_id !== locals.user.id.toString()) {
+		return new Response(JSON.stringify({ error: 'forbidden' }), {
+			status: 403,
 			headers: { 'Content-Type': 'application/json' }
 		});
 	}

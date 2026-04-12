@@ -1120,7 +1120,7 @@ pub fn add_persona_delegation_cmd(
     delegation_json: String,
 ) -> Result<(), String> {
     validate_persona_id(&persona_id)?;
-    let base = default_personas_path(&app)?;
+    let base = get_base_path(&app)?;
     let persona_dir = base.join(&persona_id);
     if !persona_dir.is_dir() {
         return Err("Persona not found".to_string());
@@ -1132,7 +1132,7 @@ pub fn add_persona_delegation_cmd(
     let delegations_path = persona_dir.join("delegations.json");
     let mut delegations: Vec<PersonaDelegation> = if delegations_path.exists() {
         let content = std::fs::read_to_string(&delegations_path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).unwrap_or_default()
+        serde_json::from_str(&content).map_err(|e| format!("Corrupt delegations.json: {}", e))?
     } else {
         Vec::new()
     };
@@ -1151,7 +1151,7 @@ pub fn list_persona_delegations_cmd(
     persona_id: String,
 ) -> Result<Vec<PersonaDelegation>, String> {
     validate_persona_id(&persona_id)?;
-    let base = default_personas_path(&app)?;
+    let base = get_base_path(&app)?;
     let delegations_path = base.join(&persona_id).join("delegations.json");
 
     if !delegations_path.exists() {
