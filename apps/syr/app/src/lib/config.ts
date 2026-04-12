@@ -53,6 +53,11 @@ const ConfigSchema = z.object({
 	INDEPENDENT_LOGIN_CHALLENGE_TTL: z.coerce.number().default(120),
 	INDEPENDENT_LOGIN_CALLBACK_TOKEN_TTL: z.coerce.number().default(60),
 
+	// Platform Delegation
+	PLATFORM_DELEGATE_SECRET: z.string().optional(),
+	PLATFORM_TOKEN_EXPIRES_IN: z.coerce.number().default(86400),
+	PLATFORM_REGISTRATION_EXPIRES_IN: z.coerce.number().default(600),
+
 	// Security
 	RATE_LIMIT_WINDOW: z.coerce.number().default(900000),
 	RATE_LIMIT_MAX: z.coerce.number().default(100),
@@ -236,4 +241,10 @@ export const cors = {
 
 export const signedMutations = {
 	requireSigned: config.SYR_REQUIRE_SIGNED_MUTATIONS
+} as const;
+
+export const platformDelegation = {
+	secret: config.PLATFORM_DELEGATE_SECRET || config.JWT_SECRET,
+	tokenExpiresIn: config.PLATFORM_TOKEN_EXPIRES_IN,
+	registrationExpiresIn: config.PLATFORM_REGISTRATION_EXPIRES_IN
 } as const;

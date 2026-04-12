@@ -398,6 +398,115 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 	}
 
 	/**
+	 * Find the active platform delegation for a DID + platform origin combo.
+	 */
+	async findByDidAndPlatformOrigin(
+		did: string,
+		platformOrigin: string
+	): Promise<DelegatedKey | null> {
+		const result = await this.db.query<[DelegatedKey[]]>(
+			`SELECT * FROM delegated_key
+			 WHERE did = $did
+			   AND scope = 'platform'
+			   AND platform_origin = $platformOrigin
+			   AND revoked_at IS NONE
+			   AND (expires_at IS NONE OR expires_at > time::now())
+			 ORDER BY created_at DESC
+			 LIMIT 1`,
+			{ did, platformOrigin }
+		);
+		const record = result[0]?.[0];
+		if (!record) {
+			console.error(
+				'[dk.findByDidAndPlatformOrigin] No raw result. result[0]:',
+				JSON.stringify(result[0]?.slice(0, 1))
+			);
+			return null;
+		}
+		try {
+			return this.validate(record);
+		} catch (err) {
+			console.error('[dk.findByDidAndPlatformOrigin] Validation failed:', err);
+			return null;
+		}
+	}
+
+	/**
+	 * Find all platform-scoped delegations for a DID (including revoked).
+	 */
+	async findPlatformDelegationsByDid(did: string): Promise<DelegatedKey[]> {
+		const result = await this.db.query<[DelegatedKey[]]>(
+			`SELECT * FROM delegated_key
+			 WHERE did = $did AND scope = 'platform'
+			 ORDER BY created_at DESC`,
+			{ did }
+		);
+		const records = result[0] ?? [];
+		return records.map((r) => this.validate(r));
+	}
+
+	/**
+	 * Create a platform-scoped delegated key with encrypted private key.
+	 */
+	async createPlatformDelegatedKey(params: {
+		did: string;
+		publicKey: string;
+		platformOrigin: string;
+		platformName: string;
+		aegisDelegate: {
+			pub: string;
+			salt: string;
+			nonce: string;
+			ct: string;
+			tag: string;
+			kdf: { mem: number; it: number; par: number };
+		};
+		createdAt: Date;
+		expiresAt?: Date;
+		signature: string;
+		canonicalDelegation: string;
+	}): Promise<DelegatedKey> {
+		const {
+			did,
+			publicKey,
+			platformOrigin,
+			platformName,
+			aegisDelegate,
+			createdAt,
+			expiresAt,
+			signature,
+			canonicalDelegation
+		} = params;
+
+		const expiresClause = expiresAt ? ', expires_at = $expiresAt' : '';
+		const query = `CREATE delegated_key SET
+			did = $did,
+			public_key = $publicKey,
+			scope = 'platform',
+			platform_origin = $platformOrigin,
+			platform_name = $platformName,
+			aegis_delegate = $aegisDelegate,
+			created_at = $createdAt,
+			signature = $signature,
+			canonical_delegation = $canonicalDelegation${expiresClause};`;
+
+		const result = await this.db.query<[DelegatedKey[]]>(query, {
+			did,
+			publicKey,
+			platformOrigin,
+			platformName,
+			aegisDelegate,
+			createdAt,
+			signature,
+			canonicalDelegation,
+			...(expiresAt ? { expiresAt } : {})
+		});
+		const record = result[0]?.[0];
+		if (!record) throw new Error('Failed to create platform delegated key.');
+		return this.validate(record);
+	}
+
+	/**
 	 * Delete all delegated keys for a DID. Used for import rollback.
 	 */
 	async deleteByDid(did: string): Promise<void> {

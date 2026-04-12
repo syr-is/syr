@@ -296,7 +296,23 @@ Not included in v0.1.
 
 ---
 
-## 9. Future Extensions (Not in v0.1)
+## 9. Platform Delegation
+
+Platform delegation extends the key hierarchy to support **third-party consumer applications**. When a user authorizes a platform, the identity provider generates a platform-scoped delegate keypair and offers a signing-as-a-service API.
+
+| Aspect        | Platform delegation                                           |
+| ------------- | ------------------------------------------------------------- |
+| Scope         | `platform`                                                    |
+| Key custody   | Private key stays on identity provider instance               |
+| Signing model | Signing-as-a-service (platform sends content, instance signs) |
+| Revocation    | Immediate via user settings                                   |
+| Export        | Included in identity export with encrypted private key        |
+
+See [Platform Delegation](/architecture/platform-delegation) for the full specification.
+
+---
+
+## 10. Future Extensions (Not in v0.1)
 
 Planned improvements:
 
@@ -310,7 +326,7 @@ These are deferred to maintain **minimal implementability**.
 
 ---
 
-## 10. Current vs. Future Key Management
+## 11. Current vs. Future Key Management
 
 ### Current (v0.1): Server-custodied keys
 
@@ -340,7 +356,7 @@ The transition is **opt-in** — server-custody remains available for users who 
 
 ---
 
-## 11. Versioning
+## 12. Versioning
 
 **Version:** v0.1
 **Status:** Draft

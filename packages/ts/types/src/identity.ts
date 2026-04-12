@@ -69,7 +69,7 @@ export type IdentityCreate = z.infer<typeof IdentityCreateSchema>;
  * Delegation Scope Schema
  * Defines the scope of authority for a delegated key.
  */
-export const DelegationScopeSchema = z.enum(['device', 'session']);
+export const DelegationScopeSchema = z.enum(['device', 'session', 'platform']);
 export type DelegationScope = z.infer<typeof DelegationScopeSchema>;
 
 /**
@@ -89,7 +89,11 @@ export const DelegatedKeySchema = BaseEntitySchema.pick({
 	expires_at: TimestampSchema.optional(),
 	revoked_at: TimestampSchema.optional(),
 	signature: z.string().min(1), // multibase-encoded root signature
-	canonical_delegation: z.string().min(1).optional() // exact signed string for re-verification
+	canonical_delegation: z.string().min(1).optional(), // exact signed string for re-verification
+	// Platform delegation fields (set only when scope is 'platform')
+	platform_origin: z.string().url().optional(), // registered platform URL
+	platform_name: z.string().optional(), // human-readable platform name
+	aegis_delegate: AegisBundleSchema.optional() // encrypted delegate private key
 });
 
 export type DelegatedKey = z.infer<typeof DelegatedKeySchema>;
@@ -153,7 +157,10 @@ export const IdentityExportBundleSchema = z.object({
 			createdAt: z.string().datetime(),
 			expiresAt: z.string().datetime().optional(),
 			revokedAt: z.string().datetime().optional(),
-			signature: z.string().min(1)
+			signature: z.string().min(1),
+			platformOrigin: z.string().url().optional(),
+			platformName: z.string().optional(),
+			aegisDelegate: AegisBundleSchema.optional()
 		})
 	),
 	profile: z.object({
