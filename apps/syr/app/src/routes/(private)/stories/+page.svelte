@@ -221,7 +221,12 @@
 											<EyeOff class="mr-1 h-3 w-3" /> Unpublish
 										{/if}
 									</Button>
-									<Button size="sm" variant="destructive" onclick={() => openDelete(u)}>
+									<Button
+										size="sm"
+										variant="destructive"
+										aria-label={`Delete story ${u.filename}`}
+										onclick={() => openDelete(u)}
+									>
 										<Trash2 class="h-3 w-3" />
 									</Button>
 								</div>
@@ -274,7 +279,12 @@
 											<Eye class="mr-1 h-3 w-3" /> Publish
 										{/if}
 									</Button>
-									<Button size="sm" variant="destructive" onclick={() => openDelete(u)}>
+									<Button
+										size="sm"
+										variant="destructive"
+										aria-label={`Delete story ${u.filename}`}
+										onclick={() => openDelete(u)}
+									>
 										<Trash2 class="h-3 w-3" />
 									</Button>
 								</div>
@@ -330,7 +340,12 @@
 											<Eye class="mr-1 h-3 w-3" /> Republish
 										{/if}
 									</Button>
-									<Button size="sm" variant="destructive" onclick={() => openDelete(u)}>
+									<Button
+										size="sm"
+										variant="destructive"
+										aria-label={`Delete story ${u.filename}`}
+										onclick={() => openDelete(u)}
+									>
 										<Trash2 class="h-3 w-3" />
 									</Button>
 								</div>

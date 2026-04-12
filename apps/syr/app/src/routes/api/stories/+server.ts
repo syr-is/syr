@@ -71,6 +71,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (upload.status !== 'completed') {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Upload must be completed first' });
 	}
+	if (upload.is_story) {
+		throw error(400, {
+			code: 'ALREADY_STORY',
+			message: 'This upload is already a story. Use PATCH to republish.'
+		});
+	}
 
 	const updated = await uploadRepository.update(uploadId, {
 		is_story: true,

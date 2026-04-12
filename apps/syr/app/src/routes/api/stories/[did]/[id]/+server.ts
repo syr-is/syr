@@ -40,7 +40,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (upload.owner_id.toString() !== user.id.toString()) {
 		throw error(403, { code: 'FORBIDDEN', message: 'You do not own this story' });
 	}
-	if (!upload.is_story) {
+	const isLegacy = !upload.is_story && upload.key && upload.key.includes('/stories/');
+	if (!upload.is_story && !isLegacy) {
 		throw error(400, { code: 'BAD_REQUEST', message: 'Upload is not a story' });
 	}
 
