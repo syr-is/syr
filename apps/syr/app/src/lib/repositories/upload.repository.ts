@@ -127,6 +127,33 @@ export class UploadRepository extends BaseRepository<Upload> {
 	}
 
 	/**
+	 * All story uploads owned by a DID — any status, any is_public flag.
+	 * Used by the story-management UI to show active + expired + unpublished.
+	 */
+	async findAllStoriesByDid(did: string): Promise<Upload[]> {
+		const result = await this.db.query<[Upload[]]>(
+			`SELECT * FROM upload
+			 WHERE id.created_by = $did
+			   AND status = 'completed'
+			   AND (
+			     is_story = true
+			     OR string::contains(type::string(key), '/stories/')
+			   )
+			 ORDER BY updated_at DESC`,
+			{ did }
+		);
+		const raw = result[0] ?? [];
+		const uploads = raw.map((r) => this.validate(r));
+		// Prefer published_at for sort (actual publish time) and fall back to
+		// updated_at. Sort in-memory so we don't need SurrealDB coalesce syntax.
+		return uploads.sort((a, b) => {
+			const at = (a.published_at ?? a.updated_at).getTime();
+			const bt = (b.published_at ?? b.updated_at).getTime();
+			return bt - at;
+		});
+	}
+
+	/**
 	 * Profile story slides for a DID within the rolling window.
 	 * Prefers `is_story` + `published_at`; legacy rows use key path `/stories/` and `updated_at`.
 	 */
@@ -143,7 +170,7 @@ export class UploadRepository extends BaseRepository<Upload> {
 			     OR (
 			       string::contains(type::string(key), '/stories/')
 			       AND updated_at >= $since
-			       AND (is_story IS NONE OR is_story = false)
+			       AND is_story IS NONE
 			     )
 			   )`,
 			{ did, since }
