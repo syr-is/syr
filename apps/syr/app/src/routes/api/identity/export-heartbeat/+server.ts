@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { subscribeExport } from '$lib/server/export-verify-broadcast';
 
+const HEARTBEAT_INTERVAL_MS = 30_000; // keepalive for proxies/load balancers
 const MAX_CONNECTION_LIFETIME_MS = 600_000; // 10 min — must outlive buildIdentityExport + chunked signing
 const MAX_CONNECTIONS_PER_IP = 3;
 
@@ -40,6 +41,7 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 	}
 
 	const challengeId = url.searchParams.get('challenge_id');
+	let intervalId: ReturnType<typeof setInterval> | undefined;
 	let lifetimeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let unsubscribe: (() => void) | undefined;
 	let cleaned = false;
@@ -49,6 +51,10 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 		if (cleaned) return;
 		cleaned = true;
 		releaseConnection(ip);
+		if (intervalId) {
+			clearInterval(intervalId);
+			intervalId = undefined;
+		}
 		if (lifetimeTimeoutId) {
 			clearTimeout(lifetimeTimeoutId);
 			lifetimeTimeoutId = undefined;
@@ -75,6 +81,7 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 				}
 			};
 
+			intervalId = setInterval(() => send('heartbeat', String(Date.now())), HEARTBEAT_INTERVAL_MS);
 			lifetimeTimeoutId = setTimeout(cleanup, MAX_CONNECTION_LIFETIME_MS);
 
 			if (challengeId) {

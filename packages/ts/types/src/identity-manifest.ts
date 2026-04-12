@@ -24,7 +24,8 @@ export const SyrIdentityManifestSchema = z.object({
 		public_emojis: z.string().url().optional(),
 		public_gifs: z.string().url().optional(),
 		public_comments: z.string().url().optional(),
-		public_reactions: z.string().url().optional()
+		public_reactions: z.string().url().optional(),
+		public_hash: z.string().url().optional()
 	}),
 	web_profile: z.string().url()
 });
@@ -59,6 +60,16 @@ export const SyrInstanceManifestSchema = z.object({
 		public_gifs: z.string().url().optional()
 	}),
 	identity_manifest_template: httpUrlTemplate,
+	platform: z
+		.object({
+			consent: httpUrlTemplate,
+			token: httpUrlTemplate,
+			sign: httpUrlTemplate,
+			challenge: httpUrlTemplate,
+			delegations: httpUrlTemplate,
+			revoke: httpUrlTemplate
+		})
+		.optional(),
 	syner: z
 		.object({
 			independent_login_challenge: httpUrlTemplate,

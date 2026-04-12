@@ -33,20 +33,32 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		const data = PlatformChallengeRequestSchema.parse(body);
 
-		// Verify the session's delegation matches the requested did + platform_origin
+		// Require a platform session — regular user sessions cannot use this endpoint
 		const sessionId = locals.user.sessionId || '';
 		const platformKeyRef = sessionId.startsWith('platform:')
 			? sessionId.slice('platform:'.length)
 			: null;
 
-		if (platformKeyRef) {
-			const dk = await delegatedKeyRepository.findById(platformKeyRef);
-			if (dk && (dk.did !== data.did || dk.platform_origin !== data.platform_origin)) {
-				return json(
-					{ error: 'forbidden', error_description: 'Challenge does not match session delegation' },
-					{ status: 403 }
-				);
-			}
+		if (!platformKeyRef) {
+			return json(
+				{ error: 'invalid_request', error_description: 'Not a platform session' },
+				{ status: 400 }
+			);
+		}
+
+		// Verify the session's delegation matches the requested did + platform_origin
+		const dk = await delegatedKeyRepository.findById(platformKeyRef);
+		if (!dk) {
+			return json(
+				{ error: 'invalid_request', error_description: 'Platform delegation not found' },
+				{ status: 400 }
+			);
+		}
+		if (dk.did !== data.did || dk.platform_origin !== data.platform_origin) {
+			return json(
+				{ error: 'forbidden', error_description: 'Challenge does not match session delegation' },
+				{ status: 403 }
+			);
 		}
 
 		const result = await platformDelegationController.signChallenge(

@@ -47,7 +47,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		if (!qOrigin || !qCallback)
 			error(400, { message: 'Missing required: platform_origin, callback_url' });
 
-		// Validate callback_url is a valid URL whose origin matches platform_origin
+		// Validate callback_url is a valid http(s) URL whose origin matches platform_origin
 		let parsedOrigin: URL;
 		let parsedCallback: URL;
 		try {
@@ -55,6 +55,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			parsedCallback = new URL(qCallback);
 		} catch {
 			error(400, { message: 'Invalid platform_origin or callback_url' });
+		}
+		if (!['http:', 'https:'].includes(parsedOrigin.protocol)) {
+			error(400, { message: 'platform_origin must use http or https' });
+		}
+		if (!['http:', 'https:'].includes(parsedCallback.protocol)) {
+			error(400, { message: 'callback_url must use http or https' });
 		}
 		if (parsedCallback.origin !== parsedOrigin.origin) {
 			error(400, { message: 'callback_url origin must match platform_origin' });

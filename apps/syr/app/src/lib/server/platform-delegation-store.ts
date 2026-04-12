@@ -90,13 +90,16 @@ export async function consumeDelegationChallenge(
 	return kvService.getAndDelete<StoredDelegationChallenge>(KV_CHALLENGE_TYPE, id);
 }
 
-/** Consume a pending delegation: validate code first, then delete. */
+/** Consume a pending delegation: validate all fields before deleting. */
 export async function consumePendingDelegation(
 	id: string,
-	code: string
+	code: string,
+	opts?: { platform_origin?: string; callback_url?: string }
 ): Promise<PendingPlatformDelegation | null> {
 	const reg = await kvService.get<PendingPlatformDelegation>(KV_TYPE, id);
 	if (!reg || reg.code !== code) return null;
+	if (opts?.platform_origin && reg.platform_origin !== opts.platform_origin) return null;
+	if (opts?.callback_url && reg.callback_url !== opts.callback_url) return null;
 	await kvService.delete(KV_TYPE, id);
 	return reg;
 }

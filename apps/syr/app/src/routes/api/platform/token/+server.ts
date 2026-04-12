@@ -34,28 +34,17 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Atomically consume the pending delegation (get + delete + code check)
-		const registration = await consumePendingDelegation(delegation_id, code);
+		// Atomically consume: validates code + origin + callback before deleting
+		const registration = await consumePendingDelegation(delegation_id, code, {
+			platform_origin,
+			callback_url
+		});
 		if (!registration) {
 			return json(
 				{
 					error: 'invalid_code',
-					error_description: 'Registration not found, expired, or code mismatch'
+					error_description: 'Registration not found, expired, or code/origin/callback mismatch'
 				},
-				{ status: 400 }
-			);
-		}
-
-		// Verify origin and callback match the registration
-		if (registration.platform_origin !== platform_origin) {
-			return json(
-				{ error: 'invalid_origin', error_description: 'Platform origin does not match' },
-				{ status: 400 }
-			);
-		}
-		if (registration.callback_url !== callback_url) {
-			return json(
-				{ error: 'invalid_request', error_description: 'Callback URL does not match' },
 				{ status: 400 }
 			);
 		}

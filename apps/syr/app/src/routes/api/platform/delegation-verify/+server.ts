@@ -104,21 +104,30 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Validate callback URL before storing delegation (prevents post-store failures)
+		// Verify the pending registration still exists before persisting the delegation
 		const registration = await getPendingDelegation(challenge.delegation_id);
-		let callbackUrl: URL | null = null;
-		if (registration) {
-			try {
-				callbackUrl = new URL(registration.callback_url);
-			} catch {
-				return json(
-					{
-						error: 'invalid_request',
-						error_description: 'Registration has a malformed callback URL'
-					},
-					{ status: 400 }
-				);
-			}
+		if (!registration) {
+			return json(
+				{
+					error: 'registration_expired',
+					error_description: 'Platform registration expired before delegation could be stored'
+				},
+				{ status: 410 }
+			);
+		}
+
+		// Validate callback URL before storing delegation (prevents post-store failures)
+		let callbackUrl: URL;
+		try {
+			callbackUrl = new URL(registration.callback_url);
+		} catch {
+			return json(
+				{
+					error: 'invalid_request',
+					error_description: 'Registration has a malformed callback URL'
+				},
+				{ status: 400 }
+			);
 		}
 
 		// Store the delegation with the REAL signature that attests to the actual delegate key
@@ -141,23 +150,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Set auth code and notify SSE
-		if (registration && callbackUrl) {
-			const code = crypto.randomUUID();
-			registration.did = did;
-			registration.code = code;
-			await setPendingDelegation(challenge.delegation_id, registration);
+		const code = crypto.randomUUID();
+		registration.did = did;
+		registration.code = code;
+		await setPendingDelegation(challenge.delegation_id, registration);
 
-			callbackUrl.searchParams.set('code', code);
-			if (registration.state) {
-				callbackUrl.searchParams.set('state', registration.state);
-			}
-
-			notifyDelegationSigned(challenge_id, {
-				signature,
-				did,
-				redirect_url: callbackUrl.toString()
-			});
+		callbackUrl.searchParams.set('code', code);
+		if (registration.state) {
+			callbackUrl.searchParams.set('state', registration.state);
 		}
+
+		notifyDelegationSigned(challenge_id, {
+			signature,
+			did,
+			redirect_url: callbackUrl.toString()
+		});
 
 		return json({ success: true });
 	} catch (err) {

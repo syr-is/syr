@@ -1137,6 +1137,12 @@ pub fn add_persona_delegation_cmd(
         Vec::new()
     };
 
+    // Dedup: replace existing delegation for same platform/key/instance tuple
+    delegations.retain(|d| {
+        !(d.delegate_public_key == delegation.delegate_public_key
+            && d.platform_origin == delegation.platform_origin
+            && d.instance_url == delegation.instance_url)
+    });
     delegations.push(delegation);
 
     let json = serde_json::to_string_pretty(&delegations).map_err(|e| e.to_string())?;

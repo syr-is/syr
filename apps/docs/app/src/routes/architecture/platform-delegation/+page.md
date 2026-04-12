@@ -41,7 +41,7 @@ Consumer applications MUST NOT hardcode any API paths on the identity provider. 
 | `/.well-known/syr`       | Instance manifest — discovers all platform endpoints                        |
 | `/.well-known/syr/{did}` | Identity manifest — discovers profile, posts, stories, delegation endpoints |
 
-Platform delegation endpoints for consumer applications (consent, token exchange, signing, challenge, delegations listing, revocation) use conventional paths on the identity provider. The Syner companion app's delegation endpoints (`delegation_challenge_payload`, `delegation_verify`) are declared in the optional `syner` section of the instance manifest. Consumer applications fetch the instance manifest once and use the discovered URLs where available.
+All platform delegation endpoints are declared in the instance manifest under the `platform` section. The Syner companion app's operational endpoints (`delegation_challenge_payload`, `delegation_verify`) are declared in the optional `syner` section. Consumer applications fetch the instance manifest once and use the discovered URLs for all subsequent operations.
 
 This ensures identity provider instances can host their APIs at any path structure without breaking consumer applications.
 
@@ -116,18 +116,18 @@ sequenceDiagram
 
 ### Endpoint discovery
 
-The consumer application SHOULD fetch the instance manifest (`GET /.well-known/syr`) before initiating the flow. The following endpoints are used by consumer applications:
+The consumer application MUST fetch the instance manifest (`GET /.well-known/syr`) before initiating the flow. The `platform` section of the manifest declares all consumer-facing endpoints:
 
-| Endpoint                  | Purpose                              |
-| ------------------------- | ------------------------------------ |
-| Consent page              | User redirect for authorization      |
-| Token exchange            | Code → access token exchange         |
-| Signing-as-a-service      | Request signatures with access token |
-| Re-login challenge        | Challenge-based re-authentication    |
-| Public delegation listing | Verification of delegate keys        |
-| Revocation                | User revokes platform access         |
+| Manifest field         | Purpose                                  |
+| ---------------------- | ---------------------------------------- |
+| `platform.consent`     | Consent page URL (user redirect)         |
+| `platform.token`       | Token exchange endpoint                  |
+| `platform.sign`        | Signing-as-a-service endpoint            |
+| `platform.challenge`   | Re-login challenge endpoint              |
+| `platform.delegations` | Public delegation listing (verification) |
+| `platform.revoke`      | Delegation revocation                    |
 
-The Syner companion app's operational endpoints are declared in the optional `syner` section of the instance manifest:
+The Syner companion app's operational endpoints are declared in the optional `syner` section:
 
 | Manifest field                       | Purpose                               |
 | ------------------------------------ | ------------------------------------- |
@@ -231,7 +231,7 @@ The user never needs to enter a DID manually — the consent page resolves it fr
 
 When the user's identity is managed externally (e.g., in the Syner companion app), the delegation signing uses a two-round protocol to ensure the stored signature attests to the actual delegate public key:
 
-**Round 1 — Challenge creation** (`POST /api/platform/delegation-challenge`):
+**Round 1 — Challenge creation** (endpoint discovered from `syner.delegation_challenge_payload` in the instance manifest):
 
 1. Consent page sends `{ delegation_id }` to the challenge endpoint.
 2. Server generates the Ed25519 delegate keypair upfront.
@@ -239,9 +239,9 @@ When the user's identity is managed externally (e.g., in the Syner companion app
 4. Server encrypts the delegate private key and stores it in KV with TTL.
 5. Server returns a `syr://delegate` deep link containing the challenge ID, instance URL, platform details, DID, and delegate public key.
 
-**Round 2 — Signing and verification** (`POST /api/platform/delegation-verify`):
+**Round 2 — Signing and verification** (endpoint discovered from `syner.delegation_verify` in the instance manifest):
 
-1. Syner fetches the canonical statement from `GET /api/platform/delegation-challenge/{id}/payload`.
+1. Syner fetches the canonical statement from the delegation challenge payload endpoint (discovered via manifest).
 2. Syner cross-checks the delegate key from the deep link against the server response.
 3. Syner shows the user: platform name, origin, and delegate public key for confirmation.
 4. User signs the exact canonical bytes with their root key.
