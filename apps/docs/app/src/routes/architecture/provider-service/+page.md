@@ -103,12 +103,14 @@ No:
 		"post_sign_payload": "https://provider.example/api/user/post-sign/{id}/payload",
 		"post_sign_signature": "https://provider.example/api/user/post-sign/{id}/signature",
 		"registry_sign_payload": "https://provider.example/api/user/registry-sign/{id}/payload",
-		"registry_sign_signature": "https://provider.example/api/user/registry-sign/{id}/signature"
+		"registry_sign_signature": "https://provider.example/api/user/registry-sign/{id}/signature",
+		"delegation_challenge_payload": "https://provider.example/api/platform/delegation-challenge/{id}/payload",
+		"delegation_verify": "https://provider.example/api/platform/delegation-verify"
 	}
 }
 ```
 
-The `syner` object is optional. It provides URL templates for the Syner companion app's operational flows (independent login, export verification, signing). `{id}` is replaced with the actual challenge or session ID. Third-party providers implementing the Syr protocol advertise their own route structure here. If absent, Syner falls back to the default Syr paths.
+The `syner` object is optional. It provides URL templates for the Syner companion app's operational flows (independent login, export verification, signing, platform delegation). `{id}` is replaced with the actual challenge or session ID. Third-party providers implementing the Syr protocol advertise their own route structure here. If absent, Syner falls back to the default Syr paths.
 
 ### 3.1 Per-identity manifest
 

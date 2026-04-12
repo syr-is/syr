@@ -218,15 +218,48 @@ The consent page handles three identity states:
 | Custodial keys (server-managed) | User enters password to decrypt root key; instance signs delegation server-side                                                   |
 | External keys (self-custody)    | Instance creates a signing challenge; user signs with their external key manager via deep link; signature is relayed back via SSE |
 
-The user never needs to enter a DID manually — the consent page resolves it from the authenticated session. If the user's identity is managed externally (e.g., in a companion app), the delegation signing happens via a challenge-sign flow:
+The user never needs to enter a DID manually — the consent page resolves it from the authenticated session.
 
-1. Consent page creates a challenge containing the delegation statement
-2. User opens a deep link in their key manager
-3. Key manager signs the delegation statement with the root key
-4. Signature is posted back to the instance and relayed to the consent page via SSE
-5. Consent page submits the signature to complete the delegation
+### External key signing (two-round protocol)
 
-All three paths produce the same delegation record.
+When the user's identity is managed externally (e.g., in the Syner companion app), the delegation signing uses a two-round protocol to ensure the stored signature attests to the actual delegate public key:
+
+**Round 1 — Challenge creation** (`POST /api/platform/delegation-challenge`):
+
+1. Consent page sends `{ delegation_id }` to the challenge endpoint.
+2. Server generates the Ed25519 delegate keypair upfront.
+3. Server builds the canonical delegation statement: `{ did, delegate: realPublicKey, scope: 'platform', platform_origin, platform_name, createdAt }`.
+4. Server encrypts the delegate private key and stores it in KV with TTL.
+5. Server returns a `syr://delegate` deep link containing the challenge ID, instance URL, platform details, DID, and delegate public key.
+
+**Round 2 — Signing and verification** (`POST /api/platform/delegation-verify`):
+
+1. Syner fetches the canonical statement from `GET /api/platform/delegation-challenge/{id}/payload`.
+2. Syner cross-checks the delegate key from the deep link against the server response.
+3. Syner shows the user: platform name, origin, and delegate public key for confirmation.
+4. User signs the exact canonical bytes with their root key.
+5. Syner posts `{ challenge_id, did, signature }` to the verify endpoint.
+6. Server verifies the signature against the DID root public key.
+7. Server consumes the pre-generated keypair (atomic) and stores the delegation record.
+8. The stored signature correctly attests to `{ did, delegate: actualKey, platform_origin, ... }`.
+
+### Deep link format
+
+```text
+syr://delegate?challenge={id}&instance={url}&platform_name={name}&platform_origin={origin}&did={did}&delegate={publicKey}
+```
+
+Syner can immediately display the platform details from the deep link parameters without a network call, then cross-check against the server's canonical statement.
+
+### Persona delegation tracking
+
+After successful signing, Syner persists the delegation info in the persona's local storage (`delegations.json` alongside `profile.json`). This enables:
+
+- Offline viewing of active delegations per persona
+- Skipping a sync roundtrip when the user opens Syner to manage delegations
+- Export/import continuity for delegation metadata
+
+All three consent paths (custodial password, external Syner, no identity) produce the same delegation record.
 
 ---
 
