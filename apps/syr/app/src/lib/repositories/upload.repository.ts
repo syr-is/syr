@@ -170,7 +170,7 @@ export class UploadRepository extends BaseRepository<Upload> {
 			     OR (
 			       string::contains(type::string(key), '/stories/')
 			       AND updated_at >= $since
-			       AND (is_story IS NONE OR is_story = false)
+			       AND is_story IS NONE
 			     )
 			   )`,
 			{ did, since }

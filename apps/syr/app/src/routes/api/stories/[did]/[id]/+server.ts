@@ -3,19 +3,24 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
+import { uploadController } from '$lib/controllers/upload.controller';
 import { recordIdFromDidAndLocal } from '@syr-is/types';
 
 const PatchSchema = z.object({
-	is_public: z.boolean().optional(),
-	republish: z.boolean().optional()
+	/** Remove from story feed (keeps file in place, does NOT change is_public) */
+	unpublish: z.boolean().optional(),
+	/** Re-add to story feed with fresh published_at */
+	republish: z.boolean().optional(),
+	/** Separate control: toggle file visibility (move in/out of public access) */
+	set_private: z.boolean().optional()
 });
 
 /**
- * PATCH /api/stories/[did]/[id]  { is_public?: boolean, republish?: boolean }
+ * PATCH /api/stories/[did]/[id]
  *
- * Toggle publish/unpublish on a story. Unpublish = is_public false (hidden
- * from the public 24h feed, file remains). Republish = is_public true +
- * refresh published_at so the story re-enters the window.
+ * - unpublish: sets is_story=false. File stays public/private as-is.
+ * - republish: sets is_story=true, published_at=now, is_public=true.
+ * - set_private: toggles is_public independently of story status.
  */
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!locals.user) throw error(401, { code: 'UNAUTHORIZED', message: 'Authentication required' });
@@ -46,10 +51,33 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	const patch: Record<string, unknown> = { updated_at: new Date() };
-	if (parsed.data.is_public !== undefined) patch.is_public = parsed.data.is_public;
+
+	if (parsed.data.unpublish) {
+		patch.is_story = false;
+	}
 	if (parsed.data.republish) {
+		patch.is_story = true;
 		patch.is_public = true;
 		patch.published_at = new Date();
+	}
+
+	// Handle privacy toggle via S3 key move (public/ ↔ private/)
+	if (parsed.data.set_private !== undefined) {
+		const moved = await uploadController.toggleStoryPrivacy(
+			uploadId,
+			user.id,
+			parsed.data.set_private
+		);
+		// If we also have unpublish/republish, apply those on top
+		if (Object.keys(patch).length > 1) {
+			const updated = await uploadRepository.update(uploadId, patch);
+			return json({
+				status: 'success',
+				data: updated,
+				meta: { timestamp: new Date().toISOString() }
+			});
+		}
+		return json({ status: 'success', data: moved, meta: { timestamp: new Date().toISOString() } });
 	}
 
 	const updated = await uploadRepository.update(uploadId, patch);

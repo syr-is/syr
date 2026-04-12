@@ -1,35 +1,56 @@
 <script lang="ts">
 	import { Button } from '@syr-is/ui/button';
-	import { Badge } from '@syr-is/ui/badge';
-	import {
-		Plus,
-		Eye,
-		EyeOff,
-		Trash2,
-		Loader2,
-		VideoIcon,
-		ImageIcon,
-		Clock,
-		CheckCircle2
-	} from 'lucide-svelte';
+	import { Plus, Loader2, CheckCircle2, Clock, EyeOff, Lock } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { type UploadWithCompositeId } from '@syr-is/types';
 	import StoryPickerDialog from '$lib/components/fragments/story-picker-dialog.svelte';
 	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
+	import StoryCard from '$lib/components/fragments/story-card.svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 
 	const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 	let stories = $state<UploadWithCompositeId[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+
+	/** Resolved display URLs — signed URLs for private files, direct URLs for public */
+	const resolvedUrls = new SvelteMap<string, string>();
+
+	function displayUrl(u: UploadWithCompositeId): string {
+		const key = u.id?.toString() ?? '';
+		return resolvedUrls.get(key) ?? u.url ?? '';
+	}
+
+	async function resolvePrivateUrls() {
+		for (const u of stories) {
+			if (u.is_public || !u.did || !u.local_id) continue;
+			const key = u.id?.toString() ?? '';
+			if (resolvedUrls.has(key)) continue;
+			try {
+				const res = await fetch(
+					`/api/uploads/${encodeURIComponent(u.did)}/${encodeURIComponent(u.local_id)}`
+				);
+				if (res.ok) {
+					const json = await res.json();
+					if (json.data?.downloadUrl) {
+						resolvedUrls.set(key, json.data.downloadUrl);
+					}
+				}
+			} catch {
+				/* skip */
+			}
+		}
+	}
 	let pickerOpen = $state(false);
 	let togglingId = $state<string | null>(null);
+	let privacyTogglingId = $state<string | null>(null);
 
 	// Delete dialog state
 	let deleteDialogOpen = $state(false);
 	let uploadToDelete = $state<UploadWithCompositeId | null>(null);
 
-	type StoryStatus = 'active' | 'expired' | 'unpublished';
+	type StoryStatus = 'active' | 'private' | 'expired' | 'unpublished';
 
 	function toMs(v: unknown): number | null {
 		if (v instanceof Date) return v.getTime();
@@ -42,15 +63,46 @@
 	}
 
 	function classify(u: UploadWithCompositeId): StoryStatus {
-		if (!u.is_public) return 'unpublished';
-		const t = toMs(u.published_at) ?? toMs(u.updated_at);
-		if (!t) return 'unpublished';
-		return Date.now() - t < STORY_WINDOW_MS ? 'active' : 'expired';
+		if (!u.is_story) return 'unpublished';
+		const publishedMs = toMs(u.published_at);
+		if (!publishedMs) return 'unpublished';
+		if (Date.now() - publishedMs >= STORY_WINDOW_MS) return 'expired';
+		if (!u.is_public) return 'private';
+		return 'active';
 	}
 
-	const active = $derived(stories.filter((s) => classify(s) === 'active'));
-	const expired = $derived(stories.filter((s) => classify(s) === 'expired'));
-	const unpublished = $derived(stories.filter((s) => classify(s) === 'unpublished'));
+	function storyCreatedMs(u: UploadWithCompositeId): number {
+		return toMs(u.created_at) ?? 0;
+	}
+
+	function storyPublishedMs(u: UploadWithCompositeId): number {
+		return toMs(u.published_at) ?? 0;
+	}
+
+	// Active: most recently published first (leftmost), closest to expiry last (rightmost)
+	const active = $derived(
+		stories
+			.filter((s) => classify(s) === 'active')
+			.sort((a, b) => storyPublishedMs(b) - storyPublishedMs(a))
+	);
+	// Private: in story feed but file not publicly accessible
+	const privateStories = $derived(
+		stories
+			.filter((s) => classify(s) === 'private')
+			.sort((a, b) => storyPublishedMs(b) - storyPublishedMs(a))
+	);
+	// Expired: most recent first
+	const expired = $derived(
+		stories
+			.filter((s) => classify(s) === 'expired')
+			.sort((a, b) => storyCreatedMs(b) - storyCreatedMs(a))
+	);
+	// Unpublished (removed from story feed): most recent first
+	const unpublished = $derived(
+		stories
+			.filter((s) => classify(s) === 'unpublished')
+			.sort((a, b) => storyCreatedMs(b) - storyCreatedMs(a))
+	);
 
 	async function loadStories() {
 		loading = true;
@@ -60,6 +112,8 @@
 			if (!res.ok) throw new Error('Failed to load stories');
 			const body = await res.json();
 			stories = body.data ?? [];
+			resolvedUrls.clear();
+			void resolvePrivateUrls();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load stories';
 		}
@@ -77,7 +131,7 @@
 				{
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(publish ? { republish: true } : { is_public: false })
+					body: JSON.stringify(publish ? { republish: true } : { unpublish: true })
 				}
 			);
 			if (!res.ok) {
@@ -92,6 +146,34 @@
 		togglingId = null;
 	}
 
+	async function togglePrivacy(u: UploadWithCompositeId) {
+		const id = u.id.toString();
+		privacyTogglingId = id;
+		try {
+			const did = u.did ?? '';
+			const local_id = u.local_id ?? '';
+			if (!did || !local_id) throw new Error('Missing composite ID');
+			const makePrivate = u.is_public;
+			const res = await fetch(
+				`/api/stories/${encodeURIComponent(did)}/${encodeURIComponent(local_id)}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ set_private: makePrivate })
+				}
+			);
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				throw new Error(err.error?.message ?? 'Failed to update');
+			}
+			toast.success(makePrivate ? 'File made private' : 'File made public');
+			await loadStories();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed');
+		}
+		privacyTogglingId = null;
+	}
+
 	function openDelete(u: UploadWithCompositeId) {
 		uploadToDelete = u;
 		deleteDialogOpen = true;
@@ -102,7 +184,7 @@
 	}
 
 	function formatAge(u: UploadWithCompositeId): string {
-		const t = toMs(u.published_at) ?? toMs(u.updated_at);
+		const t = toMs(u.created_at);
 		if (!t) return '';
 		const diff = Math.max(0, Date.now() - t);
 		const mins = Math.floor(diff / 60000);
@@ -115,7 +197,7 @@
 	}
 
 	function expiresIn(u: UploadWithCompositeId): string | null {
-		const t = toMs(u.published_at) ?? toMs(u.updated_at);
+		const t = toMs(u.published_at);
 		if (!t) return null;
 		const remaining = t + STORY_WINDOW_MS - Date.now();
 		if (remaining <= 0) return null;
@@ -162,6 +244,8 @@
 			</p>
 		</div>
 	{:else}
+		{@const gridClass = 'grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6'}
+
 		<!-- Active -->
 		{#if active.length > 0}
 			<section class="space-y-3">
@@ -171,73 +255,63 @@
 					<CheckCircle2 class="h-4 w-4 text-green-500" />
 					Active ({active.length})
 				</h2>
-				<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+				<div class={gridClass}>
 					{#each active as u (u.id)}
-						{@const exp = expiresIn(u)}
-						<article class="overflow-hidden rounded-lg border bg-card">
-							<div class="relative aspect-[9/16] bg-muted">
-								{#if u.mime_type?.startsWith('image/') && u.url}
-									<img src={u.url} alt={u.filename} class="h-full w-full object-cover" />
-								{:else if u.mime_type?.startsWith('video/') && u.url}
-									<video
-										src={u.url}
-										class="h-full w-full object-cover"
-										muted
-										playsinline
-										preload="metadata"
-									></video>
-									<VideoIcon class="absolute top-2 right-2 h-4 w-4 text-white drop-shadow" />
-								{:else}
-									<div class="flex h-full w-full items-center justify-center text-muted-foreground">
-										<ImageIcon class="h-6 w-6" />
-									</div>
-								{/if}
-								<Badge class="absolute top-2 left-2 bg-green-500/90 text-white" variant="default">
-									Live
-								</Badge>
-								{#if exp}
-									<div
-										class="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white"
-									>
-										<Clock class="h-3 w-3" />
-										{exp}
-									</div>
-								{/if}
-							</div>
-							<div class="space-y-2 p-2">
-								<p class="line-clamp-1 text-xs font-medium">{u.filename}</p>
-								<p class="text-[11px] text-muted-foreground">{formatAge(u)}</p>
-								<div class="flex gap-1">
-									<Button
-										size="sm"
-										variant="outline"
-										class="flex-1"
-										onclick={() => togglePublish(u, false)}
-										disabled={togglingId === u.id.toString()}
-									>
-										{#if togglingId === u.id.toString()}
-											<Loader2 class="h-3 w-3 animate-spin" />
-										{:else}
-											<EyeOff class="mr-1 h-3 w-3" /> Unpublish
-										{/if}
-									</Button>
-									<Button
-										size="sm"
-										variant="destructive"
-										aria-label={`Delete story ${u.filename}`}
-										onclick={() => openDelete(u)}
-									>
-										<Trash2 class="h-3 w-3" />
-									</Button>
-								</div>
-							</div>
-						</article>
+						<StoryCard
+							story={u}
+							displayUrl={displayUrl(u)}
+							age={formatAge(u)}
+							expiry={expiresIn(u)}
+							badgeText="Live"
+							badgeClass="bg-green-500/90 text-white"
+							showUnpublish
+							showPrivacyToggle
+							publishing={togglingId === u.id.toString()}
+							privacyToggling={privacyTogglingId === u.id.toString()}
+							onUnpublish={() => togglePublish(u, false)}
+							onTogglePrivacy={() => togglePrivacy(u)}
+							onDelete={() => openDelete(u)}
+						/>
 					{/each}
 				</div>
 			</section>
 		{/if}
 
-		<!-- Unpublished -->
+		{#if privateStories.length > 0}
+			<section class="space-y-3">
+				<h2
+					class="flex items-center gap-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase"
+				>
+					<Lock class="h-4 w-4 text-amber-500" />
+					Private ({privateStories.length})
+				</h2>
+				<p class="text-xs text-muted-foreground">
+					In story feed but file is private — not visible to others until made public.
+				</p>
+				<div class={gridClass}>
+					{#each privateStories as u (u.id)}
+						<StoryCard
+							story={u}
+							displayUrl={displayUrl(u)}
+							age={formatAge(u)}
+							expiry={expiresIn(u)}
+							badgeText="Private"
+							badgeClass="bg-amber-500/90 text-white"
+							cardClass="border-amber-500/30"
+							imageClass="opacity-75"
+							showUnpublish
+							showPrivacyToggle
+							publishing={togglingId === u.id.toString()}
+							privacyToggling={privacyTogglingId === u.id.toString()}
+							onUnpublish={() => togglePublish(u, false)}
+							onTogglePrivacy={() => togglePrivacy(u)}
+							onDelete={() => openDelete(u)}
+						/>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		{#if unpublished.length > 0}
 			<section class="space-y-3">
 				<h2
@@ -246,56 +320,28 @@
 					<EyeOff class="h-4 w-4" />
 					Unpublished ({unpublished.length})
 				</h2>
-				<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+				<div class={gridClass}>
 					{#each unpublished as u (u.id)}
-						<article class="overflow-hidden rounded-lg border bg-card opacity-80">
-							<div class="relative aspect-[9/16] bg-muted">
-								{#if u.mime_type?.startsWith('image/') && u.url}
-									<img src={u.url} alt={u.filename} class="h-full w-full object-cover" />
-								{:else if u.mime_type?.startsWith('video/') && u.url}
-									<video
-										src={u.url}
-										class="h-full w-full object-cover"
-										muted
-										playsinline
-										preload="metadata"
-									></video>
-								{/if}
-								<Badge class="absolute top-2 left-2" variant="secondary">Hidden</Badge>
-							</div>
-							<div class="space-y-2 p-2">
-								<p class="line-clamp-1 text-xs font-medium">{u.filename}</p>
-								<p class="text-[11px] text-muted-foreground">{formatAge(u)}</p>
-								<div class="flex gap-1">
-									<Button
-										size="sm"
-										class="flex-1"
-										onclick={() => togglePublish(u, true)}
-										disabled={togglingId === u.id.toString()}
-									>
-										{#if togglingId === u.id.toString()}
-											<Loader2 class="h-3 w-3 animate-spin" />
-										{:else}
-											<Eye class="mr-1 h-3 w-3" /> Publish
-										{/if}
-									</Button>
-									<Button
-										size="sm"
-										variant="destructive"
-										aria-label={`Delete story ${u.filename}`}
-										onclick={() => openDelete(u)}
-									>
-										<Trash2 class="h-3 w-3" />
-									</Button>
-								</div>
-							</div>
-						</article>
+						<StoryCard
+							story={u}
+							displayUrl={displayUrl(u)}
+							age={formatAge(u)}
+							badgeText="Hidden"
+							badgeVariant="secondary"
+							cardClass="opacity-80"
+							showPublish
+							showPrivacyToggle
+							publishing={togglingId === u.id.toString()}
+							privacyToggling={privacyTogglingId === u.id.toString()}
+							onPublish={() => togglePublish(u, true)}
+							onTogglePrivacy={() => togglePrivacy(u)}
+							onDelete={() => openDelete(u)}
+						/>
 					{/each}
 				</div>
 			</section>
 		{/if}
 
-		<!-- Expired -->
 		{#if expired.length > 0}
 			<section class="space-y-3">
 				<h2
@@ -307,50 +353,24 @@
 				<p class="text-xs text-muted-foreground">
 					Past their 24-hour window. Republish to push them live again.
 				</p>
-				<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+				<div class={gridClass}>
 					{#each expired as u (u.id)}
-						<article class="overflow-hidden rounded-lg border bg-card opacity-75">
-							<div class="relative aspect-[9/16] bg-muted">
-								{#if u.mime_type?.startsWith('image/') && u.url}
-									<img src={u.url} alt={u.filename} class="h-full w-full object-cover grayscale" />
-								{:else if u.mime_type?.startsWith('video/') && u.url}
-									<video
-										src={u.url}
-										class="h-full w-full object-cover grayscale"
-										muted
-										playsinline
-										preload="metadata"
-									></video>
-								{/if}
-								<Badge class="absolute top-2 left-2" variant="outline">Expired</Badge>
-							</div>
-							<div class="space-y-2 p-2">
-								<p class="line-clamp-1 text-xs font-medium">{u.filename}</p>
-								<p class="text-[11px] text-muted-foreground">{formatAge(u)}</p>
-								<div class="flex gap-1">
-									<Button
-										size="sm"
-										class="flex-1"
-										onclick={() => togglePublish(u, true)}
-										disabled={togglingId === u.id.toString()}
-									>
-										{#if togglingId === u.id.toString()}
-											<Loader2 class="h-3 w-3 animate-spin" />
-										{:else}
-											<Eye class="mr-1 h-3 w-3" /> Republish
-										{/if}
-									</Button>
-									<Button
-										size="sm"
-										variant="destructive"
-										aria-label={`Delete story ${u.filename}`}
-										onclick={() => openDelete(u)}
-									>
-										<Trash2 class="h-3 w-3" />
-									</Button>
-								</div>
-							</div>
-						</article>
+						<StoryCard
+							story={u}
+							displayUrl={displayUrl(u)}
+							age={formatAge(u)}
+							badgeText="Expired"
+							badgeVariant="outline"
+							cardClass="opacity-75"
+							imageClass="grayscale"
+							showPublish
+							showPrivacyToggle
+							publishing={togglingId === u.id.toString()}
+							privacyToggling={privacyTogglingId === u.id.toString()}
+							onPublish={() => togglePublish(u, true)}
+							onTogglePrivacy={() => togglePrivacy(u)}
+							onDelete={() => openDelete(u)}
+						/>
 					{/each}
 				</div>
 			</section>
