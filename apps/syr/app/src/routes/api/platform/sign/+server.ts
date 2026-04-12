@@ -20,7 +20,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const body = await request.json();
+		let body: unknown;
+		try {
+			body = await request.json();
+		} catch {
+			return json(
+				{ error: 'invalid_request', error_description: 'Invalid JSON body' },
+				{ status: 400 }
+			);
+		}
 		const data = PlatformSignRequestSchema.parse(body);
 
 		// Extract platform origin from the session ID (platform:{delegateKeyId})
@@ -87,10 +95,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		console.error('Platform sign error:', err);
 		return json(
-			{
-				error: 'server_error',
-				error_description: err instanceof Error ? err.message : 'An unexpected error occurred'
-			},
+			{ error: 'server_error', error_description: 'An unexpected server error occurred' },
 			{ status: 500 }
 		);
 	}

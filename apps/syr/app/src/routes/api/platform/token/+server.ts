@@ -1,9 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	getPendingDelegation,
-	deletePendingDelegation
-} from '$lib/server/platform-delegation-store';
+import { consumePendingDelegation } from '$lib/server/platform-delegation-store';
 import { delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { generateAccessToken } from '$lib/server/auth';
 import { platformDelegation } from '$lib/config';
@@ -26,31 +23,37 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Direct lookup by delegation_id
-		const registration = await getPendingDelegation(delegation_id);
+		// Always require origin and callback
+		if (!platform_origin || !callback_url) {
+			return json(
+				{
+					error: 'invalid_request',
+					error_description: 'platform_origin and callback_url are required'
+				},
+				{ status: 400 }
+			);
+		}
+
+		// Atomically consume the pending delegation (get + delete + code check)
+		const registration = await consumePendingDelegation(delegation_id, code);
 		if (!registration) {
 			return json(
-				{ error: 'invalid_code', error_description: 'Registration not found or expired' },
+				{
+					error: 'invalid_code',
+					error_description: 'Registration not found, expired, or code mismatch'
+				},
 				{ status: 400 }
 			);
 		}
 
-		// Verify code matches
-		if (registration.code !== code) {
-			return json(
-				{ error: 'invalid_code', error_description: 'Authorization code does not match' },
-				{ status: 400 }
-			);
-		}
-
-		// Validate origin and callback URL match
-		if (platform_origin && registration.platform_origin !== platform_origin) {
+		// Verify origin and callback match the registration
+		if (registration.platform_origin !== platform_origin) {
 			return json(
 				{ error: 'invalid_origin', error_description: 'Platform origin does not match' },
 				{ status: 400 }
 			);
 		}
-		if (callback_url && registration.callback_url !== callback_url) {
+		if (registration.callback_url !== callback_url) {
 			return json(
 				{ error: 'invalid_request', error_description: 'Callback URL does not match' },
 				{ status: 400 }
@@ -58,10 +61,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Look up the platform delegation to get the delegate public key
-		console.log('[platform/token] Looking up delegation:', {
-			did: registration.did,
-			origin: registration.platform_origin
-		});
 		const dk = await delegatedKeyRepository.findByDidAndPlatformOrigin(
 			registration.did,
 			registration.platform_origin
@@ -87,9 +86,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			userId: registration.user_id,
 			sessionId: `platform:${dk.id.toString()}`
 		});
-
-		// Clean up
-		await deletePendingDelegation(delegation_id);
 
 		return json({
 			access_token: accessToken,

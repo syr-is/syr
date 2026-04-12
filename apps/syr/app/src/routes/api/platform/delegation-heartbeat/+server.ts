@@ -12,8 +12,8 @@ const MAX_CONNECTION_LIFETIME_MS = 600_000;
  */
 export const GET: RequestHandler = async ({ request, url }) => {
 	const challengeId = url.searchParams.get('challenge_id');
-	if (!challengeId) {
-		return new Response(JSON.stringify({ error: 'missing_challenge_id' }), {
+	if (!challengeId || !/^[A-Za-z0-9_-]{1,64}$/.test(challengeId)) {
+		return new Response(JSON.stringify({ error: 'invalid_challenge_id' }), {
 			status: 400,
 			headers: { 'Content-Type': 'application/json' }
 		});
@@ -54,7 +54,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				try {
 					controllerRef.c?.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
 				} catch {
-					// Client disconnected
+					cleanup();
 				}
 			};
 

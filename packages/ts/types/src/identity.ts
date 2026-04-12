@@ -69,8 +69,13 @@ export type IdentityCreate = z.infer<typeof IdentityCreateSchema>;
  * Delegation Scope Schema
  * Defines the scope of authority for a delegated key.
  */
+/** All delegation scopes including platform (for storage/validation). */
 export const DelegationScopeSchema = z.enum(['device', 'session', 'platform']);
 export type DelegationScope = z.infer<typeof DelegationScopeSchema>;
+
+/** Narrower scope for device delegation endpoints (excludes 'platform'). */
+export const DeviceDelegationScopeSchema = z.enum(['device', 'session']);
+export type DeviceDelegationScope = z.infer<typeof DeviceDelegationScopeSchema>;
 
 /**
  * Delegated Key Schema
@@ -105,7 +110,7 @@ export type DelegatedKey = z.infer<typeof DelegatedKeySchema>;
 export const DelegatedKeyCreateSchema = z.object({
 	did: DidSyrSchema,
 	public_key: z.string().min(1),
-	scope: DelegationScopeSchema.default('device'),
+	scope: DeviceDelegationScopeSchema.default('device'),
 	expires_at: TimestampSchema.optional(),
 	signature: z.string().min(1)
 });

@@ -34,3 +34,13 @@ export async function getPendingDelegation(id: string): Promise<PendingPlatformD
 export async function deletePendingDelegation(id: string): Promise<void> {
 	await kvService.delete(KV_TYPE, id);
 }
+
+/** Atomically consume a pending delegation: get + delete + validate code in one step. */
+export async function consumePendingDelegation(
+	id: string,
+	code: string
+): Promise<PendingPlatformDelegation | null> {
+	const reg = await kvService.getAndDelete<PendingPlatformDelegation>(KV_TYPE, id);
+	if (!reg || reg.code !== code) return null;
+	return reg;
+}

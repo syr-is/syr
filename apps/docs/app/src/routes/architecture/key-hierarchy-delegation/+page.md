@@ -188,10 +188,11 @@ flowchart TD
 
 Allowed scopes:
 
-| Scope   | Meaning                                           |
-| ------- | ------------------------------------------------- |
-| device  | Full routine user actions                         |
-| session | Short-lived derived authority (future refinement) |
+| Scope    | Meaning                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| device   | Full routine user actions                                                                       |
+| session  | Short-lived derived authority (future refinement)                                               |
+| platform | Third-party signing-as-a-service (see [Platform Delegation](/architecture/platform-delegation)) |
 
 Future versions MAY define:
 

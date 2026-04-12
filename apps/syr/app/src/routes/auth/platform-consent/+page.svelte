@@ -89,7 +89,18 @@
 			}
 		});
 
-		src.onerror = () => disconnectHeartbeat();
+		let errorCount = 0;
+		src.onerror = () => {
+			errorCount++;
+			// Only disconnect after sustained failure or permanent close
+			if (src.readyState === EventSource.CLOSED || errorCount > 5) {
+				disconnectHeartbeat();
+			}
+		};
+		// Reset error count on successful message
+		src.onmessage = () => {
+			errorCount = 0;
+		};
 	}
 
 	onMount(() => {

@@ -33,8 +33,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		return json({ status: 'revoked' });
 	} catch (err) {
+		if (err instanceof SyntaxError) {
+			return json(
+				{ error: 'invalid_request', error_description: 'Invalid JSON body' },
+				{ status: 400 }
+			);
+		}
 		const message = err instanceof Error ? err.message : 'An unexpected error occurred';
-		const status = message.includes('not found') ? 404 : 500;
-		return json({ error: 'revocation_failed', error_description: message }, { status });
+		if (message.includes('not found')) {
+			return json({ error: 'not_found', error_description: message }, { status: 404 });
+		}
+		if (message.includes('already revoked')) {
+			return json({ error: 'already_revoked', error_description: message }, { status: 409 });
+		}
+		console.error('Platform revoke error:', err);
+		return json(
+			{ error: 'server_error', error_description: 'An unexpected error occurred' },
+			{ status: 500 }
+		);
 	}
 };
