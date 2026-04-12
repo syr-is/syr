@@ -44,9 +44,13 @@ export class PlatformDelegationController {
 		if (!identity) throw new Error('User has no identity.');
 		if (identity.did !== did) throw new Error('DID does not match user identity.');
 
-		// Reuse existing active platform delegation
+		// Reuse existing active platform delegation (if not expired or revoked)
 		const existing = await delegatedKeyRepository.findByDidAndPlatformOrigin(did, platformOrigin);
-		if (existing) {
+		if (
+			existing &&
+			!existing.revoked_at &&
+			!(existing.expires_at && new Date() > existing.expires_at)
+		) {
 			return { delegatePublicKey: existing.public_key };
 		}
 
@@ -71,10 +75,13 @@ export class PlatformDelegationController {
 		const signatureMultibase = encodeMultibase(signatureBytes);
 
 		// Encrypt the delegate private key for server-side storage
-		const aegisDelegate = await encryptDelegateKey(delegateKeypair.privateKey);
-
-		// Zero the raw private key
-		delegateKeypair.privateKey.fill(0);
+		let aegisDelegate;
+		try {
+			aegisDelegate = await encryptDelegateKey(delegateKeypair.privateKey);
+		} finally {
+			// Always zero the raw private key, even if encryption fails
+			delegateKeypair.privateKey.fill(0);
+		}
 
 		// Store the delegation
 		try {
@@ -190,6 +197,9 @@ export class PlatformDelegationController {
 		const dk = await delegatedKeyRepository.findByDidAndPlatformOrigin(did, platformOrigin);
 		if (!dk) throw new Error('No active platform delegation found.');
 		if (dk.revoked_at) throw new Error('Platform delegation has been revoked.');
+		if (dk.expires_at && new Date() > dk.expires_at) {
+			throw new Error('Platform delegation has expired.');
+		}
 		if (!dk.aegis_delegate) {
 			throw new Error('Platform delegation is missing encrypted key.');
 		}

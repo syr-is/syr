@@ -49,34 +49,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 
-		// Find the delegation by looking up all platform delegations for this DID
-		// and matching the one referenced by the session
+		// Resolve the exact delegation referenced by the platform session key
 		const delegations = await platformDelegationController.getDelegations(identity.did);
-		if (delegations.length === 0) {
+		const delegation = delegations.find((d) => d.delegate_public_key === platformKeyRef);
+		if (!delegation) {
 			return json(
-				{
-					error: 'invalid_request',
-					error_description: 'No platform delegations found'
-				},
+				{ error: 'invalid_request', error_description: 'No matching platform delegation found' },
 				{ status: 400 }
 			);
 		}
-
-		// Use the first active delegation (the session should only correspond to one)
-		const activeDelegation = delegations.find((d) => !d.revoked_at);
-		if (!activeDelegation) {
+		if (delegation.revoked_at) {
 			return json(
-				{
-					error: 'delegation_revoked',
-					error_description: 'Platform delegation has been revoked'
-				},
+				{ error: 'delegation_revoked', error_description: 'Platform delegation has been revoked' },
+				{ status: 403 }
+			);
+		}
+		if (delegation.expires_at && new Date(delegation.expires_at) < new Date()) {
+			return json(
+				{ error: 'delegation_expired', error_description: 'Platform delegation has expired' },
 				{ status: 403 }
 			);
 		}
 
 		const result = await platformDelegationController.signContent(
 			identity.did,
-			activeDelegation.platform_origin,
+			delegation.platform_origin,
 			data.payload
 		);
 

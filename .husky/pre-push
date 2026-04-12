@@ -49,7 +49,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   else
     range="$remote_sha..$local_sha"
   fi
-  for commit in $(git rev-list $range 2>/dev/null); do
+  for commit in $(git rev-list --no-merges $range 2>/dev/null); do
+    # Skip commits already on a remote branch (e.g. merged from main)
+    if git branch -r --contains "$commit" 2>/dev/null | grep -q .; then
+      continue
+    fi
     if ! git verify-commit "$commit" 2>/dev/null; then
       echo ""
       echo "ERROR: Unsigned commit $commit."

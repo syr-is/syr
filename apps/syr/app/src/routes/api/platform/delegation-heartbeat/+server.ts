@@ -12,6 +12,13 @@ const MAX_CONNECTION_LIFETIME_MS = 600_000;
  */
 export const GET: RequestHandler = async ({ request, url }) => {
 	const challengeId = url.searchParams.get('challenge_id');
+	if (!challengeId) {
+		return new Response(JSON.stringify({ error: 'missing_challenge_id' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	let intervalId: ReturnType<typeof setInterval> | undefined;
 	let lifetimeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let unsubscribe: (() => void) | undefined;

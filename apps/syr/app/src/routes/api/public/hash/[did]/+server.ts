@@ -41,11 +41,18 @@ export const GET: RequestHandler = async ({ params }) => {
 		return t > max ? t : max;
 	}, 0);
 
+	// Include sorted per-story identifiers so changes to the set change the hash
+	const storyIds = activeStories
+		.map((u) => u.id.toString())
+		.sort()
+		.join(',');
+
 	const parts = [
 		profile?.updated_at?.toISOString() ?? '',
 		profile?.content_signature ?? '',
 		String(activeStories.length),
-		latestStoryTs ? new Date(latestStoryTs).toISOString() : ''
+		latestStoryTs ? new Date(latestStoryTs).toISOString() : '',
+		storyIds
 	];
 
 	const hash = createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);

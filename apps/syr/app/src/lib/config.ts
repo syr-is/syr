@@ -54,9 +54,9 @@ const ConfigSchema = z.object({
 	INDEPENDENT_LOGIN_CALLBACK_TOKEN_TTL: z.coerce.number().default(60),
 
 	// Platform Delegation
-	PLATFORM_DELEGATE_SECRET: z.string().optional(),
-	PLATFORM_TOKEN_EXPIRES_IN: z.coerce.number().default(86400),
-	PLATFORM_REGISTRATION_EXPIRES_IN: z.coerce.number().default(600),
+	PLATFORM_DELEGATE_SECRET: z.string().min(32).optional(),
+	PLATFORM_TOKEN_EXPIRES_IN: z.coerce.number().int().positive().default(86400),
+	PLATFORM_REGISTRATION_EXPIRES_IN: z.coerce.number().int().positive().default(600),
 
 	// Security
 	RATE_LIMIT_WINDOW: z.coerce.number().default(900000),
@@ -244,7 +244,15 @@ export const signedMutations = {
 } as const;
 
 export const platformDelegation = {
-	secret: config.PLATFORM_DELEGATE_SECRET || config.JWT_SECRET,
+	/** Dedicated secret for delegate key encryption. Fails closed if missing. */
+	get secret(): string {
+		if (!config.PLATFORM_DELEGATE_SECRET) {
+			throw new Error(
+				'PLATFORM_DELEGATE_SECRET is required for platform delegation. Set a distinct 32+ char secret.'
+			);
+		}
+		return config.PLATFORM_DELEGATE_SECRET;
+	},
 	tokenExpiresIn: config.PLATFORM_TOKEN_EXPIRES_IN,
 	registrationExpiresIn: config.PLATFORM_REGISTRATION_EXPIRES_IN
 } as const;
