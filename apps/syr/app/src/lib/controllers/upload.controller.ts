@@ -714,6 +714,67 @@ export class UploadController {
 	}
 
 	/**
+	 * Toggle a story upload between public and private S3 paths.
+	 * Swaps /public/ ↔ /private/ in the key so anonymous S3 read rules apply correctly.
+	 */
+	async toggleStoryPrivacy(
+		uploadId: RecordId | string,
+		userId: RecordId,
+		makePrivate: boolean
+	): Promise<Upload> {
+		const upload = await uploadRepository.findById(uploadId);
+		if (!upload) throw new Error('Upload not found');
+		if (upload.owner_id.toString() !== userId.toString()) {
+			throw new Error('You do not have permission to modify this upload');
+		}
+		if (!upload.key) throw new Error('Upload has no storage key');
+
+		const oldKey = upload.key;
+		let newKey: string;
+
+		if (makePrivate) {
+			// /public/ → /private/
+			newKey = oldKey.replace(/\/public\//, '/private/');
+		} else {
+			// /private/ → /public/
+			newKey = oldKey.replace(/\/private\//, '/public/');
+		}
+
+		if (newKey === oldKey) {
+			// Already in the desired state — just update the flag
+			return uploadRepository.update(uploadId, {
+				is_public: !makePrivate,
+				updated_at: new Date()
+			});
+		}
+
+		// Copy to new location
+		await s3Service.client.send(
+			new CopyObjectCommand({
+				Bucket: s3.bucket,
+				CopySource: `${s3.bucket}/${oldKey}`,
+				Key: newKey,
+				ContentType: upload.mime_type
+			})
+		);
+
+		// Delete old location
+		try {
+			await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: oldKey }));
+		} catch {
+			console.warn('Failed to delete old key after privacy toggle:', oldKey);
+		}
+
+		const newUrl = this.buildUrl(newKey);
+		return uploadRepository.update(uploadId, {
+			key: newKey,
+			url: newUrl,
+			is_public: !makePrivate,
+			updated_at: new Date()
+		});
+	}
+
+	/**
 	 * Rename an upload
 	 * @param uploadId Upload ID
 	 * @param userId User ID (for ownership verification)
