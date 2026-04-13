@@ -27,6 +27,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	let callbackUrl: string;
 	let state: string | undefined;
 
+	// Resolve identity early — needed for DID in direct-entry branch and Aegis detection
+	const identity = await identityRepository.findByUserId(locals.user.id);
+
 	const existingChallengeId = url.searchParams.get('challenge');
 
 	if (existingChallengeId) {
@@ -76,7 +79,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 		challengeId = crypto.randomUUID();
 		await setPendingDelegation(challengeId, {
-			did: '',
+			did: identity?.did ?? '',
 			platform_origin: platformOrigin,
 			platform_name: platformName,
 			callback_url: callbackUrl,
@@ -87,8 +90,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		});
 	}
 
-	// Detect identity + key custody
-	const identity = await identityRepository.findByUserId(locals.user.id);
+	// Detect key custody
 	const hasAegis = !!(
 		identity?.aegis_ct &&
 		identity?.aegis_salt &&
