@@ -752,6 +752,7 @@
 								onSelect={(gif) => {
 									toggleCommentReaction(node.did, node.local_id, 'gif', gif.url, gif.url);
 								}}
+								triggerClass="h-5 w-5 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
 								onOpenChange={(o) => (pickerOpen = o)}
 							/>
 							{#if currentUserDid}

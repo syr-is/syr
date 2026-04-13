@@ -10,6 +10,7 @@ import { config, platformDelegation } from '$lib/config';
 import { encryptDelegateKey } from '$lib/services/platform-key-encryption';
 import {
 	getPendingDelegation,
+	setPendingDelegation,
 	setPendingKeypair,
 	setDelegationChallenge
 } from '$lib/server/platform-delegation-store';
@@ -49,12 +50,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 
-		const did = registration.did || '';
+		// Resolve DID: use registration's DID, or fall back to the session's DID
+		const did = registration.did || locals.user.did || '';
 		if (!did) {
 			return json(
-				{ error: 'invalid_request', error_description: 'Registration has no DID' },
+				{ error: 'invalid_request', error_description: 'No identity found for this user' },
 				{ status: 400 }
 			);
+		}
+		if (!registration.did) {
+			// Backfill so subsequent calls and the verify flow have the DID
+			registration.did = did;
+			await setPendingDelegation(delegation_id, registration);
 		}
 
 		// Generate delegate keypair

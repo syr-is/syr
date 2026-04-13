@@ -79,7 +79,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 		challengeId = crypto.randomUUID();
 		await setPendingDelegation(challengeId, {
-			did: identity?.did ?? '',
+			did: identity?.did ?? locals.user.did ?? '',
 			platform_origin: platformOrigin,
 			platform_name: platformName,
 			callback_url: callbackUrl,
@@ -105,7 +105,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		platformName,
 		platformOrigin,
 		scopes,
-		did: identity?.did || null,
+		did: identity?.did || locals.user.did || null,
 		displayName: profile?.display_name || locals.user.username,
 		avatarUrl: profile?.avatar_url,
 		hasAegis,
@@ -149,6 +149,7 @@ export const actions: Actions = {
 
 			const cb = new URL(reg.callback_url);
 			cb.searchParams.set('code', code);
+			cb.searchParams.set('delegation_id', challengeId);
 			if (reg.state) cb.searchParams.set('state', reg.state);
 			redirect(302, cb.toString());
 		} catch (err) {

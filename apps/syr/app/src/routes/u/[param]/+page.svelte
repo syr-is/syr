@@ -26,7 +26,7 @@
 		PublicStorySlideSchema
 	} from '@syr-is/types';
 	import MediaViewer from '$lib/components/fragments/media-viewer.svelte';
-	import * as Dialog from '@syr-is/ui/dialog';
+	import StoryViewer from '$lib/components/fragments/story-viewer.svelte';
 	import { Avatar, AvatarFallback, AvatarImage } from '@syr-is/ui/avatar';
 	import type { StorySlide } from '$lib/types/feed-stories';
 	import { fetchManifest } from '$lib/manifest-cache.js';
@@ -123,7 +123,6 @@
 
 	let storySlides = $state<StorySlide[]>([]);
 	let storyViewerOpen = $state(false);
-	let storySlideIndex = $state(0);
 	let storiesFetchSeq = 0;
 
 	async function loadStories(did: string) {
@@ -155,17 +154,7 @@
 
 	function openStoryViewer() {
 		if (storySlides.length === 0) return;
-		storySlideIndex = 0;
 		storyViewerOpen = true;
-	}
-
-	function storyNext() {
-		if (storySlideIndex < storySlides.length - 1) storySlideIndex += 1;
-		else storyViewerOpen = false;
-	}
-
-	function storyPrev() {
-		if (storySlideIndex > 0) storySlideIndex -= 1;
 	}
 
 	type EnrichedPublicFollow = {
@@ -904,64 +893,15 @@
 	{/if}
 </div>
 
-<Dialog.Root
+<StoryViewer
 	bind:open={storyViewerOpen}
-	onOpenChange={(open) => {
-		if (!open) storySlideIndex = 0;
+	slides={storySlides}
+	profile={{
+		displayName: p.display_name ?? undefined,
+		username: p.username,
+		avatarUrl: p.avatar_url ?? undefined
 	}}
->
-	<Dialog.Content
-		showCloseButton={false}
-		class="fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 bg-black p-0 text-white shadow-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:max-w-none"
-	>
-		{#if storySlides.length > 0}
-			{@const s = storySlides[storySlideIndex]}
-			<div class="relative flex h-[100dvh] w-full items-center justify-center">
-				{#if s.mime_type.startsWith('video/')}
-					<video
-						src={s.url}
-						controls
-						class="max-h-full max-w-full object-contain"
-						autoplay
-						playsinline
-					>
-						<track kind="captions" label="Captions unavailable" />
-					</video>
-				{:else}
-					<img src={s.url} alt="" class="max-h-full max-w-full object-contain" />
-				{/if}
-				<button
-					type="button"
-					class="absolute top-4 right-4 rounded-md bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
-					onclick={() => (storyViewerOpen = false)}
-				>
-					Close
-				</button>
-				{#if storySlides.length > 1}
-					<button
-						type="button"
-						class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
-						onclick={storyPrev}
-						aria-label="Previous slide"
-					>
-						‹
-					</button>
-					<button
-						type="button"
-						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
-						onclick={storyNext}
-						aria-label="Next slide"
-					>
-						›
-					</button>
-				{/if}
-				<p class="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/70">
-					{storySlideIndex + 1} / {storySlides.length}
-				</p>
-			</div>
-		{/if}
-	</Dialog.Content>
-</Dialog.Root>
+/>
 
 <RemoteFollowDialog
 	bind:open={remoteFollowOpen}

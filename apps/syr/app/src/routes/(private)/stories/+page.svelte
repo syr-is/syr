@@ -63,10 +63,11 @@
 	}
 
 	function classify(u: UploadWithCompositeId): StoryStatus {
-		if (!u.is_story) return 'unpublished';
 		const publishedMs = toMs(u.published_at);
+		// Expiry takes precedence — unpublished stories still expire after 24h
+		if (publishedMs && Date.now() - publishedMs >= STORY_WINDOW_MS) return 'expired';
+		if (!u.is_story) return 'unpublished';
 		if (!publishedMs) return 'unpublished';
-		if (Date.now() - publishedMs >= STORY_WINDOW_MS) return 'expired';
 		if (!u.is_public) return 'private';
 		return 'active';
 	}
@@ -326,6 +327,7 @@
 							story={u}
 							displayUrl={displayUrl(u)}
 							age={formatAge(u)}
+							expiry={expiresIn(u)}
 							badgeText="Hidden"
 							badgeVariant="secondary"
 							cardClass="opacity-80"

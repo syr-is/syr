@@ -156,6 +156,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		await setPendingDelegation(challenge.delegation_id, registration);
 
 		callbackUrl.searchParams.set('code', code);
+		callbackUrl.searchParams.set('delegation_id', challenge.delegation_id);
 		if (registration.state) {
 			callbackUrl.searchParams.set('state', registration.state);
 		}

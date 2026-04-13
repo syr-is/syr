@@ -112,7 +112,7 @@
 					<Tabs.Trigger value="instance" class="text-xs">Instance</Tabs.Trigger>
 					<Tabs.Trigger value="personal" class="text-xs">My GIFs</Tabs.Trigger>
 				</Tabs.List>
-				<Tabs.Content value="instance" class="max-h-72 overflow-y-auto p-2">
+				<Tabs.Content value="instance" class="max-h-72 min-h-72 overflow-y-auto p-2">
 					{#if loading}
 						<p class="py-4 text-center text-xs text-muted-foreground">Loading...</p>
 					{:else if instanceGifs.length === 0}
@@ -136,7 +136,7 @@
 						</div>
 					{/if}
 				</Tabs.Content>
-				<Tabs.Content value="personal" class="max-h-72 overflow-y-auto p-2">
+				<Tabs.Content value="personal" class="max-h-72 min-h-72 overflow-y-auto p-2">
 					{#if loading}
 						<p class="py-4 text-center text-xs text-muted-foreground">Loading...</p>
 					{:else if userGifs.length === 0}

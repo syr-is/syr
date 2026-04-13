@@ -1,8 +1,8 @@
 <script lang="ts">
-	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
 	import { toast } from 'svelte-sonner';
 	import type { StoryBundle } from '$lib/types/feed-stories';
+	import StoryViewer from './story-viewer.svelte';
 
 	let {
 		bundles,
@@ -20,14 +20,12 @@
 
 	let viewerOpen = $state(false);
 	let viewerBundle = $state<StoryBundle | null>(null);
-	let slideIndex = $state(0);
 	let fileInput: HTMLInputElement | undefined = $state();
 	let uploadBusy = $state(false);
 
 	function openViewer(b: StoryBundle) {
 		if (b.slides.length === 0) return;
 		viewerBundle = b;
-		slideIndex = 0;
 		viewerOpen = true;
 	}
 
@@ -40,16 +38,6 @@
 	function triggerStoryFilePick() {
 		if (uploadBusy) return;
 		fileInput?.click();
-	}
-
-	function nextSlide() {
-		if (!viewerBundle) return;
-		if (slideIndex < viewerBundle.slides.length - 1) slideIndex += 1;
-		else viewerOpen = false;
-	}
-
-	function prevSlide() {
-		if (slideIndex > 0) slideIndex -= 1;
 	}
 
 	async function onPickStory(e: Event) {
@@ -181,61 +169,15 @@
 	{/if}
 </div>
 
-<Dialog.Root
+<StoryViewer
 	bind:open={viewerOpen}
-	onOpenChange={(open) => {
-		if (!open) viewerBundle = null;
-	}}
->
-	<Dialog.Content
-		showCloseButton={false}
-		class="fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 bg-black p-0 text-white shadow-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:max-w-none"
-	>
-		{#if viewerBundle}
-			{@const s = viewerBundle.slides[slideIndex]}
-			<div class="relative flex h-[100dvh] w-full items-center justify-center">
-				{#if s.mime_type.startsWith('video/')}
-					<video
-						src={s.url}
-						controls
-						class="max-h-full max-w-full object-contain"
-						autoplay
-						playsinline
-					>
-						<track kind="captions" label="Captions unavailable" />
-					</video>
-				{:else}
-					<img src={s.url} alt="" class="max-h-full max-w-full object-contain" />
-				{/if}
-				<button
-					type="button"
-					class="absolute top-4 right-4 rounded-md bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
-					onclick={() => (viewerOpen = false)}
-				>
-					Close
-				</button>
-				{#if viewerBundle.slides.length > 1}
-					<button
-						type="button"
-						class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
-						onclick={prevSlide}
-						aria-label="Previous slide"
-					>
-						‹
-					</button>
-					<button
-						type="button"
-						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20"
-						onclick={nextSlide}
-						aria-label="Next slide"
-					>
-						›
-					</button>
-				{/if}
-				<p class="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/70">
-					{slideIndex + 1} / {viewerBundle.slides.length}
-				</p>
-			</div>
-		{/if}
-	</Dialog.Content>
-</Dialog.Root>
+	slides={viewerBundle?.slides ?? []}
+	profile={viewerBundle?.profile
+		? {
+				displayName: viewerBundle.profile.displayName,
+				username: viewerBundle.profile.username,
+				avatarUrl: viewerBundle.profile.avatarUrl ?? undefined
+			}
+		: null}
+	onClose={() => (viewerBundle = null)}
+/>

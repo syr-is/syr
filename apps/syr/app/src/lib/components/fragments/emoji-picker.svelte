@@ -126,7 +126,7 @@
 					<Tabs.Trigger value="personal" class="text-xs">Mine</Tabs.Trigger>
 				</Tabs.List>
 
-				<Tabs.Content value="unicode" class="max-h-60 overflow-y-auto p-2">
+				<Tabs.Content value="unicode" class="max-h-60 min-h-60 overflow-y-auto p-2">
 					{#if filteredUnicode}
 						{#if filteredUnicode.length === 0}
 							<p class="py-4 text-center text-xs text-muted-foreground">No emojis found</p>
@@ -165,7 +165,7 @@
 					{/if}
 				</Tabs.Content>
 
-				<Tabs.Content value="instance" class="max-h-60 overflow-y-auto p-2">
+				<Tabs.Content value="instance" class="max-h-60 min-h-60 overflow-y-auto p-2">
 					{#if loading}
 						<p class="py-4 text-center text-xs text-muted-foreground">Loading...</p>
 					{:else if filteredInstance.length === 0}
@@ -190,7 +190,7 @@
 						</div>
 					{/if}
 				</Tabs.Content>
-				<Tabs.Content value="personal" class="max-h-60 overflow-y-auto p-2">
+				<Tabs.Content value="personal" class="max-h-60 min-h-60 overflow-y-auto p-2">
 					{#if loading}
 						<p class="py-4 text-center text-xs text-muted-foreground">Loading...</p>
 					{:else if filteredUser.length === 0}
