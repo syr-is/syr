@@ -157,11 +157,14 @@ export const actions: Actions = {
 		}
 	},
 
-	deny: async ({ request }) => {
+	deny: async ({ request, locals }) => {
+		if (!locals.user) error(401, { message: 'Authentication required' });
+
 		const formData = await request.formData();
 		const challengeId = formData.get('challenge_id') as string;
 		const reg = await getPendingDelegation(challengeId);
 		if (!reg) error(400, { message: 'Challenge expired' });
+		if (reg.user_id !== locals.user.id.toString()) error(403, { message: 'Wrong user' });
 
 		const cb = new URL(reg.callback_url);
 		cb.searchParams.set('error', 'consent_denied');

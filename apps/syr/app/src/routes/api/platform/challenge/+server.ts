@@ -80,7 +80,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 		const message = err instanceof Error ? err.message : 'An unexpected error occurred';
-		const status = message.includes('revoked') || message.includes('not found') ? 403 : 500;
-		return json({ error: 'challenge_failed', error_description: message }, { status });
+		const is403 =
+			message.includes('revoked') ||
+			message.includes('not found') ||
+			message.includes('expired') ||
+			message.includes('missing encrypted key');
+		return json(
+			{ error: 'challenge_failed', error_description: message },
+			{ status: is403 ? 403 : 500 }
+		);
 	}
 };
