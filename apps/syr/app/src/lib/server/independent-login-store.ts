@@ -52,3 +52,20 @@ export async function consumeCallbackToken(token: string): Promise<string | null
 	const entry = await kvService.getAndDelete<{ jwt: string }>(KV_CALLBACK_TYPE, token);
 	return entry?.jwt ?? null;
 }
+
+// ── Delegation metadata (piggybacked on independent login challenges) ──
+
+const KV_DELEGATION_META_TYPE = 'challenge_delegation_meta';
+
+export interface DelegationMeta {
+	delegation_id: string;
+	user_id: string;
+}
+
+export async function setDelegationMeta(challengeId: string, meta: DelegationMeta): Promise<void> {
+	await kvService.set(KV_DELEGATION_META_TYPE, challengeId, meta, independentLogin.challengeTtl);
+}
+
+export async function consumeDelegationMeta(challengeId: string): Promise<DelegationMeta | null> {
+	return kvService.getAndDelete<DelegationMeta>(KV_DELEGATION_META_TYPE, challengeId);
+}

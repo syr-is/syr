@@ -1,3 +1,12 @@
+export type PersonaDelegation = {
+	delegatePublicKey: string;
+	platformOrigin: string;
+	platformName: string;
+	scope: string;
+	createdAt: string;
+	instanceUrl: string;
+};
+
 export type Persona = {
 	id: string;
 	did: string;

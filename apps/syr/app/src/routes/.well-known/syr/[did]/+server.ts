@@ -40,7 +40,8 @@ export const GET: RequestHandler = async ({ params, request }) => {
 			public_emojis: `${base}/api/public/emojis/${encoded}`,
 			public_gifs: `${base}/api/public/gifs/${encoded}`,
 			public_comments: `${base}/api/public/comments/${encoded}`,
-			public_reactions: `${base}/api/public/reactions/${encoded}`
+			public_reactions: `${base}/api/public/reactions/${encoded}`,
+			public_hash: `${base}/api/public/hash/${encoded}`
 		},
 		web_profile: `${base}/u/${encoded}`
 	};

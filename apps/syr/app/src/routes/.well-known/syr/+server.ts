@@ -26,6 +26,14 @@ export const GET: RequestHandler = async () => {
 			public_gifs: `${base}/api/public/gifs`
 		},
 		identity_manifest_template: `${base}/.well-known/syr/{did}`,
+		platform: {
+			consent: `${base}/auth/platform-consent`,
+			token: `${base}/api/platform/token`,
+			sign: `${base}/api/platform/sign`,
+			challenge: `${base}/api/platform/challenge`,
+			delegations: `${base}/api/platform/delegations`,
+			revoke: `${base}/api/platform/revoke`
+		},
 		syner: {
 			independent_login_challenge: `${base}/api/auth/independent-login/challenge/{id}`,
 			independent_login_verify: `${base}/api/auth/independent-login/verify`,
@@ -37,7 +45,9 @@ export const GET: RequestHandler = async () => {
 			post_sign_payload: `${base}/api/user/post-sign/{id}/payload`,
 			post_sign_signature: `${base}/api/user/post-sign/{id}/signature`,
 			registry_sign_payload: `${base}/api/user/registry-sign/{id}/payload`,
-			registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`
+			registry_sign_signature: `${base}/api/user/registry-sign/{id}/signature`,
+			delegation_challenge_payload: `${base}/api/platform/delegation-challenge/{id}/payload`,
+			delegation_verify: `${base}/api/platform/delegation-verify`
 		}
 	};
 	return json(manifest, {

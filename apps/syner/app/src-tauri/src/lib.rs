@@ -73,6 +73,8 @@ pub fn run() {
             persona_commands::read_file_as_base64_cmd,
             persona_commands::read_persona_asset_cmd,
             persona_commands::read_persona_encrypted_sigil_json_cmd,
+            persona_commands::add_persona_delegation_cmd,
+            persona_commands::list_persona_delegations_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

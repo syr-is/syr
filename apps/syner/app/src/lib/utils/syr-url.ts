@@ -198,6 +198,46 @@ export function parseSyrSigilHandoffUrl(urlStr: string): {
 	}
 }
 
+/**
+ * Parse syr://delegate deeplink for platform delegation signing.
+ * Contains: challenge ID, instance URL, platform details, DID, delegate public key.
+ */
+export function parseSyrDelegateUrl(urlStr: string): {
+	challenge: string;
+	instance: string;
+	platform_name: string;
+	platform_origin: string;
+	did: string;
+	delegate: string;
+} | null {
+	try {
+		const url = new URL(urlStr);
+		if (url.protocol !== 'syr:' || url.hostname !== 'delegate') return null;
+		const challenge = url.searchParams.get('challenge');
+		const instanceRaw = url.searchParams.get('instance');
+		const platform_name = url.searchParams.get('platform_name');
+		const platform_origin_raw = url.searchParams.get('platform_origin');
+		const did = url.searchParams.get('did');
+		const delegate = url.searchParams.get('delegate');
+		if (!challenge || !instanceRaw || !platform_name || !platform_origin_raw || !did || !delegate)
+			return null;
+		const instanceUrl = new URL(instanceRaw);
+		if (!isValidUrlScheme(instanceUrl)) return null;
+		const platformOriginUrl = new URL(platform_origin_raw);
+		if (!isValidUrlScheme(platformOriginUrl)) return null;
+		return {
+			challenge,
+			instance: instanceRaw,
+			platform_name,
+			platform_origin: platformOriginUrl.origin,
+			did,
+			delegate
+		};
+	} catch {
+		return null;
+	}
+}
+
 export function parseSyrSyncProfileUrl(urlStr: string): { instance: string; did: string } | null {
 	try {
 		const url = new URL(urlStr);
@@ -255,6 +295,17 @@ export function syrUrlToInternalRoute(urlStr: string): string | null {
 		q.set('session', registrySignParsed.session);
 		q.set('did', registrySignParsed.expectedDid);
 		return `/registry-sign?${q.toString()}`;
+	}
+	const delegateParsed = parseSyrDelegateUrl(trimmed);
+	if (delegateParsed) {
+		const q = new URLSearchParams();
+		q.set('challenge', delegateParsed.challenge);
+		q.set('instance', delegateParsed.instance);
+		q.set('platform_name', delegateParsed.platform_name);
+		q.set('platform_origin', delegateParsed.platform_origin);
+		q.set('did', delegateParsed.did);
+		q.set('delegate', delegateParsed.delegate);
+		return `/delegate-sign?${q.toString()}`;
 	}
 	return null;
 }

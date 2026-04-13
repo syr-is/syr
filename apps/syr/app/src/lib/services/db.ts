@@ -199,8 +199,12 @@ class DatabaseService {
 				DEFINE FIELD IF NOT EXISTS revoked_at ON TABLE delegated_key TYPE option<datetime>;
 				DEFINE FIELD IF NOT EXISTS signature ON TABLE delegated_key TYPE string;
 				DEFINE FIELD IF NOT EXISTS canonical_delegation ON TABLE delegated_key TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS platform_origin ON TABLE delegated_key TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS platform_name ON TABLE delegated_key TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS aegis_delegate ON TABLE delegated_key FLEXIBLE TYPE option<object>;
 				DEFINE INDEX IF NOT EXISTS idx_dk_pubkey ON TABLE delegated_key COLUMNS public_key UNIQUE;
 				DEFINE INDEX IF NOT EXISTS idx_dk_did ON TABLE delegated_key COLUMNS did;
+				DEFINE INDEX IF NOT EXISTS idx_dk_platform ON TABLE delegated_key COLUMNS did, scope, platform_origin;
 			`);
 
 			// Outbox table: durable job queue for external service communication

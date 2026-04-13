@@ -253,30 +253,41 @@
 				expires_in: data.expires_in,
 				qrDataUrl
 			};
-			const src = new EventSource(
-				`/api/identity/export-heartbeat?challenge_id=${encodeURIComponent(data.challenge_id)}`
-			);
-			exportHeartbeatSource = src;
-			src.addEventListener('verified', (e: MessageEvent) => {
-				if (gen !== exportGeneration) return;
-				try {
-					const payload = JSON.parse(e.data || '{}');
-					const token = payload.export_token;
-					if (!token) return;
-					disconnectExportHeartbeat();
-					exportToken = token;
-				} catch (err) {
-					exportChallenge = null;
-					exportToken = null;
-					toast.error(err instanceof Error ? err.message : 'Verification failed');
-				}
-			});
-			src.onerror = () => {
-				disconnectExportHeartbeat();
-				exportChallenge = null;
-				exportToken = null;
-				toast.error('Connection lost, please retry');
-			};
+			let errorCount = 0;
+			function connectHeartbeat() {
+				const src = new EventSource(
+					`/api/identity/export-heartbeat?challenge_id=${encodeURIComponent(data.challenge_id)}`
+				);
+				exportHeartbeatSource = src;
+				src.addEventListener('verified', (e: MessageEvent) => {
+					if (gen !== exportGeneration) return;
+					try {
+						const payload = JSON.parse(e.data || '{}');
+						const token = payload.export_token;
+						if (!token) return;
+						disconnectExportHeartbeat();
+						exportToken = token;
+					} catch (err) {
+						exportChallenge = null;
+						exportToken = null;
+						toast.error(err instanceof Error ? err.message : 'Verification failed');
+					}
+				});
+				src.onopen = () => {
+					errorCount = 0;
+				};
+				src.onerror = () => {
+					errorCount++;
+					if (src.readyState === EventSource.CLOSED || errorCount > 5) {
+						disconnectExportHeartbeat();
+						exportChallenge = null;
+						exportToken = null;
+						toast.error('Connection lost, please retry');
+					}
+					// Otherwise let EventSource auto-reconnect
+				};
+			}
+			connectHeartbeat();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to create challenge');
 		} finally {

@@ -1,46 +1,42 @@
 import type { RequestHandler } from './$types';
-import { subscribeExport } from '$lib/server/export-verify-broadcast';
+import { subscribeDelegation } from '$lib/server/platform-delegation-broadcast';
+import { getPendingDelegation } from '$lib/server/platform-delegation-store';
 
-const HEARTBEAT_INTERVAL_MS = 30_000; // keepalive for proxies/load balancers
-const MAX_CONNECTION_LIFETIME_MS = 600_000; // 10 min — must outlive buildIdentityExport + chunked signing
-const MAX_CONNECTIONS_PER_IP = 3;
-
-const connectionsByIp = new Map<string, number>();
-
-function getClientIp(request: Request): string {
-	const forwarded = request.headers.get('x-forwarded-for');
-	if (forwarded) {
-		const first = forwarded.split(',')[0]?.trim();
-		return first || 'unknown';
-	}
-	return 'unknown';
-}
-
-function tryAcquireConnection(ip: string): boolean {
-	const count = connectionsByIp.get(ip) ?? 0;
-	if (count >= MAX_CONNECTIONS_PER_IP) return false;
-	connectionsByIp.set(ip, count + 1);
-	return true;
-}
-
-function releaseConnection(ip: string): void {
-	const count = connectionsByIp.get(ip) ?? 0;
-	if (count <= 1) connectionsByIp.delete(ip);
-	else connectionsByIp.set(ip, count - 1);
-}
+const HEARTBEAT_INTERVAL_MS = 60_000;
+const MAX_CONNECTION_LIFETIME_MS = 600_000;
 
 /**
- * GET /api/identity/export-heartbeat?challenge_id=xxx
+ * GET /api/platform/delegation-heartbeat?challenge_id=xxx
  *
- * SSE stream — waits for export verification. Sends "verified" with export_token when Syner signs.
+ * SSE stream for the consent page showing the Syner QR for delegation signing.
+ * Sends "signed" when Syner completes signing, with the signature data.
+ * Requires authentication — only the user who owns the pending delegation can subscribe.
  */
-export const GET: RequestHandler = async ({ request, url, getClientAddress }) => {
-	const ip = getClientAddress?.() ?? getClientIp(request);
-	if (!tryAcquireConnection(ip)) {
-		return new Response('Too many SSE connections', { status: 429 });
+export const GET: RequestHandler = async ({ request, url, locals }) => {
+	if (!locals.user) {
+		return new Response(JSON.stringify({ error: 'unauthorized' }), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		});
 	}
 
 	const challengeId = url.searchParams.get('challenge_id');
+	if (!challengeId || !/^[A-Za-z0-9_-]{1,64}$/.test(challengeId)) {
+		return new Response(JSON.stringify({ error: 'invalid_challenge_id' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	// Verify the pending delegation belongs to this user
+	const reg = await getPendingDelegation(challengeId);
+	if (reg && reg.user_id !== locals.user.id.toString()) {
+		return new Response(JSON.stringify({ error: 'forbidden' }), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	let intervalId: ReturnType<typeof setInterval> | undefined;
 	let lifetimeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let unsubscribe: (() => void) | undefined;
@@ -50,7 +46,6 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 	function cleanup() {
 		if (cleaned) return;
 		cleaned = true;
-		releaseConnection(ip);
 		if (intervalId) {
 			clearInterval(intervalId);
 			intervalId = undefined;
@@ -77,7 +72,7 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 				try {
 					controllerRef.c?.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
 				} catch {
-					// Client disconnected
+					cleanup();
 				}
 			};
 
@@ -85,8 +80,8 @@ export const GET: RequestHandler = async ({ request, url, getClientAddress }) =>
 			lifetimeTimeoutId = setTimeout(cleanup, MAX_CONNECTION_LIFETIME_MS);
 
 			if (challengeId) {
-				unsubscribe = subscribeExport(challengeId, (exportToken) => {
-					send('verified', JSON.stringify({ export_token: exportToken }));
+				unsubscribe = subscribeDelegation(challengeId, (data) => {
+					send('signed', JSON.stringify(data));
 					cleanup();
 				});
 			}

@@ -51,6 +51,9 @@ export * from './registry.js';
 // Signed mutations (client-signed profile/post)
 export * from './signed-mutations.js';
 
+// Platform delegation (third-party signing authority)
+export * from './platform-delegation.js';
+
 // Persona types (Syner local identities)
 export * from './persona.js';
 

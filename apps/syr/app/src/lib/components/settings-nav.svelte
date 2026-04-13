@@ -13,7 +13,8 @@
 		Users,
 		Smile,
 		Film,
-		ImagePlus
+		ImagePlus,
+		ShieldCheck
 	} from 'lucide-svelte';
 
 	type NavItem = { title: string; href: string; icon: typeof User };
@@ -24,6 +25,7 @@
 		{ title: 'Discovery', href: '/settings/discovery', icon: Compass },
 		{ title: 'Content trust', href: '/settings/content-trust', icon: Shield },
 		{ title: 'Signing', href: '/settings/signing', icon: KeyRound },
+		{ title: 'Delegations', href: '/settings/platform-delegations', icon: ShieldCheck },
 		{ title: 'Sessions', href: '/settings/sessions', icon: Monitor },
 		{ title: 'Emojis & Stickers', href: '/settings/emojis', icon: Smile },
 		{ title: 'GIFs', href: '/settings/gifs', icon: Film }

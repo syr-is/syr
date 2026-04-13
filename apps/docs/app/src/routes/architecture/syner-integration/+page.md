@@ -326,11 +326,12 @@ stateDiagram-v2
 
 Custom URL scheme: `syr://`
 
-| Action | URL Pattern                                                     | Description             |
-| ------ | --------------------------------------------------------------- | ----------------------- |
-| Pair   | `syr://pair?code={code}&instance={url}`                         | Initiate device pairing |
-| Sign   | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}` | Open a signing request  |
-| Login  | `syr://login?challenge={id}&instance={url}&callback={url}`      | Independent login flow  |
+| Action   | URL Pattern                                                                                                                 | Description                 |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Pair     | `syr://pair?code={code}&instance={url}`                                                                                     | Initiate device pairing     |
+| Sign     | `syr://sign?request_id={id}&instance={url}&payload_hash={hash}`                                                             | Open a signing request      |
+| Login    | `syr://login?challenge={id}&instance={url}&callback={url}`                                                                  | Independent login flow      |
+| Delegate | `syr://delegate?challenge={id}&instance={url}&platform_name={name}&platform_origin={origin}&did={did}&delegate={publicKey}` | Platform delegation signing |
 
 **Login deep link (callback encoding and validation):** The `callback` parameter MUST be percent-encoded (e.g. `encodeURIComponent`). Syner MUST canonicalize and percent-decode both `instance` and `callback` before use. Syner MUST validate that `callback.origin` matches (or is allowed by) the trusted-instance policy—mismatch behaviors: reject (refuse redirect), warn (show confirmation), or prompt (ask user). Callback-origin validation prevents unsafe redirects to malicious sites.
 
