@@ -1,4 +1,4 @@
-import { redirect, error } from '@sveltejs/kit';
+import { redirect, error, isRedirect, isHttpError } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { getPendingDelegation, setPendingDelegation } from '$lib/server/platform-delegation-store';
 import { identityRepository } from '$lib/repositories/identity.repository';
@@ -16,7 +16,7 @@ import { config } from '$lib/config';
  */
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.user) {
-		redirect(302, `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`);
+		redirect(302, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
 	// Parse registration params (direct redirect or pre-registered challenge)
@@ -106,6 +106,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		platformOrigin,
 		scopes,
 		did: identity?.did || locals.user.did || null,
+		hasIdentity: !!identity?.did,
 		displayName: profile?.display_name || locals.user.username,
 		avatarUrl: profile?.avatar_url,
 		hasAegis,
@@ -153,6 +154,8 @@ export const actions: Actions = {
 			if (reg.state) cb.searchParams.set('state', reg.state);
 			redirect(302, cb.toString());
 		} catch (err) {
+			if (isRedirect(err)) throw err;
+			if (isHttpError(err)) throw err;
 			const msg = err instanceof Error ? err.message : 'Failed';
 			if (msg.includes('decryption') || msg.includes('Aegis'))
 				error(400, { message: 'Incorrect password' });

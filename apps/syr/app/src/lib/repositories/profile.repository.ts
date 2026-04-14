@@ -139,9 +139,9 @@ export class ProfileRepository extends BaseRepository<Profile> {
 		}
 
 		// Use SurrealDB's merge method to update only the specified fields using profile ID
-		const result = await this.db.merge<Profile, ProfileRepositoryMerge>(
+		const result = await this.db.merge<Profile, ProfileRepositoryMerge & { updated_at: Date }>(
 			profile.id,
-			validatedData.data
+			{ ...validatedData.data, updated_at: new Date() }
 		);
 
 		return result as Profile | null;

@@ -104,7 +104,7 @@
 	}
 
 	onMount(() => {
-		if (!data.hasAegis) {
+		if (data.hasIdentity) {
 			fetchDelegationChallenge(false);
 		}
 		return () => disconnectHeartbeat();
@@ -168,30 +168,56 @@
 			access anytime from your settings.
 		</p>
 
-		{#if data.hasAegis}
-			<!-- ── AEGIS: password form ── -->
-			<form method="POST" action="?/approve" use:enhance class="space-y-4">
-				<input type="hidden" name="challenge_id" value={data.challengeId} />
-				<div class="space-y-2">
-					<label for="password" class="text-sm font-medium text-card-foreground">Password</label>
-					<input
-						id="password"
-						name="password"
-						type="password"
-						required
-						autocomplete="current-password"
-						class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:outline-none"
-					/>
-				</div>
-				<button
-					type="submit"
-					class="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+		{#if !data.hasIdentity}
+			<!-- ── NO IDENTITY: guide user to set up ── -->
+			<div class="space-y-3 text-center">
+				<p class="text-sm text-muted-foreground">
+					You need to set up your identity before authorizing platforms.
+				</p>
+				<a
+					href="/settings/identity?redirectTo={encodeURIComponent(
+						`/auth/platform-consent?challenge=${data.challengeId}`
+					)}"
+					class="inline-block rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
 				>
-					Approve
-				</button>
-			</form>
+					Set up identity
+				</a>
+			</div>
 		{:else}
-			<!-- ── EXTERNAL / NO IDENTITY: Syner QR ── -->
+			{#if data.hasAegis}
+				<!-- ── AEGIS: password form ── -->
+				<form method="POST" action="?/approve" use:enhance class="space-y-4">
+					<input type="hidden" name="challenge_id" value={data.challengeId} />
+					<div class="space-y-2">
+						<label for="password" class="text-sm font-medium text-card-foreground">Password</label>
+						<input
+							id="password"
+							name="password"
+							type="password"
+							required
+							autocomplete="current-password"
+							class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+					>
+						Approve with password
+					</button>
+				</form>
+
+				<div class="relative my-2">
+					<div class="absolute inset-0 flex items-center">
+						<div class="w-full border-t border-border"></div>
+					</div>
+					<div class="relative flex justify-center text-xs">
+						<span class="bg-card px-2 text-muted-foreground">or</span>
+					</div>
+				</div>
+			{/if}
+
+			<!-- ── Syner QR (always available when identity exists) ── -->
 			{#if synerLoading}
 				<p class="text-center text-sm text-muted-foreground">Creating challenge...</p>
 			{:else if synerError}

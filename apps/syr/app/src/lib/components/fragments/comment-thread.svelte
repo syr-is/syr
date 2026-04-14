@@ -20,6 +20,8 @@
 	import { browser } from '$app/environment';
 	import { renderEmojisInHtml, renderStickersInHtml } from '$lib/utils/emoji-renderer';
 	import { getInstanceEmojis, getUserEmojis } from '$lib/stores/emoji-cache';
+	import { safeRemoteFetch } from '$lib/client/safe-remote-fetch';
+	import { isSafeMediaUrl } from '$lib/utils/url-sanitize';
 
 	type CommentData = {
 		did: string;
@@ -228,8 +230,10 @@
 		profileFetchPending.add(did);
 		try {
 			const endpoints = await getManifestEndpoints(did, base);
-			const res = await fetch(endpoints.profile!);
-			if (!res.ok) return;
+			const res = await safeRemoteFetch(endpoints.profile!, {
+				timeoutMs: 8_000,
+				maxBytes: 500_000
+			});
 			const json = await res.json();
 			if (json.status === 'success' && json.data) {
 				authorProfiles.set(did, {
@@ -312,8 +316,10 @@
 				try {
 					const endpoints = await getManifestEndpoints(did, base);
 					const qs = `post_did=${encodeURIComponent(postDid)}&post_id=${encodeURIComponent(postId)}&limit=500`;
-					const res = await fetch(`${endpoints.public_comments}?${qs}`);
-					if (!res.ok) return;
+					const res = await safeRemoteFetch(`${endpoints.public_comments}?${qs}`, {
+						timeoutMs: 10_000,
+						maxBytes: 2_000_000
+					});
 					const json = await res.json();
 					if (json.status === 'success' && json.data) {
 						for (const c of json.data) {
@@ -661,7 +667,11 @@
 				</div>
 				<div class="mt-0.5 pl-7 text-sm text-muted-foreground italic">
 					This comment was deleted or is not available.
-					<a href={profileHref(node.did)} class="text-primary hover:underline">View profile</a>
+					<a
+						href={profileHref(node.did)}
+						class="text-primary hover:underline"
+						rel="noopener noreferrer">View profile</a
+					>
 				</div>
 			</div>
 			{#if !isCollapsed && node.children.length > 0}
@@ -696,8 +706,12 @@
 						</button>
 					{/if}
 					<!-- Avatar + Username (linked to profile) -->
-					<a href={profileHref(node.did)} class="flex items-center gap-1.5 hover:underline">
-						{#if author.avatar}
+					<a
+						href={profileHref(node.did)}
+						class="flex items-center gap-1.5 hover:underline"
+						rel="noopener noreferrer"
+					>
+						{#if isSafeMediaUrl(author.avatar)}
 							<img src={author.avatar} alt="" class="h-7 w-7 rounded-full object-cover" />
 						{:else}
 							<div

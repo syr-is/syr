@@ -8,6 +8,8 @@
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
+	import { page } from '$app/state';
+	import { safePostLoginRedirectPath } from '$lib/post-login-redirect-path';
 
 	let { data }: { data: PageData } = $props();
 	const inviteOnly = $derived(data.registrationMode === 'invite_only');
@@ -40,7 +42,8 @@
 				}
 
 				toast.success('Account created successfully!');
-				window.location.href = '/';
+				const redirectTo = safePostLoginRedirectPath(page.url.searchParams.get('redirectTo'));
+				window.location.href = redirectTo ?? '/';
 			} catch (_error) {
 				toast.error('An unexpected error occurred');
 			}

@@ -21,6 +21,7 @@
 	import { Button } from '@syr-is/ui/button';
 	import SignatureVerification from '$lib/components/fragments/signature-verification.svelte';
 	import { Check } from 'lucide-svelte';
+	import { isSafeMediaUrl } from '$lib/utils/url-sanitize';
 
 	type Props = {
 		profile: ProfileCardModel;
@@ -68,13 +69,16 @@
 	}: Props = $props();
 
 	const displayName = $derived(profile.display_name?.trim() || profile.username);
+	const safeAvatarUrl = $derived(
+		isSafeMediaUrl(profile.avatar_url) ? profile.avatar_url : undefined
+	);
 	const showSigBlock = $derived(showSignatureVerification && !!profile.did?.trim());
 	const bioText = $derived(profile.bio?.trim() ?? '');
 </script>
 
 <Card.Root class="gap-0 overflow-hidden p-0 shadow-md {className}">
 	<div class="relative h-36 w-full shrink-0 bg-muted sm:h-44">
-		{#if profile.banner_url}
+		{#if isSafeMediaUrl(profile.banner_url)}
 			<img
 				src={profile.banner_url}
 				alt=""
@@ -101,7 +105,7 @@
 						aria-label="View stories"
 					>
 						<Avatar class="h-full w-full">
-							<AvatarImage src={profile.avatar_url ?? undefined} alt="" />
+							<AvatarImage src={safeAvatarUrl ?? undefined} alt="" />
 							<AvatarFallback class="text-lg">{displayName.slice(0, 2) || '?'}</AvatarFallback>
 						</Avatar>
 					</button>
@@ -109,7 +113,7 @@
 					<Avatar
 						class="-mt-14 h-24 w-24 shrink-0 self-start border-4 border-card shadow-md sm:-mt-16 sm:h-28 sm:w-28"
 					>
-						<AvatarImage src={profile.avatar_url ?? undefined} alt="" />
+						<AvatarImage src={safeAvatarUrl ?? undefined} alt="" />
 						<AvatarFallback class="text-lg">{displayName.slice(0, 2) || '?'}</AvatarFallback>
 					</Avatar>
 				{/if}

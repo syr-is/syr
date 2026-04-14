@@ -4,6 +4,7 @@
 	import { getUploadApiUrl, type UploadWithCompositeId, type Folder } from '@syr-is/types';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 
 	import DeleteUploadDialog from '$lib/components/fragments/delete-upload-dialog.svelte';
 	import UploadFilesDialog from '$lib/components/fragments/upload-files-dialog.svelte';
@@ -213,7 +214,7 @@
 			const isPublic = result.data?.isPublic ?? upload.is_public;
 			const downloadUrl = result.data?.downloadUrl;
 			if (isPublic && downloadUrl) {
-				await navigator.clipboard.writeText(downloadUrl);
+				await copyToClipboard(downloadUrl);
 				toast.success('Link copied to clipboard');
 				return;
 			}
@@ -222,7 +223,7 @@
 		} catch {
 			if (upload.is_public && upload.url) {
 				try {
-					await navigator.clipboard.writeText(upload.url);
+					await copyToClipboard(upload.url);
 					toast.success('Link copied to clipboard');
 				} catch {
 					toast.error('Failed to copy link');

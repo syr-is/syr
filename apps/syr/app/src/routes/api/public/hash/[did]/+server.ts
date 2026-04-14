@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
+import { emojiRepository } from '$lib/repositories/emoji.repository';
+import { gifRepository } from '$lib/repositories/gif.repository';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -47,12 +49,22 @@ export const GET: RequestHandler = async ({ params }) => {
 		.sort()
 		.join(',');
 
+	// Lightweight emoji/GIF digest: count + latest updated_at per table
+	const [emojiDigestData, gifDigestData] = await Promise.all([
+		emojiRepository.digestByDid(did),
+		gifRepository.digestByDid(did)
+	]);
+	const emojiDigest = `e:${emojiDigestData.count}:${emojiDigestData.latestUpdatedAt ?? ''}`;
+	const gifDigest = `g:${gifDigestData.count}:${gifDigestData.latestUpdatedAt ?? ''}`;
+
 	const parts = [
 		profile?.updated_at?.toISOString() ?? '',
 		profile?.content_signature ?? '',
 		String(activeStories.length),
 		latestStoryTs ? new Date(latestStoryTs).toISOString() : '',
-		storyIds
+		storyIds,
+		emojiDigest,
+		gifDigest
 	];
 
 	const hash = createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);

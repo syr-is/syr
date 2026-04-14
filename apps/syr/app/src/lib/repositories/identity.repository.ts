@@ -1,4 +1,5 @@
-import type { RecordId } from 'surrealdb';
+import { RecordId } from 'surrealdb';
+import { stringToRecordId } from '@syr-is/types';
 import { BaseRepository } from './base.repository';
 import {
 	IdentitySchema,
@@ -32,9 +33,10 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	 * Find identity by user ID
 	 */
 	async findByUserId(userId: string | RecordId): Promise<Identity | null> {
+		const resolved = typeof userId === 'string' ? stringToRecordId.decode(userId) : userId;
 		const result = await this.db.query<[Identity[]]>(
 			'SELECT * FROM identity WHERE user_id = $userId LIMIT 1',
-			{ userId }
+			{ userId: resolved }
 		);
 		const record = result[0]?.[0];
 		if (!record) return null;

@@ -5,6 +5,7 @@
 	import * as Select from '@syr-is/ui/select';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import type { PageData } from './$types';
 	import RemoveDiscoveryRegistryDialog from '$lib/components/fragments/remove-discovery-registry-dialog.svelte';
 	import DeleteInviteCodeDialog from '$lib/components/fragments/delete-invite-code-dialog.svelte';
@@ -314,7 +315,7 @@
 
 	async function copyCode(code: string) {
 		try {
-			await navigator.clipboard.writeText(code);
+			await copyToClipboard(code);
 			toast.success('Copied to clipboard');
 		} catch {
 			toast.error('Failed to copy');

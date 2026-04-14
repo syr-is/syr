@@ -7,6 +7,7 @@
 	import { getUploadApiUrl, type UploadWithCompositeId } from '@syr-is/types';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, Link, Clock, Copy, Check } from 'lucide-svelte';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 
 	let {
 		upload = null,
@@ -60,7 +61,7 @@
 	async function copyShareUrl() {
 		if (!generatedUrl) return;
 		try {
-			await navigator.clipboard.writeText(generatedUrl);
+			await copyToClipboard(generatedUrl);
 			linkCopied = true;
 			toast.success('Share link copied to clipboard');
 			setTimeout(() => {

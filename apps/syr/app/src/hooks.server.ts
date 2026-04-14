@@ -223,10 +223,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// Add security headers
+	// Security headers
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-XSS-Protection', '1; mode=block');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set(
+		'Content-Security-Policy',
+		[
+			"default-src 'self'",
+			"img-src 'self' https: http: data:",
+			"media-src 'self' https: http:",
+			"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
+			"worker-src 'self' blob:",
+			"style-src 'self' 'unsafe-inline'",
+			"connect-src 'self' https: http: ws: wss:",
+			"font-src 'self'",
+			"frame-ancestors 'none'",
+			"base-uri 'self'",
+			"form-action 'self' https: http:"
+		].join('; ')
+	);
 
 	return response;
 };

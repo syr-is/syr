@@ -13,6 +13,7 @@
 	import AddAsGifDialog from '$lib/components/fragments/add-as-gif-dialog.svelte';
 	import UploadInstanceMediaDialog from '$lib/components/fragments/upload-instance-media-dialog.svelte';
 	import { toast } from 'svelte-sonner';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { Plus, FolderPlus, Trash2 } from 'lucide-svelte';
 
 	import type { ViewMode, DisplayItem } from '$lib/types/display-item';
@@ -166,7 +167,7 @@
 		const result = await resolveDownloadUrl(upload);
 		if (result) {
 			try {
-				await navigator.clipboard.writeText(result.url);
+				await copyToClipboard(result.url);
 				toast.success('Link copied to clipboard');
 			} catch {
 				toast.error('Failed to copy link');

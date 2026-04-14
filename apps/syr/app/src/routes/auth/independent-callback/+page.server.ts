@@ -50,6 +50,13 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		// fail-open: continue to redirect to /
 	}
 
+	// Check redirectTo query param first (from login page), then cookie fallback
+	const redirectTo = url.searchParams.get('redirectTo');
+	const redirectSafe = safePostLoginRedirectPath(redirectTo);
+	if (redirectSafe) {
+		throw redirect(302, redirectSafe);
+	}
+
 	const postLogin = cookies.get('post_login_redirect');
 	if (postLogin) {
 		cookies.delete('post_login_redirect', { path: '/' });

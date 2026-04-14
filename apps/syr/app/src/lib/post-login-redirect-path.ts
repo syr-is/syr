@@ -5,7 +5,10 @@ const MAX_URI_DECODE_STEPS = 8;
 
 function isSafeRelativePath(s: string): boolean {
 	if (s.length > MAX_POST_LOGIN_PATH_LEN) return false;
-	if (!s.startsWith('/') || s.startsWith('//') || s.includes('://')) return false;
+	if (!s.startsWith('/') || s.startsWith('//')) return false;
+	// Only check for :// in the path portion, not in query params
+	const pathOnly = s.split('?')[0];
+	if (pathOnly.includes('://')) return false;
 	return true;
 }
 

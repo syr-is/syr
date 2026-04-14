@@ -97,8 +97,11 @@
 				const { token } = JSON.parse(e.data || '{}');
 				if (token) {
 					disconnectHeartbeat();
-					window.location.href =
+					const redirectTo = page.url.searchParams.get('redirectTo');
+					let callbackUrl =
 						resolve('/auth/independent-callback') + `?token=${encodeURIComponent(token)}`;
+					if (redirectTo) callbackUrl += `&redirectTo=${encodeURIComponent(redirectTo)}`;
+					window.location.href = callbackUrl;
 				}
 			} catch (_) {
 				/* ignore */
@@ -289,7 +292,10 @@
 			<p class="text-center text-sm text-muted-foreground">
 				Don't have an account?
 				<a
-					href={resolve('/register')}
+					href={resolve('/register') +
+						(page.url.searchParams.get('redirectTo')
+							? `?redirectTo=${encodeURIComponent(page.url.searchParams.get('redirectTo')!)}`
+							: '')}
 					data-sveltekit-preload-data
 					class="font-medium text-primary underline-offset-4 hover:underline"
 				>

@@ -167,7 +167,7 @@
 	});
 
 	onDestroy(() => {
-		window.removeEventListener('keydown', onKey);
+		if (typeof window !== 'undefined') window.removeEventListener('keydown', onKey);
 		stopTicker();
 	});
 </script>

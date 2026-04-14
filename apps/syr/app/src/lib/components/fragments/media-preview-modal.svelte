@@ -15,6 +15,7 @@
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { fetchAlbumArt } from '$lib/utils/media';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { formatFileSize } from '$lib/utils/format';
 	import {
 		type DisplayItem,
@@ -200,7 +201,7 @@
 
 		if (resolvedIsPublic) {
 			try {
-				await navigator.clipboard.writeText(effectiveUrl);
+				await copyToClipboard(effectiveUrl);
 				toast.success('Link copied to clipboard');
 			} catch {
 				toast.error('Failed to copy link');

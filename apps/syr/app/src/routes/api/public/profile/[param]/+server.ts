@@ -21,6 +21,11 @@ export const GET: RequestHandler = async ({ params }) => {
 		throw error(404, { code: 'NOT_FOUND', message: 'Profile not found' });
 	}
 
+	// Append cache-buster to media URLs so federated clients don't serve stale images
+	const v = profile.updated_at ? `?v=${profile.updated_at.getTime()}` : '';
+	const avatarUrl = profile.avatar_url ? `${profile.avatar_url}${v}` : profile.avatar_url;
+	const bannerUrl = profile.banner_url ? `${profile.banner_url}${v}` : profile.banner_url;
+
 	return json({
 		status: 'success',
 		data: {
@@ -28,8 +33,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			username: user.username,
 			display_name: profile.display_name,
 			bio: profile.bio,
-			avatar_url: profile.avatar_url,
-			banner_url: profile.banner_url,
+			avatar_url: avatarUrl,
+			banner_url: bannerUrl,
 			identity_host_url: profile.identity_host_url ?? null,
 			content_signature: profile.content_signature,
 			signed_payload_json: profile.signed_payload_json,

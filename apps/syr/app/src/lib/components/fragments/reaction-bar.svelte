@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { cn } from '$lib/utils';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { safeRemoteFetch } from '$lib/client/safe-remote-fetch';
 
 	type Reactor = { did: string; username?: string; instance?: string };
 
@@ -77,8 +78,10 @@
 		const promise = (async () => {
 			try {
 				const endpoints = await getManifestEndpoints(did, providerBase);
-				const res = await fetch(endpoints.profile);
-				if (!res.ok) return undefined;
+				const res = await safeRemoteFetch(endpoints.profile, {
+					timeoutMs: 8_000,
+					maxBytes: 500_000
+				});
 				const json = await res.json();
 				if (json.status === 'success' && json.data) {
 					return (json.data.username ?? json.data.display_name) as string | undefined;
@@ -123,8 +126,10 @@
 				try {
 					const endpoints = await getManifestEndpoints(did, base);
 					const qs = `parent_type=${encodeURIComponent(parentType)}&parent_did=${encodeURIComponent(parentDid)}&parent_id=${encodeURIComponent(parentId)}&limit=100`;
-					const res = await fetch(`${endpoints.public_reactions}?${qs}`);
-					if (!res.ok) return;
+					const res = await safeRemoteFetch(`${endpoints.public_reactions}?${qs}`, {
+						timeoutMs: 8_000,
+						maxBytes: 1_000_000
+					});
 					const json = await res.json();
 					if (json.status === 'success' && json.data) {
 						for (const r of json.data) {

@@ -56,6 +56,15 @@ export class GifRepository extends BaseRepository<Gif> {
 
 		return { data, total };
 	}
+	/** Lightweight count + latest updated_at for a user's GIFs. Used by the hash endpoint. */
+	async digestByDid(did: string): Promise<{ count: number; latestUpdatedAt: string | null }> {
+		const result = await this.db.query<[{ cnt: number; latest: string | null }[]]>(
+			`SELECT count() AS cnt, math::max(updated_at) AS latest FROM gif WHERE id.created_by = $did AND scope = 'user' GROUP ALL`,
+			{ did }
+		);
+		const row = result[0]?.[0];
+		return { count: row?.cnt ?? 0, latestUpdatedAt: row?.latest ?? null };
+	}
 }
 
 export const gifRepository = new GifRepository();

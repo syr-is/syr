@@ -4,6 +4,8 @@
  * On failure, the cache is cleared so the next call retries.
  */
 
+import { safeRemoteJson } from '$lib/client/safe-remote-fetch';
+
 type EmojiEntry = {
 	shortcode: string;
 	url: string;
@@ -38,11 +40,12 @@ export function getUserEmojis(endpointUrl: string): Promise<EmojiEntry[]> {
 	if (userEmojiCache.has(endpointUrl)) return userEmojiCache.get(endpointUrl)!;
 
 	const promise = (async () => {
-		const res = await fetch(endpointUrl);
-		if (!res.ok) throw new Error(`Failed: ${res.status}`);
-		const json = await res.json();
-		if (json.status === 'success' && json.data) {
-			return json.data as EmojiEntry[];
+		const json = await safeRemoteJson<{ status?: string; data?: EmojiEntry[] }>(endpointUrl, {
+			timeoutMs: 6_000,
+			maxBytes: 1_000_000
+		});
+		if (json?.status === 'success' && json.data) {
+			return json.data;
 		}
 		return [];
 	})().catch(() => {

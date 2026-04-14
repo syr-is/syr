@@ -1,3 +1,5 @@
+import { isSafeMediaUrl } from './url-sanitize';
+
 /**
  * Render emoji shortcodes in HTML content.
  * Replaces :shortcode: with inline <img> tags.
@@ -11,7 +13,7 @@ export function renderEmojisInHtml(html: string, emojiMap: Record<string, string
 	// Match :shortcode: but NOT ::shortcode:: (stickers handled separately)
 	return html.replace(/(?<!:):([a-zA-Z0-9_~+-]+):(?!:)/g, (match, shortcode) => {
 		const url = emojiMap[shortcode] ?? emojiMap[shortcode.toLowerCase()];
-		if (!url) return match;
+		if (!url || !isSafeMediaUrl(url)) return match;
 		return `<img src="${escapeHtml(url)}" alt=":${escapeHtml(shortcode)}:" class="custom-emoji" style="display:inline;aspect-ratio:1;width:1.5em;height:1.5em;margin:0 0.15em;vertical-align:middle;" />`;
 	});
 }
@@ -24,7 +26,7 @@ export function renderStickersInHtml(html: string, emojiMap: Record<string, stri
 
 	return html.replace(/::([a-zA-Z0-9_~+-]+)::/g, (match, shortcode) => {
 		const url = emojiMap[shortcode] ?? emojiMap[shortcode.toLowerCase()];
-		if (!url) return match;
+		if (!url || !isSafeMediaUrl(url)) return match;
 		return `<img src="${escapeHtml(url)}" alt="::${escapeHtml(shortcode)}::" class="custom-sticker" style="display:block;max-width:128px;max-height:128px;margin:0.25em 0;" />`;
 	});
 }
@@ -41,6 +43,7 @@ export function buildEmojiMap(
 	const counts: Record<string, number> = {};
 
 	function addEmoji(shortcode: string, url: string) {
+		if (!isSafeMediaUrl(url)) return;
 		if (!(shortcode in map)) {
 			map[shortcode] = url;
 		} else {
