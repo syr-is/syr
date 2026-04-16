@@ -59,7 +59,8 @@ RUN apk del wasm-pack \
 RUN pnpm install
 
 # Build the app — workspace deps are now properly injected with dist/
-RUN pnpm --filter @syr-is/syr build
+# Increase heap for Vite SSR build (OOMs at default 2GB on small VPS)
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter @syr-is/syr build
 
 # Prune dev dependencies
 RUN pnpm --filter @syr-is/syr --prod deploy pruned
