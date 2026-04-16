@@ -1,14 +1,15 @@
 services:
   # SurrealDB - Multi-model database (Production)
   surrealdb:
-    image: surrealdb/surrealdb:latest
+    image: surrealdb/surrealdb:v2.6
     command: start --log info --user root --pass ${SURREALDB_PASS} file:/data/syr.db
     volumes:
       - surrealdb-prod-data:/data
     environment:
       - SURREAL_LOG=info
     healthcheck:
-      test: ["CMD", "/surreal", "is-ready"]
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
