@@ -15,6 +15,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - internal
     restart: unless-stopped
 
   # SeaweedFS - S3-compatible distributed storage (Production)
@@ -35,6 +37,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+    networks:
+      - internal
     restart: unless-stopped
 
   # SYR Application (Production)
@@ -79,6 +83,8 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
+    networks:
+      - internal
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -87,6 +93,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   surrealdb-prod-data:
