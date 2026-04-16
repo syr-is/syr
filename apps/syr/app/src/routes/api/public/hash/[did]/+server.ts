@@ -7,6 +7,7 @@ import { profileRepository } from '$lib/repositories/profile.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { emojiRepository } from '$lib/repositories/emoji.repository';
 import { gifRepository } from '$lib/repositories/gif.repository';
+import { postRepository } from '$lib/repositories/post.repository';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -50,12 +51,14 @@ export const GET: RequestHandler = async ({ params }) => {
 		.join(',');
 
 	// Lightweight emoji/GIF digest: count + latest updated_at per table
-	const [emojiDigestData, gifDigestData] = await Promise.all([
+	const [emojiDigestData, gifDigestData, postDigestData] = await Promise.all([
 		emojiRepository.digestByDid(did),
-		gifRepository.digestByDid(did)
+		gifRepository.digestByDid(did),
+		postRepository.digestByDid(did)
 	]);
 	const emojiDigest = `e:${emojiDigestData.count}:${emojiDigestData.latestUpdatedAt ?? ''}`;
 	const gifDigest = `g:${gifDigestData.count}:${gifDigestData.latestUpdatedAt ?? ''}`;
+	const postDigest = `p:${postDigestData.count}:${postDigestData.latestUpdatedAt ?? ''}`;
 
 	const parts = [
 		profile?.updated_at?.toISOString() ?? '',
@@ -64,7 +67,8 @@ export const GET: RequestHandler = async ({ params }) => {
 		latestStoryTs ? new Date(latestStoryTs).toISOString() : '',
 		storyIds,
 		emojiDigest,
-		gifDigest
+		gifDigest,
+		postDigest
 	];
 
 	const hash = createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);

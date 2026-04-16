@@ -45,8 +45,6 @@ services:
       dockerfile: docker/prod/syr.dockerfile
     ports:
       - "${PORT:-5173}:${PORT:-5173}"
-    env_file:
-      - .env.production
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-5173}
@@ -71,4 +69,3 @@ volumes:
     driver: local
   seaweedfs-prod-data:
     driver: local
-

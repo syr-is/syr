@@ -108,6 +108,15 @@ export class PostRepository extends BaseRepository<Post> {
 		const total = countResult[0]?.[0]?.total ?? 0;
 		return { data, total };
 	}
+	/** Lightweight count + latest updated_at for a user's published posts. Used by the hash endpoint. */
+	async digestByDid(did: string): Promise<{ count: number; latestUpdatedAt: string | null }> {
+		const result = await this.db.query<[{ cnt: number; latest: string | null }[]]>(
+			`SELECT count() AS cnt, math::max(updated_at) AS latest FROM post WHERE id.created_by = $did AND status = 'published' GROUP ALL`,
+			{ did }
+		);
+		const row = result[0]?.[0];
+		return { count: row?.cnt ?? 0, latestUpdatedAt: row?.latest ?? null };
+	}
 }
 
 export const postRepository = new PostRepository();
