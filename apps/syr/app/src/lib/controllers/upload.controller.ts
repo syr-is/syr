@@ -12,7 +12,7 @@ import { getProfileSyncAssetUploadPath } from '$lib/instance-config';
 import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
-import { s3Service } from '$lib/services/s3';
+import { s3Service, s3PublicClient } from '$lib/services/s3';
 import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
 
@@ -127,7 +127,7 @@ export class UploadController {
 			})
 		});
 
-		const signedUrl = await getSignedUrl(s3Service.client, command, {
+		const signedUrl = await getSignedUrl(s3PublicClient, command, {
 			expiresIn: 3600
 		});
 
@@ -201,7 +201,7 @@ export class UploadController {
 			})
 		});
 
-		const signedUrl = await getSignedUrl(s3Service.client, command, {
+		const signedUrl = await getSignedUrl(s3PublicClient, command, {
 			expiresIn: 3600
 		});
 
@@ -285,7 +285,7 @@ export class UploadController {
 			})
 		});
 
-		const signedUrl = await getSignedUrl(s3Service.client, command, {
+		const signedUrl = await getSignedUrl(s3PublicClient, command, {
 			expiresIn: 3600
 		});
 
@@ -852,7 +852,7 @@ export class UploadController {
 			Key: upload.key
 		});
 
-		const signedUrl = await getSignedUrl(s3Service.client, command, {
+		const signedUrl = await getSignedUrl(s3PublicClient, command, {
 			expiresIn: 3600
 		});
 
@@ -906,7 +906,7 @@ export class UploadController {
 			Key: upload.key
 		});
 
-		const signedUrl = await getSignedUrl(s3Service.client, command, {
+		const signedUrl = await getSignedUrl(s3PublicClient, command, {
 			expiresIn: safeExpiry
 		});
 

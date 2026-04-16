@@ -39,3 +39,19 @@ class S3Service {
 }
 
 export const s3Service = S3Service.getInstance();
+
+/**
+ * S3 client using the public URL endpoint — only for generating presigned URLs
+ * that the browser will use. Server-side ops use s3Service.client (internal).
+ */
+const publicClient = new S3Client({
+	region: s3.region,
+	endpoint: s3.publicUrl,
+	credentials: {
+		accessKeyId: s3.accessKeyId,
+		secretAccessKey: s3.secretAccessKey
+	},
+	forcePathStyle: true
+});
+
+export const s3PublicClient = publicClient;

@@ -42,6 +42,7 @@ const ConfigSchema = z.object({
 	S3_SECRET_ACCESS_KEY: z.string().default('syr-secret-key'),
 	S3_BUCKET: z.string().default('syr'),
 	S3_REGION: z.string().default('us-east-1'),
+	S3_PUBLIC_URL: z.string().optional(),
 	// Comma-separated origins for S3 bucket CORS (defaults to CORS_ORIGIN)
 	S3_CORS_ORIGINS: z.string().optional(),
 
@@ -211,6 +212,7 @@ function s3CorsOrigins(): string[] {
 
 export const s3 = {
 	endpoint: config.S3_ENDPOINT,
+	publicUrl: config.S3_PUBLIC_URL || config.S3_ENDPOINT,
 	accessKeyId: config.S3_ACCESS_KEY_ID,
 	secretAccessKey: config.S3_SECRET_ACCESS_KEY,
 	bucket: config.S3_BUCKET,
