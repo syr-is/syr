@@ -30,18 +30,11 @@ services:
       - WEED_MASTER_VOLUME_GROWTH_COPY_2=1
       - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "-q",
-          "--spider",
-          "http://localhost:9333/cluster/status",
-        ]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8333/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
     restart: unless-stopped
 
   # SYR Application (Production)
