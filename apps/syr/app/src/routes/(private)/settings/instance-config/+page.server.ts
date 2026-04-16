@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 		max_uses: number | null;
 		uses: number;
 		created_at: string;
+		reserved_username?: string;
 	}[] = [];
 	for (const entry of inviteCodeEntries) {
 		const raw = String(entry.id.id);
@@ -63,7 +64,8 @@ export const load: PageServerLoad = async ({ parent }) => {
 			created_by: parsed.data.created_by,
 			max_uses: parsed.data.max_uses,
 			uses: parsed.data.uses,
-			created_at: parsed.data.created_at
+			created_at: parsed.data.created_at,
+			...(parsed.data.reserved_username ? { reserved_username: parsed.data.reserved_username } : {})
 		});
 	}
 

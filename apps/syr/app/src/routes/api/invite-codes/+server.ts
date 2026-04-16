@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { kvService } from '$lib/services/kv';
 import { INVITE_CODE_TYPE } from '$lib/instance-config';
+import { userRepository } from '$lib/repositories/user.repository';
 import type { InviteCodeValue } from '@syr-is/types';
 
 function generateInviteCode(): string {
@@ -33,7 +34,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 			created_by: value.created_by,
 			max_uses: value.max_uses,
 			uses: value.uses,
-			created_at: value.created_at
+			created_at: value.created_at,
+			reserved_username: value.reserved_username ?? null
 		};
 	});
 
@@ -41,7 +43,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 };
 
 const CreateBodySchema = z.object({
-	max_uses: z.number().int().min(1).nullable().optional()
+	max_uses: z.number().int().min(1).nullable().optional(),
+	reserved_username: z
+		.string()
+		.min(1)
+		.max(30)
+		.regex(/^[a-zA-Z0-9_]+$/)
+		.optional()
 });
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -62,6 +70,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid request body' });
 	}
 
+	// If reserving a username, check it's available
+	if (body.reserved_username) {
+		const exists = await userRepository.usernameExists(body.reserved_username);
+		if (exists) {
+			throw error(409, {
+				code: 'CONFLICT',
+				message: `Username "${body.reserved_username}" is already taken`
+			});
+		}
+	}
+
 	const username = locals.user.username;
 	let code = generateInviteCode();
 
@@ -69,7 +88,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		created_by: username,
 		max_uses: body.max_uses ?? null,
 		uses: 0,
-		created_at: new Date().toISOString()
+		created_at: new Date().toISOString(),
+		...(body.reserved_username && { reserved_username: body.reserved_username })
 	};
 
 	// Create with one retry on collision

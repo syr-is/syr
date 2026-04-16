@@ -92,6 +92,12 @@ export class AuthController {
 			if (value.max_uses !== null && value.uses >= value.max_uses) {
 				throw new InvalidInviteCodeError('Invite code exhausted');
 			}
+			// Enforce reserved username if set
+			if (value.reserved_username && username !== value.reserved_username) {
+				throw new InvalidInviteCodeError(
+					`This invite code is reserved for username "${value.reserved_username}"`
+				);
+			}
 			// Atomically redeem the code
 			try {
 				await kvService.atomicIncrementField(

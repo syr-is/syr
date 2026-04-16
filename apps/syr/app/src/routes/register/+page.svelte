@@ -14,6 +14,51 @@
 	let { data }: { data: PageData } = $props();
 	const inviteOnly = $derived(data.registrationMode === 'invite_only');
 
+	// Invite code preview — prefill + lock username if reserved
+	let reservedUsername = $state<string | null>(null);
+	let inviteValid = $state<boolean | null>(null);
+	let checkingInvite = $state(false);
+
+	async function checkInviteCode(code: string) {
+		if (!code.trim()) {
+			reservedUsername = null;
+			inviteValid = null;
+			return;
+		}
+		checkingInvite = true;
+		try {
+			const res = await fetch(`/api/invite-codes/${encodeURIComponent(code.trim())}/preview`);
+			if (!res.ok) {
+				inviteValid = false;
+				reservedUsername = null;
+				return;
+			}
+			const json = await res.json();
+			inviteValid = json.data.valid;
+			reservedUsername = json.data.reserved_username ?? null;
+			if (reservedUsername) {
+				$formData.username = reservedUsername;
+			}
+		} catch {
+			inviteValid = null;
+			reservedUsername = null;
+		} finally {
+			checkingInvite = false;
+		}
+	}
+
+	// Check invite from URL param on load
+	const urlInvite = page.url.searchParams.get('invite');
+	if (urlInvite) {
+		// Will run once on mount
+		$effect(() => {
+			if (urlInvite && !checkingInvite && inviteValid === null) {
+				$formData.invite_code = urlInvite;
+				checkInviteCode(urlInvite);
+			}
+		});
+	}
+
 	const form = superForm(defaults(zod4(UserRegistrationSchema)), {
 		validators: zod4(UserRegistrationSchema),
 		SPA: true,
@@ -71,7 +116,17 @@
 									bind:value={$formData.invite_code}
 									placeholder="Enter your invite code"
 									required
+									onblur={() => checkInviteCode($formData.invite_code ?? '')}
 								/>
+								{#if checkingInvite}
+									<p class="text-xs text-muted-foreground">Checking invite code…</p>
+								{:else if inviteValid === false}
+									<p class="text-xs text-destructive">Invalid or exhausted invite code</p>
+								{:else if inviteValid && reservedUsername}
+									<p class="text-xs text-muted-foreground">
+										Username reserved: <strong>{reservedUsername}</strong>
+									</p>
+								{/if}
 							{/snippet}
 						</Form.Control>
 						<Form.Description>This instance requires an invite code to register.</Form.Description>
@@ -83,7 +138,12 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							<Form.Label>Username</Form.Label>
-							<Input {...props} bind:value={$formData.username} placeholder="alice" />
+							<Input
+								{...props}
+								bind:value={$formData.username}
+								placeholder="alice"
+								disabled={!!reservedUsername}
+							/>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />

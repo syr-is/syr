@@ -45,6 +45,7 @@
 	let overviewLoading = $state(false);
 
 	let newCodeMaxUses = $state<number | null>(null);
+	let newCodeReservedUsername = $state('');
 	let creatingCode = $state(false);
 	let deleteCodeDialogOpen = $state(false);
 	let codeToDelete = $state<string | null>(null);
@@ -293,17 +294,19 @@
 				toast.error('Max uses must be a positive number');
 				return;
 			}
+			const reserved = newCodeReservedUsername.trim() || undefined;
 			const res = await fetch('/api/invite-codes', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ max_uses: maxUses })
+				body: JSON.stringify({ max_uses: maxUses, reserved_username: reserved })
 			});
 			const json = await res.json();
 			if (!res.ok) {
-				toast.error(json.message ?? 'Failed to create invite code');
+				toast.error(json.error?.message ?? json.message ?? 'Failed to create invite code');
 				return;
 			}
 			newCodeMaxUses = null;
+			newCodeReservedUsername = '';
 			toast.success(`Invite code created: ${json.data.code}`);
 			await invalidateAll();
 		} catch (e) {
@@ -387,6 +390,18 @@
 							placeholder="Unlimited"
 						/>
 					</div>
+					<div class="flex min-w-0 flex-1 flex-col gap-1">
+						<label for="invite-reserved-username" class="text-sm font-medium"
+							>Reserved username (optional)</label
+						>
+						<Input
+							id="invite-reserved-username"
+							type="text"
+							bind:value={newCodeReservedUsername}
+							placeholder="Pre-assign a username"
+							maxlength={30}
+						/>
+					</div>
 					<Button onclick={createInviteCode} disabled={creatingCode}>
 						{creatingCode ? 'Creating…' : 'Create code'}
 					</Button>
@@ -412,6 +427,11 @@
 									<span class="text-xs text-muted-foreground">
 										{invite.uses}{invite.max_uses !== null ? `/${invite.max_uses}` : ''} uses &middot;
 										by {invite.created_by}
+										{#if invite.reserved_username}
+											&middot; reserved for <span class="font-medium text-foreground"
+												>{invite.reserved_username}</span
+											>
+										{/if}
 									</span>
 								</div>
 								<button

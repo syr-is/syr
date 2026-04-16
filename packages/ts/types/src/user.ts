@@ -125,7 +125,13 @@ export const InviteCodeValueSchema = z.object({
 	created_by: z.string(),
 	max_uses: z.number().int().min(1).nullable(),
 	uses: z.number().int().min(0),
-	created_at: z.string()
+	created_at: z.string(),
+	reserved_username: z
+		.string()
+		.min(1)
+		.max(30)
+		.regex(/^[a-zA-Z0-9_]+$/)
+		.optional()
 });
 
 export type InviteCodeValue = z.infer<typeof InviteCodeValueSchema>;
