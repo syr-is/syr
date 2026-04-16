@@ -10,7 +10,7 @@ services:
       - SURREAL_LOG=info
     healthcheck:
       test:
-        ["CMD-SHELL", "wget -q --spider http://localhost:8000/health || exit 1"]
+        ["CMD", "/surreal", "is-ready", "--endpoint", "http://localhost:8000"]
       interval: 10s
       timeout: 5s
       retries: 10
