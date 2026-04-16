@@ -58,6 +58,12 @@ RUN apk del wasm-pack \
 # node_modules/@syr-is/ui/dist will now contain the built files
 RUN pnpm install
 
+# Build args for Vite (baked into client bundle at build time)
+ARG PUBLIC_URL=https://app.syr.is
+ARG PUBLIC_REGISTRY_API_URL=
+ENV PUBLIC_URL=${PUBLIC_URL}
+ENV PUBLIC_REGISTRY_API_URL=${PUBLIC_REGISTRY_API_URL}
+
 # Build the app — workspace deps are now properly injected with dist/
 # Increase heap for Vite SSR build (OOMs at default 2GB on small VPS)
 RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter @syr-is/syr build
