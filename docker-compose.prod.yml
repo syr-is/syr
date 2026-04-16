@@ -2,6 +2,7 @@ services:
   # SurrealDB - Multi-model database (Production)
   surrealdb:
     image: surrealdb/surrealdb:v2.6
+    user: root
     command: start --log info --user root --pass ${SURREALDB_PASS} file:/data/syr.db
     volumes:
       - surrealdb-prod-data:/data
