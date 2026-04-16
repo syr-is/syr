@@ -58,7 +58,7 @@ export class UploadController {
 	 * Public files get direct URLs, private files get signed URLs on request
 	 */
 	private buildUrl(key: string): string {
-		return `${s3.endpoint}/${s3.bucket}/${key}`;
+		return `${s3.publicUrl}/${s3.bucket}/${key}`;
 	}
 
 	async getPutUrl(user: User, upload: UploadCreate) {
