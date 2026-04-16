@@ -94,6 +94,9 @@ COPY --from=builder --chown=sveltekit:nodejs /app/pruned/package.json ./
 COPY --from=builder --chown=sveltekit:nodejs /app/pruned/node_modules ./node_modules
 COPY --from=builder --chown=sveltekit:nodejs /app/apps/syr/app/build ./build
 
+# Copy WASM dist — pnpm deploy may not include build artifacts from workspace deps
+COPY --from=builder --chown=sveltekit:nodejs /app/packages/ts/crypto/dist ./node_modules/@syr-is/crypto/dist
+
 # Switch to non-root user
 USER sveltekit
 
