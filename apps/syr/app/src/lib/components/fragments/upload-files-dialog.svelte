@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '@syr-is/ui/dialog';
 	import { Button } from '@syr-is/ui/button';
+	import { Progress } from '@syr-is/ui/progress';
 	import { computeSha256Hex } from '@syr-is/utils';
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
@@ -20,8 +21,36 @@
 	} = $props();
 
 	let uploading = $state(false);
-	let uploadProgress = $state<string>('');
+	let uploadLabel = $state('');
+	let uploadPercent = $state(0);
 	let fileInputRef = $state<HTMLInputElement | null>(null);
+
+	function hexToBase64(hex: string): string {
+		return btoa(
+			hex
+				.match(/.{2}/g)!
+				.map((b: string) => String.fromCharCode(parseInt(b, 16)))
+				.join('')
+		);
+	}
+
+	function putWithProgress(url: string, file: File, checksumBase64: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open('PUT', url, true);
+			xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+			xhr.setRequestHeader('x-amz-checksum-sha256', checksumBase64);
+			xhr.upload.onprogress = (e) => {
+				if (e.lengthComputable) uploadPercent = Math.round((e.loaded / e.total) * 100);
+			};
+			xhr.onload = () => {
+				if (xhr.status >= 200 && xhr.status < 300) resolve();
+				else reject(new Error(`Upload failed: ${xhr.status}`));
+			};
+			xhr.onerror = () => reject(new Error('Upload network error'));
+			xhr.send(file);
+		});
+	}
 
 	async function handleFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -29,18 +58,17 @@
 		if (!files || files.length === 0) return;
 
 		uploading = true;
-		uploadProgress = 'Preparing upload...';
 
 		try {
 			for (let i = 0; i < files.length; i++) {
 				const file = files[i];
-				uploadProgress = `Uploading ${file.name} (${i + 1}/${files.length})...`;
+				uploadLabel = `Hashing ${file.name} (${i + 1}/${files.length})...`;
+				uploadPercent = 0;
 
-				// Calculate SHA256 hash
 				const arrayBuffer = await file.arrayBuffer();
 				const sha256 = await computeSha256Hex(arrayBuffer);
 
-				// Get signed URL
+				uploadLabel = `Requesting upload URL...`;
 				const response = await fetch('/api/uploads', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -60,29 +88,12 @@
 				const result = await response.json();
 				const { signedUrl, uploadDid, uploadLocalId } = result.data;
 
-				// Upload to S3
-				uploadProgress = `Uploading ${file.name} to storage...`;
-				const checksumBase64 = btoa(
-					sha256
-						.match(/.{2}/g)!
-						.map((b: string) => String.fromCharCode(parseInt(b, 16)))
-						.join('')
-				);
-				const uploadResponse = await fetch(signedUrl, {
-					method: 'PUT',
-					headers: {
-						'Content-Type': file.type || 'application/octet-stream',
-						'x-amz-checksum-sha256': checksumBase64
-					},
-					body: file
-				});
+				uploadLabel = `Uploading ${file.name} (${i + 1}/${files.length})...`;
+				uploadPercent = 0;
+				await putWithProgress(signedUrl, file, hexToBase64(sha256));
 
-				if (!uploadResponse.ok) {
-					throw new Error(`Failed to upload ${file.name}`);
-				}
-
-				// Complete upload
-				uploadProgress = `Finalizing ${file.name}...`;
+				uploadLabel = `Finalizing ${file.name}...`;
+				uploadPercent = 100;
 				const completeResponse = await fetch('/api/uploads', {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
@@ -102,7 +113,8 @@
 			toast.error(err instanceof Error ? err.message : 'Upload failed');
 		} finally {
 			uploading = false;
-			uploadProgress = '';
+			uploadLabel = '';
+			uploadPercent = 0;
 			if (input) input.value = '';
 		}
 	}
@@ -134,7 +146,11 @@
 			{#if uploading}
 				<div class="flex flex-col items-center justify-center gap-4 py-8">
 					<Loader2 class="h-8 w-8 animate-spin text-primary" />
-					<p class="text-sm text-muted-foreground">{uploadProgress}</p>
+					<p class="text-sm text-muted-foreground">{uploadLabel}</p>
+					<div class="w-full max-w-xs">
+						<Progress value={uploadPercent} max={100} />
+					</div>
+					<p class="text-xs text-muted-foreground">{uploadPercent}%</p>
 				</div>
 			{:else}
 				<div class="flex flex-col gap-4">
