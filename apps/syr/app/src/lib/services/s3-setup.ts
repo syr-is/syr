@@ -80,7 +80,13 @@ async function ensureBucketCors(): Promise<void> {
 						AllowedOrigins: origins,
 						AllowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
 						AllowedHeaders: ['*'],
-						ExposeHeaders: ['ETag', 'x-amz-version-id'],
+						ExposeHeaders: [
+							'ETag',
+							'x-amz-version-id',
+							'Content-Length',
+							'Content-Range',
+							'Accept-Ranges'
+						],
 						MaxAgeSeconds: 3600
 					}
 				]
