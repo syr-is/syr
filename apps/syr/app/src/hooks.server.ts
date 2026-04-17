@@ -240,7 +240,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		'Content-Security-Policy',
 		[
 			"default-src 'self'",
-			"img-src 'self' https: http: data:",
+			"img-src 'self' https: http: data: blob:",
 			"media-src 'self' https: http:",
 			"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
 			"worker-src 'self' blob:",
