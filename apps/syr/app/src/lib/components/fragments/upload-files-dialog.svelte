@@ -6,7 +6,6 @@
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
 	import { storageEvents } from '$lib/stores/storage-events.svelte';
-	import { pollUploadCompletion } from '$lib/utils/poll-upload';
 
 	let {
 		currentFolderId = null,
@@ -73,11 +72,16 @@
 					throw new Error(`Failed to upload ${file.name}`);
 				}
 
-				// Wait for server-side finalization (webhook from SeaweedFS)
+				// Complete upload
 				uploadProgress = `Finalizing ${file.name}...`;
-				const completed = await pollUploadCompletion(uploadDid, uploadLocalId);
-				if (!completed) {
-					throw new Error(`Failed to finalize upload for ${file.name}`);
+				const completeResponse = await fetch('/api/uploads', {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
+				});
+
+				if (!completeResponse.ok) {
+					throw new Error(`Failed to complete upload for ${file.name}`);
 				}
 			}
 

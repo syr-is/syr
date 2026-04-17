@@ -322,35 +322,19 @@ export class UploadController {
 			throw new Error('Upload has no storage key');
 		}
 
-		// Verify the file in S3 — retry on 404 (write-visibility lag)
+		// Verify the file in S3 matches what was requested
 		try {
-			const MAX_RETRIES = 3;
-			const RETRY_DELAY_MS = 1000;
-			let headResult;
+			console.log('[upload.complete] HeadObject:', { bucket: s3.bucket, key: pendingUpload.key });
+			const headCommand = new HeadObjectCommand({
+				Bucket: s3.bucket,
+				Key: pendingUpload.key
+			});
 
-			for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-				try {
-					headResult = await s3Service.client.send(
-						new HeadObjectCommand({ Bucket: s3.bucket, Key: pendingUpload.key })
-					);
-					break;
-				} catch (retryErr) {
-					const status = (retryErr as { $metadata?: { httpStatusCode?: number } }).$metadata
-						?.httpStatusCode;
-					if (status === 404 && attempt < MAX_RETRIES) {
-						console.log(
-							`[upload.complete] HeadObject 404 attempt ${attempt + 1}/${MAX_RETRIES}, retrying in ${RETRY_DELAY_MS}ms`
-						);
-						await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-						continue;
-					}
-					throw retryErr;
-				}
-			}
-
-			if (!headResult) {
-				throw new Error('File not found in storage after retries');
-			}
+			const headResult = await s3Service.client.send(headCommand);
+			console.log('[upload.complete] HeadObject OK:', {
+				status: headResult.$metadata.httpStatusCode,
+				size: headResult.ContentLength
+			});
 			const actualSize = headResult.ContentLength ?? 0;
 
 			// Verify file size matches
