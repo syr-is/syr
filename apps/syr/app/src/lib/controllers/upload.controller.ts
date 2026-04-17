@@ -324,12 +324,17 @@ export class UploadController {
 
 		// Verify the file in S3 matches what was requested
 		try {
+			console.log('[upload.complete] HeadObject:', { bucket: s3.bucket, key: pendingUpload.key });
 			const headCommand = new HeadObjectCommand({
 				Bucket: s3.bucket,
 				Key: pendingUpload.key
 			});
 
 			const headResult = await s3Service.client.send(headCommand);
+			console.log('[upload.complete] HeadObject OK:', {
+				status: headResult.$metadata.httpStatusCode,
+				size: headResult.ContentLength
+			});
 			const actualSize = headResult.ContentLength ?? 0;
 
 			// Verify file size matches
@@ -378,6 +383,11 @@ export class UploadController {
 
 			// If file doesn't exist in S3 (404), reject the completion
 			if (httpStatusCode === 404) {
+				console.error('[upload.complete] HeadObject 404:', {
+					bucket: s3.bucket,
+					key: pendingUpload.key,
+					err
+				});
 				throw new Error('File not found in storage. Please upload the file first.');
 			}
 
