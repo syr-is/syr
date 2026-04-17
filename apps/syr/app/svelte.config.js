@@ -9,6 +9,9 @@ const config = {
 	preprocess: [vitePreprocess(), mdsvex()],
 	kit: {
 		adapter: adapter(),
+		csrf: {
+			checkOrigin: false
+		},
 		alias: {
 			'@/*': './path/to/lib/*'
 		}
