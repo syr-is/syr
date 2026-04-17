@@ -57,9 +57,18 @@
 				const { signedUrl, uploadDid, uploadLocalId } = result.data;
 
 				uploadProgress = `Uploading ${file.name} to storage...`;
+				const checksumBase64 = btoa(
+					sha256
+						.match(/.{2}/g)!
+						.map((b: string) => String.fromCharCode(parseInt(b, 16)))
+						.join('')
+				);
 				const uploadResponse = await fetch(signedUrl, {
 					method: 'PUT',
-					headers: { 'Content-Type': file.type || 'application/octet-stream' },
+					headers: {
+						'Content-Type': file.type || 'application/octet-stream',
+						'x-amz-checksum-sha256': checksumBase64
+					},
 					body: file
 				});
 
