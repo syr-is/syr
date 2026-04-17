@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		path: '/',
 		httpOnly: true,
 		secure: config.NODE_ENV === 'production',
-		sameSite: 'strict',
+		sameSite: 'lax',
 		maxAge: 60 * 60 * 24 * 7 // 7 days
 	});
 
