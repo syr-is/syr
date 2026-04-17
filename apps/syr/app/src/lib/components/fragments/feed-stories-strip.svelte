@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { StoryBundle } from '$lib/types/feed-stories';
 	import StoryViewer from './story-viewer.svelte';
+	import { pollUploadCompletion } from '$lib/utils/poll-upload';
 
 	let {
 		bundles,
@@ -74,18 +75,9 @@
 				headers: { 'Content-Type': file.type || 'application/octet-stream' }
 			});
 			if (!put.ok) throw new Error('Upload to storage failed');
-			const patch = await fetch('/api/uploads', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					did: d.uploadDid,
-					local_id: d.uploadLocalId,
-					status: 'completed'
-				})
-			});
-			const patchBody = (await patch.json()) as { message?: string };
-			if (!patch.ok) {
-				throw new Error(patchBody.message ?? 'Could not finalize story');
+			const completed = await pollUploadCompletion(d.uploadDid, d.uploadLocalId);
+			if (!completed) {
+				throw new Error('Could not finalize story');
 			}
 			toast.success('Story published');
 			onRefresh();

@@ -5,6 +5,7 @@
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { Loader2 } from 'lucide-svelte';
+	import { pollUploadCompletion } from '$lib/utils/poll-upload';
 
 	let {
 		open = $bindable(false),
@@ -68,14 +69,9 @@
 				}
 
 				uploadProgress = `Finalizing ${file.name}...`;
-				const completeResponse = await fetch('/api/admin/media', {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
-				});
-
-				if (!completeResponse.ok) {
-					throw new Error(`Failed to complete upload for ${file.name}`);
+				const completed = await pollUploadCompletion(uploadDid, uploadLocalId);
+				if (!completed) {
+					throw new Error(`Failed to finalize upload for ${file.name}`);
 				}
 			}
 

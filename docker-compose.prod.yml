@@ -25,6 +25,7 @@ services:
       - "8333:8333"
     volumes:
       - seaweedfs-prod-data:/data
+      - ./s3/notification.toml:/etc/seaweedfs/notification.toml
     environment:
       - WEED_MASTER_VOLUME_GROWTH_COPY_1=2
       - WEED_MASTER_VOLUME_GROWTH_COPY_2=1

@@ -1,0 +1,10 @@
+[notification.webhook]
+enabled = true
+endpoint = "http://syr-prod:5173/api/webhooks/storage"
+event_types = ["create"]
+path_prefixes = ["/buckets/"]
+workers = 5
+buffer_size = 10000
+max_retries = 3
+backoff_seconds = 3
+timeout_seconds = 10
