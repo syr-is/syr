@@ -86,58 +86,63 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const payload = verifyAccessToken(token);
 
 			if (payload) {
-				// Check if session exists and is not expired
-				const session = await sessionRepository.findById(payload.sessionId);
+				const isPlatformToken = payload.sessionId.startsWith('platform:');
 				const user = await userRepository.findById(payload.userId);
-				let profile = await profileRepository.findByUserId(payload.userId);
 
 				if (!user) {
-					if (session) {
-						await sessionRepository.deleteByUserId(session.user_id);
+					if (!isPlatformToken) {
+						const session = await sessionRepository.findById(payload.sessionId);
+						if (session) {
+							await sessionRepository.deleteByUserId(session.user_id);
+						}
+						const profile = await profileRepository.findByUserId(payload.userId);
+						if (profile) {
+							await profileRepository.delete(profile.id);
+						}
+						event.cookies.delete('session', { path: '/' });
 					}
-					if (profile) {
-						await profileRepository.delete(profile.id);
-					}
-					event.cookies.delete('session', { path: '/' });
 					return resolve(event);
 				}
 
-				if (session && session.expires_at > new Date()) {
-					// Fetch user and profile data
+				// Platform delegation tokens skip session table lookup
+				const session = isPlatformToken
+					? null
+					: await sessionRepository.findById(payload.sessionId);
+				if (isPlatformToken || (session && session.expires_at > new Date())) {
+					let profile = await profileRepository.findByUserId(payload.userId);
 
 					if (!profile) {
 						profile = await profileRepository.createOrGetByUserId(payload.userId);
 					}
 
-					if (user) {
-						// Session is valid - attach user info to locals
-						event.locals.user = {
-							id: user.id.toString(),
-							username: user.username,
-							did: user.did,
-							role: user.role,
-							created_at: user.created_at,
-							updated_at: user.updated_at,
-							sessionId: payload.sessionId,
-							signing_warn_before_each_action: user.signing_warn_before_each_action ?? true,
-							signing_require_explicit_sign_button:
-								user.signing_require_explicit_sign_button ?? true,
-							profile: profile
-								? {
-										id: profile.id.toString(),
-										display_name: profile.display_name,
-										bio: profile.bio,
-										avatar_url: profile.avatar_url,
-										banner_url: profile.banner_url,
-										identity_host_url: profile.identity_host_url,
-										content_signature: profile.content_signature,
-										signed_payload_json: profile.signed_payload_json,
-										signing_device_public_key: profile.signing_device_public_key
-									}
-								: undefined
-						};
+					// Session is valid - attach user info to locals
+					event.locals.user = {
+						id: user.id.toString(),
+						username: user.username,
+						did: user.did,
+						role: user.role,
+						created_at: user.created_at,
+						updated_at: user.updated_at,
+						sessionId: payload.sessionId,
+						signing_warn_before_each_action: user.signing_warn_before_each_action ?? true,
+						signing_require_explicit_sign_button: user.signing_require_explicit_sign_button ?? true,
+						profile: profile
+							? {
+									id: profile.id.toString(),
+									display_name: profile.display_name,
+									bio: profile.bio,
+									avatar_url: profile.avatar_url,
+									banner_url: profile.banner_url,
+									identity_host_url: profile.identity_host_url,
+									content_signature: profile.content_signature,
+									signed_payload_json: profile.signed_payload_json,
+									signing_device_public_key: profile.signing_device_public_key
+								}
+							: undefined
+					};
 
-						// Update session last_active and backfill ip/ua if missing
+					// Update session last_active and backfill ip/ua if missing
+					if (session) {
 						try {
 							const ip =
 								event.getClientAddress?.() ||
