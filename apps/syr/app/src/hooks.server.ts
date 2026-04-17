@@ -74,8 +74,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Ensure database and S3 (bucket + CORS) are initialized (parallel for faster first request)
 	await Promise.all([initializeDatabase(), initializeS3()]);
 
-	// Check for session cookie
-	const token = event.cookies.get('session');
+	// Check for session cookie or Authorization: Bearer header (platform delegation)
+	const authHeader = event.request.headers.get('authorization');
+	const token =
+		event.cookies.get('session') ??
+		(authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
 
 	if (token) {
 		try {
