@@ -324,6 +324,12 @@ export class UploadController {
 
 		// Verify the file in S3 — retry on 404 (write-commit lag for large files)
 		try {
+			console.log('[upload.complete] HeadObject check:', {
+				endpoint: s3.endpoint,
+				bucket: s3.bucket,
+				key: pendingUpload.key,
+				size: pendingUpload.size
+			});
 			const fileSizeMb = (pendingUpload.size ?? 0) / (1024 * 1024);
 			const maxRetries = fileSizeMb > 100 ? 10 : fileSizeMb > 10 ? 5 : 3;
 			const retryDelayMs = fileSizeMb > 100 ? 2000 : 1000;
@@ -334,14 +340,23 @@ export class UploadController {
 					headResult = await s3Service.client.send(
 						new HeadObjectCommand({ Bucket: s3.bucket, Key: pendingUpload.key })
 					);
+					console.log('[upload.complete] HeadObject OK:', {
+						contentLength: headResult.ContentLength,
+						contentType: headResult.ContentType,
+						etag: headResult.ETag
+					});
 					break;
 				} catch (retryErr) {
-					const status = (retryErr as { $metadata?: { httpStatusCode?: number } }).$metadata
-						?.httpStatusCode;
+					const retryMeta = (retryErr as any)?.$metadata;
+					const status = retryMeta?.httpStatusCode;
+					console.log(`[upload.complete] HeadObject attempt ${attempt + 1}/${maxRetries + 1}:`, {
+						httpStatus: status,
+						errorName: (retryErr as any)?.name,
+						errorMessage: (retryErr as any)?.message,
+						requestId: retryMeta?.requestId,
+						attempts: retryMeta?.attempts
+					});
 					if (status === 404 && attempt < maxRetries) {
-						console.log(
-							`[upload.complete] HeadObject 404 attempt ${attempt + 1}/${maxRetries} (${Math.round(fileSizeMb)}MB), retrying in ${retryDelayMs}ms`
-						);
 						await new Promise((r) => setTimeout(r, retryDelayMs));
 						continue;
 					}
