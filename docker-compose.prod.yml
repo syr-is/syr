@@ -20,12 +20,22 @@ services:
   # SeaweedFS - S3-compatible distributed storage (Production)
   seaweedfs:
     image: chrislusf/seaweedfs:latest
-    command: server -s3 -dir=/data -s3.port=8333 -volume.max=100 -ip=0.0.0.0
+    entrypoint: ["/bin/sh", "/etc/seaweedfs/entrypoint.sh"]
+    command: >
+      server -s3 -dir=/data -s3.port=8333 -volume.max=100 -ip=0.0.0.0
+      -filer=true
+      -s3.config=/etc/seaweedfs/s3_config.json
+      -s3.allowedOrigins=${S3_CORS_ORIGINS:-https://app.syr.is}
     ports:
       - "8333:8333"
+      - "127.0.0.1:8888:8888"
     volumes:
       - seaweedfs-prod-data:/data
+      - ./s3/entrypoint.sh:/etc/seaweedfs/entrypoint.sh:ro
     environment:
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-syr-access-key}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET:-syr-storage}
       - WEED_MASTER_VOLUME_GROWTH_COPY_1=2
       - WEED_MASTER_VOLUME_GROWTH_COPY_2=1
       - WEED_MASTER_VOLUME_GROWTH_COPY_OTHER=0
