@@ -46,10 +46,11 @@ for i in $(seq 1 30); do
     fi
     sleep 1
 done
+sleep 2
 
-# Ensure the bucket exists (PUT is idempotent — 200 if already exists)
+# Create bucket via weed shell (busybox wget doesn't support PUT)
 echo "[entrypoint] Ensuring bucket '${BUCKET}' exists..."
-wget -q -O /dev/null --method=PUT "http://127.0.0.1:8333/${BUCKET}" 2>/dev/null || true
+echo "s3.bucket.create -name ${BUCKET}" | weed shell -master=localhost:9333 2>&1 || true
 
 # Hand off to the weed process
 wait $WEED_PID
