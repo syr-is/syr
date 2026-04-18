@@ -173,6 +173,19 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			.parse(body);
 		const uploadRecordId = recordIdFromDidAndLocal('upload', did, local_id);
 		const result = await uploadController.completeUpload(uploadRecordId);
+
+		// Background finalization — tell client to poll
+		if (result && 'status' in result && result.status === 'finalizing') {
+			return json(
+				{
+					status: 'finalizing',
+					message: result.message,
+					meta: { timestamp: new Date().toISOString() }
+				},
+				{ status: 202 }
+			);
+		}
+
 		return json({
 			status: 'success',
 			data: result,

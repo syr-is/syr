@@ -15,6 +15,7 @@ import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { s3Service } from '$lib/services/s3';
 import { s3 } from '$lib/config';
+import { uploadController } from '$lib/controllers/upload.controller';
 import { dbService } from '$lib/services/db';
 import type { Upload } from '@syr-is/types';
 
@@ -212,81 +213,16 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		if (!upload.key?.startsWith('instance-media/')) {
 			throw error(403, { code: 'FORBIDDEN', message: 'Not an instance media upload' });
 		}
-		if (upload.status === 'completed') {
-			return json({
-				status: 'success',
-				data: {
-					...upload,
-					id: upload.id.toString(),
-					did: extractDid(upload.id),
-					local_id: extractLocalId(upload.id)
-				}
-			});
-		}
-		if (upload.status !== 'pending') {
-			throw error(400, {
-				code: 'BAD_REQUEST',
-				message: 'Upload cannot be completed in its current state'
-			});
-		}
+		const result = await uploadController.completeUpload(uploadId);
 
-		// Verify file in S3
-		let headResult;
-		try {
-			headResult = await s3Service.client.send(
-				new HeadObjectCommand({ Bucket: s3.bucket, Key: upload.key })
+		if (result && 'status' in result && result.status === 'finalizing') {
+			return json(
+				{ status: 'finalizing', message: result.message, meta: { timestamp: new Date().toISOString() } },
+				{ status: 202 }
 			);
-		} catch (s3Err) {
-			const httpStatus = (s3Err as { $metadata?: { httpStatusCode?: number } }).$metadata
-				?.httpStatusCode;
-			if (httpStatus === 404) {
-				throw error(400, {
-					code: 'FILE_NOT_FOUND',
-					message: 'File not found in storage. Upload the file first.'
-				});
-			}
-			throw error(502, { code: 'STORAGE_ERROR', message: 'Could not verify file in storage' });
-		}
-		const actualSize = headResult.ContentLength ?? 0;
-		if (actualSize !== upload.size) {
-			await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key }));
-			await uploadRepository.delete(uploadId);
-			throw error(400, {
-				code: 'FILE_VERIFICATION_FAILED',
-				message: `Size mismatch: expected ${upload.size}, got ${actualSize}`
-			});
-		}
-		if (upload.sha256 && headResult.ChecksumSHA256) {
-			if (headResult.ChecksumSHA256 !== hexToBase64(upload.sha256)) {
-				await s3Service.client.send(
-					new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key })
-				);
-				await uploadRepository.delete(uploadId);
-				throw error(400, { code: 'FILE_VERIFICATION_FAILED', message: 'Checksum mismatch' });
-			}
 		}
 
-		const now = new Date();
-		const finalizing = await uploadRepository.casPendingToFinalizing(uploadId, now);
-		if (!finalizing) {
-			// Concurrent completion — check if already done
-			const latest = await uploadRepository.findById(uploadId);
-			if (latest?.status === 'completed') {
-				return json({
-					status: 'success',
-					data: {
-						...latest,
-						id: latest.id.toString(),
-						did: extractDid(latest.id),
-						local_id: extractLocalId(latest.id)
-					}
-				});
-			}
-			throw error(409, { code: 'CONFLICT', message: 'Upload state changed concurrently' });
-		}
-		const completed = await uploadRepository.casFinalizingToCompleted(uploadId, now);
-		if (!completed)
-			throw error(500, { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to complete upload' });
+		const completed = result;
 
 		return json({
 			status: 'success',

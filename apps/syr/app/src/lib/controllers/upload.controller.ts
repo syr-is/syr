@@ -299,152 +299,135 @@ export class UploadController {
 		};
 	}
 
-	async completeUpload(uploadId: string | RecordId) {
-		// Get the pending upload record
-		const pendingUpload = await uploadRepository.findById(uploadId);
-		if (!pendingUpload) {
-			throw new Error('Upload not found');
-		}
-
-		if (pendingUpload.status === 'completed') {
-			return pendingUpload;
-		}
-
-		if (pendingUpload.status === 'finalizing') {
-			throw new Error('Upload completion already in progress');
-		}
-
-		if (pendingUpload.status !== 'pending') {
-			throw new Error('Upload cannot be completed in its current state');
-		}
-
-		if (!pendingUpload.key) {
-			throw new Error('Upload has no storage key');
-		}
-
-		// Verify the file in S3 — retry on 404 (write-commit lag for large files)
-		try {
-			console.log('[upload.complete] HeadObject check:', {
-				endpoint: s3.endpoint,
-				bucket: s3.bucket,
-				key: pendingUpload.key,
-				size: pendingUpload.size
-			});
-			const fileSizeMb = (pendingUpload.size ?? 0) / (1024 * 1024);
-			const maxRetries = fileSizeMb > 100 ? 10 : fileSizeMb > 10 ? 5 : 3;
-			const retryDelayMs = fileSizeMb > 100 ? 2000 : 1000;
-			let headResult;
-
-			for (let attempt = 0; attempt <= maxRetries; attempt++) {
-				try {
-					headResult = await s3Service.client.send(
-						new HeadObjectCommand({ Bucket: s3.bucket, Key: pendingUpload.key })
-					);
-					console.log('[upload.complete] HeadObject OK:', {
-						contentLength: headResult.ContentLength,
-						contentType: headResult.ContentType,
-						etag: headResult.ETag
-					});
-					break;
-				} catch (retryErr) {
-					const retryMeta = (retryErr as any)?.$metadata;
-					const status = retryMeta?.httpStatusCode;
-					console.log(`[upload.complete] HeadObject attempt ${attempt + 1}/${maxRetries + 1}:`, {
-						httpStatus: status,
-						errorName: (retryErr as any)?.name,
-						errorMessage: (retryErr as any)?.message,
-						requestId: retryMeta?.requestId,
-						attempts: retryMeta?.attempts
-					});
-					if (status === 404 && attempt < maxRetries) {
-						await new Promise((r) => setTimeout(r, retryDelayMs));
-						continue;
-					}
-					throw retryErr;
-				}
-			}
-
-			if (!headResult) {
-				throw new Error('File not found in storage after retries');
-			}
-			const actualSize = headResult.ContentLength ?? 0;
-
-			// Verify file size matches
-			if (actualSize !== pendingUpload.size) {
-				// Delete the mismatched file from S3
-				const deleteCommand = new DeleteObjectCommand({
-					Bucket: s3.bucket,
-					Key: pendingUpload.key
-				});
-				await s3Service.client.send(deleteCommand);
-
-				// Delete the upload record
-				await uploadRepository.delete(uploadId);
-
-				throw new Error(
-					`File size mismatch: expected ${pendingUpload.size} bytes, got ${actualSize} bytes. Upload rejected.`
+	/**
+	 * Try HeadObject with a few quick retries. Returns the result or null if 404.
+	 * Throws on non-404 errors (403, network, etc).
+	 */
+	private async quickHeadObject(
+		bucket: string,
+		key: string,
+		maxAttempts = 3,
+		delayMs = 2000
+	): Promise<import('@aws-sdk/client-s3').HeadObjectCommandOutput | null> {
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			try {
+				const result = await s3Service.client.send(
+					new HeadObjectCommand({ Bucket: bucket, Key: key })
 				);
-			}
-
-			// Verify checksum if both client and S3 provide SHA256
-			// Note: Some S3-compatible storage (like SeaweedFS) may not return checksums in HEAD
-			// responses, so we only verify when S3 actually returns the checksum
-			if (pendingUpload.sha256 && headResult.ChecksumSHA256) {
-				const expectedBase64 = hexToBase64(pendingUpload.sha256);
-				if (headResult.ChecksumSHA256 !== expectedBase64) {
-					const deleteCommand = new DeleteObjectCommand({
-						Bucket: s3.bucket,
-						Key: pendingUpload.key
-					});
-					await s3Service.client.send(deleteCommand);
-
-					await uploadRepository.delete(uploadId);
-
-					throw new Error('File checksum mismatch. Upload rejected.');
+				return result;
+			} catch (err) {
+				const status = (err as any)?.$metadata?.httpStatusCode;
+				if (status === 404 && attempt < maxAttempts - 1) {
+					await new Promise((r) => setTimeout(r, delayMs));
+					continue;
 				}
-			}
-		} catch (err) {
-			// If the error is one we threw, re-throw it
-			if (err instanceof Error && err.message.includes('mismatch')) {
+				if (status === 404) return null;
 				throw err;
 			}
-
-			// Check for S3 HTTP status codes
-			const httpStatusCode = (err as { $metadata?: { httpStatusCode?: number } }).$metadata
-				?.httpStatusCode;
-
-			// If file doesn't exist in S3 (404), reject the completion
-			if (httpStatusCode === 404) {
-				console.error('[upload.complete] HeadObject 404:', {
-					bucket: s3.bucket,
-					key: pendingUpload.key,
-					err
-				});
-				throw new Error('File not found in storage. Please upload the file first.');
-			}
-
-			// If permission denied (403), surface it clearly
-			if (httpStatusCode === 403) {
-				throw new Error('Permission denied accessing file in storage.');
-			}
-
-			// Re-throw other errors
-			throw err;
 		}
+		return null;
+	}
 
-		const nowFinalize = new Date();
-		const finalizingRow = await uploadRepository.casPendingToFinalizing(uploadId, nowFinalize);
-		if (!finalizingRow) {
-			const latest = await uploadRepository.findById(uploadId);
-			if (latest?.status === 'completed') {
-				return latest;
-			}
-			if (latest?.status === 'finalizing') {
-				throw new Error('Upload completion already in progress');
-			}
-			throw new Error('Upload could not be marked finalizing');
+	/**
+	 * Verify HeadObject result against expected size/checksum. Throws on mismatch.
+	 */
+	private async verifyHeadObject(
+		headResult: import('@aws-sdk/client-s3').HeadObjectCommandOutput,
+		upload: any,
+		uploadId: string | RecordId
+	) {
+		const actualSize = headResult.ContentLength ?? 0;
+		if (actualSize !== upload.size) {
+			await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key }));
+			await uploadRepository.delete(uploadId);
+			throw new Error(
+				`File size mismatch: expected ${upload.size} bytes, got ${actualSize} bytes. Upload rejected.`
+			);
 		}
+		if (upload.sha256 && headResult.ChecksumSHA256) {
+			const expectedBase64 = hexToBase64(upload.sha256);
+			if (headResult.ChecksumSHA256 !== expectedBase64) {
+				await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key }));
+				await uploadRepository.delete(uploadId);
+				throw new Error('File checksum mismatch. Upload rejected.');
+			}
+		}
+	}
 
+	/**
+	 * Background finalization: retries HeadObject with exponential backoff
+	 * up to 5 minutes, then completes the upload when the file appears.
+	 */
+	private backgroundFinalize(uploadId: string | RecordId, upload: any) {
+		const MAX_DURATION_MS = 5 * 60 * 1000;
+		const INITIAL_DELAY_MS = 3000;
+		const MAX_DELAY_MS = 15000;
+		const startedAt = Date.now();
+
+		const run = async () => {
+			let delay = INITIAL_DELAY_MS;
+
+			while (Date.now() - startedAt < MAX_DURATION_MS) {
+				await new Promise((r) => setTimeout(r, delay));
+				delay = Math.min(delay * 1.5, MAX_DELAY_MS);
+
+				// Check if already completed/cancelled by another call
+				const current = await uploadRepository.findById(uploadId);
+				if (!current || current.status === 'completed') return;
+				if (current.status !== 'finalizing') return;
+
+				try {
+					const headResult = await s3Service.client.send(
+						new HeadObjectCommand({ Bucket: s3.bucket, Key: upload.key })
+					);
+					console.log('[upload.bg-finalize] HeadObject OK:', { key: upload.key });
+
+					// Verify size/checksum
+					await this.verifyHeadObject(headResult, upload, uploadId);
+
+					// Complete the upload (storage usage + status transition)
+					await this.finishUpload(uploadId, upload);
+					console.log('[upload.bg-finalize] Upload completed:', { key: upload.key });
+					return;
+				} catch (err) {
+					const status = (err as any)?.$metadata?.httpStatusCode;
+					if (status === 404) {
+						console.log('[upload.bg-finalize] Still 404, retrying...', {
+							key: upload.key,
+							elapsed: `${Math.round((Date.now() - startedAt) / 1000)}s`
+						});
+						continue;
+					}
+					// Non-404 error — revert to pending so user can retry
+					console.error('[upload.bg-finalize] Non-retryable error:', err);
+					await uploadRepository.updateWithUnset(
+						uploadId,
+						{ status: 'pending', updated_at: new Date() },
+						upload.is_story ? ['published_at'] : []
+					);
+					return;
+				}
+			}
+
+			// Timed out — revert to pending
+			console.error('[upload.bg-finalize] Timed out after 5 minutes:', { key: upload.key });
+			await uploadRepository.updateWithUnset(
+				uploadId,
+				{ status: 'pending', updated_at: new Date() },
+				upload.is_story ? ['published_at'] : []
+			);
+		};
+
+		run().catch((err) => {
+			console.error('[upload.bg-finalize] Unexpected error:', err);
+		});
+	}
+
+	/**
+	 * Final step: apply storage usage + mark completed. Extracted so
+	 * both the synchronous and background paths can call it.
+	 */
+	private async finishUpload(uploadId: string | RecordId, pendingUpload: any): Promise<any> {
 		let appliedBytes = 0;
 		const revertFinalizingToPending = async () => {
 			await uploadRepository.updateWithUnset(
@@ -486,9 +469,7 @@ export class UploadController {
 			const completedRow = await uploadRepository.casFinalizingToCompleted(uploadId, nowComplete);
 			if (!completedRow) {
 				const latest = await uploadRepository.findById(uploadId);
-				if (latest?.status === 'completed') {
-					return latest;
-				}
+				if (latest?.status === 'completed') return latest;
 				if (pendingUpload.size > 0 && appliedBytes > 0) {
 					await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
 				}
@@ -499,21 +480,77 @@ export class UploadController {
 			return completedRow;
 		} catch (err) {
 			const latest = await uploadRepository.findById(uploadId);
-			if (latest?.status === 'completed') {
-				return latest;
-			}
+			if (latest?.status === 'completed') return latest;
 			if (latest?.status === 'finalizing') {
 				if (pendingUpload.size > 0 && appliedBytes > 0) {
 					try {
 						await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
-					} catch {
-						// best-effort rollback of KV after an unexpected failure path
-					}
+					} catch { /* best-effort */ }
 				}
 				await revertFinalizingToPending();
 			}
 			throw err;
 		}
+	}
+
+	async completeUpload(uploadId: string | RecordId) {
+		const pendingUpload = await uploadRepository.findById(uploadId);
+		if (!pendingUpload) throw new Error('Upload not found');
+
+		if (pendingUpload.status === 'completed') return pendingUpload;
+
+		// If already finalizing in the background, tell the caller to poll
+		if (pendingUpload.status === 'finalizing') {
+			return { status: 'finalizing' as const, message: 'Upload is being finalized...' };
+		}
+
+		if (pendingUpload.status !== 'pending') {
+			throw new Error('Upload cannot be completed in its current state');
+		}
+		if (!pendingUpload.key) throw new Error('Upload has no storage key');
+
+		// Quick HeadObject check (3 attempts, 2s apart)
+		const headResult = await this.quickHeadObject(s3.bucket, pendingUpload.key, 3, 2000);
+
+		if (headResult) {
+			// File found immediately — verify and complete synchronously
+			await this.verifyHeadObject(headResult, pendingUpload, uploadId);
+
+			const nowFinalize = new Date();
+			const finalizingRow = await uploadRepository.casPendingToFinalizing(uploadId, nowFinalize);
+			if (!finalizingRow) {
+				const latest = await uploadRepository.findById(uploadId);
+				if (latest?.status === 'completed') return latest;
+				if (latest?.status === 'finalizing') {
+					return { status: 'finalizing' as const, message: 'Upload is being finalized...' };
+				}
+				throw new Error('Upload could not be marked finalizing');
+			}
+
+			return this.finishUpload(uploadId, pendingUpload);
+		}
+
+		// File not found yet — mark as finalizing, start background retry
+		console.log('[upload.complete] File not yet visible, starting background finalization:', {
+			key: pendingUpload.key
+		});
+
+		const finalizingRow = await uploadRepository.casPendingToFinalizing(
+			uploadId,
+			new Date()
+		);
+		if (!finalizingRow) {
+			const latest = await uploadRepository.findById(uploadId);
+			if (latest?.status === 'completed') return latest;
+			if (latest?.status === 'finalizing') {
+				return { status: 'finalizing' as const, message: 'Upload is being finalized...' };
+			}
+			throw new Error('Upload could not be marked finalizing');
+		}
+
+		this.backgroundFinalize(uploadId, pendingUpload);
+
+		return { status: 'finalizing' as const, message: 'Upload is being finalized...' };
 	}
 
 	async getUpload(id: RecordId | string): Promise<Upload | null> {

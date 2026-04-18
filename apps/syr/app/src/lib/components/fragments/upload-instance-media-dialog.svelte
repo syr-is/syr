@@ -92,11 +92,39 @@
 
 				uploadLabel = `Finalizing ${file.name}...`;
 				uploadPercent = 100;
-				const completeResponse = await fetch('/api/admin/media', {
+				const completeBody = JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' });
+				let completeResponse = await fetch('/api/admin/media', {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ did: uploadDid, local_id: uploadLocalId, status: 'completed' })
+					body: completeBody
 				});
+
+				if (completeResponse.status === 202) {
+					uploadLabel = `Finalizing ${file.name} (waiting for storage sync)...`;
+					const maxPollMs = 5 * 60 * 1000;
+					const started = Date.now();
+					let delay = 3000;
+
+					while (Date.now() - started < maxPollMs) {
+						await new Promise((r) => setTimeout(r, delay));
+						delay = Math.min(delay * 1.3, 10000);
+
+						completeResponse = await fetch('/api/admin/media', {
+							method: 'PATCH',
+							headers: { 'Content-Type': 'application/json' },
+							body: completeBody
+						});
+
+						if (completeResponse.status === 200) break;
+						if (completeResponse.status !== 202) {
+							throw new Error(`Failed to complete upload for ${file.name}`);
+						}
+					}
+
+					if (completeResponse.status === 202) {
+						throw new Error(`Upload finalization timed out for ${file.name}`);
+					}
+				}
 
 				if (!completeResponse.ok) {
 					throw new Error(`Failed to complete upload for ${file.name}`);
