@@ -36,7 +36,8 @@ const ConfigSchema = z.object({
 	// DID
 	// DID_WEB_DOMAIN: z.string().default('localhost:5173'),
 
-	// S3 / SeaweedFS
+	// S3 Object Storage
+	S3_PROVIDER: z.enum(['seaweedfs', 'minio']).default('seaweedfs'),
 	S3_ENDPOINT: z.url().default('http://localhost:8333'),
 	S3_ACCESS_KEY_ID: z.string().default('syr-access-key'),
 	S3_SECRET_ACCESS_KEY: z.string().default('syr-secret-key'),
@@ -211,6 +212,7 @@ function s3CorsOrigins(): string[] {
 }
 
 export const s3 = {
+	provider: config.S3_PROVIDER,
 	endpoint: config.S3_ENDPOINT,
 	publicUrl: config.S3_PUBLIC_URL || config.S3_ENDPOINT,
 	accessKeyId: config.S3_ACCESS_KEY_ID,

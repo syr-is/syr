@@ -13,6 +13,7 @@ import { s3 } from '$lib/config';
 import { uploadRepository } from '$lib/repositories/upload.repository';
 import { folderRepository } from '$lib/repositories/folder.repository';
 import { s3Service, s3PublicClient } from '$lib/services/s3';
+import { objectStore } from '$lib/services/object-store';
 import { fileStoreUsageController } from './file-store-usage.controller';
 import type { RecordId } from 'surrealdb';
 
@@ -509,11 +510,12 @@ export class UploadController {
 		}
 		if (!pendingUpload.key) throw new Error('Upload has no storage key');
 
-		// Quick HeadObject check (3 attempts, 2s apart)
-		const headResult = await this.quickHeadObject(s3.bucket, pendingUpload.key, 3, 2000);
+		// Quick HeadObject check — more attempts for stores with write-commit lag
+		const retryAttempts = objectStore.requiresFinalizationRetry ? 3 : 1;
+		const headResult = await this.quickHeadObject(s3.bucket, pendingUpload.key, retryAttempts, 2000);
 
 		if (headResult) {
-			// File found immediately — verify and complete synchronously
+			// File found — verify and complete synchronously
 			await this.verifyHeadObject(headResult, pendingUpload, uploadId);
 
 			const nowFinalize = new Date();
@@ -530,7 +532,12 @@ export class UploadController {
 			return this.finishUpload(uploadId, pendingUpload);
 		}
 
-		// File not found yet — mark as finalizing, start background retry
+		// File not found — strongly consistent stores fail immediately
+		if (!objectStore.requiresFinalizationRetry) {
+			throw new Error('File not found in storage. Please upload the file first.');
+		}
+
+		// Eventually consistent store (SeaweedFS) — background retry
 		console.log('[upload.complete] File not yet visible, starting background finalization:', {
 			key: pendingUpload.key
 		});
