@@ -5,6 +5,7 @@ import { userRepository } from '$lib/repositories/user.repository';
 import { uploadController } from '$lib/controllers/upload.controller';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { recordIdFromDidAndLocal } from '@syr-is/types';
+import { s3 } from '$lib/config';
 
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
 
@@ -78,7 +79,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	const updates = body.role === 'avatar' ? { avatar_url: upload.url } : { banner_url: upload.url };
+	// Derive URL from key + current S3_PUBLIC_URL config rather than the stored
+	// upload.url, which may have been written with a stale/wrong endpoint.
+	const currentUrl = upload.key
+		? `${s3.publicUrl}/${s3.bucket}/${upload.key}`
+		: upload.url;
+	const updates = body.role === 'avatar' ? { avatar_url: currentUrl } : { banner_url: currentUrl };
 
 	const profile = await profileRepository.mergeByUserId(user.id, updates);
 	return json({
