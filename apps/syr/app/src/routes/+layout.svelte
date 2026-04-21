@@ -7,7 +7,11 @@
 	import { userSessionStore } from '$lib/stores/user-session.svelte';
 	import { setIdentityStoreContext } from '$lib/stores/identity.svelte';
 	import { initCryptoWasm } from '@syr-is/crypto';
+	import UploadProgressToast from '$lib/components/fragments/upload-progress-toast.svelte';
+	import { getUploadQueue } from '$lib/stores/upload-queue.svelte';
 	import '../app.css';
+
+	const uploadQueue = getUploadQueue();
 
 	let { children, data } = $props();
 
@@ -31,6 +35,12 @@
 
 <ModeWatcher />
 <Toaster />
+
+{#if uploadQueue.list.length > 0}
+	<div class="fixed bottom-4 right-4 z-50">
+		<UploadProgressToast />
+	</div>
+{/if}
 
 <SidebarProvider bind:open class="h-full">
 	<AppSidebar />

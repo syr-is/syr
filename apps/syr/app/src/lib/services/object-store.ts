@@ -243,23 +243,54 @@ class MinIOStore extends ObjectStore {
 		return false;
 	}
 
+	/**
+	 * Sign and send a raw S3 request, bypassing the SDK's checksum middleware
+	 * that MinIO rejects with NotImplemented.
+	 */
+	private async rawS3Request(method: string, path: string, body?: string): Promise<globalThis.Response> {
+		const { SignatureV4 } = await import('@smithy/signature-v4');
+		const { Hash } = await import('@smithy/hash-node');
+		const { HttpRequest } = await import('@smithy/protocol-http');
+		const url = new URL(path, s3.endpoint);
+		const signer = new SignatureV4({
+			service: 's3',
+			region: s3.region,
+			credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
+			sha256: Hash.bind(null, 'sha256')
+		});
+		const headers: Record<string, string> = { host: url.host };
+		if (body) headers['content-type'] = 'application/json';
+		const request = new HttpRequest({
+			method,
+			hostname: url.hostname,
+			port: Number(url.port) || undefined,
+			path: url.pathname + url.search,
+			headers,
+			body
+		});
+		const signed = await signer.sign(request) as InstanceType<typeof HttpRequest>;
+		return globalThis.fetch(url, {
+			method,
+			headers: signed.headers as Record<string, string>,
+			body: body ?? undefined
+		});
+	}
+
 	async initialize(): Promise<void> {
-		try {
-			await this.ensureBucket(this._client, s3.bucket, s3.region);
-		} catch (err) {
-			const code = (err as any)?.Code || (err as any)?.name;
-			if (code === 'NotImplemented') {
-				console.warn('MinIO: ensureBucket skipped (SDK checksum headers not supported). Ensure bucket exists via mc CLI or MinIO console.');
+		// Ensure bucket exists — raw request to avoid SDK checksum headers
+		const headRes = await this.rawS3Request('HEAD', `/${s3.bucket}`);
+		if (headRes.status === 404) {
+			const createRes = await this.rawS3Request('PUT', `/${s3.bucket}`);
+			if (createRes.ok || createRes.status === 409) {
+				console.log(`S3 bucket "${s3.bucket}" created`);
 			} else {
-				throw err;
+				console.warn(`MinIO: CreateBucket returned ${createRes.status}`);
 			}
 		}
 
 		// MinIO handles CORS natively via MINIO_API_CORS_ALLOW_ORIGIN env var.
 
-		// Set bucket policy for anonymous read on public paths via direct HTTP.
-		// The AWS SDK's PutBucketPolicyCommand sends checksum headers MinIO rejects,
-		// so we use the S3 REST API directly to bypass the middleware.
+		// Set bucket policy for anonymous read on public paths — raw request
 		const policy = JSON.stringify({
 			Version: '2012-10-17',
 			Statement: [
@@ -271,28 +302,18 @@ class MinIOStore extends ObjectStore {
 					Resource: [
 						`arn:aws:s3:::${s3.bucket}/uploads/did:syr:*/public/*`,
 						`arn:aws:s3:::${s3.bucket}/uploads/did:syr:*/*/public/*`,
-						`arn:aws:s3:::${s3.bucket}/instance-media/*/public/*`
+						`arn:aws:s3:::${s3.bucket}/instance-media/*/public/*`,
+						`arn:aws:s3:::${s3.bucket}/instance-media/public/*`
 					]
 				}
 			]
 		});
-
-		try {
-			await this._client.send(
-				new PutBucketPolicyCommand({ Bucket: s3.bucket, Policy: policy })
-			);
+		const policyRes = await this.rawS3Request('PUT', `/${s3.bucket}?policy`, policy);
+		if (policyRes.ok) {
 			console.log(`MinIO: public read policy applied to bucket "${s3.bucket}"`);
-		} catch (err) {
-			const code = (err as any)?.Code || (err as any)?.name;
-			if (code === 'NotImplemented') {
-				// AWS SDK v3 sends checksum headers MinIO doesn't support on policy ops.
-				// Set policy via mc instead:
-				//   mc alias set syr http://minio:9000 ACCESS_KEY SECRET_KEY
-				//   mc anonymous set-json policy.json syr/BUCKET
-				console.warn(`MinIO: PutBucketPolicy not supported via SDK (checksum headers). Set policy via mc CLI.`);
-			} else {
-				throw err;
-			}
+		} else {
+			const text = await policyRes.text();
+			console.warn(`MinIO: PutBucketPolicy returned ${policyRes.status}: ${text}`);
 		}
 	}
 }

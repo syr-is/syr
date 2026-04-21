@@ -5,7 +5,6 @@
       "actions": [
         "Read:syr/uploads/did:syr:*/public/*",
         "Read:syr/instance-media/*/public/*",
-        "Read:syr/instance-media/public/*",
         "Read:kodski/uploads/did:syr:*/public/*"
       ]
     },
