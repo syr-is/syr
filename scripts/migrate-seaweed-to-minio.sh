@@ -21,6 +21,7 @@ ACCESS_KEY="${S3_ACCESS_KEY_ID:-syr-access-key}"
 SECRET_KEY="${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set}"
 BUCKET="${S3_BUCKET:-syr-storage}"
 COMPOSE_FILE="docker-compose.prod.yml"
+SEAWEED_VOLUME="${SEAWEED_VOLUME:-syr-app-uigl84_seaweedfs-prod-data}"
 NETWORK=""
 
 echo "=== SeaweedFS → MinIO Migration ==="
@@ -48,7 +49,7 @@ docker rm -f syr-seaweed-migration 2>/dev/null || true
 docker run -d \
   --name syr-seaweed-migration \
   --network "$NETWORK" \
-  -v syr_seaweedfs-prod-data:/data \
+  -v "${SEAWEED_VOLUME:-syr-app-uigl84_seaweedfs-prod-data}":/data \
   -v "$(pwd)/s3/entrypoint.sh:/etc/seaweedfs/entrypoint.sh:ro" \
   -e "S3_ACCESS_KEY_ID=$ACCESS_KEY" \
   -e "S3_SECRET_ACCESS_KEY=$SECRET_KEY" \
