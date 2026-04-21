@@ -48,12 +48,10 @@ services:
   #   restart: unless-stopped
 
   # MinIO - S3-compatible object storage (Production)
+  # Traefik routes s3.syr.is → container port 9000 internally. No host ports needed.
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
-    ports:
-      - "8333:9000"
-      - "127.0.0.1:9001:9001"
     environment:
       - MINIO_ROOT_USER=${S3_ACCESS_KEY_ID:-syr-access-key}
       - MINIO_ROOT_PASSWORD=${S3_SECRET_ACCESS_KEY}
