@@ -51,8 +51,10 @@ docker run -d \
 
 echo "Waiting for SeaweedFS S3 API..."
 for i in $(seq 1 60); do
-  # Check the S3 port directly, not just master
-  if docker exec syr-seaweed-migration sh -c "wget -q --spider http://127.0.0.1:8333/ 2>/dev/null || [ \$? -eq 8 ]" 2>/dev/null; then
+  # wget returns exit 8 for server error responses (403/404) — that still means S3 is listening
+  if docker exec syr-seaweed-migration wget -q -O /dev/null http://127.0.0.1:9333/cluster/status 2>/dev/null; then
+    echo "SeaweedFS master is ready, waiting for S3..."
+    sleep 5
     echo "SeaweedFS S3 is ready."
     break
   fi
@@ -63,8 +65,6 @@ for i in $(seq 1 60); do
   fi
   sleep 1
 done
-# Extra settle time for filer
-sleep 3
 
 # 2. Ensure MinIO is running on the same network
 echo ""
