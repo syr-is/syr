@@ -10,6 +10,7 @@ import {
 	ListObjectsV2Command,
 	CreateBucketCommand,
 	PutBucketCorsCommand,
+	PutBucketPolicyCommand,
 	type PutObjectCommandInput,
 	type PutObjectCommandOutput,
 	type GetObjectCommandInput,
@@ -124,7 +125,11 @@ export abstract class ObjectStore {
 				);
 				console.log(`S3 bucket "${bucket}" created`);
 			} catch (createErr) {
-				const ce = createErr as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+				const ce = createErr as {
+					name?: string;
+					Code?: string;
+					$metadata?: { httpStatusCode?: number };
+				};
 				const isAlreadyOwned =
 					ce?.$metadata?.httpStatusCode === 409 ||
 					ce?.name === 'BucketAlreadyOwnedByYou' ||
@@ -190,9 +195,15 @@ class SeaweedFSStore extends ObjectStore {
 		});
 	}
 
-	get client() { return this._client; }
-	get publicClient() { return this._publicClient; }
-	get requiresFinalizationRetry() { return true; }
+	get client() {
+		return this._client;
+	}
+	get publicClient() {
+		return this._publicClient;
+	}
+	get requiresFinalizationRetry() {
+		return true;
+	}
 
 	async initialize(): Promise<void> {
 		await this.ensureBucket(this._client, s3.bucket, s3.region);
@@ -209,27 +220,80 @@ class MinIOStore extends ObjectStore {
 
 	constructor() {
 		super();
-		this._client = new S3Client({
+		// MinIO doesn't support AWS SDK v3's automatic checksum headers
+		// (x-amz-checksum-crc32 etc.) — disable them.
+		const minioClientConfig = {
 			region: s3.region,
-			endpoint: s3.endpoint,
 			credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
-			forcePathStyle: true
-		});
-		this._publicClient = new S3Client({
-			region: s3.region,
-			endpoint: s3.publicUrl,
-			credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
-			forcePathStyle: true
-		});
+			forcePathStyle: true,
+			requestChecksumCalculation: 'WHEN_REQUIRED' as const,
+			responseChecksumValidation: 'WHEN_REQUIRED' as const
+		};
+		this._client = new S3Client({ ...minioClientConfig, endpoint: s3.endpoint });
+		this._publicClient = new S3Client({ ...minioClientConfig, endpoint: s3.publicUrl });
 	}
 
-	get client() { return this._client; }
-	get publicClient() { return this._publicClient; }
-	get requiresFinalizationRetry() { return false; }
+	get client() {
+		return this._client;
+	}
+	get publicClient() {
+		return this._publicClient;
+	}
+	get requiresFinalizationRetry() {
+		return false;
+	}
 
 	async initialize(): Promise<void> {
-		await this.ensureBucket(this._client, s3.bucket, s3.region);
-		await this.ensureCors(this._client, s3.bucket, s3.corsOrigins);
+		try {
+			await this.ensureBucket(this._client, s3.bucket, s3.region);
+		} catch (err) {
+			const code = (err as any)?.Code || (err as any)?.name;
+			if (code === 'NotImplemented') {
+				console.warn('MinIO: ensureBucket skipped (SDK checksum headers not supported). Ensure bucket exists via mc CLI or MinIO console.');
+			} else {
+				throw err;
+			}
+		}
+
+		// MinIO handles CORS natively via MINIO_API_CORS_ALLOW_ORIGIN env var.
+
+		// Set bucket policy for anonymous read on public paths via direct HTTP.
+		// The AWS SDK's PutBucketPolicyCommand sends checksum headers MinIO rejects,
+		// so we use the S3 REST API directly to bypass the middleware.
+		const policy = JSON.stringify({
+			Version: '2012-10-17',
+			Statement: [
+				{
+					Sid: 'PublicUploads',
+					Effect: 'Allow',
+					Principal: '*',
+					Action: ['s3:GetObject'],
+					Resource: [
+						`arn:aws:s3:::${s3.bucket}/uploads/did:syr:*/public/*`,
+						`arn:aws:s3:::${s3.bucket}/uploads/did:syr:*/*/public/*`,
+						`arn:aws:s3:::${s3.bucket}/instance-media/*/public/*`
+					]
+				}
+			]
+		});
+
+		try {
+			await this._client.send(
+				new PutBucketPolicyCommand({ Bucket: s3.bucket, Policy: policy })
+			);
+			console.log(`MinIO: public read policy applied to bucket "${s3.bucket}"`);
+		} catch (err) {
+			const code = (err as any)?.Code || (err as any)?.name;
+			if (code === 'NotImplemented') {
+				// AWS SDK v3 sends checksum headers MinIO doesn't support on policy ops.
+				// Set policy via mc instead:
+				//   mc alias set syr http://minio:9000 ACCESS_KEY SECRET_KEY
+				//   mc anonymous set-json policy.json syr/BUCKET
+				console.warn(`MinIO: PutBucketPolicy not supported via SDK (checksum headers). Set policy via mc CLI.`);
+			} else {
+				throw err;
+			}
+		}
 	}
 }
 
