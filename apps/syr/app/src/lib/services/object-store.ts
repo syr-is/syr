@@ -251,14 +251,24 @@ class MinIOStore extends ObjectStore {
 		const { SignatureV4 } = await import('@smithy/signature-v4');
 		const { Hash } = await import('@smithy/hash-node');
 		const { HttpRequest } = await import('@smithy/protocol-http');
+		const crypto = await import('crypto');
 		const url = new URL(path, s3.endpoint);
+
+		// S3 requires x-amz-content-sha256 header with the hash of the body
+		const bodyHash = body
+			? crypto.createHash('sha256').update(body).digest('hex')
+			: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // empty string hash
+
 		const signer = new SignatureV4({
 			service: 's3',
 			region: s3.region,
 			credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
 			sha256: Hash.bind(null, 'sha256')
 		});
-		const headers: Record<string, string> = { host: url.host };
+		const headers: Record<string, string> = {
+			host: url.host,
+			'x-amz-content-sha256': bodyHash
+		};
 		if (body) headers['content-type'] = 'application/json';
 		const request = new HttpRequest({
 			method,
