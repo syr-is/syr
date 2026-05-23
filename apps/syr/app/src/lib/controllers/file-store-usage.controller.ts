@@ -121,32 +121,10 @@ export class FileStoreUsageController {
 	 */
 	private async calculateUsageFromUploads(userId: RecordId | string): Promise<number> {
 		const recordId = this.toRecordId(userId);
-
-		// Fetch all completed uploads for the user
-		// We need to paginate through all uploads to get the complete total
-		let totalBytes = 0;
-		let offset = 0;
-		const limit = 100;
-		let hasMore = true;
-
-		while (hasMore) {
-			const { data: uploads, total } = await uploadRepository.findMany({
-				filters: { owner_id: recordId, status: 'completed' },
-				limit,
-				offset
-			});
-
-			for (const upload of uploads) {
-				if (upload.size > 0) {
-					totalBytes += upload.size;
-				}
-			}
-
-			offset += limit;
-			hasMore = offset < total;
-		}
-
-		return totalBytes;
+		// Sum sizes in the database (idx_upload_owner) instead of fetching and
+		// summing every upload in app memory.
+		const total = await uploadRepository.sumCompletedSizeByOwner(recordId);
+		return Math.max(0, total);
 	}
 
 	/**

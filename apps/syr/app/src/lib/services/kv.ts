@@ -82,6 +82,20 @@ export class KvService {
 	}
 
 	/**
+	 * Get entries of a specific type with offset pagination and a total count.
+	 * @param type - The category/type to retrieve
+	 * @param limit - Maximum number of entries to return
+	 * @param offset - Number of entries to skip
+	 */
+	async getByTypePage(
+		type: string,
+		limit = 20,
+		offset = 0
+	): Promise<{ data: KvEntry[]; total: number }> {
+		return this.repository.findByTypePage(type, limit, offset);
+	}
+
+	/**
 	 * Find entries by type and a nested field in the value.
 	 * Uses database-level filtering for efficient lookup instead of in-memory scan.
 	 * @param type - The category/type to query

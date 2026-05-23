@@ -107,6 +107,34 @@ export class UserRepository extends BaseRepository<User> {
 	}
 
 	/**
+	 * Count all users (cheap aggregate, no row fetch).
+	 */
+	async count(): Promise<number> {
+		const result = await this.db.query<[{ total: number }[]]>(
+			`SELECT count() AS total FROM ${this.tableName} GROUP ALL`
+		);
+		return result[0]?.[0]?.total ?? 0;
+	}
+
+	/**
+	 * Map a set of user record-id strings to usernames in one query.
+	 * Used to attach usernames to a page of results without fetching all users.
+	 */
+	async findUsernamesByIds(ids: string[]): Promise<Map<string, string>> {
+		const map = new Map<string, string>();
+		if (ids.length === 0) return map;
+		const recordIds = ids.map((id) => stringToRecordId.decode(id));
+		const result = await this.db.query<[{ id: RecordId; username: string }[]]>(
+			`SELECT id, username FROM ${this.tableName} WHERE id IN $ids`,
+			{ ids: recordIds }
+		);
+		for (const row of result[0] ?? []) {
+			map.set(row.id.toString(), row.username);
+		}
+		return map;
+	}
+
+	/**
 	 * Update username and set username_last_updated to now.
 	 * Caller must validate cooldown and uniqueness.
 	 */

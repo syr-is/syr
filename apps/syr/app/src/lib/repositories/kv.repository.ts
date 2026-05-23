@@ -169,6 +169,32 @@ export class KvRepository {
 	}
 
 	/**
+	 * Find KV entries by type with offset pagination and a total count.
+	 * Pairs with the idx_kv_type index for efficient lookups (no full scan).
+	 */
+	async findByTypePage(
+		type: string,
+		limit = 20,
+		offset = 0
+	): Promise<{ data: KvEntry[]; total: number }> {
+		const [dataResult, countResult] = await Promise.all([
+			this.db.query<[KvEntry[]]>(
+				`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) LIMIT $limit START $offset`,
+				{ type, limit, offset }
+			),
+			this.db.query<[{ total: number }[]]>(
+				`SELECT count() AS total FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) GROUP ALL`,
+				{ type }
+			)
+		]);
+
+		const rawData = dataResult[0] ?? [];
+		const data = rawData.map((record: unknown) => this.validate(record));
+		const total = countResult[0]?.[0]?.total ?? 0;
+		return { data, total };
+	}
+
+	/**
 	 * Find KV entries by type and a nested field in value.
 	 * Pushes the filter to the database to reduce network transfer; still requires scanning
 	 * matching records (O(K) across records with kv_type, or O(N) if kv_type is unindexed).
