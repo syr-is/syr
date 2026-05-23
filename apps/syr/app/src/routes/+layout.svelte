@@ -37,7 +37,7 @@
 <Toaster />
 
 {#if uploadQueue.list.length > 0}
-	<div class="fixed bottom-4 right-4 z-50">
+	<div class="fixed right-4 bottom-4 z-50">
 		<UploadProgressToast />
 	</div>
 {/if}

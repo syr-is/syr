@@ -119,13 +119,21 @@
 			{#each queue.list as upload (upload.id)}
 				{@const icon = statusIcon(upload.status)}
 				{@const label = statusLabel(upload.status)}
-				<div class="flex items-center gap-2 px-3 py-1.5 {upload.status === 'failed' ? 'bg-destructive/5' : ''}">
+				<div
+					class="flex items-center gap-2 px-3 py-1.5 {upload.status === 'failed'
+						? 'bg-destructive/5'
+						: ''}"
+				>
 					<!-- Status indicator -->
 					<div class="flex h-4 w-4 shrink-0 items-center justify-center">
 						{#if icon === 'spinner'}
 							<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 						{:else if icon === 'progress'}
-							<div class="h-3.5 w-3.5 rounded-full border-2 border-primary" style="background: conic-gradient(var(--color-primary) {upload.progress * 360}deg, transparent 0)"></div>
+							<div
+								class="h-3.5 w-3.5 rounded-full border-2 border-primary"
+								style="background: conic-gradient(var(--color-primary) {upload.progress *
+									360}deg, transparent 0)"
+							></div>
 						{:else if icon === 'check'}
 							<Check class="h-3.5 w-3.5 text-green-500" />
 						{:else if icon === 'error'}
@@ -139,7 +147,11 @@
 
 					<!-- Filename + progress -->
 					<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-						<span class="truncate text-xs {upload.status === 'completed' ? 'text-muted-foreground' : 'text-foreground'}">
+						<span
+							class="truncate text-xs {upload.status === 'completed'
+								? 'text-muted-foreground'
+								: 'text-foreground'}"
+						>
 							{upload.filename}
 						</span>
 						{#if upload.status === 'uploading'}
@@ -157,7 +169,9 @@
 					<!-- Percent or action -->
 					<div class="flex shrink-0 items-center">
 						{#if upload.status === 'uploading'}
-							<span class="mr-1 text-[10px] text-muted-foreground">{Math.round(upload.progress * 100)}%</span>
+							<span class="mr-1 text-[10px] text-muted-foreground"
+								>{Math.round(upload.progress * 100)}%</span
+							>
 						{/if}
 						{#if isActive(upload)}
 							<button

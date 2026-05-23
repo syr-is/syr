@@ -81,9 +81,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	// Derive URL from key + current S3_PUBLIC_URL config rather than the stored
 	// upload.url, which may have been written with a stale/wrong endpoint.
-	const currentUrl = upload.key
-		? `${s3.publicUrl}/${s3.bucket}/${upload.key}`
-		: upload.url;
+	const currentUrl = upload.key ? `${s3.publicUrl}/${s3.bucket}/${upload.key}` : upload.url;
 	const updates = body.role === 'avatar' ? { avatar_url: currentUrl } : { banner_url: currentUrl };
 
 	const profile = await profileRepository.mergeByUserId(user.id, updates);

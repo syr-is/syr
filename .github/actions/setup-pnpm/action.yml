@@ -1,17 +1,17 @@
-name: 'Setup pnpm'
-description: 'Install Node.js, pnpm, cache store, and run pnpm install'
+name: "Setup pnpm"
+description: "Install Node.js, pnpm, cache store, and run pnpm install"
 inputs:
   node-version:
-    description: 'Node.js version'
+    description: "Node.js version"
     required: false
-    default: '20'
+    default: "20"
   pnpm-version:
-    description: 'pnpm version'
+    description: "pnpm version"
     required: false
-    default: '10.29.3'
+    default: "10.29.3"
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - uses: actions/setup-node@v4
       with:
@@ -29,3 +29,16 @@ runs:
         restore-keys: ${{ runner.os }}-pnpm-store-
     - run: pnpm install --frozen-lockfile
       shell: bash
+    # @syr-is/crypto's build invokes `wasm-pack build`. Turbo pulls
+    # that build into the dependency graph of nearly every TS task
+    # (lint, check, build, test all transitively rely on it), so the
+    # runner needs the wasm toolchain. Without it, any branch that
+    # misses the remote turbo cache fails with
+    # `sh: 1: wasm-pack: not found`. Baking it into the shared
+    # composite keeps individual workflow files thin.
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        version: "latest"

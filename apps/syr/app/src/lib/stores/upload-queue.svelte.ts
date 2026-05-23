@@ -93,7 +93,6 @@ async function processEntry(entry: InternalEntry) {
 	try {
 		// 1. Hash
 		entry.status = 'hashing';
-		entries = entries;
 		if (signal.aborted) throw new Error('Upload cancelled');
 		const buf = await file.arrayBuffer();
 		if (signal.aborted) throw new Error('Upload cancelled');
@@ -102,7 +101,6 @@ async function processEntry(entry: InternalEntry) {
 
 		// 2. Presign
 		entry.status = 'presigning';
-		entries = entries;
 		const presignRes = await fetch(api, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -122,16 +120,19 @@ async function processEntry(entry: InternalEntry) {
 		// 3. PUT with progress
 		entry.status = 'uploading';
 		entry.progress = 0;
-		entries = entries;
-		await putWithProgress(signedUrl, file, signal, (p) => {
-			entry.progress = p;
-			entries = entries;
-		}, checksumBase64);
+		await putWithProgress(
+			signedUrl,
+			file,
+			signal,
+			(p) => {
+				entry.progress = p;
+			},
+			checksumBase64
+		);
 
 		// 4. Finalize + poll
 		entry.status = 'finalizing';
 		entry.progress = 1;
-		entries = entries;
 		const completeBody = JSON.stringify({
 			did: uploadDid,
 			local_id: uploadLocalId,
@@ -168,7 +169,6 @@ async function processEntry(entry: InternalEntry) {
 		if (!completeRes.ok) throw new Error(`Failed to complete upload for ${file.name}`);
 
 		entry.status = 'completed';
-		entries = entries;
 		storageEvents.refresh();
 		opts.onFileCompleted?.();
 	} catch (err) {
@@ -178,7 +178,6 @@ async function processEntry(entry: InternalEntry) {
 			entry.status = 'failed';
 			entry.error = err instanceof Error ? err.message : 'Unknown error';
 		}
-		entries = entries;
 	} finally {
 		activeCount--;
 		drainQueue();
@@ -236,7 +235,6 @@ export function cancelUpload(id: string) {
 	if (!entry) return;
 	entry.status = 'cancelled';
 	entry.abort.abort();
-	entries = entries;
 }
 
 export function dismissUpload(id: string) {
@@ -245,9 +243,6 @@ export function dismissUpload(id: string) {
 
 export function dismissAll() {
 	entries = entries.filter(
-		(e) =>
-			e.status !== 'completed' &&
-			e.status !== 'failed' &&
-			e.status !== 'cancelled'
+		(e) => e.status !== 'completed' && e.status !== 'failed' && e.status !== 'cancelled'
 	);
 }

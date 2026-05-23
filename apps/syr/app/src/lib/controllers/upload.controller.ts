@@ -317,7 +317,8 @@ export class UploadController {
 				);
 				return result;
 			} catch (err) {
-				const status = (err as any)?.$metadata?.httpStatusCode;
+				const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+					?.httpStatusCode;
 				if (status === 404 && attempt < maxAttempts - 1) {
 					await new Promise((r) => setTimeout(r, delayMs));
 					continue;
@@ -334,7 +335,7 @@ export class UploadController {
 	 */
 	private async verifyHeadObject(
 		headResult: import('@aws-sdk/client-s3').HeadObjectCommandOutput,
-		upload: any,
+		upload: Upload,
 		uploadId: string | RecordId
 	) {
 		const actualSize = headResult.ContentLength ?? 0;
@@ -348,7 +349,9 @@ export class UploadController {
 		if (upload.sha256 && headResult.ChecksumSHA256) {
 			const expectedBase64 = hexToBase64(upload.sha256);
 			if (headResult.ChecksumSHA256 !== expectedBase64) {
-				await s3Service.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key }));
+				await s3Service.client.send(
+					new DeleteObjectCommand({ Bucket: s3.bucket, Key: upload.key })
+				);
 				await uploadRepository.delete(uploadId);
 				throw new Error('File checksum mismatch. Upload rejected.');
 			}
@@ -359,7 +362,7 @@ export class UploadController {
 	 * Background finalization: retries HeadObject with exponential backoff
 	 * up to 5 minutes, then completes the upload when the file appears.
 	 */
-	private backgroundFinalize(uploadId: string | RecordId, upload: any) {
+	private backgroundFinalize(uploadId: string | RecordId, upload: Upload) {
 		const MAX_DURATION_MS = 5 * 60 * 1000;
 		const INITIAL_DELAY_MS = 3000;
 		const MAX_DELAY_MS = 15000;
@@ -391,7 +394,8 @@ export class UploadController {
 					console.log('[upload.bg-finalize] Upload completed:', { key: upload.key });
 					return;
 				} catch (err) {
-					const status = (err as any)?.$metadata?.httpStatusCode;
+					const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+						?.httpStatusCode;
 					if (status === 404) {
 						console.log('[upload.bg-finalize] Still 404, retrying...', {
 							key: upload.key,
@@ -428,7 +432,7 @@ export class UploadController {
 	 * Final step: apply storage usage + mark completed. Extracted so
 	 * both the synchronous and background paths can call it.
 	 */
-	private async finishUpload(uploadId: string | RecordId, pendingUpload: any): Promise<any> {
+	private async finishUpload(uploadId: string | RecordId, pendingUpload: Upload): Promise<Upload> {
 		let appliedBytes = 0;
 		const revertFinalizingToPending = async () => {
 			await uploadRepository.updateWithUnset(
@@ -486,7 +490,9 @@ export class UploadController {
 				if (pendingUpload.size > 0 && appliedBytes > 0) {
 					try {
 						await fileStoreUsageController.subtractUsage(pendingUpload.owner_id, appliedBytes);
-					} catch { /* best-effort */ }
+					} catch {
+						/* best-effort */
+					}
 				}
 				await revertFinalizingToPending();
 			}
@@ -512,7 +518,12 @@ export class UploadController {
 
 		// Quick HeadObject check — more attempts for stores with write-commit lag
 		const retryAttempts = objectStore.requiresFinalizationRetry ? 3 : 1;
-		const headResult = await this.quickHeadObject(s3.bucket, pendingUpload.key, retryAttempts, 2000);
+		const headResult = await this.quickHeadObject(
+			s3.bucket,
+			pendingUpload.key,
+			retryAttempts,
+			2000
+		);
 
 		if (headResult) {
 			// File found — verify and complete synchronously
@@ -542,10 +553,7 @@ export class UploadController {
 			key: pendingUpload.key
 		});
 
-		const finalizingRow = await uploadRepository.casPendingToFinalizing(
-			uploadId,
-			new Date()
-		);
+		const finalizingRow = await uploadRepository.casPendingToFinalizing(uploadId, new Date());
 		if (!finalizingRow) {
 			const latest = await uploadRepository.findById(uploadId);
 			if (latest?.status === 'completed') return latest;

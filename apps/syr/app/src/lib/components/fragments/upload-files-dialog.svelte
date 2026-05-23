@@ -57,12 +57,7 @@
 		</Dialog.Header>
 		<div class="py-4">
 			<div class="flex flex-col gap-4">
-				<Input
-					type="file"
-					multiple
-					onchange={handleFileSelect}
-					class="cursor-pointer"
-				/>
+				<Input type="file" multiple onchange={handleFileSelect} class="cursor-pointer" />
 				<p class="text-xs text-muted-foreground">
 					You can select multiple files. Uploads continue in the background.
 				</p>
