@@ -43,7 +43,7 @@
     "build:wasm:node": "cd ../../rust/syr-crypto-wasm && wasm-pack build --target nodejs --out-dir ../../ts/crypto/dist/wasm/node",
     "build:wasm:node:esm": "node scripts/generate-node-esm-wrapper.mjs",
     "dev": "tsc --watch --preserveWatchOutput",
-    "check": "tsc --noEmit",
+    "check": "pnpm run build:wasm && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
