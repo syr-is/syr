@@ -237,6 +237,18 @@ export class UploadRepository extends BaseRepository<Upload> {
 		const recordId = recordIdFromDidAndLocal(this.tableName, did, localId);
 		return this.findById(recordId);
 	}
+
+	/**
+	 * Total bytes across a user's completed uploads, summed in the database.
+	 * Replaces fetching + summing every upload in app memory. Uses idx_upload_owner.
+	 */
+	async sumCompletedSizeByOwner(ownerId: RecordId): Promise<number> {
+		const result = await this.db.query<[{ total: number | null }[]]>(
+			`SELECT math::sum(size) AS total FROM upload WHERE owner_id = $ownerId AND status = 'completed' GROUP ALL`,
+			{ ownerId }
+		);
+		return result[0]?.[0]?.total ?? 0;
+	}
 }
 
 export const uploadRepository = new UploadRepository();

@@ -3,6 +3,7 @@
 	import { Input } from '@syr-is/ui/input';
 	import { Button, buttonVariants } from '@syr-is/ui/button';
 	import * as Select from '@syr-is/ui/select';
+	import * as Pagination from '@syr-is/ui/pagination';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
 	import { copyToClipboard } from '$lib/utils/clipboard';
@@ -39,16 +40,42 @@
 		media_reservation: number;
 		default_limit: number;
 		user_count: number;
-		users: Array<{ id: string; username: string; bytes_used: number; bytes_limit: number }>;
 	};
 	let storageOverview = $state<StorageOverview | null>(null);
 	let overviewLoading = $state(false);
+
+	// Per-user storage breakdown (paginated, usage-sorted) via /api/admin/storage/users
+	type StorageUserRow = { id: string; username: string; bytes_used: number; bytes_limit: number };
+	let storageUsers = $state<StorageUserRow[]>([]);
+	let storageUsersTotal = $state(0);
+	let storageUsersLoading = $state(false);
+	let storageUsersPage = $state(1);
+	const storageUsersSize = 10;
+	const storageUsersTotalPages = $derived(
+		Math.max(1, Math.ceil(storageUsersTotal / storageUsersSize))
+	);
 
 	let newCodeMaxUses = $state<number | null>(null);
 	let newCodeReservedUsername = $state('');
 	let creatingCode = $state(false);
 	let deleteCodeDialogOpen = $state(false);
 	let codeToDelete = $state<string | null>(null);
+
+	// Invite codes (loaded client-side, paginated via /api/admin/invite-codes)
+	type InviteRow = {
+		code: string;
+		created_by: string;
+		max_uses: number | null;
+		uses: number;
+		created_at: string;
+		reserved_username?: string;
+	};
+	let invites = $state<InviteRow[]>([]);
+	let invitesTotal = $state(0);
+	let invitesLoading = $state(false);
+	let invitePage = $state(1);
+	const inviteSize = 10;
+	const invitesTotalPages = $derived(Math.max(1, Math.ceil(invitesTotal / inviteSize)));
 
 	let newInstanceRegistryUrl = $state('');
 	let addingInstanceRegistry = $state(false);
@@ -88,9 +115,85 @@
 		}
 	}
 
+	let storageUsersRequestId = 0;
+	async function loadStorageUsers(targetPage: number = storageUsersPage) {
+		const requestId = ++storageUsersRequestId;
+		storageUsersLoading = true;
+		try {
+			const res = await fetch(
+				`/api/admin/storage/users?page=${targetPage}&size=${storageUsersSize}`
+			);
+			if (requestId !== storageUsersRequestId) return; // a newer request superseded this one
+			if (!res.ok) {
+				storageUsers = [];
+				storageUsersTotal = 0;
+				return;
+			}
+			const json = await res.json();
+			if (requestId !== storageUsersRequestId) return;
+			if (json.status === 'success') {
+				storageUsers = json.data;
+				storageUsersTotal = json.pagination?.total ?? storageUsers.length;
+			} else {
+				storageUsers = [];
+				storageUsersTotal = 0;
+			}
+		} catch (err) {
+			if (requestId !== storageUsersRequestId) return;
+			console.error('[instance-config] Storage users fetch failed:', err);
+			storageUsers = [];
+			storageUsersTotal = 0;
+		} finally {
+			if (requestId === storageUsersRequestId) storageUsersLoading = false;
+		}
+	}
+
 	// Load data on mount
 	$effect(() => {
 		loadStorageOverview();
+	});
+
+	// Load the per-user breakdown on mount and whenever its page changes.
+	$effect(() => {
+		loadStorageUsers(storageUsersPage);
+	});
+
+	let invitesRequestId = 0;
+	async function loadInvites(targetPage: number = invitePage) {
+		const requestId = ++invitesRequestId;
+		invitesLoading = true;
+		try {
+			const res = await fetch(`/api/admin/invite-codes?page=${targetPage}&size=${inviteSize}`);
+			if (requestId !== invitesRequestId) return; // a newer request superseded this one
+			if (!res.ok) {
+				invites = [];
+				invitesTotal = 0;
+				return;
+			}
+			const json = await res.json();
+			if (requestId !== invitesRequestId) return;
+			if (json.status === 'success') {
+				invites = json.data;
+				invitesTotal = json.pagination?.total ?? invites.length;
+			} else {
+				invites = [];
+				invitesTotal = 0;
+			}
+		} catch (e) {
+			if (requestId !== invitesRequestId) return;
+			console.error('[instance-config] Failed to load invite codes:', e);
+			invites = [];
+			invitesTotal = 0;
+		} finally {
+			if (requestId === invitesRequestId) invitesLoading = false;
+		}
+	}
+
+	// (Re)load the invite list when the invite-only section is active or the page changes.
+	$effect(() => {
+		if (registrationModePersisted === 'invite_only') {
+			loadInvites(invitePage);
+		}
 	});
 
 	async function saveProfileSyncPath() {
@@ -308,7 +411,8 @@
 			newCodeMaxUses = null;
 			newCodeReservedUsername = '';
 			toast.success(`Invite code created: ${json.data.code}`);
-			await invalidateAll();
+			invitePage = 1;
+			await loadInvites(1);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to create invite code');
 		} finally {
@@ -406,9 +510,11 @@
 						{creatingCode ? 'Creating…' : 'Create code'}
 					</Button>
 				</div>
-				{#if data.inviteCodes?.length}
+				{#if invitesLoading && invites.length === 0}
+					<p class="text-sm text-muted-foreground">Loading…</p>
+				{:else if invites.length}
 					<ul class="space-y-2">
-						{#each data.inviteCodes as invite (invite.code)}
+						{#each invites as invite (invite.code)}
 							<li
 								class="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
 							>
@@ -444,6 +550,37 @@
 							</li>
 						{/each}
 					</ul>
+					{#if invitesTotalPages > 1}
+						<Pagination.Root count={invitesTotal} perPage={inviteSize} bind:page={invitePage}>
+							{#snippet children({ pages, currentPage })}
+								<Pagination.Content>
+									{#if currentPage > 1}
+										<Pagination.Item>
+											<Pagination.PrevButton />
+										</Pagination.Item>
+									{/if}
+									{#each pages as p (p.key)}
+										{#if p.type === 'ellipsis'}
+											<Pagination.Item>
+												<Pagination.Ellipsis />
+											</Pagination.Item>
+										{:else}
+											<Pagination.Item>
+												<Pagination.Link page={p} isActive={currentPage === p.value}>
+													{p.value}
+												</Pagination.Link>
+											</Pagination.Item>
+										{/if}
+									{/each}
+									{#if currentPage < invitesTotalPages}
+										<Pagination.Item>
+											<Pagination.NextButton />
+										</Pagination.Item>
+									{/if}
+								</Pagination.Content>
+							{/snippet}
+						</Pagination.Root>
+					{/if}
 				{:else}
 					<p class="text-sm text-muted-foreground">No invite codes yet.</p>
 				{/if}
@@ -666,7 +803,9 @@
 					</div>
 				{/if}
 
-				{#if o.users.length > 0}
+				{#if storageUsersLoading && storageUsers.length === 0}
+					<p class="text-sm text-muted-foreground">Loading user breakdown…</p>
+				{:else if storageUsers.length > 0}
 					<Table.Root>
 						<Table.Header>
 							<Table.Row>
@@ -677,7 +816,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each o.users as u (u.id)}
+							{#each storageUsers as u (u.id)}
 								{@const pct =
 									u.bytes_limit > 0 ? Math.min(100, (u.bytes_used / u.bytes_limit) * 100) : 0}
 								<Table.Row>
@@ -691,6 +830,41 @@
 							{/each}
 						</Table.Body>
 					</Table.Root>
+					{#if storageUsersTotalPages > 1}
+						<Pagination.Root
+							count={storageUsersTotal}
+							perPage={storageUsersSize}
+							bind:page={storageUsersPage}
+						>
+							{#snippet children({ pages, currentPage })}
+								<Pagination.Content>
+									{#if currentPage > 1}
+										<Pagination.Item>
+											<Pagination.PrevButton />
+										</Pagination.Item>
+									{/if}
+									{#each pages as p (p.key)}
+										{#if p.type === 'ellipsis'}
+											<Pagination.Item>
+												<Pagination.Ellipsis />
+											</Pagination.Item>
+										{:else}
+											<Pagination.Item>
+												<Pagination.Link page={p} isActive={currentPage === p.value}>
+													{p.value}
+												</Pagination.Link>
+											</Pagination.Item>
+										{/if}
+									{/each}
+									{#if currentPage < storageUsersTotalPages}
+										<Pagination.Item>
+											<Pagination.NextButton />
+										</Pagination.Item>
+									{/if}
+								</Pagination.Content>
+							{/snippet}
+						</Pagination.Root>
+					{/if}
 				{/if}
 			{:else}
 				<p class="text-sm text-muted-foreground">Failed to load storage overview.</p>
@@ -757,7 +931,7 @@
 <DeleteInviteCodeDialog
 	bind:open={deleteCodeDialogOpen}
 	code={codeToDelete}
-	onSuccess={() => invalidateAll()}
+	onSuccess={() => loadInvites(invitePage)}
 />
 
 <RemoveDiscoveryRegistryDialog

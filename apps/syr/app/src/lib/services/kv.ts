@@ -82,6 +82,30 @@ export class KvService {
 	}
 
 	/**
+	 * Get entries of a specific type with offset pagination and a total count.
+	 * @param type - The category/type to retrieve
+	 * @param limit - Maximum number of entries to return
+	 * @param offset - Number of entries to skip
+	 */
+	async getByTypePage(
+		type: string,
+		limit = 20,
+		offset = 0
+	): Promise<{ data: KvEntry[]; total: number }> {
+		return this.repository.findByTypePage(type, limit, offset);
+	}
+
+	/**
+	 * Sum a numeric nested value field and count entries of a type, computed in
+	 * the database. Used for instance-wide totals without fetching every row.
+	 * @param type - The category/type to aggregate
+	 * @param field - Field name within the value object (validated for injection safety)
+	 */
+	async aggregateByType(type: string, field: string): Promise<{ sum: number; count: number }> {
+		return this.repository.aggregateValueFieldByType(type, field);
+	}
+
+	/**
 	 * Find entries by type and a nested field in the value.
 	 * Uses database-level filtering for efficient lookup instead of in-memory scan.
 	 * @param type - The category/type to query

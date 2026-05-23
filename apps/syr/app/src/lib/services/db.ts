@@ -351,6 +351,38 @@ class DatabaseService {
 				DEFINE INDEX IF NOT EXISTS idx_reaction_unique ON TABLE reaction COLUMNS author_id, parent_type, parent_did, parent_id, kind, value UNIQUE;
 			`);
 
+			// Hot per-owner / per-type lookup indexes. Without these, SurrealDB
+			// full-scans the entire table for every scoped query (one user's uploads,
+			// one KV type, etc.), so latency scales with total instance data rather
+			// than the target user. idx_kv_type fixes invites + storage-overview
+			// scans; owner_id/author_id fix the admin user tabs. These are standard
+			// field indexes and must apply.
+			await db.query(`
+				DEFINE INDEX IF NOT EXISTS idx_kv_type ON TABLE kv COLUMNS kv_type;
+				DEFINE INDEX IF NOT EXISTS idx_upload_owner ON TABLE upload COLUMNS owner_id;
+				DEFINE INDEX IF NOT EXISTS idx_post_author ON TABLE post COLUMNS author_id;
+				DEFINE INDEX IF NOT EXISTS idx_user_created_at ON TABLE user COLUMNS created_at;
+			`);
+
+			// Composite-id (id.created_by) indexes speed the public profile / stories
+			// listings that query owned content by author DID. Indexing a record-id
+			// subfield is best-effort: isolate it so an unsupported syntax on some
+			// SurrealDB builds logs a warning instead of aborting schema init — the
+			// owner_id/author_id indexes above already cover the admin hot paths.
+			try {
+				await db.query(`
+					DEFINE INDEX IF NOT EXISTS idx_upload_created_by ON TABLE upload COLUMNS id.created_by;
+					DEFINE INDEX IF NOT EXISTS idx_post_created_by ON TABLE post COLUMNS id.created_by;
+				`);
+			} catch (e) {
+				console.warn(
+					'[schema] Could not define id.created_by indexes (composite record-id subfield). ' +
+						'Public profile/stories listings may stay slow until added via a range-scan rewrite ' +
+						'or a denormalized indexed field.',
+					e
+				);
+			}
+
 			console.log('✅ Database schema initialized');
 		} catch (error) {
 			console.error('Schema initialization error:', error);

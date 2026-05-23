@@ -10,12 +10,10 @@ import {
 	KEY_DEFAULT_STORAGE_LIMIT_GB,
 	DEFAULT_STORAGE_LIMIT_GB,
 	KEY_INSTANCE_STORAGE_CAPACITY_GB,
-	KEY_INSTANCE_MEDIA_STORAGE_GB,
-	INVITE_CODE_TYPE
+	KEY_INSTANCE_MEDIA_STORAGE_GB
 } from '$lib/instance-config';
 import { getRegistrationMode } from '$lib/instance-config';
 import { instanceDiscoveryRegistryRepository } from '$lib/repositories/instance-discovery-registry.repository';
-import { InviteCodeValueSchema } from '@syr-is/types';
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { user } = await parent();
@@ -41,33 +39,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 	const instanceStorageCapacityGb = rawStorageCapacity ?? '';
 	const instanceMediaStorageGb = rawMediaStorage ?? '';
 
-	const inviteCodeEntries = await kvService.getByType(INVITE_CODE_TYPE);
-	const inviteCodes: {
-		code: string;
-		created_by: string;
-		max_uses: number | null;
-		uses: number;
-		created_at: string;
-		reserved_username?: string;
-	}[] = [];
-	for (const entry of inviteCodeEntries) {
-		const raw = String(entry.id.id);
-		const prefix = `${INVITE_CODE_TYPE}:`;
-		const code = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-		const parsed = InviteCodeValueSchema.safeParse(entry.value);
-		if (!parsed.success) {
-			console.warn(`[instance-config] Skipping malformed invite code entry ${raw}`, parsed.error);
-			continue;
-		}
-		inviteCodes.push({
-			code,
-			created_by: parsed.data.created_by,
-			max_uses: parsed.data.max_uses,
-			uses: parsed.data.uses,
-			created_at: parsed.data.created_at,
-			...(parsed.data.reserved_username ? { reserved_username: parsed.data.reserved_username } : {})
-		});
-	}
+	// Invite codes are loaded client-side (paginated) via /api/admin/invite-codes.
 
 	const instanceDiscoveryRows = await instanceDiscoveryRegistryRepository.findAll();
 
@@ -79,7 +51,6 @@ export const load: PageServerLoad = async ({ parent }) => {
 		defaultStorageLimitGb,
 		instanceStorageCapacityGb,
 		instanceMediaStorageGb,
-		inviteCodes,
 		instanceDiscoveryRegistries: instanceDiscoveryRows.map((r) => ({
 			id: r.id.toString(),
 			registryUrl: r.registry_url

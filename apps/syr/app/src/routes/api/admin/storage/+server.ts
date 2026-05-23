@@ -10,7 +10,6 @@ import { userRepository } from '$lib/repositories/user.repository';
 
 const KV_USAGE_TYPE = 'file_store_usage';
 const KV_LIMIT_TYPE = 'file_store_limit_override';
-const MAX_USER_FETCH_LIMIT = 10000;
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -23,57 +22,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	const [capacity, defaultLimit, mediaReservation, usageEntries, limitEntries, usersResult] =
-		await Promise.all([
+	const [capacity, defaultLimit, mediaReservation, usage, overrides, userCount] = await Promise.all(
+		[
 			getInstanceStorageCapacityBytes(),
 			getDefaultStorageLimitBytes(),
 			getInstanceMediaStorageBytes(),
-			kvService.getByType(KV_USAGE_TYPE),
-			kvService.getByType(KV_LIMIT_TYPE),
-			userRepository.findManyWithSearch({ limit: MAX_USER_FETCH_LIMIT, offset: 0 })
-		]);
+			kvService.aggregateByType(KV_USAGE_TYPE, 'bytes_used'),
+			kvService.aggregateByType(KV_LIMIT_TYPE, 'bytes_limit'),
+			userRepository.count()
+		]
+	);
 
-	// Build usage map: userId string → bytes_used
-	const usageMap = new Map<string, number>();
-	for (const entry of usageEntries) {
-		const raw = String(entry.id.id);
-		const prefix = `${KV_USAGE_TYPE}:`;
-		const key = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-		const val = entry.value as { bytes_used?: number };
-		usageMap.set(key, val.bytes_used ?? 0);
-	}
-
-	// Build limit override map: userId string → bytes_limit
-	const limitMap = new Map<string, number>();
-	for (const entry of limitEntries) {
-		const raw = String(entry.id.id);
-		const prefix = `${KV_LIMIT_TYPE}:`;
-		const key = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-		const val = entry.value as { bytes_limit?: number };
-		if (typeof val.bytes_limit === 'number' && val.bytes_limit > 0) {
-			limitMap.set(key, val.bytes_limit);
-		}
-	}
-
-	// Build per-user breakdown
-	let totalUsed = 0;
-	let totalAllocated = 0;
-	const users = usersResult.data.map((u) => {
-		const uid = u.id.toString();
-		const bytesUsed = usageMap.get(uid) ?? 0;
-		const bytesLimit = limitMap.get(uid) ?? defaultLimit;
-		totalUsed += bytesUsed;
-		totalAllocated += bytesLimit;
-		return {
-			id: uid,
-			username: u.username,
-			bytes_used: bytesUsed,
-			bytes_limit: bytesLimit
-		};
-	});
-
-	// Sort by usage descending
-	users.sort((a, b) => b.bytes_used - a.bytes_used);
+	// Totals are summed in the database (math::sum), so we never transfer per-user rows.
+	const totalUsed = usage.sum;
+	// Everyone starts on the default limit; each override shifts the total by its
+	// delta from the default. (An override left behind for a deleted user would be
+	// counted; clearing overrides on deletion avoids that.)
+	const totalAllocated = userCount * defaultLimit + overrides.sum - overrides.count * defaultLimit;
 
 	return json({
 		status: 'success',
@@ -83,8 +48,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			total_allocated: totalAllocated,
 			media_reservation: mediaReservation,
 			default_limit: defaultLimit,
-			user_count: users.length,
-			users
+			user_count: userCount
 		}
 	});
 };
