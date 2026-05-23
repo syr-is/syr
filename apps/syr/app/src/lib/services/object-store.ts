@@ -10,7 +10,6 @@ import {
 	ListObjectsV2Command,
 	CreateBucketCommand,
 	PutBucketCorsCommand,
-	PutBucketPolicyCommand,
 	type PutObjectCommandInput,
 	type PutObjectCommandOutput,
 	type GetObjectCommandInput,
@@ -40,7 +39,8 @@ export abstract class ObjectStore {
 		try {
 			return await this.client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
 		} catch (err) {
-			const status = (err as any)?.$metadata?.httpStatusCode;
+			const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+				?.httpStatusCode;
 			if (status === 404) return null;
 			throw err;
 		}

@@ -8,7 +8,7 @@ import {
 	recordIdFromDidAndLocal,
 	stringToRecordId
 } from '@syr-is/types';
-import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { userRepository } from '$lib/repositories/user.repository';
 import { uploadRepository } from '$lib/repositories/upload.repository';
@@ -215,9 +215,13 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 		const result = await uploadController.completeUpload(uploadId);
 
-		if (result && 'status' in result && result.status === 'finalizing') {
+		if (result && 'message' in result) {
 			return json(
-				{ status: 'finalizing', message: result.message, meta: { timestamp: new Date().toISOString() } },
+				{
+					status: 'finalizing',
+					message: result.message,
+					meta: { timestamp: new Date().toISOString() }
+				},
 				{ status: 202 }
 			);
 		}
