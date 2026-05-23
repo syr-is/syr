@@ -175,7 +175,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const result = await uploadController.completeUpload(uploadRecordId);
 
 		// Background finalization — tell client to poll
-		if (result && 'status' in result && result.status === 'finalizing') {
+		if (result && 'message' in result) {
 			return json(
 				{
 					status: 'finalizing',
