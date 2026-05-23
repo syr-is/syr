@@ -22,34 +22,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	const [capacity, defaultLimit, mediaReservation, usageEntries, limitEntries, userCount] =
-		await Promise.all([
+	const [capacity, defaultLimit, mediaReservation, usage, overrides, userCount] = await Promise.all(
+		[
 			getInstanceStorageCapacityBytes(),
 			getDefaultStorageLimitBytes(),
 			getInstanceMediaStorageBytes(),
-			kvService.getByType(KV_USAGE_TYPE),
-			kvService.getByType(KV_LIMIT_TYPE),
+			kvService.aggregateByType(KV_USAGE_TYPE, 'bytes_used'),
+			kvService.aggregateByType(KV_LIMIT_TYPE, 'bytes_limit'),
 			userRepository.count()
-		]);
+		]
+	);
 
-	// Total used = sum of every user's pre-computed usage entry.
-	let totalUsed = 0;
-	for (const entry of usageEntries) {
-		const val = entry.value as { bytes_used?: number };
-		totalUsed += val.bytes_used ?? 0;
-	}
-
-	// Total allocated = (everyone on the default) + per-override delta.
-	// Avoids fetching all users: start from userCount × default, then adjust by
-	// each override's difference from the default. (An override left behind for a
-	// deleted user would be counted; clearing overrides on deletion avoids that.)
-	let totalAllocated = userCount * defaultLimit;
-	for (const entry of limitEntries) {
-		const val = entry.value as { bytes_limit?: number };
-		if (typeof val.bytes_limit === 'number' && val.bytes_limit > 0) {
-			totalAllocated += val.bytes_limit - defaultLimit;
-		}
-	}
+	// Totals are summed in the database (math::sum), so we never transfer per-user rows.
+	const totalUsed = usage.sum;
+	// Everyone starts on the default limit; each override shifts the total by its
+	// delta from the default. (An override left behind for a deleted user would be
+	// counted; clearing overrides on deletion avoids that.)
+	const totalAllocated = userCount * defaultLimit + overrides.sum - overrides.count * defaultLimit;
 
 	return json({
 		status: 'success',

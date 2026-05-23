@@ -115,18 +115,22 @@
 		}
 	}
 
+	let storageUsersRequestId = 0;
 	async function loadStorageUsers(targetPage: number = storageUsersPage) {
+		const requestId = ++storageUsersRequestId;
 		storageUsersLoading = true;
 		try {
 			const res = await fetch(
 				`/api/admin/storage/users?page=${targetPage}&size=${storageUsersSize}`
 			);
+			if (requestId !== storageUsersRequestId) return; // a newer request superseded this one
 			if (!res.ok) {
 				storageUsers = [];
 				storageUsersTotal = 0;
 				return;
 			}
 			const json = await res.json();
+			if (requestId !== storageUsersRequestId) return;
 			if (json.status === 'success') {
 				storageUsers = json.data;
 				storageUsersTotal = json.pagination?.total ?? storageUsers.length;
@@ -135,11 +139,12 @@
 				storageUsersTotal = 0;
 			}
 		} catch (err) {
+			if (requestId !== storageUsersRequestId) return;
 			console.error('[instance-config] Storage users fetch failed:', err);
 			storageUsers = [];
 			storageUsersTotal = 0;
 		} finally {
-			storageUsersLoading = false;
+			if (requestId === storageUsersRequestId) storageUsersLoading = false;
 		}
 	}
 
@@ -153,16 +158,20 @@
 		loadStorageUsers(storageUsersPage);
 	});
 
+	let invitesRequestId = 0;
 	async function loadInvites(targetPage: number = invitePage) {
+		const requestId = ++invitesRequestId;
 		invitesLoading = true;
 		try {
 			const res = await fetch(`/api/admin/invite-codes?page=${targetPage}&size=${inviteSize}`);
+			if (requestId !== invitesRequestId) return; // a newer request superseded this one
 			if (!res.ok) {
 				invites = [];
 				invitesTotal = 0;
 				return;
 			}
 			const json = await res.json();
+			if (requestId !== invitesRequestId) return;
 			if (json.status === 'success') {
 				invites = json.data;
 				invitesTotal = json.pagination?.total ?? invites.length;
@@ -171,11 +180,12 @@
 				invitesTotal = 0;
 			}
 		} catch (e) {
+			if (requestId !== invitesRequestId) return;
 			console.error('[instance-config] Failed to load invite codes:', e);
 			invites = [];
 			invitesTotal = 0;
 		} finally {
-			invitesLoading = false;
+			if (requestId === invitesRequestId) invitesLoading = false;
 		}
 	}
 

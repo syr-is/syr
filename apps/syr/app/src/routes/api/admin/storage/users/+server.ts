@@ -34,7 +34,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		size: url.searchParams.get('size') ?? undefined
 	});
 	if (!parsed.success) {
-		throw error(400, { code: 'VALIDATION_ERROR', message: 'Invalid query parameters' });
+		throw error(400, {
+			code: 'VALIDATION_ERROR',
+			message: 'Invalid query parameters',
+			details: z.treeifyError(parsed.error)
+		});
 	}
 
 	const { page, size } = parsed.data;

@@ -177,10 +177,15 @@ export class KvRepository {
 		limit = 20,
 		offset = 0
 	): Promise<{ data: KvEntry[]; total: number }> {
+		// Clamp at the boundary so callers can't trigger oversized scans or negative offsets.
+		const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
+		const safeOffset = Math.max(0, Math.trunc(offset));
 		const [dataResult, countResult] = await Promise.all([
 			this.db.query<[KvEntry[]]>(
-				`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) LIMIT $limit START $offset`,
-				{ type, limit, offset }
+				// ORDER BY id keeps page boundaries stable across requests (LIMIT/START
+				// without a deterministic sort can drift and drop/duplicate rows).
+				`SELECT * FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) ORDER BY id ASC LIMIT $limit START $offset`,
+				{ type, limit: safeLimit, offset: safeOffset }
 			),
 			this.db.query<[{ total: number }[]]>(
 				`SELECT count() AS total FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) GROUP ALL`,
@@ -192,6 +197,28 @@ export class KvRepository {
 		const data = rawData.map((record: unknown) => this.validate(record));
 		const total = countResult[0]?.[0]?.total ?? 0;
 		return { data, total };
+	}
+
+	/**
+	 * Sum a numeric nested value field and count matching entries for a type,
+	 * computed in the database (GROUP ALL). Lets callers get instance-wide totals
+	 * without transferring every row. Field name is validated against injection.
+	 */
+	async aggregateValueFieldByType(
+		type: string,
+		field: string
+	): Promise<{ sum: number; count: number }> {
+		if (!KvRepository.VALID_FIELD_REGEX.test(field)) {
+			throw new Error(
+				`Invalid field name: "${field}". Field names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+			);
+		}
+		const result = await this.db.query<[{ sum: number | null; count: number }[]]>(
+			`SELECT math::sum(value.${field}) AS sum, count() AS count FROM ${this.tableName} WHERE kv_type = $type AND (expires_at = NONE OR expires_at >= time::now()) GROUP ALL`,
+			{ type }
+		);
+		const row = result[0]?.[0];
+		return { sum: row?.sum ?? 0, count: row?.count ?? 0 };
 	}
 
 	/**
