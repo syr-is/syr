@@ -287,6 +287,12 @@ export async function validateBundle(
 		const pubKeyFromDid = parsedDid.publicKey;
 		const pubKeyFromBundle = decodePublicKey(identity.publicKey);
 
+		// This asserts the bundle's key equals the DID-derived GENESIS key. A
+		// rotated identity's bundle carries the CURRENT root as identity.publicKey,
+		// so it fails here — rotated identities are intentionally not yet portable
+		// across instances (the bundle does not carry the rotation chain). See
+		// architecture/recovery-rotation §10. On the identity's home instance the
+		// rotation chain lives in identity_rotation and everything resolves normally.
 		if (!constantTimeEqual(pubKeyFromDid, pubKeyFromBundle)) {
 			throw error(400, {
 				code: 'KEY_MISMATCH',

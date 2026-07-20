@@ -91,7 +91,20 @@ export async function signAsset(
 }
 
 /**
- * Verify a post's signature against the bundle's DID public key.
+ * Verify a post's signature against the DID's GENESIS key (the key parsed from
+ * the DID itself).
+ *
+ * Why genesis and not the current root: this path only runs during cross-instance
+ * bundle import, and a bundle carries neither the rotation chain nor a way for the
+ * importing instance to resolve it (`getCurrentRootKey` reads the *local*
+ * identity_rotation table, which a foreign instance does not have). Rotated
+ * identities are therefore not yet portable across instances — their Aegis/Sigil
+ * bundle exposes the current root as `identity.publicKey`, which fails the
+ * genesis match in `validateBundle` before this verifier is ever reached, so a
+ * rotated identity is rejected at import rather than mis-verified here. For
+ * non-rotated identities genesis === current root, so this check is correct.
+ * See architecture/recovery-rotation §10 (cross-instance portability, out of scope v1).
+ *
  * Rejects (throws) on invalid or missing signature.
  */
 export async function verifyPostSignature(did: string, post: ExportedPost): Promise<void> {
@@ -112,7 +125,11 @@ export async function verifyPostSignature(did: string, post: ExportedPost): Prom
 }
 
 /**
- * Verify an asset's signature against the bundle's DID public key.
+ * Verify an asset's signature against the DID's GENESIS key.
+ * Anchored on genesis for the same reason as {@link verifyPostSignature}: rotated
+ * identities are not yet portable across instances and are rejected earlier in
+ * `validateBundle`; for non-rotated identities genesis === current root.
+ *
  * When fileBytes is provided, also validates blob size and SHA-256 against signed values.
  * Rejects (throws) on invalid or missing signature, missing file, size mismatch, or hash mismatch.
  */

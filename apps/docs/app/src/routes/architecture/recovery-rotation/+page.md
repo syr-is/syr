@@ -172,8 +172,18 @@ If both the root key and (for custodial identities) the password are lost, the i
 
 ---
 
-## 10. Versioning
+## 10. Known Limitations & Versioning
+
+### 10.1 Cross-instance portability of a rotated identity (out of scope v1)
+
+A rotated identity stays **fully functional and resolvable on its home instance** — its chain lives in `identity_rotation`, `getCurrentRootKey` resolves it locally, and registries carry the chain so federated resolution succeeds.
+
+What is **not** yet supported is **importing a rotated identity onto a different instance** via [export](/architecture/export)/[import](/architecture/import). The export bundle carries the current root as the identity's public key but does **not** carry the rotation chain, and the importing instance cannot reconstruct a foreign DID's chain from its own database. Content in the bundle is signed under the current root, so genesis-anchored bundle verification would reject it. Rather than mis-verify, `validateBundle` rejects such a bundle at the DID/key match step (`KEY_MISMATCH`), so a rotated identity simply cannot be moved to a new instance yet.
+
+Making rotated identities portable requires shipping the verified chain inside the export bundle and resolving the current root from it at import time; that is a candidate for a future phase. Non-rotated identities are unaffected (genesis === current root).
+
+### 10.2 Versioning
 
 **Version:** v1
 **Status:** Implemented — `syr-crypto-core::rotation`, `@syr-is/crypto`, `POST /api/identity/rotate`, `GET /api/identity/{did}/rotations`, chain-aware registry + resolver.
-**Out of scope:** recovery keys, social/threshold recovery, encrypted rotation metadata.
+**Out of scope:** recovery keys, social/threshold recovery, encrypted rotation metadata, cross-instance export/import of a rotated identity (§10.1).
