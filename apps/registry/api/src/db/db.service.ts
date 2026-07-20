@@ -38,6 +38,12 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS updated_at ON TABLE hosting_record TYPE datetime;
       DEFINE FIELD IF NOT EXISTS signature ON TABLE hosting_record TYPE string;
       DEFINE FIELD IF NOT EXISTS rotation_chain ON TABLE hosting_record TYPE option<array>;
+      -- Each element is a rotation statement (an object). On a SCHEMAFULL table the
+      -- array-element schema must be declared FLEXIBLE, otherwise cleanup_table_fields
+      -- strips every nested key and the chain round-trips to a list of empty objects,
+      -- making rotated identities unresolvable. Same recipe the syr app uses for its
+      -- FLEXIBLE object fields.
+      DEFINE FIELD IF NOT EXISTS rotation_chain.* ON TABLE hosting_record FLEXIBLE TYPE object;
       DEFINE FIELD IF NOT EXISTS created_at ON TABLE hosting_record TYPE datetime DEFAULT time::now();
       DEFINE INDEX IF NOT EXISTS idx_hosting_did ON TABLE hosting_record COLUMNS did UNIQUE;
 
