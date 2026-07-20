@@ -36,6 +36,34 @@ interface DirectoryRow {
 	signature: string;
 }
 
+/** Committed rollback-protection state for a DID (0/[] = never rotated). */
+interface StoredRotationState {
+	maxSeq: number;
+	chain: RotationStatement[];
+}
+
+/**
+ * Token thrown by an in-transaction stale/concurrency guard. Surfaced in the
+ * SurrealDB error message and normalized to a STALE_UPDATE-classifiable error.
+ */
+const STALE_CONCURRENT_MARKER = 'SYR_STALE_CONCURRENT_UPDATE';
+
+/**
+ * Structural equality for a committed rotation statement against an incoming
+ * one (prefix pinning). Comparing the signature also pins rotatedAt, since the
+ * signature is made over the canonical statement (which includes rotatedAt).
+ */
+function rotationStatementsEqual(a: RotationStatement, b: RotationStatement | undefined): boolean {
+	if (!b) return false;
+	return (
+		a.did === b.did &&
+		a.seq === b.seq &&
+		a.prevRoot === b.prevRoot &&
+		a.newRoot === b.newRoot &&
+		a.signature === b.signature
+	);
+}
+
 @Injectable()
 export class RegistryService {
 	constructor(private readonly dbService: DbService) {}
@@ -58,11 +86,27 @@ export class RegistryService {
 		return false;
 	}
 
+	/** Re-throw a normalized stale error when a transaction hit the concurrency guard. */
+	private static rethrowStaleConcurrent(err: unknown, message: string): never {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.includes(STALE_CONCURRENT_MARKER)) {
+			throw new Error(message);
+		}
+		throw err instanceof Error ? err : new Error(msg);
+	}
+
 	/**
 	 * Resolve the CURRENT root key for a DID (genesis when no chain is
-	 * supplied) and enforce rollback protection: a payload whose chain is
-	 * shorter than the registry's recorded high-water mark is rejected.
+	 * supplied) and enforce rollback + fork protection against the committed
+	 * rotation chain:
 	 *
+	 * - a chain shorter than the committed high-water mark is a rollback;
+	 * - the incoming chain MUST exactly extend the committed one — every
+	 *   committed statement must appear identically at the same index — so a
+	 *   same-length divergence or any prefix mismatch (e.g. a fork forged from
+	 *   a compromised RETIRED key below the committed tip) is rejected.
+	 *
+	 * Both are surfaced as rotation-chain errors (INVALID_ROTATION_CHAIN).
 	 * Returns the key to verify the record signature against, plus the chain
 	 * seq for state persistence after successful verification.
 	 */
@@ -83,49 +127,62 @@ export class RegistryService {
 			}
 		}
 
-		const storedSeq = await this.getStoredRotationSeq(did);
-		if (chain.length < storedSeq) {
+		const stored = await this.getStoredRotationState(did);
+
+		// Rollback protection: reject any chain shorter than the committed
+		// high-water mark (a stolen retired key re-registering with fewer hops).
+		const committedLength = Math.max(stored.maxSeq, stored.chain.length);
+		if (chain.length < committedLength) {
 			throw new Error(
-				`Stale rotation chain: seq ${chain.length} is lower than the previously recorded seq ${storedSeq}`
+				`Rotation chain rollback rejected: incoming seq ${chain.length} is not greater than recorded seq ${committedLength}`
 			);
+		}
+
+		// Prefix pinning: every committed statement must be reproduced exactly
+		// by the incoming chain. Guarantees the new chain strictly extends the
+		// stored one; forks and same-length divergences fail here.
+		for (let i = 0; i < stored.chain.length; i++) {
+			if (!rotationStatementsEqual(stored.chain[i], chain[i])) {
+				throw new Error(
+					`Rotation chain fork rejected: incoming chain diverges from the committed chain at seq ${i + 1}`
+				);
+			}
 		}
 
 		return { publicKey, chainSeq: chain.length };
 	}
 
-	/** Highest rotation-chain seq the registry has accepted for this DID (0 = none). */
-	private async getStoredRotationSeq(did: string): Promise<number> {
+	/** Committed rollback-protection state for a DID (high-water seq + full chain). */
+	private async getStoredRotationState(did: string): Promise<StoredRotationState> {
 		const db = this.dbService.getDb();
-		const result = await db.query<[Array<{ max_seq: number }>]>(
-			'SELECT max_seq FROM did_rotation_state WHERE did = $did LIMIT 1',
+		const result = await db.query<[Array<{ max_seq: number; chain?: RotationStatement[] }>]>(
+			'SELECT max_seq, chain FROM did_rotation_state WHERE did = $did LIMIT 1',
 			{ did }
 		);
-		return result[0]?.[0]?.max_seq ?? 0;
+		const row = result[0]?.[0];
+		return {
+			maxSeq: row?.max_seq ?? 0,
+			chain: Array.isArray(row?.chain) ? (row.chain as RotationStatement[]) : []
+		};
 	}
 
-	/** Persist the highest seen rotation seq for a DID (monotonic). */
-	private async recordRotationSeq(did: string, chainSeq: number): Promise<void> {
-		if (chainSeq <= 0) return;
-		const db = this.dbService.getDb();
-		const stored = await this.getStoredRotationSeq(did);
-		if (chainSeq <= stored) return;
-		if (stored === 0) {
-			try {
-				await db.query(
-					`CREATE did_rotation_state SET did = $did, max_seq = $maxSeq, updated_at = time::now()`,
-					{ did, maxSeq: chainSeq }
-				);
-				return;
-			} catch (err) {
-				if (!RegistryService.isUniqueConstraintError(err)) throw err;
-				// Concurrent create: fall through to monotonic update.
-			}
-		}
-		await db.query(
-			`UPDATE did_rotation_state SET max_seq = $maxSeq, updated_at = time::now()
-        WHERE did = $did AND max_seq < $maxSeq`,
-			{ did, maxSeq: chainSeq }
-		);
+	/**
+	 * SurrealQL fragment (used inside a transaction) that advances the
+	 * rollback-protection commitment for `$did` to `$maxSeq` / `$rotationChain`.
+	 * Empty for genesis records (no chain to commit). The monotonic `<= $maxSeq`
+	 * guard keeps a concurrent higher commitment from being regressed.
+	 */
+	private rotationStateCommitFragment(chainSeq: number): string {
+		if (chainSeq <= 0) return '';
+		return `
+			LET $stateRows = SELECT id FROM did_rotation_state WHERE did = $did;
+			IF array::len($stateRows) == 0 {
+				CREATE did_rotation_state SET did = $did, max_seq = $maxSeq, chain = $rotationChain, updated_at = time::now();
+			} ELSE {
+				UPDATE did_rotation_state SET max_seq = $maxSeq, chain = $rotationChain, updated_at = time::now()
+					WHERE did = $did AND max_seq <= $maxSeq;
+			};
+		`;
 	}
 
 	/**
@@ -151,7 +208,9 @@ export class RegistryService {
 	 * Update (or create) a hosting record.
 	 * Verifies the Ed25519 signature against the CURRENT root key: the
 	 * genesis key embedded in the DID, advanced through the optional
-	 * rotation_chain (verified from genesis, rollback-protected).
+	 * rotation_chain (verified from genesis, rollback- and fork-protected).
+	 * The record write and the rollback-protection commitment are persisted in
+	 * a single transaction so they commit or fail together.
 	 */
 	async update(dto: UpdateRecordDto): Promise<HostingRecord> {
 		// 1. Resolve the current root key (genesis + optional rotation chain)
@@ -184,59 +243,64 @@ export class RegistryService {
 			}
 		}
 
-		// 6. Upsert the hosting record
+		// 6. Upsert the hosting record + advance the rotation commitment atomically.
 		// SurrealDB datetime field expects a Date; DTO provides ISO string
 		const updatedAtDate = new Date(dto.updatedAt);
 		const rotationChain = dto.rotation_chain ?? [];
 		const db = this.dbService.getDb();
+		const params = {
+			did: dto.did,
+			provider: dto.provider,
+			updatedAt: updatedAtDate,
+			signature: dto.signature,
+			rotationChain,
+			maxSeq: chainSeq
+		};
+
 		if (existing) {
-			const result = await db.query(
-				`UPDATE hosting_record SET
-          provider = $provider,
-          updated_at = $updatedAt,
-          signature = $signature,
-          rotation_chain = $rotationChain
-        WHERE did = $did AND updated_at < $updatedAt`,
-				{
-					did: dto.did,
-					provider: dto.provider,
-					updatedAt: updatedAtDate,
-					signature: dto.signature,
-					rotationChain
-				}
-			);
-			const updated = result[0] ?? [];
-			if (!Array.isArray(updated) || updated.length === 0) {
-				throw new Error(
+			// Re-check freshness inside the transaction (the record may have
+			// advanced since resolve()); THROW aborts so the commitment below
+			// never advances on a losing concurrent write.
+			const query = `
+				BEGIN TRANSACTION;
+				LET $current = SELECT updated_at FROM hosting_record WHERE did = $did;
+				IF array::len($current) == 0 OR $current[0].updated_at >= $updatedAt {
+					THROW "${STALE_CONCURRENT_MARKER}";
+				};
+				UPDATE hosting_record SET
+					provider = $provider,
+					updated_at = $updatedAt,
+					signature = $signature,
+					rotation_chain = $rotationChain
+					WHERE did = $did;
+				${this.rotationStateCommitFragment(chainSeq)}
+				COMMIT TRANSACTION;
+			`;
+			try {
+				await db.query(query, params);
+			} catch (err) {
+				RegistryService.rethrowStaleConcurrent(
+					err,
 					'Stale update: record was modified by a concurrent request; updatedAt must be strictly newer'
 				);
 			}
 		} else {
+			const query = `
+				BEGIN TRANSACTION;
+				CREATE hosting_record SET
+					did = $did,
+					provider = $provider,
+					updated_at = $updatedAt,
+					signature = $signature,
+					rotation_chain = $rotationChain;
+				${this.rotationStateCommitFragment(chainSeq)}
+				COMMIT TRANSACTION;
+			`;
 			try {
-				await db.query(
-					`CREATE hosting_record SET
-          did = $did,
-          provider = $provider,
-          updated_at = $updatedAt,
-          signature = $signature,
-          rotation_chain = $rotationChain`,
-					{
-						did: dto.did,
-						provider: dto.provider,
-						updatedAt: updatedAtDate,
-						signature: dto.signature,
-						rotationChain
-					}
-				);
+				await db.query(query, params);
 			} catch (createErr) {
 				// Concurrent first registration: another request created the record between our resolve() and CREATE
-				const msg = createErr instanceof Error ? createErr.message : String(createErr);
-				if (
-					msg.toLowerCase().includes('unique') ||
-					msg.toLowerCase().includes('duplicate') ||
-					msg.toLowerCase().includes('constraint') ||
-					(createErr as { code?: string }).code === 'UNIQUE_CONSTRAINT_VIOLATION'
-				) {
+				if (RegistryService.isUniqueConstraintError(createErr)) {
 					throw new Error(
 						'Concurrent registration: DID was registered by another request; retry with resolve for updates'
 					);
@@ -244,9 +308,6 @@ export class RegistryService {
 				throw createErr;
 			}
 		}
-
-		// 7. Record the accepted rotation seq (monotonic high-water mark)
-		await this.recordRotationSeq(dto.did, chainSeq);
 
 		return {
 			did: dto.did,
@@ -260,7 +321,8 @@ export class RegistryService {
 	/**
 	 * Delete a hosting record.
 	 * Verifies the Ed25519 signature on the deletion request under the
-	 * CURRENT root key (genesis + optional rotation chain).
+	 * CURRENT root key (genesis + optional rotation chain). The record delete
+	 * and the rollback-protection commitment advance in a single transaction.
 	 */
 	async delete(dto: DeleteRecordDto): Promise<void> {
 		// 1. Resolve the current root key (genesis + optional rotation chain)
@@ -286,13 +348,19 @@ export class RegistryService {
 			throw new Error('Not found: no hosting record for this DID');
 		}
 
-		// 5. Delete the record (keep rotation state: rollback protection
-		//    must survive record deletion and re-registration)
+		// 5. Delete the record and advance the rotation commitment atomically.
+		//    The commitment (rollback protection) must survive record deletion
+		//    and re-registration, so it lives in did_rotation_state, not the
+		//    deleted hosting_record.
+		const rotationChain = dto.rotation_chain ?? [];
 		const db = this.dbService.getDb();
-		await db.query('DELETE FROM hosting_record WHERE did = $did', {
-			did: dto.did
-		});
-		await this.recordRotationSeq(dto.did, chainSeq);
+		const query = `
+			BEGIN TRANSACTION;
+			DELETE hosting_record WHERE did = $did;
+			${this.rotationStateCommitFragment(chainSeq)}
+			COMMIT TRANSACTION;
+		`;
+		await db.query(query, { did: dto.did, rotationChain, maxSeq: chainSeq });
 	}
 
 	async upsertDirectory(dto: DirectoryUpsertDto): Promise<DirectoryEntry> {
@@ -312,9 +380,22 @@ export class RegistryService {
 		if (!isValid) {
 			throw new Error('Invalid signature: directory upsert verification failed');
 		}
-		await this.recordRotationSeq(dto.did, chainSeq);
 
+		const rotationChain = dto.rotation_chain ?? [];
+		const commitFragment = this.rotationStateCommitFragment(chainSeq);
 		const db = this.dbService.getDb();
+		const params = {
+			did: dto.did,
+			provider: dto.provider,
+			username: dto.username,
+			displayName: dto.displayName,
+			listed: dto.listed,
+			updatedAt: new Date(dto.updatedAt),
+			signature: dto.signature,
+			rotationChain,
+			maxSeq: chainSeq
+		};
+
 		const selectRow = async (): Promise<DirectoryRow | undefined> => {
 			const existing = await db.query<[DirectoryRow[]]>(
 				'SELECT * FROM directory_entry WHERE did = $did LIMIT 1',
@@ -323,60 +404,61 @@ export class RegistryService {
 			return existing[0]?.[0];
 		};
 
-		let prev = await selectRow();
-		const newTime = new Date(dto.updatedAt).getTime();
-		const runDirectoryUpdate = async () => {
-			if (!prev) return;
+		// Directory write + rollback-protection commitment in one transaction.
+		const runDirectoryUpdate = async (prev: DirectoryRow) => {
 			const oldTime = new Date(prev.updated_at).getTime();
+			const newTime = new Date(dto.updatedAt).getTime();
 			if (newTime <= oldTime) {
 				throw new Error(
 					'Stale update: updatedAt must be strictly newer than the existing directory row'
 				);
 			}
-			await db.query(
-				`UPDATE directory_entry SET
-          provider = $provider,
-          username = $username,
-          display_name = $displayName,
-          listed = $listed,
-          updated_at = $updatedAt,
-          signature = $signature
-        WHERE did = $did AND updated_at < $updatedAt`,
-				{
-					did: dto.did,
-					provider: dto.provider,
-					username: dto.username,
-					displayName: dto.displayName,
-					listed: dto.listed,
-					updatedAt: new Date(dto.updatedAt),
-					signature: dto.signature
-				}
-			);
+			const query = `
+				BEGIN TRANSACTION;
+				LET $current = SELECT updated_at FROM directory_entry WHERE did = $did;
+				IF array::len($current) == 0 OR $current[0].updated_at >= $updatedAt {
+					THROW "${STALE_CONCURRENT_MARKER}";
+				};
+				UPDATE directory_entry SET
+					provider = $provider,
+					username = $username,
+					display_name = $displayName,
+					listed = $listed,
+					updated_at = $updatedAt,
+					signature = $signature
+					WHERE did = $did;
+				${commitFragment}
+				COMMIT TRANSACTION;
+			`;
+			try {
+				await db.query(query, params);
+			} catch (err) {
+				RegistryService.rethrowStaleConcurrent(
+					err,
+					'Stale update: directory row was modified by a concurrent request; updatedAt must be strictly newer'
+				);
+			}
 		};
 
+		let prev = await selectRow();
 		if (prev) {
-			await runDirectoryUpdate();
+			await runDirectoryUpdate(prev);
 		} else {
+			const query = `
+				BEGIN TRANSACTION;
+				CREATE directory_entry SET
+					did = $did,
+					provider = $provider,
+					username = $username,
+					display_name = $displayName,
+					listed = $listed,
+					updated_at = $updatedAt,
+					signature = $signature;
+				${commitFragment}
+				COMMIT TRANSACTION;
+			`;
 			try {
-				await db.query(
-					`CREATE directory_entry SET
-          did = $did,
-          provider = $provider,
-          username = $username,
-          display_name = $displayName,
-          listed = $listed,
-          updated_at = $updatedAt,
-          signature = $signature`,
-					{
-						did: dto.did,
-						provider: dto.provider,
-						username: dto.username,
-						displayName: dto.displayName,
-						listed: dto.listed,
-						updatedAt: new Date(dto.updatedAt),
-						signature: dto.signature
-					}
-				);
+				await db.query(query, params);
 			} catch (createErr) {
 				if (!RegistryService.isUniqueConstraintError(createErr)) {
 					throw createErr;
@@ -385,7 +467,7 @@ export class RegistryService {
 				if (!prev) {
 					throw createErr;
 				}
-				await runDirectoryUpdate();
+				await runDirectoryUpdate(prev);
 			}
 		}
 

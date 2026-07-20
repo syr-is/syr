@@ -20,8 +20,10 @@ const signature = z.string().describe('Multibase-encoded Ed25519 signature');
  * Optional root-key rotation chain (ordered, seq 1..n from the genesis key).
  * When present, registries verify the chain from the DID-derived genesis key
  * to the current root and verify the record signature under the CURRENT key.
- * Registries persist the highest seen seq per DID and reject payloads whose
- * chain is shorter than the stored high-water mark (rollback protection).
+ * Registries persist the committed chain per DID and require an incoming chain
+ * to exactly EXTEND it (every committed statement reproduced as a prefix);
+ * shorter chains, same-length divergence, and forks below the committed tip are
+ * all rejected as rollback/fork attacks (rollback + prefix-pinning protection).
  */
 const rotationChain = z
 	.array(RotationStatementSchema)

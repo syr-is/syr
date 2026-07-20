@@ -177,36 +177,41 @@ Registry MUST:
    (DID match, seq continuity from 1, prevRoot linkage, per-hop signatures,
    non-decreasing `rotatedAt`) → derive the **current root key**. Absent
    chain ⇒ current key = genesis key.
-3. **Rollback protection:** persist the highest chain `seq` ever accepted per
-   DID; reject any payload whose chain seq is **lower** than the stored
-   high-water mark (this stops a stolen retired key from re-registering the
-   DID with a shorter chain).
+3. **Rollback + fork protection (prefix pinning):** persist the committed
+   rotation chain per DID. Require the incoming chain to **exactly extend** it —
+   every committed statement must be reproduced identically (same
+   `did`/`seq`/`prevRoot`/`newRoot`/`signature`) as a prefix of the incoming
+   chain. Reject a **shorter** chain (rollback), a **same-length divergence**,
+   and any **prefix mismatch** (a fork below the committed tip, e.g. forged from
+   a stolen RETIRED key) as `INVALID_ROTATION_CHAIN` — even with a valid
+   signature under a retired key.
 4. Reconstruct the canonical payload (JCS).
 5. Verify the Ed25519 signature under the **current** root key.
 6. Ensure `updatedAt` is **strictly newer** than the stored record.
-7. Replace the existing record (and its stored chain) if valid; advance the
-   per-DID seq high-water mark.
+7. On success, persist the record write and advance the committed chain in a
+   **single transaction** (commit or fail together).
 
 ```mermaid
 flowchart TD
     Receive["Receive POST /update"] --> ExtractKey["Extract genesis key from DID"]
     ExtractKey --> VerifyChain["Verify rotation_chain from genesis -> current key"]
     VerifyChain -->|invalid chain| RejectChain["REJECT 400 INVALID_ROTATION_CHAIN"]
-    VerifyChain -->|valid or absent| CheckSeq["chain seq >= stored max seq?"]
-    CheckSeq -->|lower| RejectRollback["REJECT 409 (stale rotation chain)"]
-    CheckSeq -->|ok| Canonicalize["Reconstruct canonical payload (JCS)"]
+    VerifyChain -->|valid or absent| CheckPrefix["Incoming chain strictly extends committed chain?"]
+    CheckPrefix -->|shorter / divergent / forked| RejectRollback["REJECT 400 INVALID_ROTATION_CHAIN"]
+    CheckPrefix -->|ok| Canonicalize["Reconstruct canonical payload (JCS)"]
     Canonicalize --> VerifySig["Verify Ed25519 signature under CURRENT key"]
     VerifySig -->|invalid| Reject["REJECT 400"]
     VerifySig -->|valid| CheckTimestamp["Check updatedAt > stored"]
     CheckTimestamp -->|older or equal| RejectStale["REJECT 409"]
-    CheckTimestamp -->|newer| Store["Replace stored record + chain, advance max seq"]
+    CheckTimestamp -->|newer| Store["Transaction: replace record + advance committed chain"]
     Store --> OK["200 OK"]
 ```
 
 Reject if:
 
 - rotation chain invalid (bad link, seq gap, bad per-hop signature, cross-DID)
-- chain seq lower than the per-DID high-water mark (rollback)
+- chain does not strictly extend the committed chain — shorter, same-length
+  divergence, or forked prefix (rollback/fork) → `INVALID_ROTATION_CHAIN`
 - signature invalid under the current key
 - timestamp older or equal
 - malformed DID
@@ -314,9 +319,11 @@ Mitigations are future work.
 Prevented by:
 
 - strictly increasing `updatedAt` timestamps (record replay)
-- the per-DID rotation-chain **seq high-water mark** (chain rollback: a
-  shorter chain — e.g. presented by whoever holds a stolen retired key — is
-  rejected even with a valid signature under that retired key)
+- **prefix pinning** the per-DID committed rotation chain (chain rollback/fork:
+  an incoming chain that does not exactly extend the committed one — shorter, a
+  same-length divergence, or a fork below the committed tip presented by whoever
+  holds a stolen retired key — is rejected even with a valid signature under
+  that retired key)
 
 ---
 
@@ -371,6 +378,6 @@ These are intentionally deferred to keep v0.1 **minimal and implementable**.
 - DID resolution
 - provider portability
 - identity migration
-- rotation-chain-aware verification with rollback protection
+- rotation-chain-aware verification with rollback + fork (prefix-pinning) protection
 
 Registries remain plural, independently operated discovery services; future versions expand toward **federated and trust-minimized resolution**.

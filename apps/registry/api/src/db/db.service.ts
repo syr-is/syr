@@ -51,6 +51,13 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS did ON TABLE did_rotation_state TYPE string
         ASSERT string::starts_with($value, "did:syr:");
       DEFINE FIELD IF NOT EXISTS max_seq ON TABLE did_rotation_state TYPE int;
+      -- Committed rotation chain (prefix pinning): the incoming chain must
+      -- exactly extend this, so forks with the same/greater seq are rejected.
+      -- FLEXIBLE per element for the same reason hosting_record.rotation_chain is:
+      -- otherwise cleanup_table_fields strips nested keys and the chain round-trips
+      -- to empty objects, defeating the prefix comparison.
+      DEFINE FIELD IF NOT EXISTS chain ON TABLE did_rotation_state TYPE option<array>;
+      DEFINE FIELD IF NOT EXISTS chain.* ON TABLE did_rotation_state FLEXIBLE TYPE object;
       DEFINE FIELD IF NOT EXISTS updated_at ON TABLE did_rotation_state TYPE datetime;
       DEFINE INDEX IF NOT EXISTS idx_rotation_state_did ON TABLE did_rotation_state COLUMNS did UNIQUE;
 

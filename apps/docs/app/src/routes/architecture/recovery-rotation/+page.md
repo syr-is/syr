@@ -145,7 +145,7 @@ See [Key hierarchy & delegation](/architecture/key-hierarchy-delegation).
 
 - **`GET /api/identity/{did}/rotations`** — public, per-identity ordered chain (see [Public API](/reference/public-api)). Advertised in the [per-identity manifest](/reference/public-api) as `endpoints.rotations`.
 - **DID document** — `#root` always presents the **current** key ([did:syr method](/architecture/did-method)).
-- **Registries** — hosting-record updates attach the chain; registries verify it from genesis, check the record signature under the current key, and keep a per-DID seq high-water mark for rollback protection ([registry protocol](/architecture/registry-protocol)).
+- **Registries** — hosting-record updates attach the chain; registries verify it from genesis, check the record signature under the current key, and prefix-pin the committed chain (an incoming chain must exactly extend it) for rollback + fork protection ([registry protocol](/architecture/registry-protocol)).
 
 Trust-anchor rule for implementations: **never verify a root signature against the raw genesis key parsed from the DID** — always resolve genesis + chain to the current key first.
 
@@ -165,8 +165,8 @@ If both the root key and (for custodial identities) the password are lost, the i
 
 ## 9. Security Considerations
 
-- **Compromised current key** — the attacker can extend the chain and take the identity; rotation is not a compromise-_recovery_ mechanism, it is compromise _hygiene_ (rotate before, not after). Registries' seq high-water mark prevents the _previous_ holder from rolling the chain back.
-- **Fork attempts** — two statements with the same `seq` cannot both verify against one chain; verifiers reject any chain whose links don't match, and registries reject seq regressions.
+- **Compromised current key** — the attacker can extend the chain and take the identity; rotation is not a compromise-_recovery_ mechanism, it is compromise _hygiene_ (rotate before, not after). Registries prefix-pin the committed chain, preventing the _previous_ holder from rolling the chain back or forking below the committed tip.
+- **Fork attempts** — two statements with the same `seq` cannot both verify against one chain; verifiers reject any chain whose links don't match, and registries reject any chain that does not exactly extend the committed one (shorter, divergent, or forked).
 - **Cross-DID replay** — impossible: `did` is inside every signed payload.
 - **Chain withholding** — a verifier that has never seen the chain resolves the genesis key and will reject current-key signatures; publishing the chain (rotations endpoint, manifest, registry records) is therefore part of rotation, which the implementation automates.
 
