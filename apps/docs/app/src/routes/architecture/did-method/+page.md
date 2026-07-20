@@ -142,7 +142,7 @@ A resolved document MUST contain:
 }
 ```
 
-`#root` MUST present the **current** root key — for rotated identities this is the last `newRoot` in the rotation chain, not the genesis key encoded in the DID.
+`#root` MUST be the **current** root key — for rotated identities this is the last `newRoot` in the rotation chain, not the genesis key encoded in the DID.
 
 ---
 

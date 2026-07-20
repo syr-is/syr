@@ -12,7 +12,7 @@ This specification defines how a Syr identity rotates its **root key** while kee
 
 - the DID is **genesis-key-derived and never changes**
 - rotation appends **signed statements** to a per-DID **rotation chain**
-- any verifier holding the chain can derive the **current root key** from the DID alone
+- a verifier resolves the **current root key** from the DID **plus** its complete, validated rotation chain (obtained from the rotations endpoint, a registry record, or an embedded bundle) — the DID alone yields only the genesis key
 - past signatures stay auditable; delegations survive rotation under an explicit validity policy
 
 Rotation requires **possession of the current root key** — either the Aegis password (custodial seed) or an external signer such as Syner (self-custody). There is no recovery path for a lost key in v1.
@@ -62,7 +62,7 @@ flowchart LR
 
 **Canonical signing payload** — the RFC 8785 (JCS) serialization of:
 
-```
+```json
 { "did", "seq", "prevRoot", "newRoot", "rotatedAt" }
 ```
 
@@ -147,7 +147,7 @@ See [Key hierarchy & delegation](/architecture/key-hierarchy-delegation).
 - **DID document** — `#root` always presents the **current** key ([did:syr method](/architecture/did-method)).
 - **Registries** — hosting-record updates attach the chain; registries verify it from genesis, check the record signature under the current key, and prefix-pin the committed chain (an incoming chain must exactly extend it) for rollback + fork protection ([registry protocol](/architecture/registry-protocol)).
 
-Trust-anchor rule for implementations: **never verify a root signature against the raw genesis key parsed from the DID** — always resolve genesis + chain to the current key first.
+Trust-anchor rule for implementations: **hosting-record and publication signatures MUST be verified against the current root — resolve genesis + validated chain to the current key first, never against the raw genesis key parsed from the DID.** This does not blanket-ban genesis or retired keys: rotation statement 1 is verified under the genesis key, and a delegation minted before its signing key was retired stays verifiable under that retired root (per the §6 validity policy).
 
 ---
 

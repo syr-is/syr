@@ -64,11 +64,11 @@ A `.syr` bundle carries a [manifest v2](/architecture/export). Before any import
 
 Every bundle-ingesting route runs the same `assertBundleIntegrity()` backstop (`verifyBundleTrust` over the raw zip bytes) **before any DB/S3 write or import-token consumption**:
 
-| Route                                 | Auth | Purpose                                            |
-| ------------------------------------- | ---- | -------------------------------------------------- |
-| `POST /api/identity/import`           | Yes  | Import a bundle into a new (keyless) account       |
-| `POST /api/auth/register-with-import` | No   | Create account + import in one step (migrate flow) |
-| `POST /api/identity/sync-from-backup` | Yes  | Restore a backup into the caller's own identity    |
+| Route                                 | Auth | Purpose                                                                                                                                     |
+| ------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/identity/import`           | Yes  | Import a bundle into a custodial (Aegis) or self-custody identity, depending on whether the request carries `aegisBundle` or `import_token` |
+| `POST /api/auth/register-with-import` | No   | Create account + import in one step (migrate flow)                                                                                          |
+| `POST /api/identity/sync-from-backup` | Yes  | Restore a backup into the caller's own identity                                                                                             |
 
 No route bypasses the backstop; there is no code path where a v2 signed bundle reaches a write without hash/chain/signature re-verification.
 

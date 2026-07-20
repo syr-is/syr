@@ -21,7 +21,7 @@ Canonical protocol docs: `apps/docs/app/src/routes/`.
 
 ## Monorepo Structure
 
-```
+```text
 apps/
   syr/       # SvelteKit web app (primary instance implementation)
   docs/      # SveltePress protocol/spec docs site
@@ -79,7 +79,7 @@ reimplement crypto in TS — extend the crate, rebuild the WASM, wrap it.
 ## Cryptographic Conventions
 
 - **Ed25519 only**, implemented in `packages/rust/syr-crypto-core`, consumed through `syr-crypto-wasm`
-- **DID format**: `did:syr:z6Mk…` (multibase base58btc, multicodec `0xed01` + 32-byte Ed25519 public key). The DID is genesis-key-derived and never changes; the *current* root key is resolved through the rotation chain
+- **DID format**: `did:syr:z6Mk…` (multibase base58btc, multicodec `0xed01` + 32-byte Ed25519 public key). The DID is genesis-key-derived and never changes; the _current_ root key is resolved through the rotation chain
 - **Canonical signing**: RFC 8785 JCS via `canonicalize()` before signing — Rust and TS must byte-match; when adding a signed payload, add a cross-language test vector
 - **Delegation**: Root-signed statement `{ did, delegate, scope, createdAt, expiresAt?, signature }`; scopes `device | session | platform`
 - **Never persist plaintext seeds**: custodial seeds exist only Aegis-encrypted at rest; decrypt → use → zeroize in one scope
