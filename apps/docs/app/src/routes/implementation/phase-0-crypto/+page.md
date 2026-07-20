@@ -105,11 +105,12 @@ Used for creating canonical signing payloads for delegation statements, rotation
 
 ---
 
-## Key Rotation Stubs
+## Key Rotation Primitives
 
 ```typescript
 function createRotationStatement(
 	did: string,
+	seq: number,
 	newPublicKey: Uint8Array,
 	currentPrivateKey: Uint8Array
 ): Promise<RotationStatement>;
@@ -118,9 +119,14 @@ function verifyRotationStatement(
 	statement: RotationStatement,
 	currentPublicKey: Uint8Array
 ): Promise<boolean>;
+
+function verifyRotationChain(
+	did: string,
+	statements: RotationStatement[]
+): Promise<Uint8Array>; // current root key
 ```
 
-These compile and can be tested but have no UI or API endpoint in Phase 0. They establish the architectural pattern for key rotation.
+Started as Phase 0 stubs; now the implemented v1 rotation chain — see [Root key rotation](/architecture/recovery-rotation) for the statement format, validation rules, and the `POST /api/identity/rotate` flows.
 
 ---
 

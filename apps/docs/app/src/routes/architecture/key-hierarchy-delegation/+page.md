@@ -14,7 +14,7 @@ Goals:
 - protect the **root identity key** from routine exposure
 - enable **multi-device usage**
 - allow **revocation of compromised devices**
-- support future **recovery and rotation mechanisms**
+- compose with **root key rotation** (see [rotation spec](/architecture/recovery-rotation)) and future recovery mechanisms
 
 This document establishes the **minimum viable key model** for Syr v0.1.
 
@@ -162,12 +162,22 @@ Delegation is represented as a **signed statement**:
 
 Providers and clients MUST:
 
-1. Verify root signature.
+1. Verify the root signature (see 4.2.1 for which root key qualifies).
 2. Confirm DID matches signer.
 3. Check expiration (if present).
 4. Ensure delegation not revoked.
 
 If any check fails → delegation is invalid.
+
+#### 4.2.1 Validity across root key rotation
+
+Root keys rotate via the per-DID [rotation chain](/architecture/recovery-rotation); the DID itself never changes. Delegation signatures are validated against the chain as follows:
+
+- A delegation signed by the **current** root key is valid.
+- A delegation signed by a **retired** root key remains valid **iff its `createdAt` is earlier than that key's `rotatedAt`** in the chain (the key was still the root when it authorized the delegate). Verifiers holding the chain perform this timestamp check.
+- A retired key can never authorize **new** delegations — anything it signs after its `rotatedAt` is invalid.
+
+**Custodial rotation additionally re-signs** all active (non-revoked, non-expired) delegations with the new root key in the same flow, so verifiers that only track the current key keep accepting them without the timestamp rule. Self-custody (external) rotation cannot re-sign server-side; delegations created before the rotation rely on the timestamp rule above.
 
 ```mermaid
 flowchart TD
@@ -263,10 +273,8 @@ This is the primary safety property of delegation.
 
 If the root key is compromised:
 
-- attacker gains full identity control
-- recovery mechanisms are required (future spec)
-
-v0.1 assumes **root key safety**.
+- attacker gains full identity control, including the ability to rotate the root away from the owner
+- [rotation](/architecture/recovery-rotation) is compromise **hygiene** (rotate aging keys before exposure), not compromise recovery; recovery keys remain out of scope for v1
 
 ---
 
@@ -276,7 +284,7 @@ A compromised provider:
 
 - cannot forge delegations
 - cannot revoke devices without root signature
-- cannot rotate root key
+- cannot rotate the root key of a **self-custody** identity (rotation statements must be signed by the current root key, which the provider never holds); custodial (Aegis) identities additionally depend on the password, which the provider does not store in plaintext
 
 ---
 
@@ -319,9 +327,10 @@ Planned improvements:
 
 - social recovery guardians
 - threshold root keys
-- automated rotation chains
 - hardware-backed attestation
 - encrypted delegation distribution
+
+(Root key **rotation chains** shipped — see [Root key rotation](/architecture/recovery-rotation).)
 
 These are deferred to maintain **minimal implementability**.
 

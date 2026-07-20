@@ -264,6 +264,27 @@ This is the same enrichment pattern used by the home timeline and following list
 
 ---
 
+## `GET /api/identity/[did]/rotations`
+
+Route file: `api/identity/[did]/rotations/+server.ts`. Returns the **ordered root-key rotation chain** for the DID. Public, unauthenticated, served with `Cache-Control: public, max-age=300` (same treatment as the DID document endpoint). Verifiers replay the chain from the DID-derived **genesis** key to resolve the **current** root key — see [Root key rotation](/architecture/recovery-rotation).
+
+### Response (bare object, like the DID document endpoint)
+
+| Field          | Type   | Description                                                       |
+| -------------- | ------ | ----------------------------------------------------------------- |
+| `did`          | string | The identity's DID                                                |
+| `current_root` | string | Multibase current root public key (last `newRoot`, or genesis)   |
+| `rotations`    | array  | Ordered rotation statements (seq 1..n); empty when never rotated |
+
+Each rotation statement: `{ did, seq, prevRoot, newRoot, rotatedAt, signature }` (`RotationStatementSchema` in `@syr-is/types`).
+
+### Errors
+
+- **400** invalid DID.
+- **404** if the identity is not hosted on this instance.
+
+---
+
 ## Discovery
 
 ### Instance-level: `GET /.well-known/syr`
@@ -319,6 +340,7 @@ Route file: `.well-known/syr/[did]/+server.ts`. Returns a **per-identity manifes
 | `endpoints.stories`          | string            | Absolute URL for public stories API      |
 | `endpoints.uploads`          | string            | Absolute URL for public uploads API      |
 | `endpoints.did_document`     | string            | Absolute URL for DID document            |
+| `endpoints.rotations`        | string (optional) | Absolute URL for the root-key rotation chain |
 | `endpoints.public_following` | string (optional) | Absolute URL for public following list   |
 | `endpoints.public_emojis`    | string (optional) | Absolute URL for user's emoji catalog    |
 | `endpoints.public_gifs`      | string (optional) | Absolute URL for user's GIF catalog      |

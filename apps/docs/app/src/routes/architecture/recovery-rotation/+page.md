@@ -1,270 +1,179 @@
 ---
-title: Syr Recovery & Key Rotation Specification v0.1
+title: Syr Root Key Rotation Specification v1
 ---
 
-# Syr Recovery & Key Rotation Specification v0.1
+# Syr Root Key Rotation Specification v1
 
-> **Product status:** Current Syr scope follows [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified): **one DID, one root key**; rotation and recovery here are **not** active roadmap items. This document is kept as reference for a possible future phase.
+> **Product status:** Root key rotation via a per-DID signed chain is **implemented**. Recovery keys (rotating away a *lost* root key) remain **out of scope** for v1 — see §8.
 
 ## 1. Purpose
 
-This specification defines how a Syr identity can:
+This specification defines how a Syr identity rotates its **root key** while keeping the same `did:syr` identifier:
 
-- recover from **lost root keys**
-- rotate compromised or aging root keys
-- maintain **continuous identity ownership**
-- preserve **DID stability** across recovery events
+- the DID is **genesis-key-derived and never changes**
+- rotation appends **signed statements** to a per-DID **rotation chain**
+- any verifier holding the chain can derive the **current root key** from the DID alone
+- past signatures stay auditable; delegations survive rotation under an explicit validity policy
 
-Without recovery and rotation, Syr identities would be
-**permanently fragile** and unusable in real-world conditions.
-
----
-
-## 2. Design Principles
-
-### 2.1 Identity continuity is paramount
-
-Recovery and rotation MUST:
-
-- preserve the same `did:syr` identifier
-- maintain verifiable ownership history
-- avoid dependence on any single institution or provider
+Rotation requires **possession of the current root key** — either the Aegis password (custodial seed) or an external signer such as Syner (self-custody). There is no recovery path for a lost key in v1.
 
 ---
 
-### 2.2 Recovery must not enable silent takeover
-
-Any recovery mechanism MUST ensure:
-
-- attackers cannot replace the root key undetected
-- recovery requires **independent trust factors**
-- recovery events are **cryptographically auditable**
-
----
-
-### 2.3 Minimal viable recovery for v0.1
-
-v0.1 defines only:
-
-- **recovery key method**
-- **root key rotation via signed chain**
-
-Social recovery, guardians, and threshold cryptography
-are **future extensions**.
-
----
-
-## 3. Recovery Key Model
-
-### 3.1 Recovery key definition
-
-A **recovery key** is a secondary keypair that:
-
-- is generated at identity creation
-- is stored separately from the root key
-- can authorize **root key replacement**
-
-The recovery key MUST:
-
-- never be used for routine authentication
-- be protected with strong offline storage
-
----
-
-### 3.2 Recovery statement format
-
-```mermaid
-sequenceDiagram
-    participant User as User (Recovery Key)
-    participant Provider
-    participant Registry
-
-    Note over User: Root key lost or compromised
-    User->>User: Generate new root keypair
-    User->>User: Sign recovery statement with recovery key
-    Note right of User: { did, newRoot, recoveredAt, signature }
-    User->>Provider: Submit recovery statement
-    Provider->>Provider: Verify recovery key signature
-    Provider->>Provider: Accept new root key
-    Provider->>Provider: Preserve old root in history
-    User->>Registry: Sign new hosting record with new root key
-    Registry->>Registry: Verify via key history chain
-    Note over User, Registry: DID unchanged, identity preserved
-```
-
-Root key replacement is expressed as:
-
-```json
-{
-	"did": "did:syr:...",
-	"newRoot": "<newRootPublicKey>",
-	"recoveredAt": "ISO-8601 timestamp",
-	"signature": "<signed by recovery key>"
-}
-```
-
----
-
-### 3.3 Recovery verification rules
-
-Resolvers and providers MUST:
-
-1. Verify signature using the registered recovery public key.
-2. Confirm timestamp freshness.
-3. Accept the **new root key** as authoritative.
-4. Preserve previous root keys in **history** (for auditability).
-
----
-
-## 4. Root Key Rotation (Non-compromise)
-
-Rotation may occur without compromise for:
-
-- key aging
-- cryptographic upgrades
-- security hygiene
-
----
-
-### 4.1 Rotation statement
-
-```json
-{
-	"did": "did:syr:...",
-	"newRoot": "<newRootPublicKey>",
-	"rotatedAt": "ISO-8601 timestamp",
-	"signature": "<signed by current root key>"
-}
-```
-
----
-
-### 4.2 Rotation verification
-
-Systems MUST:
-
-- verify signature using **current root key**
-- update root key reference
-- append rotation event to **key history**
-
----
-
-## 5. Key History Chain
-
-Each identity maintains a **verifiable chain** of root keys:
+## 2. Chain Model
 
 ```mermaid
 flowchart LR
-    Root0["root0 (original)"] -->|"rotation signed by root0"| Root1["root1"]
-    Root1 -->|"rotation signed by root1"| Root2["root2"]
+    Genesis["genesis key
+    (encoded in the DID)"] -->|"statement seq 1
+    signed by genesis"| Root1["root1"]
+    Root1 -->|"statement seq 2
+    signed by root1"| Root2["root2"]
     Root2 -->|"..."| RootN["rootN (current)"]
-
-    Recovery["Recovery Key"] -.->|"can replace any root"| Root1
-    Recovery -.->|"can replace any root"| Root2
 ```
 
-```text
-root₀ → root₁ → root₂ → ...
+- The **genesis key** is the Ed25519 public key encoded in `did:syr:z…`. It is the chain's anchor; no external registry is needed to establish it.
+- Each **rotation statement** retires one key (`prevRoot`) and installs its successor (`newRoot`), signed by the retiring key's private half — *the retiring key authorizes its successor*.
+- The **current root key** is the `newRoot` of the last statement, or the genesis key when the chain is empty.
+- The chain is **append-only**: statements are never edited or removed.
+
+---
+
+## 3. Rotation Statement (payload v2)
+
+```json
+{
+	"did": "did:syr:z6Mk…",
+	"seq": 2,
+	"prevRoot": "z6Mk…",
+	"newRoot": "z6Mk…",
+	"rotatedAt": "2026-01-01T00:00:00.000Z",
+	"signature": "z…"
+}
 ```
 
-Rules:
+| Field       | Meaning                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `did`       | The identity's DID. Included in the signed payload — chains cannot be replayed across DIDs.   |
+| `seq`       | 1-based chain position. Strictly increasing, **no gaps**.                                     |
+| `prevRoot`  | Multibase key being retired. Statement 1's `prevRoot` MUST equal the genesis key.             |
+| `newRoot`   | Multibase key taking over as root.                                                            |
+| `rotatedAt` | ISO-8601 timestamp. Non-decreasing along the chain.                                           |
+| `signature` | Multibase Ed25519 signature by **`prevRoot`'s private key** over the canonical payload below. |
 
-- Each transition MUST be signed by:
-  - previous root key **OR**
-  - recovery key
-- History MUST be append-only.
-- Historical signatures MUST remain valid.
+**Canonical signing payload** — the RFC 8785 (JCS) serialization of:
 
----
+```
+{ "did", "seq", "prevRoot", "newRoot", "rotatedAt" }
+```
 
-## 6. Registry Interaction During Rotation
-
-After recovery or rotation:
-
-1. Identity signs **new hosting record** using the **new root key**.
-2. Registry verifies using updated key history.
-3. Provider resolution continues unchanged.
-
-This ensures:
-
-> **provider portability survives key changes**.
+Implementations MUST byte-match the JCS output between Rust (`syr-crypto-core::rotation`) and TS (`@syr-is/crypto`). Statements created by Syr instances use millisecond-precision UTC `Z` timestamps (`2026-01-01T00:00:00.000Z`) so the signed `rotatedAt` survives datetime storage roundtrips losslessly; externally submitted statements MUST use the same form.
 
 ---
 
-## 7. Security Considerations
+## 4. Chain Validation Rules
 
-### 7.1 Lost root key
+`verify_rotation_chain(did, statements) → current key` MUST enforce, per statement *i* (1-based):
 
-If root key is lost:
+1. **DID match** — `statement.did == did` (rejects cross-DID replay).
+2. **Seq continuity** — `statement.seq == i`; 1-based, strictly increasing, no gaps.
+3. **Link check** — `statement.prevRoot` equals the prior statement's `newRoot`, or the **genesis key** for statement 1 (rejects forks).
+4. **Signature check** — `signature` verifies under `prevRoot` over the JCS canonical payload.
+5. **Timestamp monotonicity** — `rotatedAt` is non-decreasing along the chain.
 
-- recovery key enables identity restoration
-- DID identifier remains unchanged
-- prior signatures remain auditable
-
----
-
-### 7.2 Recovery key compromise
-
-If recovery key is compromised:
-
-- attacker MAY replace root key
-- mitigation requires **future social/threshold recovery**
-
-v0.1 assumes secure recovery key storage.
+The result is the last `newRoot` (genesis when the chain is empty). Any failure invalidates the whole chain — verifiers MUST NOT accept a prefix.
 
 ---
 
-### 7.3 Simultaneous compromise
+## 5. Rotation Flows
 
-If both:
+### 5.1 Custodial rotation (`mode: "aegis"`)
 
-- root key
-- recovery key
+`POST /api/identity/rotate` `{ "mode": "aegis", "password": "…" }` (session-authenticated, own DID only):
 
-are compromised → identity loss is unavoidable.
+```mermaid
+sequenceDiagram
+    participant User
+    participant Instance as Syr Instance
+    participant Registry
 
-Future multi-party recovery will mitigate this.
+    User->>Instance: POST /api/identity/rotate { mode: aegis, password }
+    Instance->>Instance: Decrypt Aegis seed (password) — proves possession
+    Instance->>Instance: Generate new root keypair
+    Instance->>Instance: Sign statement seq n+1 with OLD seed
+    Instance->>Instance: Persist chain row + update identity root key
+    Instance->>Instance: Re-wrap NEW seed under Aegis(password)
+    Instance->>Instance: Re-sign active delegations with new root
+    Instance->>Instance: Enqueue registry_sync outbox jobs
+    Instance->>Instance: Zeroize seed material
+    User->>Registry: (later) signed hosting record + rotation chain
+```
+
+In one flow, rolled back on any mid-step failure (rollback ledger):
+
+1. verify the password by decrypting the Aegis seed (the seed MUST match the current root),
+2. generate the new root keypair,
+3. create the statement **signed by the old key**,
+4. persist the chain row and move `identity.public_key` to the new root,
+5. re-wrap the **new** seed under Aegis(password), replacing the old `aegis_*` columns,
+6. **re-sign active delegations** (non-revoked, non-expired) with the new root,
+7. enqueue the `registry_sync` outbox jobs so every publication registry gets a hosting record re-signed under the new root (the push includes the chain),
+8. zeroize all seed material.
+
+### 5.2 Self-custody rotation (`mode: "external"`)
+
+`POST /api/identity/rotate` `{ "mode": "external", "statement": { … } }`:
+
+The client (Syner or any external signer) builds and signs the fully-formed statement itself; **no server-side key material is involved**. The instance validates the statement against the stored chain — `seq = n+1`, `prevRoot` = current root, valid signature, genesis linkage, monotonic `rotatedAt` — then persists the row and updates the identity's current key. Registry re-sync jobs are enqueued; the user signs them with the new key via the existing Syner signing session flow.
+
+A dedicated Syner rotation UI is planned; until then external statements can be produced by any tool implementing this spec.
+
+Identities that still hold an Aegis bundle MUST rotate via `mode: "aegis"` (or remove Aegis first) — otherwise the stored custodial seed would silently stop matching the root key.
 
 ---
 
-## 8. Privacy Considerations
+## 6. Delegation Validity Across Rotation
 
-Recovery and rotation reveal:
+A delegation signed by a **retired** root key remains valid **iff it was created before that key's `rotatedAt`** (verifiers holding the chain check the delegation's `createdAt` against the retiring statement's `rotatedAt`). A retired key can never mint *new* delegations.
 
-- timing of security events
-- number of key transitions
+Additionally, **custodial rotation re-signs** all active (non-revoked, non-expired) delegations with the new root, so verifiers that only track the current key keep accepting them without consulting timestamps. External (self-custody) rotation cannot re-sign server-side; those delegations rely on the timestamp policy above.
 
-Future work MAY include:
-
-- encrypted recovery metadata
-- privacy-preserving rotation proofs
-
-Not included in v0.1.
+See [Key hierarchy & delegation](/architecture/key-hierarchy-delegation).
 
 ---
 
-## 9. Future Extensions (Not in v0.1)
+## 7. Publication & Discovery
 
-Planned improvements:
+- **`GET /api/identity/{did}/rotations`** — public, per-identity ordered chain (see [Public API](/reference/public-api)). Advertised in the [per-identity manifest](/reference/public-api) as `endpoints.rotations`.
+- **DID document** — `#root` always presents the **current** key ([did:syr method](/architecture/did-method)).
+- **Registries** — hosting-record updates attach the chain; registries verify it from genesis, check the record signature under the current key, and keep a per-DID seq high-water mark for rollback protection ([registry protocol](/architecture/registry-protocol)).
 
-- social recovery guardians
-- threshold signatures
-- time-locked recovery
-- institutional recovery attestations
-- hardware-bound recovery approval
+Trust-anchor rule for implementations: **never verify a root signature against the raw genesis key parsed from the DID** — always resolve genesis + chain to the current key first.
 
-These are deferred to maintain **implementability**.
+---
+
+## 8. Recovery Keys — Out of Scope (v1)
+
+v1 rotation **requires possession** of the current root key: the Aegis password (custodial) or the external signer holding the seed (self-custody). There is deliberately **no recovery-key mechanism**:
+
+- A recovery key is a second long-lived secret with root-replacement power; it doubles the theft surface while being stored *less* carefully than the root key in practice.
+- Custodial identities already have a working possession path (the password); self-custody users chose to hold their own keys, and a server-side recovery override would undermine exactly that guarantee.
+- Doing recovery *well* (social guardians, thresholds, time-locks) is a protocol of its own; shipping a naive single-recovery-key scheme would freeze a weak design into the trust model.
+
+If both the root key and (for custodial identities) the password are lost, the identity cannot be rotated; the practical path is a new DID plus [export](/architecture/export)/[import](/architecture/import) of content. Social/threshold recovery remains a candidate for a future phase.
+
+---
+
+## 9. Security Considerations
+
+- **Compromised current key** — the attacker can extend the chain and take the identity; rotation is not a compromise-*recovery* mechanism, it is compromise *hygiene* (rotate before, not after). Registries' seq high-water mark prevents the *previous* holder from rolling the chain back.
+- **Fork attempts** — two statements with the same `seq` cannot both verify against one chain; verifiers reject any chain whose links don't match, and registries reject seq regressions.
+- **Cross-DID replay** — impossible: `did` is inside every signed payload.
+- **Chain withholding** — a verifier that has never seen the chain resolves the genesis key and will reject current-key signatures; publishing the chain (rotations endpoint, manifest, registry records) is therefore part of rotation, which the implementation automates.
 
 ---
 
 ## 10. Versioning
 
-**Version:** v0.1  
-**Status:** Draft  
-**Scope:** Minimal recovery and rotation sufficient for:
-
-- real-world identity survivability
-- safe root key replacement
-- uninterrupted DID continuity
-
-This completes the **core cryptographic resilience layer** of Syr.
+**Version:** v1
+**Status:** Implemented — `syr-crypto-core::rotation`, `@syr-is/crypto`, `POST /api/identity/rotate`, `GET /api/identity/{did}/rotations`, chain-aware registry + resolver.
+**Out of scope:** recovery keys, social/threshold recovery, encrypted rotation metadata.

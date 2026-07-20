@@ -143,17 +143,18 @@ This page maps each requirement from the architecture specifications to the curr
 
 ---
 
-## Recovery & Rotation Specification
+## Rotation Specification (Recovery out of scope)
 
-**Product note:** Under [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified), rotation and recovery are **out of scope** until a future phase explicitly revives them. Portability is **migration + export/import**; new root keys imply a **new DID**.
+**Product note:** Root key rotation via a per-DID signed chain is **implemented** — see [Root key rotation](/architecture/recovery-rotation). The DID stays genesis-derived; the current root key is resolved through the chain. **Recovery keys remain out of scope** for v1: rotation requires possession (Aegis password or external signer).
 
-| Requirement                                  | Status           | Details                                                                                                                      |
-| -------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Recovery key generation at identity creation | **Out of scope** | Deferred per simplified lifecycle; see [roadmap](/roadmap) Phase 5 note.                                                     |
-| Recovery statement format                    | **Out of scope** | Deferred.                                                                                                                    |
-| Root key rotation (signed chain)             | **Out of scope** | `createRotationStatement()` / `verifyRotationStatement()` exist in `@syr-is/crypto` but are **not** roadmap-backed features. |
-| Key history chain (append-only)              | **Out of scope** | Not planned under simplified lifecycle.                                                                                      |
-| Registry update after rotation               | **Out of scope** | Registry updates apply to **hosting** migration, not key rotation.                                                           |
+| Requirement                                  | Status           | Details                                                                                                                                                                                                                                     |
+| -------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recovery key generation at identity creation | **Out of scope** | Deliberate: no second long-lived root-replacement secret in v1; see [rotation spec §8](/architecture/recovery-rotation).                                                                                                                    |
+| Recovery statement format                    | **Out of scope** | Deferred with recovery keys.                                                                                                                                                                                                                |
+| Root key rotation (signed chain)             | **Implemented**  | Statement v2 `{ did, seq, prevRoot, newRoot, rotatedAt }` (JCS, signed by retiring key) in `syr-crypto-core::rotation`; `POST /api/identity/rotate` with `aegis` (custodial) and `external` (self-custody) modes; rollback ledger on failure. |
+| Key history chain (append-only)              | **Implemented**  | `identity_rotation` table (unique `did`+`seq`); `verify_rotation_chain()` in Rust/WASM/`@syr-is/crypto`; public `GET /api/identity/{did}/rotations`; manifest `endpoints.rotations`; `getCurrentRootKey()` trust anchor across the app.       |
+| Registry update after rotation               | **Implemented**  | Rotation enqueues `registry_sync` jobs; pushes attach `rotation_chain`; registry verifies chain → current key, keeps per-DID seq high-water mark (rollback protection); `@syr-is/resolver` verifies chain-bearing hosting records.          |
+| Delegation validity across rotation          | **Implemented**  | Retired-root delegations stay valid if created before that key's `rotatedAt`; custodial rotation re-signs active delegations with the new root. See [key hierarchy §4.2.1](/architecture/key-hierarchy-delegation).                          |
 
 ---
 

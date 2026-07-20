@@ -1,48 +1,45 @@
 ---
-title: Identity Lifecycle (Simplified — One DID, One Key)
+title: Identity Lifecycle (One DID, Rotating Root Keys)
 ---
 
-# Identity Lifecycle (Simplified — One DID, One Key)
+# Identity Lifecycle (One DID, Rotating Root Keys)
 
 ## 1. Purpose
 
-Syr product architecture **defers** root key **rotation** and **recovery** flows as first-class features. This document states the **simplified lifecycle** so docs, roadmap, and implementation stay aligned: **one `did:syr` maps to one root keypair** for the lifetime of that identity on a provider.
-
-For portability, users rely on **export / import** and **registry updates** (new provider URL), not on in-place cryptographic key rotation.
+This document states the identity lifecycle so docs, roadmap, and implementation stay aligned: **one `did:syr` for the lifetime of the identity**, anchored to the **genesis root key** encoded in the identifier, with the *current* root key resolved through an append-only **rotation chain**.
 
 **Related**
 
 - [Identity model](/architecture/identity-model)
-- [Recovery & Rotation v0.1](/architecture/recovery-rotation) (historical spec; see §4 below)
+- [Root key rotation](/architecture/recovery-rotation) — chain format, validation, flows
 - [Follows and timeline](/architecture/follows-and-timeline) (social features assume stable DIDs)
 
 ---
 
 ## 2. Rules
 
-1. **No root rotation API** — The platform does not expose “rotate root key while keeping the same DID” as a supported path.
-2. **No recovery-key ceremony** — No separate recovery key generation, threshold guardians, or social recovery as part of core identity v1.
-3. **No append-only key history chain** — No required on-chain or in-DB rotation log for the simplified model.
-4. **Changing keys means a new identity** — If a user must use a new root keypair, they create a **new DID** and move content via **export → import** on the new account (and update registry to point the old DID’s hosting record only if still migrating—that flow follows [import](/architecture/import) and registry protocol, not rotation).
-
-**Delegation** (device keys) remains available for operational signing (see [Key hierarchy](/architecture/key-hierarchy-delegation)); delegation is not “rotation” of the root DID.
+1. **The DID never changes** — `did:syr:z…` encodes the *genesis* Ed25519 key and is fixed at creation. Rotation moves the *current* root key, not the identifier.
+2. **Root rotation is a first-class API** — `POST /api/identity/rotate` appends a signed statement to the per-DID chain (custodial `aegis` mode or self-custody `external` mode). See [Root key rotation](/architecture/recovery-rotation).
+3. **Key history is an append-only chain** — each statement is signed by the retiring key; verifiers replay the chain from the genesis key to derive the current root. The chain is public (`GET /api/identity/{did}/rotations`, advertised in the per-identity manifest).
+4. **Rotation requires possession** — the Aegis password (custodial) or an external signer holding the seed (Syner). **Recovery keys are out of scope for v1**: a lost root key with no custodial seed cannot be rotated away; that case remains "new DID + export/import".
+5. **Delegation** (device keys) remains available for operational signing (see [Key hierarchy](/architecture/key-hierarchy-delegation)); delegation is not rotation of the root.
 
 ---
 
 ## 3. Relationship to migration
 
-**Migration** (same DID, new provider) is unchanged: export bundle from provider A, import on provider B, update registry `provider` URL with a root-signed hosting record. The **DID and root key material** are the same; only hosting moves.
+**Migration** (same DID, new provider) is unchanged: export bundle from provider A, import on provider B, update registry `provider` URL with a root-signed hosting record. Rotation composes with migration: hosting records are signed by the **current** root key and carry the rotation chain so registries and resolvers can verify them (see [registry protocol](/architecture/registry-protocol)).
 
-**New keys** → **new DID** → treat as **new person** from the protocol’s perspective unless you explicitly build a future “account linking” feature (out of scope here).
+**Lost keys without Aegis** → **new DID** → treat as a new identity from the protocol's perspective; move content via **export → import**.
 
 ---
 
-## 4. Status of Recovery & Rotation spec
+## 4. Status of the rotation spec
 
-The [Recovery & Rotation v0.1](/architecture/recovery-rotation) document remains in the tree as **reference material** for a possible future phase. It is **not** current product scope. The [spec-to-implementation map](/reference/spec-mapping) marks recovery/rotation items as **out of scope** until a future phase explicitly revives them.
+[Root key rotation](/architecture/recovery-rotation) is the **implemented v1 spec** (chain format, JCS payload, validation rules, custodial + external flows, delegation validity policy). Recovery keys and social/threshold recovery stay **out of scope** until a future phase explicitly picks them up. The [spec-to-implementation map](/reference/spec-mapping) tracks per-requirement status.
 
 ---
 
 ## 5. Phase 0 blueprint alignment
 
-[Phase 0 success criteria](/implementation/phase-0-blueprint) treat **exit condition 6** (basic key rotation path) as **not applicable** under this simplified model: **rotation is not supported**; **migration and export/import** are the supported portability paths.
+[Phase 0 success criteria](/implementation/phase-0-blueprint) exit condition 6 (basic key rotation path) is **met** by the chain-based rotation API: rotation preserves the DID, past signatures stay auditable, and registry records are re-signed under the new root.

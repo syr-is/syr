@@ -221,7 +221,7 @@ Deep link flow:
 | `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updated_at }`        |
 | `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, created_at }` |
 | `post_sign`       | Sign a post or content mutation            | `{ did, action, content_hash, ... }`   |
-| `rotation`        | Rotate root key                            | `{ did, new_root, rotated_at }`        |
+| `rotation`        | Rotate root key (chain statement)          | `{ did, seq, prevRoot, newRoot, rotatedAt }` |
 
 ---
 

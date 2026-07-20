@@ -66,7 +66,7 @@ Make identity truly portable across SYR instances.
 - Full migration flow: export from provider A, import on provider B, update registry
 - Provider-to-provider identity verification
 
-**Not in scope (simplified lifecycle):** In-place **root key rotation** and **append-only key history** are deferred. See [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified). Changing keys is modeled as a **new DID** plus export/import, not rotation of an existing DID. Helper routines such as `createRotationStatement()` in `@syr-is/crypto` may remain for hypothetical future use but are not roadmap commitments.
+**Shipped: root key rotation.** In-place **root key rotation** with an **append-only key history chain** is implemented — see [Root key rotation](/architecture/recovery-rotation). The DID never changes; `POST /api/identity/rotate` (custodial `aegis` / self-custody `external` modes) appends chain statements, the public chain is served at `GET /api/identity/{did}/rotations`, and registries verify chain-bearing hosting records with rollback protection. **Recovery keys stay out of scope** (rotation requires possession of the current key); a Syner rotation UI for the external mode is a follow-up.
 
 ---
 
