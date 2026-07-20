@@ -37,7 +37,7 @@ export class DbService implements OnModuleDestroy {
       DEFINE FIELD IF NOT EXISTS provider ON TABLE hosting_record TYPE string;
       DEFINE FIELD IF NOT EXISTS updated_at ON TABLE hosting_record TYPE datetime;
       DEFINE FIELD IF NOT EXISTS signature ON TABLE hosting_record TYPE string;
-      DEFINE FIELD IF NOT EXISTS rotation_chain ON TABLE hosting_record FLEXIBLE TYPE option<array>;
+      DEFINE FIELD IF NOT EXISTS rotation_chain ON TABLE hosting_record TYPE option<array>;
       DEFINE FIELD IF NOT EXISTS created_at ON TABLE hosting_record TYPE datetime DEFAULT time::now();
       DEFINE INDEX IF NOT EXISTS idx_hosting_did ON TABLE hosting_record COLUMNS did UNIQUE;
 

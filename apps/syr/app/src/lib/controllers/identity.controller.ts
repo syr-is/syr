@@ -21,6 +21,7 @@ import type {
 	IdentityExportBundle
 } from '@syr-is/types';
 import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
+import { getRotationChain } from '$lib/server/root-key.server';
 
 type UserIdInput = RecordId | string;
 
@@ -266,16 +267,14 @@ export class IdentityController {
 		// delegated_key and having it accepted without the root key's signature.
 		// Use the stored canonical delegation string (exact bytes the client signed)
 		// so verify() matches; reconstructing from DB fields would be fragile.
-		const rootKeyClean = decodePublicKey(identity.public_key);
-
 		const canonicalDelegation = dk.canonical_delegation;
 		if (!canonicalDelegation) {
 			throw new Error('Delegation record is missing canonical statement.');
 		}
-		const delegationValid = await verify(
-			canonicalDelegation,
-			decodeMultibase(dk.signature),
-			rootKeyClean
+		const delegationValid = await this.verifyDelegationRootSignature(
+			identity,
+			dk,
+			canonicalDelegation
 		);
 		if (!delegationValid) {
 			throw new Error('Delegation signature invalid. Device key is not authorized by root.');
@@ -293,6 +292,39 @@ export class IdentityController {
 		}
 
 		return { identity, delegatedKey: dk };
+	}
+
+	/**
+	 * Verify a delegation's root signature under the rotation-chain policy:
+	 * - valid when signed by the CURRENT root key (custodial rotation re-signs
+	 *   active delegations, so this is the common case), or
+	 * - valid when signed by a RETIRED root key, provided the delegation was
+	 *   created before that key's rotatedAt (the key was still the root when
+	 *   it authorized the delegate). Self-custody (external) rotation cannot
+	 *   re-sign server-side, so its pre-rotation delegations rely on this.
+	 */
+	private async verifyDelegationRootSignature(
+		identity: Identity,
+		dk: DelegatedKey,
+		canonicalDelegation: string
+	): Promise<boolean> {
+		const signatureBytes = decodeMultibase(dk.signature);
+
+		const currentRootKey = decodePublicKey(identity.public_key);
+		if (await verify(canonicalDelegation, signatureBytes, currentRootKey)) {
+			return true;
+		}
+
+		const chain = await getRotationChain(identity.did);
+		for (const statement of chain) {
+			const rotatedAt = new Date(statement.rotatedAt);
+			if (!(dk.created_at < rotatedAt)) continue;
+			const retiredKey = decodePublicKey(statement.prevRoot);
+			if (await verify(canonicalDelegation, signatureBytes, retiredKey)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
