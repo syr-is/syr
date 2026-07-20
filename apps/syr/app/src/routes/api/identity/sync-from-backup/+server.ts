@@ -7,6 +7,7 @@ import { identityRepository } from '$lib/repositories/identity.repository';
 import { consumeImportToken } from '$lib/server/export-verify-store';
 import {
 	parseBundle,
+	assertBundleIntegrity,
 	validateBundle,
 	validateBundleForDataOnlyImport,
 	syncPostsAndProfileFromBundle,
@@ -50,6 +51,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const useDataOnlyImport = typeof importToken === 'string' && importToken.length > 0;
 	const parsed = await parseBundle(file);
+
+	// Authenticity backstop: hard-fail a tampered v2 signed bundle before any writes
+	// (or token consumption). Mirrors POST /api/identity/import. Legacy v1 and
+	// explicitly-unsigned v2 bundles pass through; only a v2 SIGNED bundle that fails
+	// a hash/chain/signature check is rejected (HTTP 422 IMPORT_TAMPERED).
+	await assertBundleIntegrity(parsed);
 
 	let did: string;
 

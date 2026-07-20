@@ -60,7 +60,17 @@ When the backup has no `identity.sigil`, it contains profile, posts, and assets 
 
 ## 4. Bundle authenticity verification (manifest v2)
 
-A `.syr` bundle carries a [manifest v2](/architecture/export). Before any import, the bundle is classified into one of three trust states. The **import dialog** classifies client-side for immediate feedback, and the **server re-verifies from the raw zip bytes on `POST /api/identity/import`** — the server is always the authority; a tampered bundle can never be imported by trusting the client.
+A `.syr` bundle carries a [manifest v2](/architecture/export). Before any import, the bundle is classified into one of three trust states. The **import dialog** classifies client-side for immediate feedback, and the **server re-verifies from the raw zip bytes on every route that ingests a `.syr` bundle** — the server is always the authority; a tampered bundle can never be imported by trusting the client.
+
+Every bundle-ingesting route runs the same `assertBundleIntegrity()` backstop (`verifyBundleTrust` over the raw zip bytes) **before any DB/S3 write or import-token consumption**:
+
+| Route                                 | Auth | Purpose                                            |
+| ------------------------------------- | ---- | -------------------------------------------------- |
+| `POST /api/identity/import`           | Yes  | Import a bundle into a new (keyless) account       |
+| `POST /api/auth/register-with-import` | No   | Create account + import in one step (migrate flow) |
+| `POST /api/identity/sync-from-backup` | Yes  | Restore a backup into the caller's own identity    |
+
+No route bypasses the backstop; there is no code path where a v2 signed bundle reaches a write without hash/chain/signature re-verification.
 
 ### Trust states
 
@@ -108,7 +118,7 @@ Any failure yields `tampered` with a precise sub-code; the server maps it to **H
 | `/api/identity/import-heartbeat` | GET    | —    | SSE; receive import_token when Syner verifies              |
 | `/api/identity/export-verify`    | POST   | No   | Syner calls to verify; issues export_token or import_token |
 
-On `POST /api/identity/import`, a tampered v2 signed bundle is rejected with **HTTP 422** and code `IMPORT_TAMPERED` before any identity/profile/post/asset write.
+On `POST /api/identity/import`, `POST /api/auth/register-with-import`, and `POST /api/identity/sync-from-backup`, a tampered v2 signed bundle is rejected with **HTTP 422** and code `IMPORT_TAMPERED` before any identity/profile/post/asset write.
 
 ---
 

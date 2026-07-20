@@ -11,6 +11,7 @@ import { sessionRepository } from '$lib/repositories/session.repository';
 import { peekPublicImportToken, consumePublicImportToken } from '$lib/server/export-verify-store';
 import {
 	parseBundle,
+	assertBundleIntegrity,
 	validateBundle,
 	validateBundleForDataOnlyImport,
 	importIdentityAndProfile,
@@ -97,6 +98,12 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress,
 
 	const useDataOnlyImport = typeof importToken === 'string' && importToken.length > 0;
 	const parsed = await parseBundle(file);
+
+	// Authenticity backstop: hard-fail a tampered v2 signed bundle before any writes
+	// (or token consumption). Mirrors POST /api/identity/import. Legacy v1 and
+	// explicitly-unsigned v2 bundles pass through; only a v2 SIGNED bundle that fails
+	// a hash/chain/signature check is rejected (HTTP 422 IMPORT_TAMPERED).
+	await assertBundleIntegrity(parsed);
 
 	let did: string;
 	let aegisBundle: z.infer<typeof AegisBundleSchema> | null = null;
