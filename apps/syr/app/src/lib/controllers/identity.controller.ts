@@ -21,9 +21,27 @@ import type {
 	IdentityExportBundle
 } from '@syr-is/types';
 import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
-import { getRotationChain } from '$lib/server/root-key.server';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 
 type UserIdInput = RecordId | string;
+
+/**
+ * Extract the signed `createdAt` from a canonical delegation string (JCS JSON).
+ * This value is covered by the delegation signature, so it is the trustworthy
+ * source for the retired-root timestamp gate. Returns null when the field is
+ * absent or unparseable so the gate fails closed rather than falling back to a
+ * mutable DB column.
+ */
+function parseDelegationCreatedAt(canonicalDelegation: string): Date | null {
+	try {
+		const parsed = JSON.parse(canonicalDelegation) as { createdAt?: unknown };
+		if (typeof parsed.createdAt !== 'string') return null;
+		const date = new Date(parsed.createdAt);
+		return Number.isNaN(date.getTime()) ? null : date;
+	} catch {
+		return null;
+	}
+}
 
 /**
  * Identity Controller
@@ -302,6 +320,16 @@ export class IdentityController {
 	 *   created before that key's rotatedAt (the key was still the root when
 	 *   it authorized the delegate). Self-custody (external) rotation cannot
 	 *   re-sign server-side, so its pre-rotation delegations rely on this.
+	 *
+	 * The current key AND every retired key are resolved from a FULLY
+	 * RE-VERIFIED rotation chain via getCurrentRootKey (link, seq, signatures,
+	 * timestamps re-checked, each prev_root cryptographically linked back to the
+	 * DID-derived genesis). This is the same trust anchor every other
+	 * root-signature verifier in the app uses; resolving retired keys from raw
+	 * identity_rotation rows would let a DB-write attacker plant an unsigned row
+	 * whose prev_root anchors a forged delegation. getCurrentRootKey throws if
+	 * any stored row is tampered/unsigned, so such a chain is rejected before
+	 * any key it contains can be trusted.
 	 */
 	private async verifyDelegationRootSignature(
 		identity: Identity,
@@ -310,15 +338,20 @@ export class IdentityController {
 	): Promise<boolean> {
 		const signatureBytes = decodeMultibase(dk.signature);
 
-		const currentRootKey = decodePublicKey(identity.public_key);
+		const { publicKey: currentRootKey, chain } = await getCurrentRootKey(identity.did);
 		if (await verify(canonicalDelegation, signatureBytes, currentRootKey)) {
 			return true;
 		}
 
-		const chain = await getRotationChain(identity.did);
+		// Gate retired-root validity on the signed createdAt embedded in the
+		// canonical delegation (covered by the delegation signature we are about
+		// to verify), not the mutable dk.created_at DB column an attacker with
+		// DB-write access could backdate.
+		const delegationCreatedAt = parseDelegationCreatedAt(canonicalDelegation);
+		if (delegationCreatedAt === null) return false;
 		for (const statement of chain) {
 			const rotatedAt = new Date(statement.rotatedAt);
-			if (!(dk.created_at < rotatedAt)) continue;
+			if (!(delegationCreatedAt < rotatedAt)) continue;
 			const retiredKey = decodePublicKey(statement.prevRoot);
 			if (await verify(canonicalDelegation, signatureBytes, retiredKey)) {
 				return true;
