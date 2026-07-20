@@ -4,7 +4,7 @@ title: Syr Root Key Rotation Specification v1
 
 # Syr Root Key Rotation Specification v1
 
-> **Product status:** Root key rotation via a per-DID signed chain is **implemented**. Recovery keys (rotating away a *lost* root key) remain **out of scope** for v1 — see §8.
+> **Product status:** Root key rotation via a per-DID signed chain is **implemented**. Recovery keys (rotating away a _lost_ root key) remain **out of scope** for v1 — see §8.
 
 ## 1. Purpose
 
@@ -32,7 +32,7 @@ flowchart LR
 ```
 
 - The **genesis key** is the Ed25519 public key encoded in `did:syr:z…`. It is the chain's anchor; no external registry is needed to establish it.
-- Each **rotation statement** retires one key (`prevRoot`) and installs its successor (`newRoot`), signed by the retiring key's private half — *the retiring key authorizes its successor*.
+- Each **rotation statement** retires one key (`prevRoot`) and installs its successor (`newRoot`), signed by the retiring key's private half — _the retiring key authorizes its successor_.
 - The **current root key** is the `newRoot` of the last statement, or the genesis key when the chain is empty.
 - The chain is **append-only**: statements are never edited or removed.
 
@@ -72,7 +72,7 @@ Implementations MUST byte-match the JCS output between Rust (`syr-crypto-core::r
 
 ## 4. Chain Validation Rules
 
-`verify_rotation_chain(did, statements) → current key` MUST enforce, per statement *i* (1-based):
+`verify_rotation_chain(did, statements) → current key` MUST enforce, per statement _i_ (1-based):
 
 1. **DID match** — `statement.did == did` (rejects cross-DID replay).
 2. **Seq continuity** — `statement.seq == i`; 1-based, strictly increasing, no gaps.
@@ -133,7 +133,7 @@ Identities that still hold an Aegis bundle MUST rotate via `mode: "aegis"` (or r
 
 ## 6. Delegation Validity Across Rotation
 
-A delegation signed by a **retired** root key remains valid **iff it was created before that key's `rotatedAt`** (verifiers holding the chain check the delegation's `createdAt` against the retiring statement's `rotatedAt`). A retired key can never mint *new* delegations.
+A delegation signed by a **retired** root key remains valid **iff it was created before that key's `rotatedAt`** (verifiers holding the chain check the delegation's `createdAt` against the retiring statement's `rotatedAt`). A retired key can never mint _new_ delegations.
 
 Additionally, **custodial rotation re-signs** all active (non-revoked, non-expired) delegations with the new root, so verifiers that only track the current key keep accepting them without consulting timestamps. External (self-custody) rotation cannot re-sign server-side; those delegations rely on the timestamp policy above.
 
@@ -155,9 +155,9 @@ Trust-anchor rule for implementations: **never verify a root signature against t
 
 v1 rotation **requires possession** of the current root key: the Aegis password (custodial) or the external signer holding the seed (self-custody). There is deliberately **no recovery-key mechanism**:
 
-- A recovery key is a second long-lived secret with root-replacement power; it doubles the theft surface while being stored *less* carefully than the root key in practice.
+- A recovery key is a second long-lived secret with root-replacement power; it doubles the theft surface while being stored _less_ carefully than the root key in practice.
 - Custodial identities already have a working possession path (the password); self-custody users chose to hold their own keys, and a server-side recovery override would undermine exactly that guarantee.
-- Doing recovery *well* (social guardians, thresholds, time-locks) is a protocol of its own; shipping a naive single-recovery-key scheme would freeze a weak design into the trust model.
+- Doing recovery _well_ (social guardians, thresholds, time-locks) is a protocol of its own; shipping a naive single-recovery-key scheme would freeze a weak design into the trust model.
 
 If both the root key and (for custodial identities) the password are lost, the identity cannot be rotated; the practical path is a new DID plus [export](/architecture/export)/[import](/architecture/import) of content. Social/threshold recovery remains a candidate for a future phase.
 
@@ -165,7 +165,7 @@ If both the root key and (for custodial identities) the password are lost, the i
 
 ## 9. Security Considerations
 
-- **Compromised current key** — the attacker can extend the chain and take the identity; rotation is not a compromise-*recovery* mechanism, it is compromise *hygiene* (rotate before, not after). Registries' seq high-water mark prevents the *previous* holder from rolling the chain back.
+- **Compromised current key** — the attacker can extend the chain and take the identity; rotation is not a compromise-_recovery_ mechanism, it is compromise _hygiene_ (rotate before, not after). Registries' seq high-water mark prevents the _previous_ holder from rolling the chain back.
 - **Fork attempts** — two statements with the same `seq` cannot both verify against one chain; verifiers reject any chain whose links don't match, and registries reject seq regressions.
 - **Cross-DID replay** — impossible: `did` is inside every signed payload.
 - **Chain withholding** — a verifier that has never seen the chain resolves the genesis key and will reject current-key signatures; publishing the chain (rotations endpoint, manifest, registry records) is therefore part of rotation, which the implementation automates.

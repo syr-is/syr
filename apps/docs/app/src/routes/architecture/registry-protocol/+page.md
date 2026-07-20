@@ -135,7 +135,7 @@ GET /resolve/{did}
 	"provider": "...",
 	"updatedAt": "...",
 	"signature": "...",
-	"rotation_chain": [ "… (present only for rotated identities)" ]
+	"rotation_chain": ["… (present only for rotated identities)"]
 }
 ```
 
@@ -162,7 +162,7 @@ POST /update
 	"provider": "...",
 	"updatedAt": "...",
 	"signature": "...",
-	"rotation_chain": [ "… (optional; required once the identity has rotated)" ]
+	"rotation_chain": ["… (optional; required once the identity has rotated)"]
 }
 ```
 

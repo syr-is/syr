@@ -120,10 +120,7 @@ function verifyRotationStatement(
 	currentPublicKey: Uint8Array
 ): Promise<boolean>;
 
-function verifyRotationChain(
-	did: string,
-	statements: RotationStatement[]
-): Promise<Uint8Array>; // current root key
+function verifyRotationChain(did: string, statements: RotationStatement[]): Promise<Uint8Array>; // current root key
 ```
 
 Started as Phase 0 stubs; now the implemented v1 rotation chain — see [Root key rotation](/architecture/recovery-rotation) for the statement format, validation rules, and the `POST /api/identity/rotate` flows.

@@ -46,7 +46,7 @@ Where:
 
 - `<id>` is the **multibase-encoded Ed25519 public key** of the **genesis** root identity key.
 - Encoding MUST use **base58btc multibase**.
-- The identifier is fixed at creation and **never changes**; the *current* root key may differ from the genesis key after [root key rotation](/architecture/recovery-rotation).
+- The identifier is fixed at creation and **never changes**; the _current_ root key may differ from the genesis key after [root key rotation](/architecture/recovery-rotation).
 
 Example:
 

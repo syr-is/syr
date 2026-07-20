@@ -216,11 +216,11 @@ Deep link flow:
 
 ### 7.3 Request Types
 
-| request_type      | Description                                | Payload                                |
-| ----------------- | ------------------------------------------ | -------------------------------------- |
-| `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updated_at }`        |
-| `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, created_at }` |
-| `post_sign`       | Sign a post or content mutation            | `{ did, action, content_hash, ... }`   |
+| request_type      | Description                                | Payload                                      |
+| ----------------- | ------------------------------------------ | -------------------------------------------- |
+| `registry_update` | Update DID-to-provider mapping in registry | `{ did, provider, updated_at }`              |
+| `delegation`      | Delegate authority to a device key         | `{ did, delegate, scope, created_at }`       |
+| `post_sign`       | Sign a post or content mutation            | `{ did, action, content_hash, ... }`         |
 | `rotation`        | Rotate root key (chain statement)          | `{ did, seq, prevRoot, newRoot, rotatedAt }` |
 
 ---

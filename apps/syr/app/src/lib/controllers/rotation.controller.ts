@@ -13,10 +13,7 @@ import { createAegisBundle } from '@syr-is/crypto/aegis';
 import { stringToRecordId } from '@syr-is/types';
 import type { Identity, RotationStatement } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
-import {
-	identityRepository,
-	delegatedKeyRepository
-} from '$lib/repositories/identity.repository';
+import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import {
 	identityRotationRepository,
 	rotationRowToStatement
@@ -154,7 +151,10 @@ export class RotationController {
 		// rotatedAt must survive datetime storage losslessly so the chain can
 		// be re-verified from persisted rows byte-for-byte.
 		const rotatedAtDate = new Date(statement.rotatedAt);
-		if (Number.isNaN(rotatedAtDate.getTime()) || rotatedAtDate.toISOString() !== statement.rotatedAt) {
+		if (
+			Number.isNaN(rotatedAtDate.getTime()) ||
+			rotatedAtDate.toISOString() !== statement.rotatedAt
+		) {
 			throw new Error(
 				'rotatedAt must be an ISO-8601 UTC timestamp with millisecond precision (e.g. 2026-01-01T00:00:00.000Z).'
 			);

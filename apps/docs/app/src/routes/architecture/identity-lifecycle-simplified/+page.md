@@ -6,7 +6,7 @@ title: Identity Lifecycle (One DID, Rotating Root Keys)
 
 ## 1. Purpose
 
-This document states the identity lifecycle so docs, roadmap, and implementation stay aligned: **one `did:syr` for the lifetime of the identity**, anchored to the **genesis root key** encoded in the identifier, with the *current* root key resolved through an append-only **rotation chain**.
+This document states the identity lifecycle so docs, roadmap, and implementation stay aligned: **one `did:syr` for the lifetime of the identity**, anchored to the **genesis root key** encoded in the identifier, with the _current_ root key resolved through an append-only **rotation chain**.
 
 **Related**
 
@@ -18,7 +18,7 @@ This document states the identity lifecycle so docs, roadmap, and implementation
 
 ## 2. Rules
 
-1. **The DID never changes** — `did:syr:z…` encodes the *genesis* Ed25519 key and is fixed at creation. Rotation moves the *current* root key, not the identifier.
+1. **The DID never changes** — `did:syr:z…` encodes the _genesis_ Ed25519 key and is fixed at creation. Rotation moves the _current_ root key, not the identifier.
 2. **Root rotation is a first-class API** — `POST /api/identity/rotate` appends a signed statement to the per-DID chain (custodial `aegis` mode or self-custody `external` mode). See [Root key rotation](/architecture/recovery-rotation).
 3. **Key history is an append-only chain** — each statement is signed by the retiring key; verifiers replay the chain from the genesis key to derive the current root. The chain is public (`GET /api/identity/{did}/rotations`, advertised in the per-identity manifest).
 4. **Rotation requires possession** — the Aegis password (custodial) or an external signer holding the seed (Syner). **Recovery keys are out of scope for v1**: a lost root key with no custodial seed cannot be rotated away; that case remains "new DID + export/import".
