@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RotationStatementSchema } from './identity.js';
 
 /**
  * DID format for did:syr identities
@@ -16,6 +17,18 @@ const isoTimestamp = z.iso.datetime().describe('ISO-8601 timestamp');
 const signature = z.string().describe('Multibase-encoded Ed25519 signature');
 
 /**
+ * Optional root-key rotation chain (ordered, seq 1..n from the genesis key).
+ * When present, registries verify the chain from the DID-derived genesis key
+ * to the current root and verify the record signature under the CURRENT key.
+ * Registries persist the highest seen seq per DID and reject payloads whose
+ * chain is shorter than the stored high-water mark (rollback protection).
+ */
+const rotationChain = z
+	.array(RotationStatementSchema)
+	.optional()
+	.describe('Root-key rotation chain from genesis to current key');
+
+/**
  * Update hosting record payload
  * Signature is over canonical JSON of { did, provider, updatedAt }
  */
@@ -24,7 +37,10 @@ export const UpdateRecordSchema = z
 		did: didSyr.describe('DID to register or update'),
 		provider: z.string().url().describe('Hosting provider URL'),
 		updatedAt: isoTimestamp.describe('ISO-8601 timestamp'),
-		signature: signature.describe('Ed25519 signature over canonical { did, provider, updatedAt }')
+		signature: signature.describe(
+			'Ed25519 signature over canonical { did, provider, updatedAt } by the current root key'
+		),
+		rotation_chain: rotationChain
 	})
 	.meta({ id: 'UpdateRecord' });
 
@@ -38,7 +54,10 @@ export const DeleteRecordSchema = z
 	.object({
 		did: didSyr.describe('DID to remove'),
 		deletedAt: isoTimestamp.describe('ISO-8601 timestamp'),
-		signature: signature.describe('Ed25519 signature over canonical { did, deletedAt }')
+		signature: signature.describe(
+			'Ed25519 signature over canonical { did, deletedAt } by the current root key'
+		),
+		rotation_chain: rotationChain
 	})
 	.meta({ id: 'DeleteRecord' });
 
@@ -56,7 +75,8 @@ export const DirectoryUpsertSchema = z
 		displayName: z.string().min(1).max(100),
 		listed: z.boolean(),
 		updatedAt: isoTimestamp,
-		signature
+		signature,
+		rotation_chain: rotationChain
 	})
 	.meta({ id: 'DirectoryUpsert' });
 

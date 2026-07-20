@@ -7,14 +7,19 @@ export interface Keypair {
 }
 
 /**
- * A rotation statement signed by the current root key,
- * authorizing a new root key to take over the identity.
+ * A rotation statement signed by the retiring root key, authorizing a new
+ * root key to take over the identity. Statements form a per-DID chain; the
+ * DID itself is derived from the genesis key and never changes.
+ *
+ * Signed payload (RFC 8785 JCS): { did, seq, prevRoot, newRoot, rotatedAt }.
  */
 export interface RotationStatement {
   did: string;
+  seq: number; // 1-based chain position; strictly increasing, no gaps
+  prevRoot: string; // multibase-encoded key being retired (genesis for seq 1)
   newRoot: string; // multibase-encoded new root public key
   rotatedAt: string; // ISO 8601 timestamp
-  signature: string; // multibase-encoded Ed25519 signature
+  signature: string; // multibase-encoded Ed25519 signature by prevRoot
 }
 
 /** Sigil (PIEF) KDF parameters */

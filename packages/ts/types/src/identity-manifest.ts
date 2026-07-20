@@ -20,6 +20,8 @@ export const SyrIdentityManifestSchema = z.object({
 		stories: z.string().url(),
 		uploads: z.string().url(),
 		did_document: z.string().url(),
+		/** Ordered root-key rotation chain for this DID (may be empty). */
+		rotations: z.string().url().optional(),
 		public_following: z.string().url().optional(),
 		public_emojis: z.string().url().optional(),
 		public_gifs: z.string().url().optional(),

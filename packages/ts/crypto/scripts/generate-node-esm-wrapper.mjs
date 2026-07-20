@@ -26,6 +26,7 @@ const EXPORTS = [
   "decrypt_aegis_bundle_wasm",
   "decrypt_sigil_wasm",
   "derive_did_wasm",
+  "derive_public_key_from_seed_wasm",
   "ed25519_multicodec_prefix_wasm",
   "ed25519_priv_multicodec_prefix_wasm",
   "encode_multibase_wasm",
@@ -35,6 +36,7 @@ const EXPORTS = [
   "is_valid_syr_did_wasm",
   "parse_did_wasm",
   "sign_wasm",
+  "verify_rotation_chain_wasm",
   "verify_rotation_statement_wasm",
   "verify_wasm",
 ];

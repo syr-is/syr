@@ -134,16 +134,55 @@ export type DelegationStatement = z.infer<typeof DelegationStatementSchema>;
 
 /**
  * Rotation Statement Schema
- * The payload for root key rotation, signed by the current root key.
+ * One link in the per-DID root-key rotation chain. The signed payload is the
+ * RFC 8785 JCS canonical form of { did, seq, prevRoot, newRoot, rotatedAt },
+ * signed by the private key of prevRoot (the retiring key). The DID itself is
+ * genesis-key-derived and never changes.
  */
 export const RotationStatementSchema = z.object({
 	did: DidSyrSchema,
+	seq: z.number().int().min(1), // 1-based chain position; strictly increasing, no gaps
+	prevRoot: z.string().min(1), // multibase-encoded key being retired (genesis for seq 1)
 	newRoot: z.string().min(1), // multibase-encoded new root public key
-	rotatedAt: z.string().datetime(),
-	signature: z.string().min(1) // multibase-encoded signature
+	rotatedAt: z.string().datetime({ offset: true }),
+	signature: z.string().min(1) // multibase-encoded signature by prevRoot
 });
 
 export type RotationStatement = z.infer<typeof RotationStatementSchema>;
+
+/**
+ * Identity Rotation Schema
+ * A persisted rotation-chain row in SurrealDB (identity_rotation table).
+ */
+export const IdentityRotationSchema = BaseEntitySchema.pick({
+	id: true,
+	created_at: true
+}).extend({
+	did: DidSyrSchema,
+	seq: z.number().int().min(1),
+	prev_root: z.string().min(1),
+	new_root: z.string().min(1),
+	rotated_at: TimestampSchema,
+	signature: z.string().min(1)
+});
+
+export type IdentityRotation = z.infer<typeof IdentityRotationSchema>;
+
+/**
+ * Identity Rotate Request Schema
+ * For POST /api/identity/rotate (session-authenticated, own DID only).
+ *
+ * - aegis: the instance verifies the password, decrypts the custodial seed,
+ *   generates the new root, and creates + persists the statement itself.
+ * - external: a self-custody signer (e.g. Syner) submits a fully-formed
+ *   signed statement; the instance validates it against the stored chain.
+ */
+export const IdentityRotateRequestSchema = z.discriminatedUnion('mode', [
+	z.object({ mode: z.literal('aegis'), password: z.string().min(1) }),
+	z.object({ mode: z.literal('external'), statement: RotationStatementSchema })
+]);
+
+export type IdentityRotateRequest = z.infer<typeof IdentityRotateRequestSchema>;
 
 /**
  * Identity Export Bundle Schema

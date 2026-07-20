@@ -164,13 +164,19 @@ export function canonicalize(obj: Record<string, unknown>): string {
 
 // ---- Rotation ----
 
+/**
+ * Create a rotation statement for chain position `seq` (1-based), signed by
+ * the retiring root key. `prevRoot` is derived from `currentPrivateKey`.
+ */
 export async function createRotationStatement(
   did: string,
+  seq: number,
   newPublicKey: Uint8Array,
   currentPrivateKey: Uint8Array,
 ): Promise<RotationStatement> {
   const json = getWasm().create_rotation_statement_wasm(
     did,
+    seq,
     newPublicKey,
     currentPrivateKey,
   );
@@ -185,6 +191,38 @@ export async function verifyRotationStatement(
     JSON.stringify(statement),
     currentPublicKey,
   );
+}
+
+/**
+ * Verify a full rotation chain for `did` (link, seq continuity, signatures,
+ * non-decreasing rotatedAt) and return the current root public key.
+ * An empty chain resolves to the genesis key derived from the DID.
+ * @throws {Error} When the chain is invalid.
+ */
+export async function verifyRotationChain(
+  did: string,
+  statements: RotationStatement[],
+): Promise<Uint8Array> {
+  try {
+    return getWasm().verify_rotation_chain_wasm(
+      did,
+      JSON.stringify(statements),
+    );
+  } catch (err) {
+    throw new Error(String(err), { cause: err });
+  }
+}
+
+/**
+ * Derive the Ed25519 public key from a 32-byte private-key seed.
+ * @throws {Error} Invalid input (e.g. seed not 32 bytes).
+ */
+export function derivePublicKeyFromSeed(seed: Uint8Array): Uint8Array {
+  try {
+    return getWasm().derive_public_key_from_seed_wasm(seed);
+  } catch (err) {
+    throw new Error(String(err), { cause: err });
+  }
 }
 
 // ---- Sigil ----

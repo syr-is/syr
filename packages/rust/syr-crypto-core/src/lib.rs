@@ -14,4 +14,7 @@ pub use keys::{
     constant_time_equal, derive_public_key_from_seed, generate_device_keypair,
     generate_root_keypair, sign, verify,
 };
-pub use rotation::{create_rotation_statement, verify_rotation_statement, RotationStatement};
+pub use rotation::{
+    create_rotation_statement, genesis_key_from_did, verify_rotation_chain,
+    verify_rotation_statement, RotationStatement,
+};
