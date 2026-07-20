@@ -308,9 +308,13 @@ export async function validateBundle(
 
 		// This asserts the bundle's key equals the DID-derived GENESIS key. A
 		// rotated identity's bundle carries the CURRENT root as identity.publicKey,
-		// so it fails here — rotated identities are intentionally not yet portable
-		// across instances (the bundle does not carry the rotation chain). See
-		// architecture/recovery-rotation §10. On the identity's home instance the
+		// so it fails here. This is a CREATION-time gate, not an authenticity gate:
+		// the bundle now carries its full rotation chain (identity.json rotationChain)
+		// and assertBundleIntegrity/verifyBundleTrust already verify a rotated bundle's
+		// manifest signature under the chain-resolved current root. Re-homing a rotated
+		// identity onto a foreign instance stays out of scope for v1 solely because
+		// creation requires genesis == identity.publicKey. See
+		// architecture/recovery-rotation §10.1. On the identity's home instance the
 		// rotation chain lives in identity_rotation and everything resolves normally.
 		if (!constantTimeEqual(pubKeyFromDid, pubKeyFromBundle)) {
 			throw error(400, {

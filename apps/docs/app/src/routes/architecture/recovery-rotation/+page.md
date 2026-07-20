@@ -174,16 +174,16 @@ If both the root key and (for custodial identities) the password are lost, the i
 
 ## 10. Known Limitations & Versioning
 
-### 10.1 Cross-instance portability of a rotated identity (out of scope v1)
+### 10.1 Cross-instance re-home of a rotated identity (partial)
 
 A rotated identity stays **fully functional and resolvable on its home instance** — its chain lives in `identity_rotation`, `getCurrentRootKey` resolves it locally, and registries carry the chain so federated resolution succeeds.
 
-What is **not** yet supported is **importing a rotated identity onto a different instance** via [export](/architecture/export)/[import](/architecture/import). The export bundle carries the current root as the identity's public key but does **not** carry the rotation chain, and the importing instance cannot reconstruct a foreign DID's chain from its own database. Content in the bundle is signed under the current root, so genesis-anchored bundle verification would reject it. Rather than mis-verify, `validateBundle` rejects such a bundle at the DID/key match step (`KEY_MISMATCH`), so a rotated identity simply cannot be moved to a new instance yet.
+**Bundle authenticity is now self-verifying, even for a rotated identity.** The manifest v2 [export](/architecture/export) embeds the full rotation chain in `identity.json` (`rotationChain`) and signs the manifest under the **current** root key. At [import](/architecture/import) time, `verifyBundleTrust` no longer anchors on the raw genesis key parsed from the DID: it resolves the current root from the embedded chain via `verifyRotationChain(did, extractRotationChain(identity))`, then requires the manifest `signing_key` to equal that resolved root before checking the signature. A rotated identity's bundle therefore **verifies** instead of being rejected — the verified chain travels inside the bundle, so no importing instance needs to reconstruct a foreign DID's chain from its own database.
 
-Making rotated identities portable requires shipping the verified chain inside the export bundle and resolving the current root from it at import time; that is a candidate for a future phase. Non-rotated identities are unaffected (genesis === current root).
+What remains **out of scope for v1** is the final step of the re-home flow: **creating** the imported identity on a foreign instance. `validateBundle` still gates identity creation on the DID-derived **genesis** key equalling `identity.publicKey`; a rotated identity's `publicKey` is its current root, not genesis, so creation rejects it at the DID/key match step with `KEY_MISMATCH`. Verifying the bundle establishes authenticity; lifting the creation-time genesis gate (and defining the surrounding re-home semantics) is the piece deferred to a future phase. Non-rotated identities are unaffected (genesis === current root) and import end-to-end.
 
 ### 10.2 Versioning
 
 **Version:** v1
 **Status:** Implemented — `syr-crypto-core::rotation`, `@syr-is/crypto`, `POST /api/identity/rotate`, `GET /api/identity/{did}/rotations`, chain-aware registry + resolver.
-**Out of scope:** recovery keys, social/threshold recovery, encrypted rotation metadata, cross-instance export/import of a rotated identity (§10.1).
+**Out of scope:** recovery keys, social/threshold recovery, encrypted rotation metadata, cross-instance **re-home** (identity creation) of a rotated identity onto a foreign instance — bundle authenticity is now verifiable via the embedded chain; only the creation-time genesis gate remains (§10.1).
