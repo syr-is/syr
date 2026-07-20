@@ -10,6 +10,7 @@ import {
 	sign
 } from '@syr-is/crypto';
 import { createAegisBundle } from '@syr-is/crypto/aegis';
+import type { AegisBundle } from '@syr-is/crypto/aegis';
 import { stringToRecordId } from '@syr-is/types';
 import type { Identity, RotationStatement } from '@syr-is/types';
 import type { RecordId } from 'surrealdb';
@@ -92,16 +93,8 @@ export class RotationController {
 						identity,
 						statement,
 						resolvedUserId,
-						applyIdentityUpdate: () =>
-							identityRepository.updateRootKeyWithAegis(identity.id, statement.newRoot, newBundle),
-						revertIdentityUpdate: () =>
-							identityRepository.updateRootKeyWithAegis(identity.id, identity.public_key, {
-								salt: bundle.salt,
-								nonce: bundle.nonce,
-								ct: bundle.ct,
-								tag: bundle.tag,
-								kdf: bundle.kdf
-							}),
+						newAegisBundle: newBundle,
+						oldAegisBundle: bundle,
 						newPrivateKey: newKeypair.privateKey
 					});
 
@@ -168,9 +161,8 @@ export class RotationController {
 			identity,
 			statement,
 			resolvedUserId,
-			applyIdentityUpdate: () => identityRepository.updateRootKey(identity.id, statement.newRoot),
-			revertIdentityUpdate: () =>
-				identityRepository.updateRootKey(identity.id, identity.public_key),
+			newAegisBundle: null,
+			oldAegisBundle: null,
 			newPrivateKey: null
 		});
 
@@ -210,31 +202,44 @@ export class RotationController {
 	}
 
 	/**
-	 * Persist a validated rotation atomically-ish with a rollback ledger:
-	 * every applied step pushes an undo action; on failure the ledger is
-	 * unwound in reverse order.
+	 * Persist a validated rotation with a rollback ledger: every applied step
+	 * pushes an undo action; on failure the ledger is unwound in reverse order.
+	 *
+	 * The core step — appending the chain row and advancing identity.public_key
+	 * (+ re-wrapped Aegis for custodial) — is a single DB transaction, so a
+	 * crash can never leave a chain tip ahead of the stored root key.
 	 */
 	private async persistRotation(params: {
 		identity: Identity;
 		statement: RotationStatement;
 		resolvedUserId: RecordId;
-		applyIdentityUpdate: () => Promise<void>;
-		revertIdentityUpdate: () => Promise<void>;
+		/** New-seed Aegis bundle (custodial rotation); null for external. */
+		newAegisBundle: AegisBundle | null;
+		/** Prior Aegis bundle restored on rollback (custodial); null for external. */
+		oldAegisBundle: AegisBundle | null;
 		/** New root private key (custodial mode) used to re-sign active delegations; null for external mode. */
 		newPrivateKey: Uint8Array | null;
 	}): Promise<void> {
-		const { identity, statement, resolvedUserId, applyIdentityUpdate, revertIdentityUpdate } =
-			params;
+		const { identity, statement, resolvedUserId, newAegisBundle, oldAegisBundle } = params;
 		const rollback: Array<() => Promise<void>> = [];
 
 		try {
-			await identityRotationRepository.appendStatement(statement);
+			// Atomic: append the chain row AND advance identity.public_key
+			// (+ Aegis columns for custodial) in one transaction.
+			await identityRotationRepository.appendStatementAndAdvanceRoot({
+				statement,
+				identityId: identity.id,
+				aegisBundle: newAegisBundle
+			});
 			rollback.push(() =>
-				identityRotationRepository.deleteByDidAndSeq(identity.did, statement.seq)
+				identityRotationRepository.revertRootAndDeleteStatement({
+					did: identity.did,
+					seq: statement.seq,
+					identityId: identity.id,
+					publicKey: identity.public_key,
+					aegisBundle: oldAegisBundle
+				})
 			);
-
-			await applyIdentityUpdate();
-			rollback.push(revertIdentityUpdate);
 
 			if (params.newPrivateKey) {
 				// Custodial rotation also re-signs active (non-revoked,

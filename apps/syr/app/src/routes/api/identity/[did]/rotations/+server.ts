@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { encodeMultibase, ED25519_MULTICODEC_PREFIX } from '@syr-is/crypto';
 import { identityRepository } from '$lib/repositories/identity.repository';
-import { getRotationChain } from '$lib/server/root-key.server';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 
 /**
  * GET /api/identity/[did]/rotations
@@ -23,13 +24,18 @@ export const GET: RequestHandler = async ({ params }) => {
 		throw error(404, 'Identity not found');
 	}
 
-	const rotations = await getRotationChain(did);
+	// Resolve the CURRENT root key from the verified rotation chain (the
+	// genesis key when never rotated) rather than echoing identity.public_key,
+	// so current_root can never drift from the chain verifiers replay. Encoded
+	// as multibase(multicodec-prefix || raw key) to match the stored key format.
+	const { publicKey, chain } = await getCurrentRootKey(did);
+	const currentRoot = encodeMultibase(new Uint8Array([...ED25519_MULTICODEC_PREFIX, ...publicKey]));
 
 	return json(
 		{
 			did,
-			current_root: identity.public_key,
-			rotations
+			current_root: currentRoot,
+			rotations: chain
 		},
 		{
 			headers: {

@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { z } from 'zod';
 import { IdentityRotateRequestSchema } from '@syr-is/types';
 import { rotationController } from '$lib/controllers/rotation.controller';
 
@@ -39,7 +40,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, {
 			code: 'VALIDATION_ERROR',
 			message: 'Invalid request body',
-			details: JSON.parse(JSON.stringify(parsed.error.issues))
+			details: z.treeifyError(parsed.error)
 		});
 	}
 
