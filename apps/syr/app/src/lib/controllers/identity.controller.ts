@@ -21,7 +21,7 @@ import type {
 	IdentityExportBundle
 } from '@syr-is/types';
 import { ensureDefaultIdentityHostUrl } from '$lib/server/ensure-default-identity-host-url.server';
-import { getCurrentRootKey } from '$lib/server/root-key.server';
+import { getCurrentRootKey, getRotationChain } from '$lib/server/root-key.server';
 
 type UserIdInput = RecordId | string;
 
@@ -531,6 +531,11 @@ export class IdentityController {
 			throw new Error('User has no profile.');
 		}
 
+		// Embed the full rotation chain so the exported bundle is self-verifying: an
+		// importer resolves the current root via verifyRotationChain(did, chain)
+		// without access to this instance's identity_rotation table.
+		const rotationChain = await getRotationChain(identity.did);
+
 		return {
 			did: identity.did,
 			publicKey: identity.public_key,
@@ -555,6 +560,7 @@ export class IdentityController {
 				bannerUrl: profile.banner_url,
 				identityHostUrl: profile.identity_host_url
 			},
+			...(rotationChain.length > 0 && { rotationChain }),
 			exportedAt: new Date().toISOString()
 		};
 	}

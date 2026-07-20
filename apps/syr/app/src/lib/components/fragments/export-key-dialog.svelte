@@ -9,6 +9,7 @@
 	import { decodePublicKey, deriveDid, personaIdFromPublicKey } from '@syr-is/crypto';
 	import { createSigil } from '@syr-is/crypto/sigil';
 	import { signPost, signAsset } from '$lib/services/bundle-signature-verification';
+	import { buildSignedManifestV2, buildUnsignedManifestV2 } from '$lib/services/export-manifest';
 	import { seedHandler } from '$lib/services/seed-handler';
 	import type { AegisBundle } from '@syr-is/crypto/aegis';
 	import QRCode from 'qrcode';
@@ -332,7 +333,6 @@
 		const didShort = data.identity.did?.slice(8, 20) ?? 'export';
 		const timestamp = Date.now();
 		const zipFiles: Record<string, Uint8Array> = {};
-		zipFiles['manifest.json'] = strToU8(JSON.stringify(data.manifest, null, 2));
 		zipFiles['identity.json'] = strToU8(JSON.stringify(data.identity, null, 2));
 		zipFiles['posts.json'] = strToU8(JSON.stringify(data.posts, null, 2));
 		zipFiles['assets.json'] = strToU8(
@@ -382,6 +382,28 @@
 				zipFiles[safeKey] = base64ToBytes(asset.content_base64);
 			}
 		}
+		// Self-custody exports: the keys live in Syner and the existing signer round
+		// cannot carry the manifest payload, so emit format_version 2 with an explicit
+		// `unsigned: true` marker (never a silent downgrade). Importers surface this as
+		// "authenticity not verifiable", same as a legacy v1 bundle.
+		const rotationSeq = Array.isArray(data.identity?.rotationChain)
+			? data.identity.rotationChain.length
+			: 0;
+		const pinnedCount = Array.isArray(data.pinned_posts?.post_ids)
+			? data.pinned_posts.post_ids.length
+			: 0;
+		const manifest = await buildUnsignedManifestV2({
+			did: data.identity.did,
+			createdAt: new Date().toISOString(),
+			rotationSeq,
+			counts: {
+				posts: Array.isArray(data.posts) ? data.posts.length : 0,
+				assets: Array.isArray(data.assets) ? data.assets.length : 0,
+				pinned_posts: pinnedCount
+			},
+			files: zipFiles
+		});
+		zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
 		const zipped = zipSync(zipFiles, { level: 1 });
 		const filename = `syr-export-${didShort}-${timestamp}.syr`;
 		const blob = new Blob([zipped as BlobPart], { type: 'application/zip' });
@@ -574,8 +596,14 @@
 						)
 					);
 
+					const signingKey = data.identity?.publicKey;
+					if (!signingKey || typeof signingKey !== 'string') {
+						throw new Error('Invalid export payload: missing identity public key');
+					}
+
+					// Assemble every bundle file EXCEPT manifest.json first, so the manifest can
+					// hash and sign the exact bytes that land in the zip.
 					const zipFiles: Record<string, Uint8Array> = {};
-					zipFiles['manifest.json'] = strToU8(JSON.stringify(data.manifest, null, 2));
 					zipFiles['identity.json'] = strToU8(JSON.stringify(data.identity, null, 2));
 					zipFiles['posts.json'] = strToU8(JSON.stringify(signedPosts, null, 2));
 					zipFiles['assets.json'] = strToU8(
@@ -606,6 +634,30 @@
 							}
 						}
 					}
+
+					// Sign the manifest with the ROOT seed (available in this unlock scope).
+					const rotationSeq = Array.isArray(data.identity?.rotationChain)
+						? data.identity.rotationChain.length
+						: 0;
+					const pinnedCount = Array.isArray(data.pinned_posts?.post_ids)
+						? data.pinned_posts.post_ids.length
+						: 0;
+					const manifest = await buildSignedManifestV2(
+						{
+							did,
+							createdAt: new Date().toISOString(),
+							rotationSeq,
+							counts: {
+								posts: signedPosts.length,
+								assets: signedAssets.length,
+								pinned_posts: pinnedCount
+							},
+							files: zipFiles
+						},
+						seed,
+						signingKey
+					);
+					zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
 
 					const zipped = zipSync(zipFiles, { level: 1 });
 					const filename = `syr-export-${didShort}-${timestamp}.syr`;
