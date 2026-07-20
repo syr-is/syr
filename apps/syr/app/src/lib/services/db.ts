@@ -187,6 +187,23 @@ class DatabaseService {
 				DEFINE INDEX IF NOT EXISTS idx_identity_user ON TABLE identity COLUMNS user_id UNIQUE;
 			`);
 
+			// Identity rotation table: append-only per-DID root-key rotation chain.
+			// Each row is one signed rotation statement; current root = last new_root
+			// (genesis key derived from the DID when the chain is empty).
+			await db.query(`
+				DEFINE TABLE IF NOT EXISTS identity_rotation SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS did ON TABLE identity_rotation TYPE string
+					ASSERT string::starts_with($value, "did:syr:");
+				DEFINE FIELD IF NOT EXISTS seq ON TABLE identity_rotation TYPE int;
+				DEFINE FIELD IF NOT EXISTS prev_root ON TABLE identity_rotation TYPE string;
+				DEFINE FIELD IF NOT EXISTS new_root ON TABLE identity_rotation TYPE string;
+				DEFINE FIELD IF NOT EXISTS rotated_at ON TABLE identity_rotation TYPE datetime;
+				DEFINE FIELD IF NOT EXISTS signature ON TABLE identity_rotation TYPE string;
+				DEFINE FIELD IF NOT EXISTS created_at ON TABLE identity_rotation TYPE datetime;
+				DEFINE INDEX IF NOT EXISTS idx_rotation_did_seq ON TABLE identity_rotation COLUMNS did, seq UNIQUE;
+				DEFINE INDEX IF NOT EXISTS idx_rotation_did ON TABLE identity_rotation COLUMNS did;
+			`);
+
 			// Delegated keys table: stores device delegations
 			await db.query(`
 				DEFINE TABLE IF NOT EXISTS delegated_key SCHEMAFULL;

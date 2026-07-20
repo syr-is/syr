@@ -86,6 +86,56 @@ export class IdentityRepository extends BaseRepository<Identity> {
 	}
 
 	/**
+	 * Apply a root-key rotation to a custodial identity: set the new root
+	 * public key and replace the Aegis columns with the re-wrapped seed.
+	 */
+	async updateRootKeyWithAegis(
+		id: RecordId | string,
+		publicKey: string,
+		aegisBundle: {
+			salt: string;
+			nonce: string;
+			ct: string;
+			tag: string;
+			kdf: { mem: number; it: number; par: number };
+		}
+	): Promise<void> {
+		await this.db.query(
+			`UPDATE $id SET
+				public_key = $publicKey,
+				aegis_salt = $aegisSalt,
+				aegis_nonce = $aegisNonce,
+				aegis_ct = $aegisCt,
+				aegis_tag = $aegisTag,
+				aegis_kdf_mem = $aegisKdfMem,
+				aegis_kdf_it = $aegisKdfIt,
+				aegis_kdf_par = $aegisKdfPar;`,
+			{
+				id: typeof id === 'string' ? stringToRecordId.decode(id) : id,
+				publicKey,
+				aegisSalt: aegisBundle.salt,
+				aegisNonce: aegisBundle.nonce,
+				aegisCt: aegisBundle.ct,
+				aegisTag: aegisBundle.tag,
+				aegisKdfMem: aegisBundle.kdf.mem,
+				aegisKdfIt: aegisBundle.kdf.it,
+				aegisKdfPar: aegisBundle.kdf.par
+			}
+		);
+	}
+
+	/**
+	 * Apply a root-key rotation to a self-custody identity: set the new root
+	 * public key only (no Aegis columns to rewrap).
+	 */
+	async updateRootKey(id: RecordId | string, publicKey: string): Promise<void> {
+		await this.db.query(`UPDATE $id SET public_key = $publicKey;`, {
+			id: typeof id === 'string' ? stringToRecordId.decode(id) : id,
+			publicKey
+		});
+	}
+
+	/**
 	 * Find identity by DID within a specific tenant scope
 	 */
 	async findByDidAndTenant(did: string, tenantId: string | RecordId): Promise<Identity | null> {
@@ -520,6 +570,25 @@ export class DelegatedKeyRepository extends BaseRepository<DelegatedKey> {
 	 */
 	async revoke(id: RecordId | string): Promise<DelegatedKey> {
 		return this.update(id, { revoked_at: new Date() } as Partial<DelegatedKey>);
+	}
+
+	/**
+	 * Replace the root signature over a delegation statement (root-key
+	 * rotation re-signs active delegations with the new root key).
+	 */
+	async updateDelegationSignature(
+		id: RecordId | string,
+		canonicalDelegation: string,
+		signature: string
+	): Promise<void> {
+		await this.db.query(
+			`UPDATE $id SET canonical_delegation = $canonicalDelegation, signature = $signature;`,
+			{
+				id: typeof id === 'string' ? stringToRecordId.decode(id) : id,
+				canonicalDelegation,
+				signature
+			}
+		);
 	}
 }
 

@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import type { RotationStatement } from '@syr-is/types';
 import { registryRepository } from '$lib/repositories/registry.repository';
 import { outboxRepository, type OutboxEntry } from '$lib/repositories/outbox.repository';
 
@@ -15,6 +16,12 @@ export type RegistryJobPushParams = {
 	updatedAt?: string;
 	deletedAt?: string;
 	signature: string;
+	/**
+	 * Root-key rotation chain for the DID. Attached to every registry payload
+	 * when non-empty so chain-aware registries can verify the record signature
+	 * under the CURRENT root key instead of the genesis key.
+	 */
+	rotationChain?: RotationStatement[];
 	/** Root-signed directory row for `POST …/directory/upsert` (search / follow discovery). */
 	directory?: {
 		username: string;
@@ -44,11 +51,14 @@ export async function pushSignedRegistryJobToRemoteAndComplete(
 		updatedAt,
 		deletedAt,
 		signature,
+		rotationChain,
 		directory
 	} = params;
 
 	const base = registryUrl.replace(/\/$/, '');
 	const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+	const chainField =
+		rotationChain && rotationChain.length > 0 ? { rotation_chain: rotationChain } : {};
 
 	try {
 		if (action === 'update') {
@@ -63,7 +73,8 @@ export async function pushSignedRegistryJobToRemoteAndComplete(
 					did,
 					provider: providerForRegistry,
 					updatedAt,
-					signature
+					signature,
+					...chainField
 				}),
 				signal
 			});
@@ -78,7 +89,7 @@ export async function pushSignedRegistryJobToRemoteAndComplete(
 			const res = await fetch(`${base}/api/v1/delete`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ did, deletedAt, signature }),
+				body: JSON.stringify({ did, deletedAt, signature, ...chainField }),
 				signal
 			});
 			if (!res.ok) {
@@ -116,7 +127,8 @@ export async function pushSignedRegistryJobToRemoteAndComplete(
 						displayName: directory.displayName,
 						listed: directory.listed,
 						updatedAt: directory.updatedAt,
-						signature: directory.signature
+						signature: directory.signature,
+						...chainField
 					}),
 					signal: dirSignal
 				});

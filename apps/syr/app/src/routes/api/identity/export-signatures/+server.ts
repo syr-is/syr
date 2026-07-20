@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { verify, decodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 import {
 	getExportSigningSession,
 	updateExportSigningSession,
@@ -75,9 +75,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const allItems = all_signable_items ?? buildAllSignableItems(export_data, did);
 		const itemsById = new Map(allItems.map((i) => [i.id, i]));
-		let parsedDid;
+		// Trust anchor: CURRENT root key (genesis + rotation chain)
+		let currentRootKey: Uint8Array;
 		try {
-			parsedDid = parseDid(did);
+			({ publicKey: currentRootKey } = await getCurrentRootKey(did));
 		} catch {
 			return json(
 				{ error: 'server_error', error_description: 'Invalid DID in session' },
@@ -103,7 +104,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				);
 			}
 			const messageBytes = new TextEncoder().encode(item.message);
-			const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
+			const isValid = await verify(messageBytes, signatureBytes, currentRootKey);
 			if (!isValid) {
 				return json(
 					{

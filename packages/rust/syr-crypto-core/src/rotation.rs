@@ -84,7 +84,9 @@ pub fn create_rotation_statement(
     let prev_public_key = derive_public_key_from_seed(current_private_key);
     let prev_root = encode_public_key_multibase(&prev_public_key);
     let new_root = encode_public_key_multibase(new_public_key);
-    let rotated_at = chrono::Utc::now().to_rfc3339();
+    // Millisecond-precision UTC "Z" form (matches JS Date#toISOString) so the
+    // signed timestamp survives datetime storage roundtrips losslessly.
+    let rotated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
     let payload = RotationPayload {
         did,
