@@ -58,7 +58,48 @@ When the backup has no `identity.sigil`, it contains profile, posts, and assets 
 
 ---
 
-## 4. API Summary
+## 4. Bundle authenticity verification (manifest v2)
+
+A `.syr` bundle carries a [manifest v2](/architecture/export). Before any import, the bundle is classified into one of three trust states. The **import dialog** classifies client-side for immediate feedback, and the **server re-verifies from the raw zip bytes on `POST /api/identity/import`** — the server is always the authority; a tampered bundle can never be imported by trusting the client.
+
+### Trust states
+
+| State             | Bundle                                     | UI                                                    | Import        |
+| ----------------- | ------------------------------------------ | ----------------------------------------------------- | ------------- |
+| `verified`        | v2 signed, all checks pass                 | Green "Verified backup" badge                         | Allowed       |
+| `legacy_unsigned` | v1 manifest, or v2 with `"unsigned": true` | Amber "Legacy unsigned — authenticity not verifiable" | Allowed       |
+| `tampered`        | v2 **signed** bundle that failed any check | Red "Tampered backup — import blocked"                | **Hard-fail** |
+
+Legacy (v1) and explicitly-unsigned (v2) bundles remain importable — their authenticity simply cannot be established, and the UI says so. There is **no flag** that lets a tampered v2 signed bundle through.
+
+### Verification pipeline (v2 signed bundles)
+
+1. **Recompute every file hash.** Each `manifest.files` entry must exist in the zip and its SHA-256 must match. Then every zip entry except `manifest.json` must appear in `manifest.files` (no injected files).
+2. **Verify the rotation chain** embedded in `identity.json` (`rotationChain`) from the DID-derived genesis key via `verifyRotationChain(did, chain)`, yielding the current root key.
+3. **Bind the signing key.** `manifest.signature.signing_key` must equal that chain-resolved current root.
+4. **Re-canonicalize** the manifest (sans its signature block) and byte-compare against `signature.signed_payload_json`.
+5. **Verify the Ed25519 signature** over `signed_payload_json` under the current root.
+
+Any failure yields `tampered` with a precise sub-code; the server maps it to **HTTP 422 `IMPORT_TAMPERED`** and performs no writes.
+
+### Error sub-codes
+
+| Sub-code                | Meaning                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `MANIFEST_INVALID`      | v2 manifest failed schema validation                 |
+| `MANIFEST_DID_MISMATCH` | `manifest.did` ≠ `identity.json` DID                 |
+| `FILE_MISSING`          | A hashed file is absent from the bundle              |
+| `FILE_HASH_MISMATCH`    | A file's SHA-256 does not match the manifest         |
+| `EXTRA_FILE`            | A zip entry is not covered by the signed manifest    |
+| `CHAIN_INVALID`         | The embedded rotation chain failed verification      |
+| `SIGNING_KEY_INVALID`   | `signing_key` is malformed                           |
+| `SIGNING_KEY_MISMATCH`  | `signing_key` is not the chain-resolved current root |
+| `CANONICAL_MISMATCH`    | Manifest content diverges from its signed payload    |
+| `SIGNATURE_INVALID`     | Malformed signature or Ed25519 verification failed   |
+
+---
+
+## 5. API Summary
 
 | Endpoint                         | Method | Auth | Purpose                                                    |
 | -------------------------------- | ------ | ---- | ---------------------------------------------------------- |
@@ -67,9 +108,11 @@ When the backup has no `identity.sigil`, it contains profile, posts, and assets 
 | `/api/identity/import-heartbeat` | GET    | —    | SSE; receive import_token when Syner verifies              |
 | `/api/identity/export-verify`    | POST   | No   | Syner calls to verify; issues export_token or import_token |
 
+On `POST /api/identity/import`, a tampered v2 signed bundle is rejected with **HTTP 422** and code `IMPORT_TAMPERED` before any identity/profile/post/asset write.
+
 ---
 
-## 5. Related
+## 6. Related
 
 - [Export Formats](/architecture/export) — full vs data-only .syr variants
 - [Sigil](/architecture/sigil) — cryptographic format for portable keys

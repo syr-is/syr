@@ -85,8 +85,8 @@ For implementer details and API contracts, see [Implementer Guide: Export Format
 **Full .syr** includes:
 
 ```
-manifest.json      # Export metadata (version, did, exportedAt, postCount, assetCount)
-identity.json      # IdentityExportBundle (did, publicKey, profile, delegatedKeys)
+manifest.json      # Manifest v2 — signed, self-verifying (see §5)
+identity.json      # IdentityExportBundle (did, publicKey, profile, delegatedKeys, rotationChain)
 identity.sigil     # Encrypted seed (PIEF v1)
 posts.json         # All posts
 assets.json        # Asset manifest
@@ -96,6 +96,8 @@ assets/            # Binary assets (images, etc.)
 
 **Data-only .syr** includes the same except **identity.sigil** is omitted. Independent users (keys managed in Syner) verify via Syner challenge-sign flow; no Sigil is produced.
 
+`identity.json` embeds the full **rotation chain** (`rotationChain`) so the bundle is self-verifying: an importer resolves the current root key with `verifyRotationChain(did, chain)` without access to the exporting instance's `identity_rotation` table.
+
 **Filename pattern:** `syr-export-{didShort}-{timestamp}.syr`
 
 **Use case:** Complete backup (full) or profile/data backup (data-only). Reclaim identity in SYR web app.
@@ -104,7 +106,58 @@ assets/            # Binary assets (images, etc.)
 
 ---
 
-## 5. Summary
+## 5. Manifest v2 — signed, self-verifying bundle
+
+Every `.syr` bundle carries a `manifest.json` with `format_version: 2`. The manifest hashes every file in the bundle and, for custodial/device-signed exports, binds those hashes with an Ed25519 signature made by the **root key** — turning the bundle into a tamper-evident, self-verifying unit.
+
+### Shape
+
+```json
+{
+	"format_version": 2,
+	"did": "did:syr:z6Mk…",
+	"created_at": "2026-07-20T10:00:00.000Z",
+	"rotation_seq": 0, // rotation-chain length at export (0 = never rotated)
+	"counts": { "posts": 12, "assets": 34, "pinned_posts": 3 },
+	"files": {
+		// SHA-256 (hex) of EVERY bundle file except manifest.json
+		"identity.json": "<sha256>",
+		"posts.json": "<sha256>",
+		"assets.json": "<sha256>",
+		"pinned_posts.json": "<sha256>",
+		"identity.sigil": "<sha256>", // present only in full custodial bundles
+		"assets/…": "<sha256>"
+	},
+	"signature": {
+		// present for SIGNED bundles; mutually exclusive with `unsigned`
+		"signed_payload_json": "<RFC 8785 JCS of the manifest sans this block>",
+		"signature": "<multibase Ed25519 over signed_payload_json>",
+		"signing_key": "<multibase root public key current at export>"
+	}
+}
+```
+
+`manifest.json` cannot hash itself, so it is the one file excluded from `files`. The signature covers the JCS canonical form of every other field — including the full `files` map — so any change to any file is detectable. `signed_payload_json` stores the exact signed bytes (mirroring the `canonical_delegation` pattern) so verifiers re-canonicalize, byte-compare, then check the signature.
+
+### Two authenticity states (never both)
+
+| State                   | Marker             | Produced by                           | Authenticity   |
+| ----------------------- | ------------------ | ------------------------------------- | -------------- |
+| **Signed**              | `signature` block  | Custodial (Aegis) full `.syr`         | Verifiable     |
+| **Explicitly unsigned** | `"unsigned": true` | Self-custody (Syner) data-only `.syr` | Not verifiable |
+
+### Signing flows
+
+- **Custodial (Aegis) exports** — the export already gates on the account password. Inside the unlock scope the seed is decrypted, every bundle file is assembled and hashed, the manifest is signed with the seed (`signing_key = identity.publicKey`, the current root), and the seed is zeroized. Result: a **signed** manifest v2.
+- **Self-custody (Syner) exports** — keys live in Syner and the existing export challenge/sign round signs each post and asset, but it cannot yet carry the final manifest payload (whose `files` hashes only exist after the browser serializes the zip) without a redesign of that round. Per the locked design's fallback, these bundles emit `format_version: 2` with an explicit **`"unsigned": true`** marker — never a silent downgrade. See [spec-mapping](/reference/spec-mapping) for the tracked gap.
+
+`.persona` and `.sigil` formats are unchanged this phase and carry no manifest v2.
+
+`public_hash` (per-identity content cache signal on the federation manifest) is unrelated to bundle signing: it stays a **non-authenticated cache hint** and is never a trust anchor.
+
+---
+
+## 6. Summary
 
 - **Export Sigil** — Single `.sigil` file. Minimal. Key recovery.
 - **Export Persona** — `.persona` zip. Syner-readable. Profile + assets.
