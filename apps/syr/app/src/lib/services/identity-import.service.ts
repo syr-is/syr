@@ -4,7 +4,7 @@ import { decodePublicKey, constantTimeEqual, canonicalize } from '@syr-is/crypto
 import { parseDid } from '@syr-is/did';
 import type { AegisBundle } from '@syr-is/crypto/aegis';
 import {
-	IdentityExportManifestSchema,
+	AnyIdentityExportManifestSchema,
 	IdentityExportBundleSchema,
 	ExportedPostSchema,
 	ExportedAssetSchema,
@@ -16,6 +16,7 @@ import {
 	verifyPostSignature,
 	verifyAssetSignature
 } from '$lib/services/bundle-signature-verification';
+import { verifyBundleTrust, type BundleTrustState } from '$lib/services/export-manifest';
 import { z } from 'zod';
 import { identityRepository, delegatedKeyRepository } from '$lib/repositories/identity.repository';
 import { userRepository } from '$lib/repositories/user.repository';
@@ -146,7 +147,7 @@ async function resolveProfileUrls(
 
 export type ParsedBundle = {
 	files: Record<string, Uint8Array>;
-	manifest: z.infer<typeof IdentityExportManifestSchema>;
+	manifest: z.infer<typeof AnyIdentityExportManifestSchema>;
 	identity: z.infer<typeof IdentityExportBundleSchema>;
 	posts: z.infer<typeof ExportedPostSchema>[];
 };
@@ -233,11 +234,11 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 		});
 	}
 
-	let manifest: z.infer<typeof IdentityExportManifestSchema>;
+	let manifest: z.infer<typeof AnyIdentityExportManifestSchema>;
 	let identity: z.infer<typeof IdentityExportBundleSchema>;
 	let posts: z.infer<typeof ExportedPostSchema>[];
 	try {
-		manifest = IdentityExportManifestSchema.parse(JSON.parse(strFromU8(files['manifest.json'])));
+		manifest = AnyIdentityExportManifestSchema.parse(JSON.parse(strFromU8(files['manifest.json'])));
 		identity = IdentityExportBundleSchema.parse(JSON.parse(strFromU8(files['identity.json'])));
 		posts = z.array(ExportedPostSchema).parse(JSON.parse(strFromU8(files['posts.json'])));
 	} catch (err) {
@@ -253,6 +254,24 @@ export async function parseBundle(file: File): Promise<ParsedBundle> {
 	}
 
 	return { files, manifest, identity, posts };
+}
+
+/**
+ * Server-side authenticity backstop. Re-verifies the manifest v2 signature, rotation
+ * chain, and every file hash directly from the zip bytes (never trusting the client's
+ * own verification). Hard-fails a tampered v2 SIGNED bundle with HTTP 422 and a precise
+ * sub-code. v1 bundles and explicitly-unsigned v2 bundles pass through as legacy state.
+ * Must run before any DB/S3 writes.
+ */
+export async function assertBundleIntegrity(parsed: ParsedBundle): Promise<BundleTrustState> {
+	const result = await verifyBundleTrust(parsed.files);
+	if (result.state === 'tampered') {
+		throw error(422, {
+			code: 'IMPORT_TAMPERED',
+			message: `[${result.code ?? 'MANIFEST_INVALID'}] ${result.message ?? 'Bundle failed integrity verification'}`
+		});
+	}
+	return result.state;
 }
 
 export type ValidateBundleOpts = { allowExistingDid?: boolean };

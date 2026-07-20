@@ -3,7 +3,7 @@
 	import { Button } from '@syr-is/ui/button';
 	import { Input } from '@syr-is/ui/input';
 	import { toast } from 'svelte-sonner';
-	import { Loader2 } from 'lucide-svelte';
+	import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-svelte';
 	import { unzipSync, strFromU8, zip, strToU8 } from 'fflate';
 	import { decryptSigil } from '@syr-is/crypto/sigil';
 	import { createAegisBundle } from '@syr-is/crypto/aegis';
@@ -11,6 +11,7 @@
 	import { computeSha256Hex } from '@syr-is/utils';
 	import { buildDidDocument } from '@syr-is/did';
 	import { signAsset } from '$lib/services/bundle-signature-verification';
+	import { verifyBundleTrust, type BundleTrustState } from '$lib/services/export-manifest';
 	import type { SigilObject } from '@syr-is/crypto/sigil';
 	import { analyzeBackupFile } from '$lib/utils/migrate-file';
 	import QRCode from 'qrcode';
@@ -53,9 +54,13 @@
 	} | null>(null);
 	let importToken = $state<string | null>(null);
 	let importHeartbeatSource: EventSource | null = null;
+	// Manifest-v2 authenticity state for .syr bundles (null = not a .syr / not yet checked).
+	let trustState = $state<BundleTrustState | null>(null);
+	let trustMessage = $state<string | null>(null);
 
 	function canImport(): boolean {
 		if (!bundleFile) return false;
+		if (trustState === 'tampered') return false; // never import a tampered signed bundle
 		if (hasSigil === false) return !!importToken; // data-only: need token
 		if (hasSigil === true) {
 			if (exportPassphrase.length < 10) return false;
@@ -82,6 +87,8 @@
 		fileType = null;
 		importChallenge = null;
 		importToken = null;
+		trustState = null;
+		trustMessage = null;
 		disconnectImportHeartbeat();
 	}
 
@@ -92,6 +99,8 @@
 		fileType = null;
 		importChallenge = null;
 		importToken = null;
+		trustState = null;
+		trustMessage = null;
 		disconnectImportHeartbeat();
 		if (!f) return;
 		const result = await analyzeBackupFile(f);
@@ -112,10 +121,30 @@
 					: result.fileType === 'persona'
 						? 'persona'
 						: null;
+
+		// Classify .syr authenticity from the manifest (v2 signed / legacy-unsigned / tampered).
+		// The server re-verifies on import; this only drives the badge and blocks tampered bundles.
+		if (fileType === 'syr') {
+			try {
+				const ab = await f.arrayBuffer();
+				const files = unzipSync(new Uint8Array(ab));
+				const trust = await verifyBundleTrust(files);
+				trustState = trust.state;
+				trustMessage = trust.message ?? null;
+				if (trust.state === 'tampered') {
+					toast.error(trust.message ?? 'This backup failed verification and cannot be imported.');
+				}
+			} catch {
+				// Non-fatal: leave trustState null; the server remains the authority on import.
+				trustState = null;
+				trustMessage = null;
+			}
+		}
 	}
 
 	async function handleVerifyWithSyner() {
 		if (!bundleFile || hasSigil !== false) return;
+		if (trustState === 'tampered') return; // block Syner verification for a tampered bundle
 		importing = true;
 		importChallenge = null;
 		try {
@@ -481,6 +510,46 @@
 				{/if}
 			</div>
 
+			{#if fileType === 'syr' && trustState === 'verified'}
+				<div
+					class="flex items-start gap-2 rounded-md border border-green-600/40 bg-green-600/10 p-3"
+				>
+					<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+					<div class="space-y-0.5">
+						<p class="text-sm font-medium text-green-700 dark:text-green-400">Verified backup</p>
+						<p class="text-xs text-muted-foreground">
+							Signed by this identity's root key. Every file and the rotation chain check out.
+						</p>
+					</div>
+				</div>
+			{:else if fileType === 'syr' && trustState === 'tampered'}
+				<div
+					class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+				>
+					<ShieldAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+					<div class="space-y-0.5">
+						<p class="text-sm font-medium text-destructive">Tampered backup — import blocked</p>
+						<p class="text-xs text-muted-foreground">
+							{trustMessage ?? 'This bundle failed signature or integrity verification.'}
+						</p>
+					</div>
+				</div>
+			{:else if fileType === 'syr' && trustState === 'legacy_unsigned'}
+				<div
+					class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3"
+				>
+					<ShieldQuestion class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+					<div class="space-y-0.5">
+						<p class="text-sm font-medium text-amber-700 dark:text-amber-400">
+							Legacy unsigned backup
+						</p>
+						<p class="text-xs text-muted-foreground">
+							Authenticity cannot be verified. Import only if you trust where this file came from.
+						</p>
+					</div>
+				</div>
+			{/if}
+
 			{#if hasSigil === true}
 				<div class="space-y-2">
 					<label for="export-passphrase" class="text-sm font-medium"
@@ -561,7 +630,10 @@
 				Cancel
 			</Button>
 			{#if hasSigil === false && !importToken}
-				<Button onclick={handleVerifyWithSyner} disabled={importing || !bundleFile}>
+				<Button
+					onclick={handleVerifyWithSyner}
+					disabled={importing || !bundleFile || trustState === 'tampered'}
+				>
 					{#if importing}
 						<Loader2 class="mr-2 h-4 w-4 animate-spin" />
 						Creating...
