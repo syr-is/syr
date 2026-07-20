@@ -1,3 +1,5 @@
+import type { RotationStatement } from '@syr-is/crypto';
+
 /**
  * A hosting record as stored in the SYR Registry.
  */
@@ -6,6 +8,12 @@ export interface HostingRecord {
 	provider: string;
 	updatedAt: string;
 	signature: string;
+	/**
+	 * Root-key rotation chain (seq 1..n from the genesis key). When present,
+	 * the record signature verifies under the chain's CURRENT root key rather
+	 * than the genesis key embedded in the DID.
+	 */
+	rotation_chain?: RotationStatement[];
 }
 
 /**

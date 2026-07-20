@@ -3,14 +3,17 @@ import { DbService } from '../db/db.service';
 import { UpdateRecordDto } from './dto/update-record.dto';
 import { DeleteRecordDto } from './dto/delete-record.dto';
 import { DirectoryUpsertDto } from './dto/directory-upsert.dto';
-import { verify, canonicalize, decodeMultibase } from '@syr-is/crypto';
+import { verify, canonicalize, decodeMultibase, verifyRotationChain } from '@syr-is/crypto';
 import { parseDid } from '@syr-is/did';
+import type { RotationStatement } from '@syr-is/types';
 
 export interface HostingRecord {
 	did: string;
 	provider: string;
 	updatedAt: string;
 	signature: string;
+	/** Root-key rotation chain the record signature was verified against (empty/absent = genesis). */
+	rotation_chain?: RotationStatement[];
 }
 
 export interface DirectoryEntry {
@@ -56,26 +59,103 @@ export class RegistryService {
 	}
 
 	/**
-	 * Resolve a DID to its hosting record.
+	 * Resolve the CURRENT root key for a DID (genesis when no chain is
+	 * supplied) and enforce rollback protection: a payload whose chain is
+	 * shorter than the registry's recorded high-water mark is rejected.
+	 *
+	 * Returns the key to verify the record signature against, plus the chain
+	 * seq for state persistence after successful verification.
+	 */
+	private async resolveVerificationKey(
+		did: string,
+		rotationChain: RotationStatement[] | undefined
+	): Promise<{ publicKey: Uint8Array; chainSeq: number }> {
+		const chain = rotationChain ?? [];
+		let publicKey: Uint8Array;
+		if (chain.length === 0) {
+			publicKey = parseDid(did).publicKey;
+		} else {
+			try {
+				publicKey = await verifyRotationChain(did, chain);
+			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
+				throw new Error(`Invalid rotation chain: ${detail}`);
+			}
+		}
+
+		const storedSeq = await this.getStoredRotationSeq(did);
+		if (chain.length < storedSeq) {
+			throw new Error(
+				`Stale rotation chain: seq ${chain.length} is lower than the previously recorded seq ${storedSeq}`
+			);
+		}
+
+		return { publicKey, chainSeq: chain.length };
+	}
+
+	/** Highest rotation-chain seq the registry has accepted for this DID (0 = none). */
+	private async getStoredRotationSeq(did: string): Promise<number> {
+		const db = this.dbService.getDb();
+		const result = await db.query<[Array<{ max_seq: number }>]>(
+			'SELECT max_seq FROM did_rotation_state WHERE did = $did LIMIT 1',
+			{ did }
+		);
+		return result[0]?.[0]?.max_seq ?? 0;
+	}
+
+	/** Persist the highest seen rotation seq for a DID (monotonic). */
+	private async recordRotationSeq(did: string, chainSeq: number): Promise<void> {
+		if (chainSeq <= 0) return;
+		const db = this.dbService.getDb();
+		const stored = await this.getStoredRotationSeq(did);
+		if (chainSeq <= stored) return;
+		if (stored === 0) {
+			try {
+				await db.query(
+					`CREATE did_rotation_state SET did = $did, max_seq = $maxSeq, updated_at = time::now()`,
+					{ did, maxSeq: chainSeq }
+				);
+				return;
+			} catch (err) {
+				if (!RegistryService.isUniqueConstraintError(err)) throw err;
+				// Concurrent create: fall through to monotonic update.
+			}
+		}
+		await db.query(
+			`UPDATE did_rotation_state SET max_seq = $maxSeq, updated_at = time::now()
+        WHERE did = $did AND max_seq < $maxSeq`,
+			{ did, maxSeq: chainSeq }
+		);
+	}
+
+	/**
+	 * Resolve a DID to its hosting record (including the rotation chain the
+	 * record was verified against, when the identity has rotated).
 	 */
 	async resolve(did: string): Promise<HostingRecord | null> {
 		const db = this.dbService.getDb();
 		const result = await db.query<[HostingRecord[]]>(
-			'SELECT did, provider, updated_at AS updatedAt, signature FROM hosting_record WHERE did = $did LIMIT 1',
+			'SELECT did, provider, updated_at AS updatedAt, signature, rotation_chain FROM hosting_record WHERE did = $did LIMIT 1',
 			{ did }
 		);
 
-		return result[0]?.[0] ?? null;
+		const record = result[0]?.[0];
+		if (!record) return null;
+		if (record.rotation_chain == null || record.rotation_chain.length === 0) {
+			delete record.rotation_chain;
+		}
+		return record;
 	}
 
 	/**
 	 * Update (or create) a hosting record.
-	 * Verifies the Ed25519 signature against the public key embedded in the DID.
+	 * Verifies the Ed25519 signature against the CURRENT root key: the
+	 * genesis key embedded in the DID, advanced through the optional
+	 * rotation_chain (verified from genesis, rollback-protected).
 	 */
 	async update(dto: UpdateRecordDto): Promise<HostingRecord> {
-		// 1. Parse the DID to extract the public key
-		const parsed = parseDid(dto.did);
-		const publicKey = parsed.publicKey;
+		// 1. Resolve the current root key (genesis + optional rotation chain)
+		const { publicKey, chainSeq } = await this.resolveVerificationKey(dto.did, dto.rotation_chain);
 
 		// 2. Build the canonical payload (JCS — RFC 8785)
 		const payload = canonicalize({
@@ -87,7 +167,7 @@ export class RegistryService {
 		// 3. Decode the signature from multibase (raw Ed25519 signature bytes)
 		const signatureBytes = decodeMultibase(dto.signature);
 
-		// 4. Verify the Ed25519 signature
+		// 4. Verify the Ed25519 signature under the current root key
 		const isValid = await verify(payload, signatureBytes, publicKey);
 
 		if (!isValid) {
@@ -107,19 +187,22 @@ export class RegistryService {
 		// 6. Upsert the hosting record
 		// SurrealDB datetime field expects a Date; DTO provides ISO string
 		const updatedAtDate = new Date(dto.updatedAt);
+		const rotationChain = dto.rotation_chain ?? [];
 		const db = this.dbService.getDb();
 		if (existing) {
 			const result = await db.query(
 				`UPDATE hosting_record SET
           provider = $provider,
           updated_at = $updatedAt,
-          signature = $signature
+          signature = $signature,
+          rotation_chain = $rotationChain
         WHERE did = $did AND updated_at < $updatedAt`,
 				{
 					did: dto.did,
 					provider: dto.provider,
 					updatedAt: updatedAtDate,
-					signature: dto.signature
+					signature: dto.signature,
+					rotationChain
 				}
 			);
 			const updated = result[0] ?? [];
@@ -135,12 +218,14 @@ export class RegistryService {
           did = $did,
           provider = $provider,
           updated_at = $updatedAt,
-          signature = $signature`,
+          signature = $signature,
+          rotation_chain = $rotationChain`,
 					{
 						did: dto.did,
 						provider: dto.provider,
 						updatedAt: updatedAtDate,
-						signature: dto.signature
+						signature: dto.signature,
+						rotationChain
 					}
 				);
 			} catch (createErr) {
@@ -160,22 +245,26 @@ export class RegistryService {
 			}
 		}
 
+		// 7. Record the accepted rotation seq (monotonic high-water mark)
+		await this.recordRotationSeq(dto.did, chainSeq);
+
 		return {
 			did: dto.did,
 			provider: dto.provider,
 			updatedAt: dto.updatedAt,
-			signature: dto.signature
+			signature: dto.signature,
+			...(rotationChain.length > 0 ? { rotation_chain: rotationChain } : {})
 		};
 	}
 
 	/**
 	 * Delete a hosting record.
-	 * Verifies the Ed25519 signature on the deletion request.
+	 * Verifies the Ed25519 signature on the deletion request under the
+	 * CURRENT root key (genesis + optional rotation chain).
 	 */
 	async delete(dto: DeleteRecordDto): Promise<void> {
-		// 1. Parse the DID to extract the public key
-		const parsed = parseDid(dto.did);
-		const publicKey = parsed.publicKey;
+		// 1. Resolve the current root key (genesis + optional rotation chain)
+		const { publicKey, chainSeq } = await this.resolveVerificationKey(dto.did, dto.rotation_chain);
 
 		// 2. Build the canonical payload
 		const payload = canonicalize({
@@ -197,16 +286,17 @@ export class RegistryService {
 			throw new Error('Not found: no hosting record for this DID');
 		}
 
-		// 5. Delete the record
+		// 5. Delete the record (keep rotation state: rollback protection
+		//    must survive record deletion and re-registration)
 		const db = this.dbService.getDb();
 		await db.query('DELETE FROM hosting_record WHERE did = $did', {
 			did: dto.did
 		});
+		await this.recordRotationSeq(dto.did, chainSeq);
 	}
 
 	async upsertDirectory(dto: DirectoryUpsertDto): Promise<DirectoryEntry> {
-		const parsed = parseDid(dto.did);
-		const publicKey = parsed.publicKey;
+		const { publicKey, chainSeq } = await this.resolveVerificationKey(dto.did, dto.rotation_chain);
 
 		const payload = canonicalize({
 			did: dto.did,
@@ -222,6 +312,7 @@ export class RegistryService {
 		if (!isValid) {
 			throw new Error('Invalid signature: directory upsert verification failed');
 		}
+		await this.recordRotationSeq(dto.did, chainSeq);
 
 		const db = this.dbService.getDb();
 		const selectRow = async (): Promise<DirectoryRow | undefined> => {

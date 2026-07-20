@@ -1,8 +1,47 @@
-import { verify, canonicalize, decodeMultibase } from '@syr-is/crypto';
+import { verify, canonicalize, decodeMultibase, verifyRotationChain } from '@syr-is/crypto';
 import { parseDid, isValidSyrDid } from '@syr-is/did';
 import type { DidDocument } from '@syr-is/did';
 import type { HostingRecord, ResolverOptions } from './types.js';
 import { ResolverError } from './types.js';
+
+/**
+ * Verify a hosting record signature under the CURRENT root key for the DID:
+ * the genesis key embedded in the DID, advanced through the record's
+ * rotation_chain when present (the chain itself is fully verified from the
+ * genesis key — link, seq continuity, per-hop signatures).
+ *
+ * @throws {ResolverError} INVALID_SIGNATURE when the chain or signature is invalid.
+ */
+async function verifyHostingRecordSignature(did: string, record: HostingRecord): Promise<void> {
+	let publicKey: Uint8Array;
+	if (record.rotation_chain && record.rotation_chain.length > 0) {
+		try {
+			publicKey = await verifyRotationChain(did, record.rotation_chain);
+		} catch (err) {
+			throw new ResolverError(
+				`Rotation chain verification failed for ${did}: ${err instanceof Error ? err.message : String(err)}`,
+				'INVALID_SIGNATURE'
+			);
+		}
+	} else {
+		publicKey = parseDid(did).publicKey;
+	}
+
+	const payload = canonicalize({
+		did: record.did,
+		provider: record.provider,
+		updatedAt: record.updatedAt
+	});
+	const signatureBytes = decodeMultibase(record.signature);
+	const isValid = await verify(payload, signatureBytes, publicKey);
+
+	if (!isValid) {
+		throw new ResolverError(
+			`Hosting record signature verification failed for ${did}`,
+			'INVALID_SIGNATURE'
+		);
+	}
+}
 
 /**
  * Resolve a did:syr identifier to a DID Document.
@@ -45,23 +84,9 @@ export async function resolveDid(did: string, options: ResolverOptions): Promise
 
 	const record: HostingRecord = await registryResponse.json();
 
-	// 3. Verify the hosting record signature
-	const parsed = parseDid(did);
-	const payload = canonicalize({
-		did: record.did,
-		provider: record.provider,
-		updatedAt: record.updatedAt
-	});
-
-	const signatureBytes = decodeMultibase(record.signature);
-	const isValid = await verify(payload, signatureBytes, parsed.publicKey);
-
-	if (!isValid) {
-		throw new ResolverError(
-			`Hosting record signature verification failed for ${did}`,
-			'INVALID_SIGNATURE'
-		);
-	}
+	// 3. Verify the hosting record signature (current root key = genesis +
+	//    optional rotation chain)
+	await verifyHostingRecordSignature(did, record);
 
 	// 4. Fetch DID Document from the provider
 	const documentUrl = `${record.provider}/api/identity/${encodeURIComponent(did)}/document`;
@@ -119,22 +144,8 @@ export async function resolveProvider(did: string, options: ResolverOptions): Pr
 
 	const record: HostingRecord = await response.json();
 
-	// Verify signature
-	const parsed = parseDid(did);
-	const payload = canonicalize({
-		did: record.did,
-		provider: record.provider,
-		updatedAt: record.updatedAt
-	});
-	const signatureBytes = decodeMultibase(record.signature);
-	const isValid = await verify(payload, signatureBytes, parsed.publicKey);
-
-	if (!isValid) {
-		throw new ResolverError(
-			`Hosting record signature verification failed for ${did}`,
-			'INVALID_SIGNATURE'
-		);
-	}
+	// Verify signature (current root key = genesis + optional rotation chain)
+	await verifyHostingRecordSignature(did, record);
 
 	return record.provider;
 }
