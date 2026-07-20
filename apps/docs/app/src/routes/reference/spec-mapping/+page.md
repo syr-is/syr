@@ -42,17 +42,17 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## did:syr Method Specification
 
-| Requirement                                    | Status          | Details                                                                                                |
-| ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
-| DID syntax `did:syr:<multibase-pubkey>`        | **Implemented** | `packages/did/src/parse.ts` — `parseDid()` validates and extracts public key from `did:syr:z...`.      |
-| Multibase-encoded Ed25519 public key           | **Implemented** | `packages/crypto/src/encoding.ts` — `encodeMultibase()` and `decodeMultibase()` with base58btc.        |
-| DID Document structure                         | **Implemented** | `packages/did/src/document.ts` — `buildDidDocument()` returns W3C-compliant DID Document.              |
-| Resolution via registry lookup                 | **Implemented** | `packages/resolver/src/resolve.ts` — `resolveDid()` queries registry, verifies signature, fetches doc. |
-| DID Document contains `verificationMethod`     | **Implemented** | `Ed25519VerificationKey2020` with `#root` id.                                                          |
-| Service endpoint in DID Document               | **Implemented** | Optional `#provider` service with `SyrIdentityProvider` type.                                          |
-| Registry update authorization (root signature) | **Implemented** | `POST /update` on registry verifies Ed25519 signature over JCS-canonicalized payload.                  |
-| Migration semantics (DID unchanged)            | **Implemented** | DID is key-anchored. Migration only changes provider URL in registry.                                  |
-| Identity-based auth binding                    | **Implemented** | Challenge/token flow binds authentication to DID via SYR instance.                                     |
+| Requirement                                    | Status          | Details                                                                                                                                                                  |
+| ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DID syntax `did:syr:<multibase-pubkey>`        | **Implemented** | `packages/did/src/parse.ts` — `parseDid()` validates and extracts public key from `did:syr:z...`.                                                                        |
+| Multibase-encoded Ed25519 public key           | **Implemented** | `packages/ts/crypto` (`@syr-is/crypto`) — `encodeMultibase()` and `decodeMultibase()` (base58btc), wrapping the Rust/WASM crypto surface (`packages/rust/syr-crypto-*`). |
+| DID Document structure                         | **Implemented** | `packages/did/src/document.ts` — `buildDidDocument()` returns W3C-compliant DID Document.                                                                                |
+| Resolution via registry lookup                 | **Implemented** | `packages/resolver/src/resolve.ts` — `resolveDid()` queries registry, verifies signature, fetches doc.                                                                   |
+| DID Document contains `verificationMethod`     | **Implemented** | `Ed25519VerificationKey2020` with `#root` id.                                                                                                                            |
+| Service endpoint in DID Document               | **Implemented** | Optional `#provider` service with `SyrIdentityProvider` type.                                                                                                            |
+| Registry update authorization (root signature) | **Implemented** | `POST /update` on registry verifies Ed25519 signature over JCS-canonicalized payload.                                                                                    |
+| Migration semantics (DID unchanged)            | **Implemented** | DID is key-anchored. Migration only changes provider URL in registry.                                                                                                    |
+| Identity-based auth binding                    | **Implemented** | Challenge/token flow binds authentication to DID via SYR instance.                                                                                                       |
 
 ---
 
@@ -60,7 +60,7 @@ This page maps each requirement from the architecture specifications to the curr
 
 | Requirement                             | Status          | Details                                                                                                                                                                             |
 | --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ed25519 root key generation             | **Implemented** | `packages/crypto/src/keys.ts` — `generateRootKeypair()`.                                                                                                                            |
+| Ed25519 root key generation             | **Implemented** | `packages/ts/crypto` (`@syr-is/crypto`) — `generateRootKeypair()`, wrapping the Ed25519 Rust/WASM crates (`packages/rust/syr-crypto-*`).                                            |
 | Root key stored on server               | **Implemented** | `identity.private_key` field stores multibase-encoded private key (server-managed identities).                                                                                      |
 | Delegated device keys                   | **Implemented** | `POST /api/identity/delegate`. Delegation statement signed by root key, verified server-side.                                                                                       |
 | Delegation statement (root-signed)      | **Implemented** | JCS-canonicalized `{ did, delegate, scope, createdAt, expiresAt? }` signed with root key.                                                                                           |
@@ -85,15 +85,15 @@ This page maps each requirement from the architecture specifications to the curr
 
 ## Registry Protocol Specification
 
-| Requirement                                | Status          | Details                                                                                       |
-| ------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------- |
-| Hosting record (`did -> provider`)         | **Implemented** | `apps/registry/api` — SurrealDB-backed registry with `identity_registry` table.               |
-| Ed25519 signature on records               | **Implemented** | Registry verifies Ed25519 signatures using `@syr-is/crypto`.                                  |
-| JCS canonical signing (RFC 8785)           | **Implemented** | `packages/crypto/src/canonical.ts` — `canonicalize()` implements RFC 8785.                    |
-| `GET /resolve/:did`                        | **Implemented** | Returns hosting record with provider URL.                                                     |
-| `POST /update` with signature verification | **Implemented** | Verifies signature, validates DID ownership, updates hosting record.                          |
-| Strictly increasing `updatedAt` timestamps | **Implemented** | Registry rejects stale timestamps.                                                            |
-| Migration flow                             | **Implemented** | Export identity + assets from old provider, import on new, update registry with new provider. |
+| Requirement                                | Status          | Details                                                                                                                                          |
+| ------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hosting record (`did -> provider`)         | **Implemented** | `apps/registry/api` — SurrealDB-backed registry with `identity_registry` table.                                                                  |
+| Ed25519 signature on records               | **Implemented** | Registry verifies Ed25519 signatures using `@syr-is/crypto`.                                                                                     |
+| JCS canonical signing (RFC 8785)           | **Implemented** | `packages/ts/crypto` (`@syr-is/crypto`) — `canonicalize()` implements RFC 8785 over the Rust/WASM crypto surface (`packages/rust/syr-crypto-*`). |
+| `GET /resolve/:did`                        | **Implemented** | Returns hosting record with provider URL.                                                                                                        |
+| `POST /update` with signature verification | **Implemented** | Verifies signature, validates DID ownership, updates hosting record.                                                                             |
+| Strictly increasing `updatedAt` timestamps | **Implemented** | Registry rejects stale timestamps.                                                                                                               |
+| Migration flow                             | **Implemented** | Export identity + assets from old provider, import on new, update registry with new provider.                                                    |
 
 ---
 
