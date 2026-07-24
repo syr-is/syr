@@ -1,14 +1,14 @@
 ---
-title: 'Phase 0: packages/crypto'
+title: 'Phase 0: packages/ts/crypto'
 ---
 
-# Phase 0: packages/crypto
+# Phase 0: packages/ts/crypto
 
 `@syr-is/crypto` is the cryptographic foundation for Syr identity. It provides Ed25519 key generation, multibase encoding, signing, verification, and canonical serialization.
 
 **Package:** `@syr-is/crypto`
-**Location:** `packages/crypto/`
-**Dependencies:** `@noble/ed25519`, `@scure/base`, `canonicalize`
+**Location:** `packages/ts/crypto/`
+**Dependencies:** the WASM build of the Rust crypto crates (`packages/rust/syr-crypto-*` via `syr-crypto-wasm`); no JS crypto dependencies
 
 ---
 
@@ -16,18 +16,17 @@ title: 'Phase 0: packages/crypto'
 
 1. **Pure cryptography.** No app logic, no network calls, no database access.
 2. **Browser + Node compatible.** All operations work in both environments.
-3. **Audited dependencies.** `@noble/ed25519` is independently audited and zero-dependency.
+3. **Single crypto implementation.** Ed25519, JCS, and multibase live in the `syr-crypto-*` Rust crates and are consumed through `syr-crypto-wasm` — no separate JS crypto dependency.
 4. **Deterministic.** Same input always produces same output (except key generation).
 
 ---
 
 ## Dependency Rationale
 
-| Package          | Purpose                                       | Why this one                                               |
-| ---------------- | --------------------------------------------- | ---------------------------------------------------------- |
-| `@noble/ed25519` | Ed25519 key generation, signing, verification | Audited, zero-dep, browser+Node, by Paul Miller            |
-| `@scure/base`    | Multibase encoding (base58btc)                | Same author as noble, trusted, comprehensive base encoding |
-| `canonicalize`   | RFC 8785 JSON Canonicalization Scheme         | Spec-compliant JCS implementation                          |
+| Package                  | Purpose                                                         | Why this one                                                         |
+| ------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `syr-crypto-core` (Rust) | Ed25519 keygen/sign/verify, RFC 8785 JCS, multibase (base58btc) | Single cryptographic source of truth; Rust and TS byte-match         |
+| `syr-crypto-wasm`        | wasm-bindgen surface exposing the Rust crypto crates to TS      | One WASM build consumed by every `@syr-is/*` package, browser + Node |
 
 ---
 
@@ -105,11 +104,12 @@ Used for creating canonical signing payloads for delegation statements, rotation
 
 ---
 
-## Key Rotation Stubs
+## Key Rotation Primitives
 
 ```typescript
 function createRotationStatement(
 	did: string,
+	seq: number,
 	newPublicKey: Uint8Array,
 	currentPrivateKey: Uint8Array
 ): Promise<RotationStatement>;
@@ -118,9 +118,11 @@ function verifyRotationStatement(
 	statement: RotationStatement,
 	currentPublicKey: Uint8Array
 ): Promise<boolean>;
+
+function verifyRotationChain(did: string, statements: RotationStatement[]): Promise<Uint8Array>; // current root key
 ```
 
-These compile and can be tested but have no UI or API endpoint in Phase 0. They establish the architectural pattern for key rotation.
+Started as Phase 0 stubs; now the implemented v1 rotation chain — see [Root key rotation](/architecture/recovery-rotation) for the statement format, validation rules, and the `POST /api/identity/rotate` flows.
 
 ---
 
@@ -128,7 +130,7 @@ These compile and can be tested but have no UI or API endpoint in Phase 0. They 
 
 ```mermaid
 flowchart LR
-    crypto["packages/crypto"]
+    crypto["packages/ts/crypto"]
     did["packages/did"]
     syrClient["apps/syr (client)"]
     syrServer["apps/syr (server)"]

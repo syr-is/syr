@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verify, decodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 import { ProfileSyncSignedPayloadSchema, type ProfileSyncSignedPayload } from '@syr-is/types';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
@@ -104,10 +104,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		const parsedDid = parseDid(did);
+		// Trust anchor: CURRENT root key (genesis + rotation chain), not the genesis key
+		const { publicKey: currentRootKey } = await getCurrentRootKey(did);
 		const signatureBytes = decodeMultibase(signature.trim());
 		const messageBytes = new TextEncoder().encode(signedPayloadStr);
-		const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
+		const isValid = await verify(messageBytes, signatureBytes, currentRootKey);
 		if (!isValid) {
 			throw error(403, {
 				code: 'FORBIDDEN',

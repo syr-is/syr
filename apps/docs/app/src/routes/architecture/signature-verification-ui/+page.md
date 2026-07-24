@@ -66,3 +66,17 @@ The same async pattern applies on the [home timeline](/architecture/follows-and-
 ## 7. Dependencies
 
 - API responses must include **`did`**, **signature**, and enough **fields** to reconstruct the signed payload (see persistence §6 in [signed mutations](/architecture/signed-profile-post-mutations)).
+
+---
+
+## 8. Bundle import authenticity badge
+
+The **Import identity** dialog classifies a selected `.syr` bundle from its [manifest v2](/architecture/export) and surfaces one badge. This is the bundle-level analogue of the per-post/profile signature panel above — same "re-verify locally, show an explicit state" philosophy, applied to a whole backup.
+
+| Badge                                   | State             | Meaning                                                                                           | Action                         |
+| --------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
+| ✅ **Verified backup**                  | `verified`        | v2 signed; every file hash, the rotation chain, the signing key, and the signature all check out. | Import enabled                 |
+| ⚠️ **Legacy unsigned backup**           | `legacy_unsigned` | v1 manifest or v2 `"unsigned": true`; authenticity cannot be established.                         | Import enabled, warned         |
+| ⛔ **Tampered backup — import blocked** | `tampered`        | v2 **signed** bundle that failed a check (with a precise sub-code reason).                        | Import + Syner verify disabled |
+
+Classification runs client-side for instant feedback; the **server independently re-verifies on import** (HTTP 422 `IMPORT_TAMPERED` on failure), so the badge is UX, not the trust boundary. See [Import → Bundle authenticity verification](/architecture/import) for the pipeline and error sub-codes.

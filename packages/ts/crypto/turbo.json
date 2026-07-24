@@ -2,10 +2,10 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "inputs": ["$TURBO_EXTENDS$", "packages/rust/**"]
+      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/rust/**"]
     },
     "test": {
-      "inputs": ["$TURBO_EXTENDS$", "packages/rust/**"]
+      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/rust/**"]
     }
   }
 }

@@ -23,6 +23,8 @@ export {
   canonicalize,
   createRotationStatement,
   verifyRotationStatement,
+  verifyRotationChain,
+  derivePublicKeyFromSeed,
 } from "./wasm-adapter.js";
 
 export {

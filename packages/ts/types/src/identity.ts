@@ -134,16 +134,55 @@ export type DelegationStatement = z.infer<typeof DelegationStatementSchema>;
 
 /**
  * Rotation Statement Schema
- * The payload for root key rotation, signed by the current root key.
+ * One link in the per-DID root-key rotation chain. The signed payload is the
+ * RFC 8785 JCS canonical form of { did, seq, prevRoot, newRoot, rotatedAt },
+ * signed by the private key of prevRoot (the retiring key). The DID itself is
+ * genesis-key-derived and never changes.
  */
 export const RotationStatementSchema = z.object({
 	did: DidSyrSchema,
+	seq: z.number().int().min(1), // 1-based chain position; strictly increasing, no gaps
+	prevRoot: z.string().min(1), // multibase-encoded key being retired (genesis for seq 1)
 	newRoot: z.string().min(1), // multibase-encoded new root public key
-	rotatedAt: z.string().datetime(),
-	signature: z.string().min(1) // multibase-encoded signature
+	rotatedAt: z.string().datetime({ offset: true }),
+	signature: z.string().min(1) // multibase-encoded signature by prevRoot
 });
 
 export type RotationStatement = z.infer<typeof RotationStatementSchema>;
+
+/**
+ * Identity Rotation Schema
+ * A persisted rotation-chain row in SurrealDB (identity_rotation table).
+ */
+export const IdentityRotationSchema = BaseEntitySchema.pick({
+	id: true,
+	created_at: true
+}).extend({
+	did: DidSyrSchema,
+	seq: z.number().int().min(1),
+	prev_root: z.string().min(1),
+	new_root: z.string().min(1),
+	rotated_at: TimestampSchema,
+	signature: z.string().min(1)
+});
+
+export type IdentityRotation = z.infer<typeof IdentityRotationSchema>;
+
+/**
+ * Identity Rotate Request Schema
+ * For POST /api/identity/rotate (session-authenticated, own DID only).
+ *
+ * - aegis: the instance verifies the password, decrypts the custodial seed,
+ *   generates the new root, and creates + persists the statement itself.
+ * - external: a self-custody signer (e.g. Syner) submits a fully-formed
+ *   signed statement; the instance validates it against the stored chain.
+ */
+export const IdentityRotateRequestSchema = z.discriminatedUnion('mode', [
+	z.object({ mode: z.literal('aegis'), password: z.string().min(1) }),
+	z.object({ mode: z.literal('external'), statement: RotationStatementSchema })
+]);
+
+export type IdentityRotateRequest = z.infer<typeof IdentityRotateRequestSchema>;
 
 /**
  * Identity Export Bundle Schema
@@ -175,6 +214,13 @@ export const IdentityExportBundleSchema = z.object({
 		bannerUrl: ProfileSignedImageUrlSchema.optional(),
 		identityHostUrl: IdentityHostUrlSchema.optional()
 	}),
+	/**
+	 * Full root-key rotation chain for this DID at export time (empty/omitted when
+	 * never rotated). Bundling the chain makes a `.syr` bundle self-verifying: an
+	 * importer resolves the current root from `verifyRotationChain(did, chain)`
+	 * without needing the exporter's local `identity_rotation` table.
+	 */
+	rotationChain: z.array(RotationStatementSchema).optional(),
 	exportedAt: z.string().datetime()
 });
 
@@ -245,6 +291,80 @@ export const IdentityExportManifestSchema = z.object({
 });
 
 export type IdentityExportManifest = z.infer<typeof IdentityExportManifestSchema>;
+
+/** Lowercase SHA-256 hex digest (64 chars). */
+export const Sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * Signature block on a manifest v2. Mirrors the `canonical_delegation` pattern:
+ * `signed_payload_json` is the exact RFC 8785 JCS string that was signed, so the
+ * verifier re-canonicalizes the manifest (sans this block), byte-compares it, then
+ * checks the Ed25519 `signature` under `signing_key` (the root key current at export).
+ */
+export const ExportManifestSignatureSchema = z.object({
+	signed_payload_json: z.string().min(1),
+	signature: z.string().min(1), // multibase-encoded Ed25519 signature over signed_payload_json
+	signing_key: z.string().min(1) // multibase-encoded root public key current at export time
+});
+
+export type ExportManifestSignature = z.infer<typeof ExportManifestSignatureSchema>;
+
+/**
+ * Per-content-type counts embedded in the manifest for at-a-glance bundle stats.
+ * Covered by the manifest signature.
+ */
+export const ExportManifestCountsSchema = z.object({
+	posts: z.number().int().nonnegative(),
+	assets: z.number().int().nonnegative(),
+	pinned_posts: z.number().int().nonnegative()
+});
+
+export type ExportManifestCounts = z.infer<typeof ExportManifestCountsSchema>;
+
+/**
+ * Identity Full Export Manifest v2 — signed, self-verifying bundle metadata.
+ *
+ * `files` maps every bundle-relative path (identity.json, posts.json, assets.json,
+ * pinned_posts.json, identity.sigil when present, and every `assets/…` file) to its
+ * SHA-256 hex digest; manifest.json itself is necessarily excluded. `rotation_seq`
+ * is the rotation-chain length at export time.
+ *
+ * Exactly one authenticity state is present:
+ * - `signature` set (custodial/Aegis exports, and any device-signed export): the
+ *   manifest — and by extension every file it hashes — is verifiable under the
+ *   chain-resolved current root key.
+ * - `unsigned: true` (self-custody data-only exports whose signer round cannot yet
+ *   carry the manifest payload): integrity is self-consistent but authenticity is
+ *   NOT verifiable. Importers surface this like a legacy bundle. Never both.
+ */
+export const IdentityExportManifestV2Schema = z
+	.object({
+		format_version: z.literal(2),
+		did: DidSyrSchema,
+		created_at: z.string().datetime(),
+		rotation_seq: z.number().int().nonnegative(),
+		counts: ExportManifestCountsSchema,
+		files: z.record(z.string().min(1), Sha256HexSchema),
+		signature: ExportManifestSignatureSchema.optional(),
+		unsigned: z.literal(true).optional()
+	})
+	.refine((m) => (m.signature != null) !== (m.unsigned === true), {
+		message: 'Manifest v2 must be exactly one of signed (signature) or explicitly unsigned'
+	});
+
+export type IdentityExportManifestV2 = z.infer<typeof IdentityExportManifestV2Schema>;
+
+/**
+ * Parse-time union accepting either a v2 (signed / explicitly-unsigned) manifest or
+ * a legacy v1 manifest. v2 is tried first; a v1 object lacks `format_version` and
+ * falls through. Both variants expose `did`.
+ */
+export const AnyIdentityExportManifestSchema = z.union([
+	IdentityExportManifestV2Schema,
+	IdentityExportManifestSchema
+]);
+
+export type AnyIdentityExportManifest = z.infer<typeof AnyIdentityExportManifestSchema>;
 
 /** ULID format: 26 chars, Crockford Base32 (0-9, A-HJKMNP-TV-Z) */
 const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/i);

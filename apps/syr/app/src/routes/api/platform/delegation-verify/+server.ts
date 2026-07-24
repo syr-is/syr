@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verify, decodeMultibase, encodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 import { AegisBundleSchema } from '@syr-is/types';
 import {
 	consumeDelegationChallenge,
@@ -52,10 +52,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		// Verify signature against DID root public key
-		const parsed = parseDid(did);
+		// Verify signature against the CURRENT root key (genesis + rotation chain)
+		const { publicKey: currentRootKey } = await getCurrentRootKey(did);
 		const signatureBytes = decodeMultibase(signature);
-		const isValid = await verify(challenge.message, signatureBytes, parsed.publicKey);
+		const isValid = await verify(challenge.message, signatureBytes, currentRootKey);
 		if (!isValid) {
 			return json(
 				{ error: 'invalid_signature', error_description: 'Signature verification failed' },

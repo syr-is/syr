@@ -101,6 +101,12 @@ export class RegistryController {
 			if (lower.includes('stale') || lower.includes('older') || lower.includes('concurrent')) {
 				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
 			}
+			if (lower.includes('rotation')) {
+				throw new HttpException(
+					{ code: 'INVALID_ROTATION_CHAIN', message },
+					HttpStatus.BAD_REQUEST
+				);
+			}
 			if (RegistryController.isUniqueConstraintError(err)) {
 				throw new HttpException(
 					{
@@ -149,6 +155,15 @@ export class RegistryController {
 			}
 			if (lower.includes('not found')) {
 				throw new HttpException({ code: 'NOT_FOUND', message }, HttpStatus.NOT_FOUND);
+			}
+			if (lower.includes('stale')) {
+				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
+			}
+			if (lower.includes('rotation')) {
+				throw new HttpException(
+					{ code: 'INVALID_ROTATION_CHAIN', message },
+					HttpStatus.BAD_REQUEST
+				);
 			}
 
 			throw new HttpException(
@@ -201,6 +216,12 @@ export class RegistryController {
 			}
 			if (lower.includes('stale')) {
 				throw new HttpException({ code: 'STALE_UPDATE', message }, HttpStatus.CONFLICT);
+			}
+			if (lower.includes('rotation')) {
+				throw new HttpException(
+					{ code: 'INVALID_ROTATION_CHAIN', message },
+					HttpStatus.BAD_REQUEST
+				);
 			}
 			throw new HttpException(
 				{ code: 'INTERNAL_ERROR', message },

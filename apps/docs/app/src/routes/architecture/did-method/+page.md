@@ -44,8 +44,9 @@ did:syr:<id>
 
 Where:
 
-- `<id>` is the **multibase-encoded Ed25519 public key** of the root identity.
+- `<id>` is the **multibase-encoded Ed25519 public key** of the **genesis** root identity key.
 - Encoding MUST use **base58btc multibase**.
+- The identifier is fixed at creation and **never changes**; the _current_ root key may differ from the genesis key after [root key rotation](/architecture/recovery-rotation).
 
 Example:
 
@@ -59,12 +60,14 @@ did:syr:z6Mkt9…abc
 
 The DID is **cryptographically bound** to:
 
-- the Ed25519 public key embedded in the identifier.
+- the **genesis** Ed25519 public key embedded in the identifier, and
+- the identity's **rotation chain**: an append-only sequence of statements, each signed by the retiring key, that advances the root from the genesis key to the **current key** (see [Root key rotation](/architecture/recovery-rotation)).
 
 Therefore:
 
-- No external registry is required to verify **ownership**.
+- No external registry is required to verify **ownership** — the genesis key anchors the chain, and the chain proves every key transition.
 - Registries are used only for **service discovery**.
+- Verifiers MUST anchor root-signature checks on the **current** key (genesis + chain), never on the raw genesis key alone.
 
 ---
 
@@ -86,10 +89,12 @@ did:syr:<publicKey>
 
 Resolver MUST:
 
-1. Decode multibase → obtain Ed25519 public key.
-2. Query Syr **registry** for latest hosting record.
-3. Construct DID Document using:
-   - embedded public key
+1. Decode multibase → obtain the **genesis** Ed25519 public key.
+2. Obtain the identity's **rotation chain** (from the hosting record's `rotation_chain`, the provider's `GET /api/identity/{did}/rotations` endpoint, or the per-identity manifest's `endpoints.rotations`).
+3. **Verify the chain** from the genesis key (link, seq continuity, per-hop signatures) → derive the **current root key**. An empty/absent chain resolves to the genesis key.
+4. Query a Syr **registry** for the latest hosting record and verify its signature under the **current** key.
+5. Construct the DID Document using:
+   - the current root key
    - registry-discovered services.
 
 ```mermaid
@@ -99,11 +104,12 @@ sequenceDiagram
     participant Registry
 
     Client->>Resolver: Resolve did:syr:z6Mkt9...
-    Resolver->>Resolver: Decode multibase -> Ed25519 public key
+    Resolver->>Resolver: Decode multibase -> genesis Ed25519 key
     Resolver->>Registry: GET /resolve/did:syr:z6Mkt9...
-    Registry-->>Resolver: { provider: "https://...", signature: "..." }
-    Resolver->>Resolver: Verify signature with embedded public key
-    Resolver->>Resolver: Build DID Document
+    Registry-->>Resolver: { provider: "https://...", signature: "...", rotation_chain?: [...] }
+    Resolver->>Resolver: Verify rotation chain from genesis -> current key
+    Resolver->>Resolver: Verify record signature with CURRENT key
+    Resolver->>Resolver: Build DID Document (#root = current key)
     Resolver-->>Client: DID Document { id, verificationMethod, service }
 ```
 
@@ -135,6 +141,8 @@ A resolved document MUST contain:
 	]
 }
 ```
+
+`#root` MUST be the **current** root key — for rotated identities this is the last `newRoot` in the rotation chain, not the genesis key encoded in the DID.
 
 ---
 
@@ -193,17 +201,13 @@ Migration MUST NOT:
 
 ---
 
-## 8. Key Rotation (future)
+## 8. Key Rotation
 
-v0.1 assumes:
+Root key rotation is supported via a **signed key update chain**: the DID stays genesis-derived and immutable while rotation statements (each signed by the retiring key) advance the current root. Resolution is always **genesis from the DID + rotation chain → current key**.
 
-- root key is stable.
+See the [Root Key Rotation Specification](/architecture/recovery-rotation) for the statement format, validation rules, and API flows.
 
-Future versions MAY support:
-
-- rotation via signed key update chain
-- recovery mechanisms
-- multi-sig guardians.
+Not supported (future work): recovery mechanisms for lost keys, multi-sig guardians.
 
 ---
 

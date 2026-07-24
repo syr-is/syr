@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { verify, decodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 import {
 	consumeExportChallenge,
 	consumeImportChallenge,
@@ -83,10 +83,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		let parsedDid;
+		// Trust anchor: CURRENT root key (genesis + rotation chain)
+		let currentRootKey;
 		let signatureBytes;
 		try {
-			parsedDid = parseDid(data.did);
+			({ publicKey: currentRootKey } = await getCurrentRootKey(data.did));
 			signatureBytes = decodeMultibase(data.signature);
 		} catch {
 			return json(
@@ -97,7 +98,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const messageBytes = new TextEncoder().encode(challenge.message);
 
-		const isValid = await verify(messageBytes, signatureBytes, parsedDid.publicKey);
+		const isValid = await verify(messageBytes, signatureBytes, currentRootKey);
 		if (!isValid) {
 			return json(
 				{ error: 'invalid_signature', error_description: 'Signature verification failed' },

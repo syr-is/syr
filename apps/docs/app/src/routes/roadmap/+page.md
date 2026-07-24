@@ -66,7 +66,9 @@ Make identity truly portable across SYR instances.
 - Full migration flow: export from provider A, import on provider B, update registry
 - Provider-to-provider identity verification
 
-**Not in scope (simplified lifecycle):** In-place **root key rotation** and **append-only key history** are deferred. See [Identity lifecycle (simplified)](/architecture/identity-lifecycle-simplified). Changing keys is modeled as a **new DID** plus export/import, not rotation of an existing DID. Helper routines such as `createRotationStatement()` in `@syr-is/crypto` may remain for hypothetical future use but are not roadmap commitments.
+**Shipped: root key rotation.** In-place **root key rotation** with an **append-only key history chain** is implemented — see [Root key rotation](/architecture/recovery-rotation). The DID never changes; `POST /api/identity/rotate` (custodial `aegis` / self-custody `external` modes) appends chain statements, the public chain is served at `GET /api/identity/{did}/rotations`, and registries verify chain-bearing hosting records with rollback protection. **Recovery keys stay out of scope** (rotation requires possession of the current key); a Syner rotation UI for the external mode is a follow-up.
+
+**Shipped: verifiable data layer.** `.syr` bundles use a **signed, self-verifying [manifest v2](/architecture/export)** — a SHA-256 map of every file plus a root-key Ed25519 signature, with the full rotation chain embedded in `identity.json`. [Import](/architecture/import) recomputes every hash, verifies the chain from genesis, and checks the signature under the chain-resolved root, hard-failing tampered bundles (HTTP 422) and showing verified / legacy-unsigned / tampered in the dialog. Custodial (Aegis) exports sign the manifest with the unlocked seed; **self-custody (Syner) data-only exports currently emit an explicit `"unsigned": true` marker** (device-signed manifests are the tracked follow-up). Legacy v1 bundles remain importable as unverifiable.
 
 ---
 

@@ -11,6 +11,7 @@ import {
 	verifyRegistryRootSignature
 } from '$lib/server/registry-job-crypto';
 import { pushSignedRegistryJobToRemoteAndComplete } from '$lib/server/registry-job-runner';
+import { getRotationChain } from '$lib/server/root-key.server';
 
 const RegistrySignSchema = z.object({
 	jobId: z.string().min(1),
@@ -204,6 +205,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			updatedAt,
 			deletedAt,
 			signature,
+			rotationChain: await getRotationChain(did),
 			directory: directoryListing
 		});
 

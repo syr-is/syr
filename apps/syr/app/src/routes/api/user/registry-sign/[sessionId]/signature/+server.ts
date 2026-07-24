@@ -13,6 +13,7 @@ import { stringToRecordId } from '@syr-is/types';
 import { z } from 'zod';
 import { verifyRegistryRootSignature } from '$lib/server/registry-job-crypto';
 import { pushSignedRegistryJobToRemoteAndComplete } from '$lib/server/registry-job-runner';
+import { getRotationChain } from '$lib/server/root-key.server';
 
 const BodySchema = z.object({
 	signature: z.string().min(1),
@@ -164,6 +165,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 			updatedAt: claimed.updated_at,
 			deletedAt: claimed.deleted_at,
 			signature,
+			rotationChain: await getRotationChain(claimed.did),
 			directory
 		});
 	} catch (e) {

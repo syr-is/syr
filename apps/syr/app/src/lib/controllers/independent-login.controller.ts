@@ -1,5 +1,5 @@
 import { verify, decodeMultibase } from '@syr-is/crypto';
-import { parseDid } from '@syr-is/did';
+import { getCurrentRootKey } from '$lib/server/root-key.server';
 import { userRepository } from '$lib/repositories/user.repository';
 import { profileRepository } from '$lib/repositories/profile.repository';
 import { sessionRepository } from '$lib/repositories/session.repository';
@@ -26,8 +26,9 @@ export class IndependentLoginController {
 		_inviteCode?: string,
 		profileData?: { display_name?: string; bio?: string; identity_host_url?: string }
 	): Promise<User> {
-		const parsedDid = parseDid(did);
-		const publicKeyBytes = parsedDid.publicKey;
+		// Trust anchor: the CURRENT root key (genesis + local rotation chain),
+		// never the raw genesis key parsed from the DID.
+		const { publicKey: publicKeyBytes } = await getCurrentRootKey(did);
 		const signatureBytes = decodeMultibase(signature);
 		const messageBytes = new TextEncoder().encode(message);
 

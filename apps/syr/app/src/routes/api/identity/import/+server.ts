@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { consumeImportToken } from '$lib/server/export-verify-store';
 import {
 	parseBundle,
+	assertBundleIntegrity,
 	validateBundle,
 	validateBundleForDataOnlyImport,
 	importIdentityAndProfile,
@@ -72,6 +73,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 		const parsed = await parseBundle(file);
+		// Authenticity backstop: hard-fail a tampered v2 signed bundle before any writes.
+		await assertBundleIntegrity(parsed);
 		did = await validateBundleForDataOnlyImport(parsed);
 		if (parsed.identity.did !== tokenData.did) {
 			throw error(400, {
@@ -166,6 +169,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const parsed = await parseBundle(file);
+	// Authenticity backstop: hard-fail a tampered v2 signed bundle before any writes.
+	await assertBundleIntegrity(parsed);
 	did = await validateBundle(parsed, aegisBundle);
 
 	const ctx: ImportContext = {

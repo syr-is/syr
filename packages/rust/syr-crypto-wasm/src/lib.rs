@@ -9,8 +9,14 @@ use syr_crypto_core::{
         decode_multibase, decode_private_key, decode_public_key, derive_did, encode_multibase,
         encode_private_key, ED25519_MULTICODEC_PREFIX, ED25519_PRIV_MULTICODEC_PREFIX,
     },
-    keys::{constant_time_equal, generate_device_keypair, generate_root_keypair, sign, verify},
-    rotation::{create_rotation_statement, verify_rotation_statement, RotationStatement},
+    keys::{
+        constant_time_equal, derive_public_key_from_seed, generate_device_keypair,
+        generate_root_keypair, sign, verify,
+    },
+    rotation::{
+        create_rotation_statement, verify_rotation_chain, verify_rotation_statement,
+        RotationStatement,
+    },
 };
 use syr_crypto_sigil::{create_sigil, decrypt_sigil, SigilObject};
 use syr_did::{build_did_document, is_valid_syr_did, parse_did, BuildDidDocumentInput};
@@ -63,6 +69,14 @@ pub fn verify_wasm(payload: &[u8], signature: &[u8], public_key: &[u8]) -> bool 
 #[wasm_bindgen]
 pub fn constant_time_equal_wasm(a: &[u8], b: &[u8]) -> bool {
     constant_time_equal(a, b)
+}
+
+#[wasm_bindgen]
+pub fn derive_public_key_from_seed_wasm(seed: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let s: [u8; 32] = seed
+        .try_into()
+        .map_err(|_| JsValue::from_str("Seed must be 32 bytes"))?;
+    Ok(derive_public_key_from_seed(&s).to_vec())
 }
 
 // ---- Encoding ----
@@ -138,6 +152,7 @@ pub fn canonicalize_wasm(obj_json: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn create_rotation_statement_wasm(
     did: &str,
+    seq: u32,
     new_public_key: &[u8],
     current_private_key: &[u8],
 ) -> Result<String, JsValue> {
@@ -147,7 +162,8 @@ pub fn create_rotation_statement_wasm(
     let priv_k: [u8; 32] = current_private_key
         .try_into()
         .map_err(|_| JsValue::from_str("Current private key must be 32 bytes"))?;
-    let stmt = create_rotation_statement(did, &pk, &priv_k).map_err(|e| JsValue::from_str(&e))?;
+    let stmt = create_rotation_statement(did, seq as u64, &pk, &priv_k)
+        .map_err(|e| JsValue::from_str(&e))?;
     serde_json::to_string(&stmt).map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))
 }
 
@@ -162,6 +178,17 @@ pub fn verify_rotation_statement_wasm(
         .try_into()
         .map_err(|_| JsValue::from_str("Current public key must be 32 bytes"))?;
     verify_rotation_statement(&stmt, &pk).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Verify a full rotation chain (JSON array of statements) for `did`.
+/// Returns the current root public key (32 bytes); errors when the chain is invalid.
+#[wasm_bindgen]
+pub fn verify_rotation_chain_wasm(did: &str, chain_json: &str) -> Result<Vec<u8>, JsValue> {
+    let chain: Vec<RotationStatement> = serde_json::from_str(chain_json)
+        .map_err(|e: serde_json::Error| JsValue::from_str(&e.to_string()))?;
+    verify_rotation_chain(did, &chain)
+        .map(|arr| arr.to_vec())
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 // ---- Sigil ----

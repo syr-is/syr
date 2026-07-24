@@ -46,7 +46,7 @@ Phase 0 is complete when:
 3. Profile mutations are signed.
 4. Identity bundle can be exported.
 5. Delegated device key exists.
-6. ~~Basic key rotation path compiles (not UI-complete).~~ **Superseded:** Under the [simplified identity lifecycle](/architecture/identity-lifecycle-simplified), **in-place root key rotation is not a Phase 0 goal**. Portability is via **export / import** and **registry migration**; changing root keys implies a **new DID**.
+6. Basic key rotation path compiles (not UI-complete). **Met and since superseded by the full implementation:** rotation is now a first-class chained API — see [Root key rotation](/architecture/recovery-rotation).
 
 If any of the above is missing → Phase 0 is incomplete.
 
@@ -304,6 +304,8 @@ Must:
 
 No UI required in Phase 0.
 Goal is architectural readiness, not UX.
+
+> **Status:** exceeded — the shipped implementation is the chained rotation API described in [Root key rotation](/architecture/recovery-rotation).
 
 ---
 
