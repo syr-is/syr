@@ -249,6 +249,26 @@ export class UploadRepository extends BaseRepository<Upload> {
 		);
 		return result[0]?.[0]?.total ?? 0;
 	}
+
+	/**
+	 * Find multiple uploads by their IDs
+	 */
+	async findByIds(ids: RecordId[]): Promise<Upload[]> {
+		if (ids.length === 0) return [];
+		const result = await this.db.query<[Upload[]]>(`SELECT * FROM upload WHERE id IN $ids`, {
+			ids
+		});
+		const raw = result[0] ?? [];
+		const uploads: Upload[] = [];
+		for (const r of raw) {
+			try {
+				uploads.push(this.validate(r));
+			} catch {
+				// Skip individual invalid records to prevent failing the batch
+			}
+		}
+		return uploads;
+	}
 }
 
 export const uploadRepository = new UploadRepository();
