@@ -255,12 +255,13 @@ export class UploadRepository extends BaseRepository<Upload> {
 	 */
 	async findByIds(ids: RecordId[]): Promise<Upload[]> {
 		if (ids.length === 0) return [];
-		const result = await this.db.query<[Upload[]]>(`SELECT * FROM upload WHERE id IN $ids`, {
-			ids
-		});
+		const result = await this.db.query<[Upload[]]>(`SELECT * FROM $ids`, { ids });
 		const raw = result[0] ?? [];
 		const uploads: Upload[] = [];
 		for (const r of raw) {
+			// FROM $ids resolves each id against its own table, so re-assert the
+			// scoping the old `FROM upload` query gave us for free.
+			if (r?.id?.tb !== this.tableName) continue;
 			try {
 				uploads.push(this.validate(r));
 			} catch {
