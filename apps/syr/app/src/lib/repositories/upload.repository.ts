@@ -249,6 +249,30 @@ export class UploadRepository extends BaseRepository<Upload> {
 		);
 		return result[0]?.[0]?.total ?? 0;
 	}
+
+	/**
+	 * Find multiple uploads by their IDs
+	 * AI Provenance: AI-generated code (Gemini).
+	 * Context: Batch query optimization to fix N+1 lookups.
+	 * Limitations/Assumptions: Records failing schema validation are skipped instead of throwing an error for the whole batch.
+	 */
+	async findByIds(ids: RecordId[]): Promise<Upload[]> {
+		if (ids.length === 0) return [];
+		const result = await this.db.query<[Upload[]]>(
+			`SELECT * FROM upload WHERE id IN $ids`,
+			{ ids }
+		);
+		const raw = result[0] ?? [];
+		const uploads: Upload[] = [];
+		for (const r of raw) {
+			try {
+				uploads.push(this.validate(r));
+			} catch {
+				// Skip invalid records to prevent failing the entire batch
+			}
+		}
+		return uploads;
+	}
 }
 
 export const uploadRepository = new UploadRepository();

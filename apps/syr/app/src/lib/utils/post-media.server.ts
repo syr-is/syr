@@ -1,5 +1,7 @@
+// AI Provenance: AI-assisted imports (Gemini) for batch query optimization
 import { recordIdFromDidAndLocal } from '@syr-is/types';
-import { uploadController } from '$lib/controllers/upload.controller';
+import { uploadRepository } from '$lib/repositories/upload.repository';
+import type { RecordId } from 'surrealdb';
 
 /**
  * Extract upload composite ID (DID + localId) from a media URL.
@@ -30,23 +32,47 @@ export interface MediaUrlMetadata {
 export async function resolveMediaUrlMetadata(mediaUrls: string[]): Promise<MediaUrlMetadata> {
 	const mimeTypes: Record<string, string> = {};
 	const filenames: Record<string, string> = {};
-	await Promise.all(
-		mediaUrls.map(async (url) => {
-			const ids = extractUploadRecordId(url);
-			if (ids) {
-				try {
-					const recordId = recordIdFromDidAndLocal('upload', ids.did, ids.localId);
-					const upload = await uploadController.getUpload(recordId);
-					if (upload) {
+	
+	const uniqueUrls = [...new Set(mediaUrls)];
+	const recordIds: RecordId[] = [];
+	const urlByRecordId = new Map<string, string[]>();
+
+	for (const url of uniqueUrls) {
+		const ids = extractUploadRecordId(url);
+		if (ids) {
+			const recordId = recordIdFromDidAndLocal('upload', ids.did, ids.localId);
+			const ridStr = recordId.toString();
+			
+			const urls = urlByRecordId.get(ridStr) || [];
+			if (urls.length === 0) {
+				recordIds.push(recordId);
+			}
+			urls.push(url);
+			urlByRecordId.set(ridStr, urls);
+		}
+	}
+
+	if (recordIds.length > 0) {
+		// AI Provenance: AI-generated code (Gemini)
+		// Context: Resolving media metadata in a single batch query to avoid N+1 lookups.
+		// Limitations/Assumptions: If the entire batch query fails, the error is caught and metadata won't be populated for any URLs. Invalid individual uploads are handled upstream in \`findByIds\`.
+		try {
+			const uploads = await uploadRepository.findByIds(recordIds);
+			for (const upload of uploads) {
+				const ridStr = upload.id.toString();
+				const mappedUrls = urlByRecordId.get(ridStr);
+				if (mappedUrls) {
+					for (const url of mappedUrls) {
 						mimeTypes[url] = upload.mime_type;
 						filenames[url] = upload.filename;
 					}
-				} catch {
-					// Skip if upload record not found
 				}
 			}
-		})
-	);
+		} catch {
+			// Skip if batch query fails
+		}
+	}
+
 	return { mimeTypes, filenames };
 }
 
